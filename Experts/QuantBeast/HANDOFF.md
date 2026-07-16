@@ -40,7 +40,8 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 - `QuantBeastEA.ex5` is present and the final MetaEditor build is `0 errors, 0 warnings`.
 - The original 23-error/15-warning baseline is preserved under `TestEvidence/compile_20260715/`.
 - The Shadow lifecycle build/runtime evidence is under `TestEvidence/shadow_lifecycle_20260715/`.
-- Strategy Tester agent logs prove Shadow initialization and 45 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, alert-routing policy, entry preflight controls, and session/rollover exit policy. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
+- Strategy Tester agent logs prove Shadow initialization and 51 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, restored arbitration duplicate/cooldown persistence, live broker-transmission acknowledgement gating, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, alert-routing policy, entry preflight controls, session/rollover exit policy, self-test detail logging control, chart-object toggle policy, fill/reconciliation alert-category routing, and strategy-counter same-day restore policy. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
+- BO now applies its strategy-specific `InpBO_CompressionPct` input against the current ATR percentile rank in addition to the shared minimum compression-bar duration; evidence is under `TestEvidence/bo_compression_pct_20260716/`.
 - A two-process restart probe is preserved under `TestEvidence/restart_probe_20260715/`: phase 1 passed, but a fresh tester/Wine process loaded schema `0`. This proves tester-state isolation, not live-terminal restart safety. Production persistence now explicitly flushes Terminal Global Variables.
 - Broker submission return values now require both local API success and order-class-specific server acceptance; deterministic mismatched-response injection passes under `TestEvidence/server_ack_policy_20260715/`.
 - Pending tracking now survives delete failure, missing history, and unsafe fill reconciliation; evidence is under `TestEvidence/pending_orphan_policy_20260715/`.
@@ -51,6 +52,7 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 - Rejected strategy signals now preserve the evaluated BUY/SELL direction. A generated-tick fallback run reached FBO long and short through arbitration to central risk. Evidence: `TestEvidence/organic_pipeline_20260715/`.
 - Arbitration now finalizes every candidate as selected or explicitly rejected; signal rows are written only at their final strategy/arbitration/risk decision stage, and journal IDs include direction. Evidence: `TestEvidence/arbitration_journal_20260715/`.
 - Organic true-tick Shadow proof with all strategies enabled and self-tests disabled produced 880 new signal rows, 3 accepted FBO Shadow entries, separate order/trade rows, and final risk-rejected winner evidence. Evidence: `TestEvidence/organic_true_ticks_20260716/`.
+- Manual demo broker lifecycle proof exists under `TestEvidence/demo_broker_lifecycle_20260716/`: two explicitly authorized `XAUUSD BUY 0.01` demo positions were opened through MT5 MCP trading controls and both were closed; final broker state had zero open positions and zero pending orders. This proves manual/MCP demo broker order lifecycle only, not QuantBeast EA-autonomous live execution or restart recovery.
 - Final repaired-state adversarial audit: `FINAL_ADVERSARIAL_AUDIT_20260716.md`.
 - Current repaired-state verdict: `REPAIR_AUDIT_20260715.md`.
 
@@ -79,7 +81,7 @@ The authoritative, complete focused findings are in `BUG_AUDIT.md`. Highest-risk
 2. Core Shadow market-position branches have deterministic runtime evidence; strategy-generated lifecycle sequences remain unproven.
 3. Pending broker orders are cancelled fail-closed on restart rather than restored.
 4. Recovered positions cannot always restore signal/regime/MFE/MAE/exact management state.
-5. Strategy semantic gaps remain: BO local compression threshold, FBO target variants, TP pullback age, MR opposite-band target.
+5. Strategy semantic gaps remain: broader organic accepted-entry evidence for BO/TP/MR and advanced target variants such as partial/runner policies.
 6. Challenge deposits/withdrawals, attempts, profit locks, and restart scenarios remain unproven.
 7. Alert routing is wired and tester-suppressed, but real terminal/push delivery has not been operator-verified outside Strategy Tester.
 8. State-version mismatch now quarantines entries fail-closed, but no automatic migration exists and real restart recovery remains unproven.
@@ -142,8 +144,23 @@ Broker-fault-matrix evidence: TestEvidence/broker_fault_matrix_20260715/
 Organic-pipeline evidence: TestEvidence/organic_pipeline_20260715/
 Arbitration/journal evidence: TestEvidence/arbitration_journal_20260715/
 Live-gate evidence: TestEvidence/live_strategy_gate_20260716/
-Final source SHA-256: 8312ffcd21e9e5a8d051315acd14398e3aba7b7488ab4a8888186957ffde34b8
-Final EX5 SHA-256: 834e063c510e940e2ff366a8deea4edda32511b06f3ec8ff2cfb4b7d361bd5a7
+Self-test detail-control evidence: TestEvidence/selftest_detail_control_20260716/
+Chart-object-toggle evidence: TestEvidence/chart_object_toggle_20260716/
+Alert-category routing evidence: TestEvidence/alert_category_routing_20260716/
+Preset-gate alignment evidence: TestEvidence/preset_gate_alignment_20260716/
+Arbitration-mode coverage evidence: TestEvidence/arbitration_modes_20260716/
+Arbitration persistence evidence: TestEvidence/arbitration_persistence_20260716/
+Strategy-counter persistence evidence: TestEvidence/strategy_counter_persistence_20260716/
+Manual demo broker lifecycle evidence: TestEvidence/demo_broker_lifecycle_20260716/
+Live broker acknowledgement gate evidence: TestEvidence/live_broker_ack_gate_20260716/
+Current regression checkpoint evidence: TestEvidence/current_regression_20260716/
+BO compression-percentile evidence: TestEvidence/bo_compression_pct_20260716/
+TP pullback-age evidence: TestEvidence/tp_pullback_age_20260716/
+MR opposite-band target evidence: TestEvidence/mr_target_band_20260716/
+FBO target-variant evidence: TestEvidence/fbo_target_variants_20260716/
+Conservative Live tester FBO attempt evidence: TestEvidence/conservative_live_tester_fbo_20260716/
+Final source SHA-256: 8b36c2f7f66f38d2fbe982cd4d9427e2c14e2d8e55658c041d1d38bcd1b9ba49
+Final EX5 SHA-256: 869da00fbd86607002ad605c5364511938e33a93a2875f91df9ee134647ec232
 ```
 
 ## Test status
@@ -152,7 +169,7 @@ Final EX5 SHA-256: 834e063c510e940e2ff366a8deea4edda32511b06f3ec8ff2cfb4b7d361bd
 Static content audit: completed
 Focused bug audit: completed — BUG_AUDIT.md
 Compile test: passed after repair — 0 errors, 0 warnings
-Deterministic startup fixtures: runtime pass — 45 passed, 0 failed
+Deterministic startup fixtures: runtime pass — 51 passed, 0 failed
 Shadow attachment: completed per local tester agent log; MCP status remained unreliable
 Shadow lifecycle tests: all core market-position branches passed; no broker orders/deals; tester balance unchanged
 Strategy Tester baseline: not yet valid as performance evidence
@@ -160,6 +177,116 @@ Restart/recovery: version quarantine and risk-state restore contracts proven; tw
 Demo forward: prohibited until earlier gates pass
 Live: prohibited
 ```
+
+### 2026-07-16 — Live broker-transmission acknowledgement gate
+
+- Defect demonstrated: Conservative Live and acknowledged Challenge Live had strategy, execution, and recovery gates, but no separate live-broker acknowledgement. Accidentally loading a live preset that passed those gates could permit broker transmission without an explicit live-order acknowledgement.
+- Severity: High configuration/safety defect. Affected path: live EA initialization before broker transmission.
+- Fix: added default-false `InpAcknowledgeLiveBrokerRisk`; live modes now fail initialization unless it is true. All QuantBeast presets explicitly set it to false. Challenge acknowledgement remains separate and was not enabled.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `51 passed, 0 failed`, including `TEST 40b PASS: Live broker transmission acknowledgement gate`. Tester footer: final balance `10000.00 USD`, `OnTester result 0`, `Test passed`.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/live_broker_ack_gate_20260716/`.
+- Source SHA-256: `8b36c2f7f66f38d2fbe982cd4d9427e2c14e2d8e55658c041d1d38bcd1b9ba49`; Configuration SHA-256: `287d8f29198bd829367fcc49650c849afafd5fe95b289411c77a92ab2a9635e6`; EX5 SHA-256: `191b36f1bd4195ea4296941de941b7b202e5394e8c15380a2a13d6f2d8d225f7`.
+- No broker order was transmitted by QuantBeast during this regression; manual/MCP demo lifecycle evidence remains separate. Readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Manual demo broker lifecycle validation
+
+- Authorization: operator explicitly authorized broker exposure, then explicitly instructed `Place demo market order: XAUUSD BUY 0.01` twice and later instructed closing both validation positions.
+- Account: `Coinexx-Demo`, hedging, demo, USD. Pre-run account had no open positions or pending orders.
+- Execution evidence: order `34601163` opened position `34601163` (`XAUUSD BUY 0.01`, fill `4010.53`, deal `31610668`); order `34601183` opened position `34601183` (`XAUUSD BUY 0.01`, fill `4011.41`, deal `31610688`).
+- Close evidence: position `34601163` closed by order `34601232` / deal `31610736` at `4011.00`; position `34601183` closed by order `34601245` / deal `31610750` at `4011.82`.
+- Final broker state: zero open positions, zero pending orders, balance/equity `980.40 USD`, margin `0.00`.
+- Boundary: trades were placed/closed through MT5 MCP trading controls, not by autonomous QuantBeast EA strategy/execution logic. This proves demo broker order lifecycle visibility and cleanup only; it does not prove EA-controlled live trading, EA restart reconciliation, protection management, or challenge readiness.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/demo_broker_lifecycle_20260716/`.
+- Readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Arbitration duplicate/cooldown persistence
+
+- Defect demonstrated: `CSignalArbitrator` stored `m_lastAcceptTime` and recent accepted signal IDs only in memory. After terminal restart, the EA could forget an accepted setup inside the configured cooldown/duplicate window while account-level locks and strategy counters persisted.
+- Severity: High restart-safety defect. Affected path: live restart recovery and arbitration throttles. Safety consequence: restart could bypass duplicate/cooldown protections and allow repeated exposure attempts.
+- Fix: added stable hash-based duplicate persistence to `SignalArbitrator.mqh`; added bounded global-variable slots in `StateStore.mqh` for arbitration last-accept time and recent signal hashes/times; restored only fresh non-future timestamps; persisted immediately after accepted arbitration commits.
+- Compatibility: state schema version was not changed; missing arbitration keys are treated as empty legacy state.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `50 passed, 0 failed`, including `TEST 34 PASS ... restoredDuplicate=rejected ... restoredCooldown=rejected` and `TEST 48 PASS: Arbitration restore policy fresh=restore expired=reject missing=reject future=reject`. Tester footer: final balance `10000.00 USD`, `OnTester result 0`, `Test passed`.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/arbitration_persistence_20260716/`.
+- Source SHA-256: `b9d2950a56a94838fc4765ca418f8f9c40e1d59006ad1dcef760f99c44276d20`; SignalArbitrator SHA-256: `065b90c2f9170a80d90cb00a24e1eeba6277fede42a77d7a5f724e54f0906086`; StateStore SHA-256: `90d6c738b3bac5ab6154fa8909c7cc1ff73adf9be16f891b37f0c78282a52598`; SafetyTests SHA-256: `cb411da45233d1adb767dd0be3c012d7f051d6e50454475504da84bebca58549`; EX5 SHA-256: `f32f2df50f3c6c76fe64a5df5419a68a1f2d3fe30559f9c6f6c4c6641e2140c5`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Strategy daily counter persistence
+
+- Defect demonstrated: per-strategy daily trade counters were runtime-only, so terminal restart could reset strategy daily limits while daily/weekly risk locks persisted.
+- Severity: Medium risk/restart defect. It could permit additional same-day strategy entries after restart in live modes, although no broker exposure was created during this repair.
+- Fix: added scoped global-variable keys for strategy trade day and BO/FBO/TP/MR daily counts; persisted counters as part of runtime checkpoints; restored counters only when the saved trade day matches the current broker day; reset and persisted counters on day rollover; persisted immediately after `MarkStrategyTrade()`.
+- Compatibility: state schema version was not changed; missing counter keys are treated as empty legacy state.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `49 passed, 0 failed`, including `TEST 47 PASS: Strategy counter restore policy same=restore missing=reject old=reject future=reject`.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/strategy_counter_persistence_20260716/`.
+- Source SHA-256: `3723de29e9b0caf6dd4ef2201866476c1d77a32f6761f85c5c64e59d5f50ecee`; StateStore SHA-256: `1c43138f0e685c1f52e2f5509768f6873903ea7b81211e39302b32dd830a67eb`; EX5 SHA-256: `e1f34f0bb49bf2b506da3f37f405377bf9903c3c87d084f06cf7756c379b4499`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Arbitration mode regression coverage expanded
+
+- Defect demonstrated: all arbitration enum cases existed in current source, but deterministic coverage only proved highest-score, duplicate, reject-conflicts, and exposure behavior. `ARBITRATION_REGIME_PRIORITY` and `ARBITRATION_REQUIRE_CONFLUENCE` lacked direct regression evidence.
+- Severity: Medium test-coverage/configuration defect. Exposed modes were implemented, but insufficient evidence could hide future regressions.
+- Fix: expanded `QBTestArbitrationPolicy()` so existing `TEST 34 PASS` now also requires regime-priority selection, confluence selection, and no-confluence rejection.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `48 passed, 0 failed`, including `TEST 34 PASS ... regime=selected confluence=selected noConfluence=rejected`.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/arbitration_modes_20260716/`.
+- Source SHA-256 remained `65a007c3cd091314c7000403c635f0f5fce4a11c5c88d419de86cac4f4635935`; SafetyTests SHA-256: `e4fad7fcd448cb2b2d199fbbc5bc6b392a69025a6cdd4d5e1efd174d74fc1dfa`; EX5 SHA-256: `3ecc2d1274891dc02db319ffa2373e1b804ef0fa4ec827dbcaeae3a4c5bafed1`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Challenge example preset aligned to live/challenge gates
+
+- Defect demonstrated: `XAUUSD_Challenge_Example.set` was safe by default because `InpAcknowledgeChallengeRisk=false`, but if an operator manually acknowledged Challenge risk later it inherited default BO/TP/MR and pending-order settings that fail the current live/challenge gates.
+- Severity: Medium configuration safety/operability defect. No broker exposure was created.
+- Fix: kept `InpAcknowledgeChallengeRisk=false`, made the Challenge example explicit FBO-only, market-only, `InpMaxPendingOrders=0`, persistence/global variables enabled, and unknown-position quarantine.
+- Validation: static preset validation passed for all four `.set` files; Conservative Live and Challenge example presets both match current FBO-only, market-only, no-pending, unknown-quarantine gates. Compile sanity remained `0 errors, 0 warnings`.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/preset_gate_alignment_20260716/`.
+- Source SHA-256 remained `65a007c3cd091314c7000403c635f0f5fce4a11c5c88d419de86cac4f4635935`; EX5 SHA-256 after recompile: `a2d735399ab7682dddc72efbd34fda09cea776b86591c1f7b4f4d4b3c7b74744`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Fill and reconciliation alert categories wired
+
+- Defect demonstrated: `InpAlertOrderFilled` and `InpAlertReconFailure` were declared but had no runtime references. Severity: Medium operational-visibility defect; no signal, risk, execution, or broker safety path was weakened.
+- Fix: routed Shadow fills, live protected fills, and pending-entry transaction fills through `InpAlertOrderFilled`; routed protection/reconciliation failures, close-queue failures, and missing local close context through `InpAlertReconFailure`.
+- Added deterministic coverage: `TEST 46 PASS: Fill/reconciliation alert categories`.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `48 passed, 0 failed`, final balance `10000.00`, `OnTester result 0`, and tester `Test passed` footer.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/alert_category_routing_20260716/`.
+- Source SHA-256: `65a007c3cd091314c7000403c635f0f5fce4a11c5c88d419de86cac4f4635935`; EX5 SHA-256: `bce28bc0c5c019988f2a14f28fd3dd6e9459bf3e6b5743c1ea38a91bcaab69fe`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Session-exit limitation text corrected
+
+- Documentation defect demonstrated: `KNOWN_LIMITATIONS.md` still stated that session-close and rollover-close lifecycle rules were not implemented in the virtual portfolio, despite the earlier compiled/tested session-exit repair.
+- Severity: Documentation. The stale limitation could mislead the next operator or agent, but no runtime path changed.
+- Fix: replaced the stale limitation with the accurate current state: deterministic Shadow coverage exists under `TestEvidence/session_exit_policy_20260716/`, while live broker flatten behavior remains unproven and requires explicit authorization.
+- No source or EX5 code changed in this documentation-only repair; latest validated compile/test state remains `0 errors, 0 warnings` and `48 passed, 0 failed`.
+
+### 2026-07-16 — Chart-object toggle wired with tester suppression
+
+- Defect demonstrated: `InpShowChartObjects` existed as a dashboard/UI input but had no runtime effect outside configuration. Severity: Low UI/operational defect; no signal, risk, execution, or broker safety path was affected.
+- Fix: added bounded accepted-signal level drawing to `CDashboard`, with entry/stop/target horizontal lines on normal charts when `InpShowChartObjects=true`. Strategy Tester suppresses object drawing, and object retention is bounded to 10 accepted-signal slots / 30 level lines.
+- Added deterministic coverage: `TEST 45 PASS: Chart object toggle policy`.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `47 passed, 0 failed`, final balance `10000.00`, `OnTester result 0`, and tester `Test passed` footer.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/chart_object_toggle_20260716/`.
+- Source SHA-256: `a985147dbfd36f6dead2f7f467888edb2d3106d8f4e2b5fc83720e049e305b24`; Dashboard SHA-256: `9aad1d1995f4df0999fb18d2f5c7edddfe29c7d240fae755425fa3ef03e6174f`; EX5 SHA-256: `82ff8e1335d7a2bef94b004c0211f6e5dfdda05ef2d404524d93f2e48434fbb4`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Self-test detail logging input activated
+
+- Defect demonstrated: `InpLogSelfTestDetails` existed as a testing/logging input but `RunSelfTests()` logged PASS detail rows unconditionally. Severity: Low operational/configuration defect; no trading path or broker exposure was affected.
+- Fix: added diagnostics-level self-test PASS detail filtering via `DiagSetSelfTestDetails()`, `QBIsSelfTestPassDetail()`, and `QBShouldLogSelfTestMessage()`. `QBLog()` suppresses only self-test PASS detail rows when the input is false; self-test FAIL rows and the final summary remain visible.
+- Added deterministic coverage: `TEST 44 PASS: Self-test detail logging policy`.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `46 passed, 0 failed`, final balance `10000.00`, `OnTester result 0`, and tester `Test passed` footer.
+- Additional suppression fixture: `InpLogSelfTestDetails=false` produced `Self-tests complete: 46 passed, 0 failed` and the tester footer with no `TEST ... PASS` detail rows in the new log suffix.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/selftest_detail_control_20260716/`.
+- Source SHA-256: `26b69114f94465a6c901f62c353e24235bcb61bba905644e5e1a2b14a4a7154a`; EX5 SHA-256: `884d316e0560508e21d05d005004e38804c7f230b88f078a16a9a2d5bda97ad8`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Alert helper fail-closed push routing and docs correction
+
+- Defect demonstrated: `UI/Alerts.mqh` `SendAlert()` previously called `SendNotification()` but ignored its return value, so push failure could be reported as success. Severity: Low operational / documentation-level because the helper remains disconnected from the main EA runtime.
+- Affected path: `Include/QuantBeast/UI/Alerts.mqh`; safety consequence is limited to standalone helper behavior and future wiring, not current live trading.
+- Fix: push-enabled alerts now log a warning and return the actual `SendNotification()` result; tester-mode alerts still suppress to logs and return true; the module header now states push delivery is fail-closed and email is not configured.
+- Validation: compile remained `0 errors, 0 warnings` in `TestEvidence/alert_category_routing_20260716/compile_alert_patch.log`; the existing tester log `Tester/Agent-127.0.0.1-3000/logs/20260716.log` still shows `51 passed, 0 failed`, `OnTester result 0`, and `final balance 10000.00 USD`. No broker orders were transmitted.
+- Documentation: `KNOWN_LIMITATIONS.md` now states that `UI/Alerts.mqh` remains uninstantiated by the EA and terminal/push delivery remains unverified outside Strategy Tester.
+- Readiness remains exactly `READY FOR_SHADOW_MODE`.
 
 ## Next task
 
@@ -622,3 +749,101 @@ Live: prohibited
 - Evidence: `TestEvidence/state_scope_20260716/`.
 - Source SHA-256: `5590b568ce72f9718faad863f763c74e08f1bddc5c056ac11005d866d4b11010`; EX5 SHA-256: `ca27819e558e1c1a1a6f14793d7721f9b5f7455de156971d987d5047ffcc77bf`.
 - No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Current clean compile and Shadow regression checkpoint
+
+- Revalidated native MT5 MCP workspace, compiler, and tester capability before continuing.
+- Pre-run process check found only the MT5 terminal and wineserver; no MetaEditor or tester process was active before launch.
+- Compile: `0 errors, 0 warnings, 21189 ms`, MetaEditor build 6002, timestamp `2026.07.16 13:29:54.162`.
+- Ran a unique generated-tick Shadow regression config, `QuantBeast.CurrentRegression.XAUUSD.M5.20260716_1329.ini`, with live broker acknowledgement false, Challenge acknowledgement false, persistence/global variables disabled, journals disabled, and self-tests enabled.
+- The tester MCP returned the known unreliable `job_id: 0`; validation used a bounded newly appended local tester-agent log suffix.
+- Result: `Self-tests complete: 51 passed, 0 failed`; `22080` generated ticks, `1104` bars; final balance `10000.00`; `OnTester result 0`; normal tester footer present.
+- Temporary `MQL5/Profiles/Tester` launcher config was removed after the run.
+- Evidence: `TestEvidence/current_regression_20260716/`.
+- Current hashes after compile: source `8b36c2f7f66f38d2fbe982cd4d9427e2c14e2d8e55658c041d1d38bcd1b9ba49`; EX5 `352c6be5f415370c9548315aea4a5dad9cb645f022c8a0afd9bb37cbc61ad1d3`; configuration module `287d8f29198bd829367fcc49650c849afafd5fe95b289411c77a92ab2a9635e6`.
+- No broker orders were transmitted by this regression. The manual demo broker lifecycle remains manual/MCP evidence only, not QuantBeast EA-autonomous live execution evidence. Readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — BO compression-percent input wired to ATR percentile rank
+
+- Defect demonstrated: `InpBO_CompressionPct` was passed into `CBreakoutEngine::Init()` as `m_compressionPct`, but `CBreakoutEngine::IsEligible()` never read it. BO eligibility depended only on shared `features.compression_bars`.
+- Severity: Medium configuration-integrity defect; operators could change a BO-specific compression parameter without changing BO eligibility, creating misleading strategy research/live-readiness evidence.
+- Fix: added `FeatureSnapshot::atr_percentile_rank`, calculated current ATR percentile rank in `FeatureEngine`, and required `features.atr_percentile_rank <= m_compressionPct` in BO eligibility while preserving the shared minimum compression-bar duration gate.
+- Signal descriptions now include `atrRank`, and deterministic BO reachability coverage now verifies percentile rejection with `pct=rejected`.
+- Updated `CONFIGURATION_GUIDE.md`, `STRATEGY_SPEC.md`, and `KNOWN_LIMITATIONS.md` to remove the stale BO-compression limitation while keeping other strategy semantic gaps open.
+- Compile: `0 errors, 0 warnings, 20999 ms`, timestamp `2026.07.16 13:34:32.590`.
+- Shadow regression: `TEST 16 PASS: BO reachability L=valid S=valid gate=rejected pct=rejected`; `51 passed, 0 failed`; `22080` generated ticks, `1104` bars; final balance `10000.00`; normal tester footer present.
+- Evidence: `TestEvidence/bo_compression_pct_20260716/`.
+- Hashes: main source `8b36c2f7f66f38d2fbe982cd4d9427e2c14e2d8e55658c041d1d38bcd1b9ba49`; EX5 `dd953b52e9c14ef0518d62df3f258a1259d0f1f1c449eeaad833fe0a280ffb73`; `Types.mqh` `aa556c64e1dea5db61910fa7f8ecb0033c1b27205fcfa6ba2f2dce79621397c7`; `FeatureEngine.mqh` `e85101e9d497366e10c2e4cc4eeebea7c323adafa25645fa64b8797666d358f2`; `BreakoutEngine.mqh` `4f4358d1d89564488edb6dd7e7ba4727e27296e4ce87a32595e21d434299b2d5`; `SafetyTests.mqh` `23e68c84d3e7d9fbcbc045234edbd6dd4f3115ed6addaf9c0a972a43c529bc2f`.
+- No broker orders were transmitted. BO organic accepted entries remain unproven; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — TP max-pullback-bars input wired to swing-age rejection
+
+- Defect demonstrated: `InpTP_MaxPullbackBars` was passed into `CTrendPullbackEngine::Init()` as `m_maxPullbackBars`, but TP long/short evaluation did not enforce pullback age.
+- Severity: Medium configuration-integrity defect; operators could change the maximum pullback duration without changing TP eligibility, creating misleading strategy research/live-readiness evidence.
+- Fix: long TP setups now reject when `features.swing_high_bars > m_maxPullbackBars`, short TP setups now reject when `features.swing_low_bars > m_maxPullbackBars`, and TP signal descriptions include `age=`.
+- Zero swing-age values are treated as unavailable rather than as stale-pullback proof.
+- Updated `CONFIGURATION_GUIDE.md`, `KNOWN_LIMITATIONS.md`, and `REPAIR_AUDIT_20260715.md` to remove the stale TP pullback-age limitation while keeping FBO and MR semantic gaps open.
+- Compile: `0 errors, 0 warnings, 19911 ms`, timestamp `2026.07.16 13:39:11.437`.
+- Shadow regression: `TEST 18 PASS: TP reachability L=valid S=valid age=rejected gate=rejected`; `51 passed, 0 failed`; `22080` generated ticks, `1104` bars; final balance `10000.00`; normal tester footer present.
+- Evidence: `TestEvidence/tp_pullback_age_20260716/`.
+- Hashes: main source `8b36c2f7f66f38d2fbe982cd4d9427e2c14e2d8e55658c041d1d38bcd1b9ba49`; EX5 `e64f3f8ce8b201b7614d13c3a6ea4129677883657c01af4528a35735f4e6f859`; `TrendPullbackEngine.mqh` `41a5c6050560ed52c85e355c1a6e032b5ff36046f29e91e3a11882a69079f905`; `SafetyTests.mqh` `c9fbb503b55c851062583a435207c8e9ccb49749df26fea04dcd56aaab0ffdb0`.
+- No broker orders were transmitted. TP organic accepted entries remain unproven; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — MR opposite standard-deviation-band target wired
+
+- Defect demonstrated: `InpMR_TargetSDBandR` was stored in `CMeanReversionEngine` but never used. MR targets only used VWAP, range midpoint, or fixed-R fallback.
+- Severity: Medium configuration-integrity defect; operators could change an MR target input without affecting MR target geometry, creating misleading strategy research/live-readiness evidence.
+- Fix: when `features.vwap_sd > 0`, MR long targets the opposite upper VWAP SD band (`vwap + InpMR_TargetSDBandR * vwap_sd`) and MR short targets the opposite lower VWAP SD band (`vwap - InpMR_TargetSDBandR * vwap_sd`). Existing VWAP, range-midpoint, and fixed-R fallbacks remain for unavailable/invalid band geometry.
+- MR signal descriptions now include `targetBandR`.
+- Validation included an intentionally failed compile caused by using nonexistent test field `StrategySignal.target`; corrected to `proposed_target` before final compile.
+- Compile: `0 errors, 0 warnings, 19852 ms`, MetaEditor build 6002.
+- Shadow regression: `TEST 19 PASS: MR reachability L=valid S=valid bandL=ok bandS=ok gate=rejected`; `51 passed, 0 failed`; `22080` generated ticks, `1104` bars; final balance `10000.00`; normal tester footer present.
+- Evidence: `TestEvidence/mr_target_band_20260716/`.
+- Hashes: main source `8b36c2f7f66f38d2fbe982cd4d9427e2c14e2d8e55658c041d1d38bcd1b9ba49`; EX5 `136d822b4f92d84711e6e8e9f0ca65b1001add796e5983c79eca8150c547c591`; `MeanReversionEngine.mqh` `e77275d0b56f14a788595ea6c83b4f608448a5d1ab65365a6329ee9458ed3443`; `SafetyTests.mqh` `2faf41297450ea5493ea25f3f8e27cfee0751652312ceb4ced67281069717ab6`.
+- No broker orders were transmitted. MR organic accepted entries remain unproven; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — FBO midpoint/VWAP target fallbacks wired independently
+
+- Defect demonstrated: `InpFBO_TargetVWAPR` was stored in `CFailedBreakoutEngine` but fallback target geometry used only `InpFBO_TargetMidR` when midpoint/VWAP levels were invalid.
+- Severity: Medium configuration-integrity defect; operators could change the VWAP target fallback input without affecting fallback target geometry.
+- Fix: FBO now builds separate midpoint and VWAP target candidates. Valid midpoint/VWAP levels are still used; invalid or wrong-side midpoint falls back through `InpFBO_TargetMidR`, and invalid or wrong-side VWAP falls back through `InpFBO_TargetVWAPR`. Longs select the higher candidate; shorts select the lower candidate, preserving the prior directional intent.
+- FBO signal descriptions now include `targetMidR` and `targetVWAPR`.
+- Compile: `0 errors, 0 warnings, 20130 ms`, MetaEditor build 6002.
+- Shadow regression: `TEST 17 PASS: FBO reachability L=valid S=valid targetL=vwapR targetS=vwapR gate=rejected`; `51 passed, 0 failed`; `22080` generated ticks, `1104` bars; final balance `10000.00`; normal tester footer present.
+- Evidence: `TestEvidence/fbo_target_variants_20260716/`.
+- Hashes: main source `8b36c2f7f66f38d2fbe982cd4d9427e2c14e2d8e55658c041d1d38bcd1b9ba49`; EX5 `869da00fbd86607002ad605c5364511938e33a93a2875f91df9ee134647ec232`; `FailedBreakoutEngine.mqh` `0790d244f9682a9cb774b5ad04e24b48963ee5bb4d3fb52d5bfb44934f4bbdab`; `SafetyTests.mqh` `b9937f79d9ee928fd02824c12ab5a1026daea7652533f2c26a8abaead40d6fbc`.
+- No broker orders were transmitted. This proves deterministic FBO target-input wiring, not performance edge. Readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Conservative Live Strategy Tester FBO attempt blocked by live-ack input override
+
+- Attempted a broker-free Strategy Tester run of `QB_MODE_CONSERVATIVE_LIVE` to exercise EA-autonomous live-order routing in tester only.
+- Config intent: FBO-only, market-only, no pending orders, Challenge acknowledgement false, `InpAcknowledgeLiveBrokerRisk=true`, persistence/global variables disabled.
+- Three input-loading variants were tried: inline optimization-style `[TesterInputs]`, separate `.set` via tester `inputs_path`, and plain `[TesterInputs]` key/value overrides.
+- In every attempt the tester applied `InpMode=2`, but did not apply/expose `InpAcknowledgeLiveBrokerRisk=true`. QuantBeast failed closed at `OnInit()` with `Live broker-transmission gate blocked initialization: Live broker transmission requires explicit InpAcknowledgeLiveBrokerRisk=true`.
+- This is useful safety evidence for the live broker-transmission gate, but it blocks EA-autonomous Conservative Live tester execution evidence through the current native tester path.
+- Evidence: `TestEvidence/conservative_live_tester_fbo_20260716/`.
+- No source or EX5 code changed. No broker orders were transmitted; the connected demo account remained flat. Readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Documentation drift correction after safe-phase repair work
+
+- Defect demonstrated: `ARCHITECTURE.md` still described several repaired areas using older baseline language: alerts as disconnected, arbitration duplicate/cooldown persistence as incomplete, SafetyTests as 38-policy coverage, configuration as having at least 22 inactive inputs, and state persistence as saving only selected risk/challenge/kill values. `FINAL_ADVERSARIAL_AUDIT_20260716.md` also still listed close-before-session/rollover controls and repaired strategy-input variants as inactive/partial.
+- Severity: Documentation. Runtime behavior was not changed, but stale architecture/audit text could mislead the next operator or agent about the current verified state.
+- Fix: updated `ARCHITECTURE.md` to reflect wired alert routing, 51 deterministic fixture coverage, bounded arbitration duplicate/cooldown persistence, expanded StateStore scope, current unknown-position/pending-order recovery policy, and remaining durable-context gaps. Updated `FINAL_ADVERSARIAL_AUDIT_20260716.md` to distinguish remaining advanced exit/strategy variants from controls that now have deterministic policy coverage.
+- Validation: documentation-only change; no source, preset, or EX5 behavior changed. Latest validated build remains the previous `0 errors, 0 warnings` compile with deterministic Shadow regression `51 passed, 0 failed` and EX5 SHA-256 `869da00fbd86607002ad605c5364511938e33a93a2875f91df9ee134647ec232`.
+- Safety: no broker order was transmitted. Manual/MCP demo lifecycle evidence remains separate from QuantBeast EA-autonomous execution evidence. Readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — README evidence synchronization
+
+- Defect demonstrated: `README.md` lagged the latest evidence set and current verified status, omitting the newer `current_regression`, BO/TP/MR input-wiring, arbitration persistence, live-ack gate, demo lifecycle, and tester fail-closed evidence folders from the top-level evidence list.
+- Severity: Documentation. The project state itself was already validated, but the top-level summary did not fully reflect the current evidence set.
+- Fix: updated the opening status paragraph to mention deterministic BO/TP/MR strategy-input wiring and expanded the evidence list with the latest regression, arbitration, persistence, preset-gate, live-ack, BO/TP/MR, demo lifecycle, and tester-fail-closed folders.
+- Validation: documentation-only change; no source, preset, or EX5 behavior changed. Latest validated build remains `0 errors, 0 warnings`, deterministic Shadow regression remains `51 passed, 0 failed`, and readiness remains exactly `READY FOR SHADOW MODE`.
+- Safety: no broker order was transmitted. Manual/MCP demo lifecycle evidence remains separate from QuantBeast EA-autonomous execution evidence.
+
+### 2026-07-16 — Limitations and testing-guide evidence sync
+
+- Defect demonstrated: `KNOWN_LIMITATIONS.md` and `TESTING_GUIDE.md` still lacked the latest regression and wiring evidence references in their summary paragraphs, even though the underlying runtime state had already been repaired and validated.
+- Severity: Documentation. The operational state was unchanged, but the project’s evidence map was not yet fully synchronized across the top-level guidance docs.
+- Fix: added `current_regression_20260716`, BO/TP/MR/FBO wiring evidence, and the current live-ack/demo lifecycle evidence to the summary bullets and testing debt narrative.
+- Validation: documentation-only change; no source, preset, or EX5 behavior changed. Latest validated build remains `0 errors, 0 warnings`, deterministic Shadow regression remains `51 passed, 0 failed`, and readiness remains exactly `READY FOR SHADOW MODE`.
+- Safety: no broker order was transmitted.

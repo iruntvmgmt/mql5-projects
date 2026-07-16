@@ -3,7 +3,7 @@
 **Status:** Partial implementation; not live validated.  
 **Authority:** All trades must pass centralized risk validation and centralized sizing.
 
-**Latest evidence:** 2026-07-16 deterministic Shadow regression `45 passed, 0 failed`; organic true-tick Shadow evidence includes accepted FBO BUY/SELL entries and a central-risk rejection for excessive stop distance. Live-mode initialization is gated to FBO-only, market-order-only operation and non-flattening unknown-position recovery until broader evidence exists.
+**Latest evidence:** 2026-07-16 deterministic Shadow regression `51 passed, 0 failed`; organic true-tick Shadow evidence includes accepted FBO BUY/SELL entries and a central-risk rejection for excessive stop distance. Live-mode initialization is gated to FBO-only, market-order-only operation, non-flattening unknown-position recovery, and explicit `InpAcknowledgeLiveBrokerRisk=true` until broader evidence exists.
 
 ## Risk flow
 
@@ -64,7 +64,7 @@ All results should be normalized to broker minimum, maximum, and step. Sizing mu
 - Sized orders are revalidated with `OrderCalcProfit()`-based broker loss estimates plus configured costs, `InpMaxRiskPerTrade`, and projected post-trade lot exposure before submission.
 - Close events now call `UpdateAfterClose`, and material risk state is persisted when persistence is enabled and version-compatible. Duplicate/out-of-order broker transaction behavior still lacks fault-injection evidence.
 - KillSwitch entry, symbol, strategy, cancel, flatten, and emergency states are connected to the main control paths; live runtime proof is pending.
-- Per-strategy daily-trade accounting is connected in memory but is not persisted across restart.
+- Per-strategy daily-trade accounting is persisted and restored only for the same broker day; normal-terminal restart evidence is still required before live reliance.
 - Daily/weekly period rollover and persisted start-equity semantics have deterministic state restoration coverage but not a real multi-session restart test.
 - Maximum holding is enforced by position management; pending lifetime is not authoritative because Shadow pending intents are rejected and live pending recovery is fail-closed cancellation.
 - Maximum leverage is not enforced as an independent configured cap.

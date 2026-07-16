@@ -1,0 +1,4 @@
+config=QuantBeast.LiveBrokerAckGate.XAUUSD.M5.20260518_20260522.ini
+agent_log=/Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/Tester/Agent-127.0.0.1-3000/logs/20260716.log
+pre_size=12283228
+created_epoch=1784217483.333098

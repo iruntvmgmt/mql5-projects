@@ -43,6 +43,7 @@ struct FeatureSnapshot
    double short_atr;         // Short-term ATR
    double long_atr;          // Long-term ATR
    double atr_ratio;         // Short/Long ATR ratio
+   double atr_percentile_rank; // Current ATR rank inside compression lookback, 0=lowest ATR, 100=highest ATR
    double range_percentile;  // Current range vs lookback percentile
    double bb_bandwidth;      // Bollinger bandwidth
    int    compression_bars;  // Bars spent in compression

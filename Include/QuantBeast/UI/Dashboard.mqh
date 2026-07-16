@@ -14,6 +14,11 @@
 #include "../Core/Constants.mqh"
 #include "../Core/Diagnostics.mqh"
 
+bool QBChartObjectsShouldRender(bool showChartObjects, bool isTester)
+{
+   return showChartObjects && !isTester;
+}
+
 //+------------------------------------------------------------------+
 //| Dashboard - efficient on-chart status display                     |
 //+------------------------------------------------------------------+
@@ -29,9 +34,37 @@ private:
    datetime m_lastUpdate;
    int      m_updateIntervalSec;
    bool     m_initialized;
+   bool     m_showChartObjects;
+   string   m_levelPrefix;
+   int      m_levelSeq;
+   int      m_maxLevelSets;
 
    // Object names for each line
    string   m_objNames[30];
+
+   void DeleteSignalLevelSlot(int slot)
+   {
+      string base = m_levelPrefix + IntegerToString(slot) + "_";
+      ObjectDelete(0, base + "ENTRY");
+      ObjectDelete(0, base + "SL");
+      ObjectDelete(0, base + "TP");
+   }
+
+   void CreatePriceLine(const string name, double price, color clr,
+                        const string text)
+   {
+      if(ObjectFind(0, name) < 0)
+      {
+         ObjectCreate(0, name, OBJ_HLINE, 0, 0, price);
+         ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+         ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_DOT);
+         ObjectSetInteger(0, name, OBJPROP_WIDTH, 1);
+      }
+
+      ObjectSetDouble(0, name, OBJPROP_PRICE, price);
+      ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
+      ObjectSetString(0, name, OBJPROP_TEXT, text);
+   }
 
 public:
    //+------------------------------------------------------------------+
@@ -46,6 +79,10 @@ public:
       m_lastUpdate = 0;
       m_updateIntervalSec = 1; // Update every second
       m_initialized = false;
+      m_showChartObjects = false;
+      m_levelPrefix = "QB_Level_";
+      m_levelSeq = 0;
+      m_maxLevelSets = 10;
    }
 
    //+------------------------------------------------------------------+
@@ -55,13 +92,15 @@ public:
    }
 
    //+------------------------------------------------------------------+
-   void Init(bool enabled, int x, int y, int fontSize, color clr)
+   void Init(bool enabled, int x, int y, int fontSize, color clr,
+             bool showChartObjects)
    {
       m_enabled  = enabled;
       m_x        = x;
       m_y        = y;
       m_fontSize = fontSize;
       m_color    = clr;
+      m_showChartObjects = showChartObjects;
 
       if(!m_enabled) return;
 
@@ -79,6 +118,38 @@ public:
 
       // Also delete any leftover objects with prefix
       ObjectsDeleteAll(0, m_objPrefix);
+      ObjectsDeleteAll(0, m_levelPrefix);
+   }
+
+   //+------------------------------------------------------------------+
+   //| Draw bounded accepted-signal levels on normal charts              |
+   //+------------------------------------------------------------------+
+   void DrawSignalLevels(const StrategySignal &signal, int digits)
+   {
+      if(!QBChartObjectsShouldRender(m_showChartObjects,
+                                     (bool)MQLInfoInteger(MQL_TESTER)))
+         return;
+      if(!signal.valid) return;
+
+      int slot = m_levelSeq % MathMax(1, m_maxLevelSets);
+      DeleteSignalLevelSlot(slot);
+
+      string base = m_levelPrefix + IntegerToString(slot) + "_";
+      string dir = (signal.direction == ORDER_TYPE_BUY) ? "BUY" : "SELL";
+      color entryColor = (signal.direction == ORDER_TYPE_BUY) ? clrLime : clrOrange;
+      string tag = signal.strategy_id + " " + dir;
+
+      CreatePriceLine(base + "ENTRY", signal.proposed_entry, entryColor,
+                      tag + " entry " +
+                      DoubleToString(signal.proposed_entry, digits));
+      CreatePriceLine(base + "SL", signal.proposed_stop, clrRed,
+                      tag + " stop " +
+                      DoubleToString(signal.proposed_stop, digits));
+      CreatePriceLine(base + "TP", signal.proposed_target, clrDodgerBlue,
+                      tag + " target " +
+                      DoubleToString(signal.proposed_target, digits));
+
+      m_levelSeq++;
    }
 
    //+------------------------------------------------------------------+

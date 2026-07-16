@@ -1,0 +1,6 @@
+CS	0	11:58:10.298	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 40b PASS: Live broker transmission acknowledgement gate
+CS	0	11:58:10.298	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Self-tests complete: 51 passed, 0 failed
+CS	0	11:58:31.380	Tester	final balance 10000.00 USD
+CS	0	11:58:31.380	Tester	OnTester result 0
+CS	0	11:58:31.388	Tester	XAUUSD,M5: 22080 ticks, 1104 bars generated. Environment synchronized in 0:00:00.043. Test passed in 0:00:21.731 (including ticks preprocessing 0:00:00.003).
+CS	0	11:58:31.390	Tester	test Experts\QuantBeast\QuantBeastEA.ex5 on XAUUSD,M5 thread finished

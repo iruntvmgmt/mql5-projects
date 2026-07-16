@@ -4,17 +4,17 @@
 
 `READY FOR SHADOW MODE`
 
-QuantBeast is not complete in the live-trading sense. It is, however, repaired to the broker-free Shadow readiness gate: the final compiled EA has `0 errors, 0 warnings`; the latest deterministic Shadow regression reports `45 passed, 0 failed`; live modes are gated to FBO-only market-order-only initialization with non-flattening unknown-position recovery; unknown positions are not adopted into active management unless ownership is recovered; alert controls are wired with tester-safe suppression; entry preflight gates enforce bar warmup and abnormal price-jump blocking; session/rollover exits have deterministic policy coverage; and the immediate signal-journal blocker is closed by an organic true-tick Shadow run with all strategies enabled and self-tests disabled.
+QuantBeast is not complete in the live-trading sense. It is, however, repaired to the Shadow readiness gate: the final compiled EA has `0 errors, 0 warnings`; the latest deterministic Shadow regression reports `51 passed, 0 failed`; live modes are gated to FBO-only market-order-only initialization with non-flattening unknown-position recovery and an explicit live broker-transmission acknowledgement; unknown positions are not adopted into active management unless ownership is recovered; alert controls are wired with tester-safe suppression; entry preflight gates enforce bar warmup and abnormal price-jump blocking; session/rollover exits have deterministic policy coverage; self-test detail logging respects its operator input; chart-object level rendering is bounded and tester-suppressed; fill/reconciliation alert categories are wired; strategy daily counts persist for same-day recovery; arbitration duplicate/cooldown memory persists as bounded restart state; BO, FBO, TP, and MR strategy-specific target/filter inputs now have deterministic wiring coverage; manual/MCP demo broker lifecycle proof exists; and the immediate signal-journal blocker is closed by an organic true-tick Shadow run with all strategies enabled and self-tests disabled.
 
-Live, Conservative Live, Challenge research with broker transmission, and Challenge Live remain prohibited because this run did not authorize broker orders and therefore cannot provide real broker execution, callback, or restart evidence.
+Live, Conservative Live, Challenge research with broker transmission, and Challenge Live remain prohibited. The later manual/MCP demo broker lifecycle proves only operator-authorized open/close visibility and cleanup; it does not prove QuantBeast EA-autonomous demo execution, broker callback ordering, protection management, or restart recovery.
 
 ## Final build and hashes
 
 - Compiler: MetaEditor build 6002.
-- Final source SHA-256: `8312ffcd21e9e5a8d051315acd14398e3aba7b7488ab4a8888186957ffde34b8`.
-- Final EX5 SHA-256: `834e063c510e940e2ff366a8deea4edda32511b06f3ec8ff2cfb4b7d361bd5a7`.
-- EX5 timestamp: 2026-07-16 10:08:54 EDT.
-- EX5 size: 443512 bytes.
+- Final source SHA-256: `8b36c2f7f66f38d2fbe982cd4d9427e2c14e2d8e55658c041d1d38bcd1b9ba49`.
+- Final EX5 SHA-256: `869da00fbd86607002ad605c5364511938e33a93a2875f91df9ee134647ec232`.
+- EX5 timestamp: 2026-07-16 13:53 EDT.
+- EX5 size: 492552 bytes.
 
 ## Defects repaired in this run
 
@@ -22,13 +22,16 @@ Live, Conservative Live, Challenge research with broker transmission, and Challe
 - High: `OpenJournalFile()` opened existing CSV files at offset 0, allowing historical journal bytes to be overwritten. The journal opener now seeks to file end and fails closed if append positioning fails. One pre-fix shared Common `SignalJournal.csv` prefix was corrupted during proof work and is preserved honestly as historical damage.
 - Medium: dashboard diagnostic text was suppressed by a second throttle check immediately after the main dashboard update. The redundant diagnostic throttle was removed.
 - Medium: `TradeJournal::LogTrade()` skipped performance metric updates when the file journal was disabled. Performance now updates independently from CSV writing, while file output remains gated by configuration.
+- Medium: BO, FBO, TP, and MR each had strategy-specific configuration inputs that were stored but incomplete or not independently applied in at least one target/filter path. Deterministic repairs now cover BO compression percentile, FBO midpoint/VWAP R fallback targets, TP max pullback bars, and MR opposite VWAP SD-band targets.
 
 ## Deterministic validation
 
 Evidence: `TestEvidence/audit_final_20260716/`
 
 - Compile: `0 errors, 0 warnings`.
-- Latest deterministic gate run: `45 passed, 0 failed`.
+- Latest deterministic gate run: `51 passed, 0 failed`.
+- Latest preset gate check: all four `.set` files reference valid inputs; Conservative Live and Challenge example presets match current FBO-only, market-only, no-pending, unknown-quarantine gates.
+- Latest strategy-input wiring checks: BO `pct=rejected`, FBO `targetL=vwapR targetS=vwapR`, TP `age=rejected`, MR `bandL=ok bandS=ok`.
 - Test 35 proved final-decision signal writer rows for strategy rejects, arbitration loser, risk reject, and accepted BUY.
 - Test 36 proved performance metrics update while `InpEnableTradeJournal=false`.
 - Tester result: 22080 generated ticks, 1104 bars, normal completion, final balance `10000.00`.
@@ -94,7 +97,7 @@ No strategy has a proven edge. This audit proves mechanical routing and selected
 
 ## Regime and arbitration verdict
 
-Regime classification has deterministic coverage and ran in the organic true-tick pipeline. Arbitration now finalizes lower-ranked, duplicate, cooldown, conflict, confluence, and exposure outcomes as explicit rejections. Organic true-tick signal rows show final decisions after strategy/arbitration/risk routing.
+Regime classification has deterministic coverage and ran in the organic true-tick pipeline. Arbitration now has deterministic coverage for highest-score, regime-priority, require-confluence, reject-conflicts, lower-ranked, duplicate, restored duplicate/cooldown, conflict, confluence, and exposure outcomes, and finalizes non-selected candidates as explicit rejections. Organic true-tick signal rows show final decisions after strategy/arbitration/risk routing.
 
 ## Risk assessment
 
@@ -113,7 +116,7 @@ State schema quarantine, risk-state restore, Challenge restore, cash-flow cursor
 - Shadow pending orders are explicitly rejected; activation, expiry, and cancellation simulation are not implemented.
 - Owned broker pending orders are cancelled fail-closed on startup rather than restored.
 - Alert routing is wired for key signal/order/protection events and tester-suppressed for validation; real terminal/push delivery remains unverified outside Strategy Tester.
-- Several declared inputs remain inactive or partial, including close-before-session/rollover controls and some strategy-specific target/pullback/compression variants.
+- Several declared inputs remain inactive or partial, including advanced exit variants and broader strategy target/trigger modes. Close-before-session/rollover controls and the BO/FBO/TP/MR input-wiring repairs now have deterministic policy coverage, but live broker flatten behavior and BO/TP/MR organic accepted lifecycles remain unproven.
 - Historical shared Common signal journal contains pre-repair rows and a pre-fix corrupted prefix. Current proof uses byte-bounded suffixes only.
 - Performance baselines are mechanically started: the combined training baseline, a clean combined holdout retry, and independent BO/FBO/TP/MR train and holdout baselines completed, while the first holdout attempt remains preserved as invalid/incomplete evidence. No edge claim is supported.
 

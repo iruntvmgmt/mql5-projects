@@ -1,0 +1,5 @@
+created=2026-07-16T13:39:38.074950
+config=QuantBeast.TPPullbackAge.XAUUSD.M5.20260716_1339.ini
+agent_log=/Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/Tester/Agent-127.0.0.1-3000/logs/20260716.log
+pre_size=15614878
+pre_mtime=1784223307.53387

@@ -33,6 +33,7 @@ private:
    int                     m_existingLongCount;
    int                     m_existingShortCount;
    string                  m_recentSignalIDs[];
+   double                  m_recentSignalHashes[];
    datetime                m_recentSignalTimes[];
    int                     m_recentCount;
    int                     m_recentMax;
@@ -56,6 +57,7 @@ public:
       ZeroMemory(m_lastAcceptedShort);
 
       ArrayResize(m_recentSignalIDs, m_recentMax);
+      ArrayResize(m_recentSignalHashes, m_recentMax);
       ArrayResize(m_recentSignalTimes, m_recentMax);
    }
 
@@ -84,14 +86,34 @@ public:
    }
 
    //+------------------------------------------------------------------+
+   //| Stable 32-bit FNV-1a hash for bounded duplicate persistence       |
+   //+------------------------------------------------------------------+
+   double SignalIDHash(const string signalID)
+   {
+      uint hash = 2166136261;
+      for(int i = 0; i < StringLen(signalID); i++)
+      {
+         hash ^= (uint)StringGetCharacter(signalID, i);
+         hash *= 16777619;
+      }
+      return (double)hash;
+   }
+
+   //+------------------------------------------------------------------+
    //| Check if signal is a duplicate of a recent one                    |
    //+------------------------------------------------------------------+
    bool IsDuplicate(string signalID, datetime signalTime)
    {
       datetime cutoff = signalTime - m_duplicateWindowSeconds;
+      double signalHash = SignalIDHash(signalID);
       for(int i = 0; i < m_recentCount; i++)
       {
          if(m_recentSignalIDs[i] == signalID &&
+            m_recentSignalTimes[i] >= cutoff)
+         {
+            return true;
+         }
+         if(m_recentSignalHashes[i] == signalHash &&
             m_recentSignalTimes[i] >= cutoff)
          {
             return true;
@@ -111,14 +133,66 @@ public:
          for(int i = 0; i < m_recentMax - 1; i++)
          {
             m_recentSignalIDs[i]   = m_recentSignalIDs[i + 1];
+            m_recentSignalHashes[i] = m_recentSignalHashes[i + 1];
             m_recentSignalTimes[i] = m_recentSignalTimes[i + 1];
          }
          m_recentCount = m_recentMax - 1;
       }
 
       m_recentSignalIDs[m_recentCount]   = signalID;
+      m_recentSignalHashes[m_recentCount] = SignalIDHash(signalID);
       m_recentSignalTimes[m_recentCount] = signalTime;
       m_recentCount++;
+   }
+
+   //+------------------------------------------------------------------+
+   //| Export restart-critical arbitration state                         |
+   //+------------------------------------------------------------------+
+   void ExportPersistence(datetime &lastAcceptTime, double &hashes[],
+                          datetime &times[], int &count, int maxItems)
+   {
+      lastAcceptTime = m_lastAcceptTime;
+      count = 0;
+      int capped = MathMin(maxItems, m_recentCount);
+      ArrayResize(hashes, capped);
+      ArrayResize(times, capped);
+      datetime cutoff = TimeCurrent() - m_duplicateWindowSeconds;
+
+      for(int i = m_recentCount - 1; i >= 0 && count < capped; i--)
+      {
+         if(m_recentSignalTimes[i] <= 0 || m_recentSignalTimes[i] < cutoff)
+            continue;
+         hashes[count] = m_recentSignalHashes[i];
+         times[count] = m_recentSignalTimes[i];
+         count++;
+      }
+      ArrayResize(hashes, count);
+      ArrayResize(times, count);
+   }
+
+   //+------------------------------------------------------------------+
+   //| Restore restart-critical arbitration state                        |
+   //+------------------------------------------------------------------+
+   void RestorePersistence(datetime lastAcceptTime, const double &hashes[],
+                           const datetime &times[], int count, datetime now)
+   {
+      m_lastAcceptTime = 0;
+      if(lastAcceptTime > 0 && lastAcceptTime <= now &&
+         now - lastAcceptTime < m_cooldownSeconds)
+         m_lastAcceptTime = lastAcceptTime;
+
+      m_recentCount = 0;
+      int capped = MathMin(MathMin(count, ArraySize(hashes)), ArraySize(times));
+      datetime cutoff = now - m_duplicateWindowSeconds;
+      for(int i = 0; i < capped && m_recentCount < m_recentMax; i++)
+      {
+         if(hashes[i] <= 0 || times[i] <= 0 || times[i] > now || times[i] < cutoff)
+            continue;
+         m_recentSignalIDs[m_recentCount] = "";
+         m_recentSignalHashes[m_recentCount] = hashes[i];
+         m_recentSignalTimes[m_recentCount] = times[i];
+         m_recentCount++;
+      }
    }
 
    //+------------------------------------------------------------------+
@@ -398,6 +472,8 @@ public:
    //+------------------------------------------------------------------+
    int GetLongCount()  const { return m_existingLongCount; }
    int GetShortCount() const { return m_existingShortCount; }
+   datetime GetLastAcceptTime() const { return m_lastAcceptTime; }
+   int GetRecentCount() const { return m_recentCount; }
 };
 
 #endif // QB_SIGNALARBITRATOR_MQH

@@ -71,9 +71,9 @@ The timer checks terminal connectivity and periodically saves limited state. It 
 | Layer | Module | Current status | Notes |
 |---|---|---:|---|
 | Core | Enums, Types, Constants | Substantive | Strongly typed structures exist. Some fields are never populated. |
-| Core | Configuration | Partial | Extensive inputs exist; at least 22 are not wired into behavior. |
+| Core | Configuration | Partial | Extensive inputs exist; many safety and operator controls are now wired and tested, while advanced strategy/exit variants and research controls remain partial or explicitly documented. |
 | Core | Time/Math/Diagnostics | Substantive | Utility functions exist; require bug and boundary review. |
-| Core | StateStore | Partial | Saves selected risk/challenge/kill values only. |
+| Core | StateStore | Partial | Saves scoped risk/challenge/kill values, strategy daily counts, broker-rejection streaks, and bounded arbitration duplicate/cooldown state; full per-position lifecycle context is not yet durable. |
 | Data | MarketData | Substantive | Dynamic symbol properties and market snapshots exist. |
 | Data | BarCache | Substantive | Centralized cache exists for configured timeframes. Required timeframe and sequencing tests are absent. |
 | Data | TickState | Substantive | Rolling tick/spread measurements exist. |
@@ -83,7 +83,7 @@ The timer checks terminal connectivity and periodically saves limited state. It 
 | Data | NewsInterface | Partial | Manual timestamp lockout only. |
 | Regime | Four classifiers and engine | Partial | Structural inputs are populated from closed bars; classifier thresholds and switching still require runtime/scenario proof. |
 | Strategies | BO, FBO, TP, MR | Partial | Real long/short methods exist; required trigger/exit variations are incomplete. |
-| Portfolio | SignalArbitrator | Substantive | Scoring, cooldown, duplicate, conflict, exposure, and lower-ranked rejection paths are implemented and deterministically tested. Organic true-tick CSV suffix proof exists; cooldown/duplicate persistence remains incomplete. |
+| Portfolio | SignalArbitrator | Substantive | Scoring, cooldown, duplicate, conflict, exposure, lower-ranked rejection, all arbitration enum modes, and bounded restart persistence for accepted-signal hashes/timestamps are implemented and deterministically tested. Organic true-tick CSV suffix proof exists. |
 | Portfolio | AllocationEngine | Stub | Constructor only. |
 | Portfolio | ExposureManager | Stub | Constructor only; some single-symbol exposure checks live in RiskEngine. |
 | Risk | PositionSizer | Substantive | Four sizing modes are represented; requires broker and formula tests. |
@@ -97,9 +97,9 @@ The timer checks terminal connectivity and periodically saves limited state. It 
 | Execution | RecoveryEngine | Stub | Constructor only. |
 | Analytics | TradeJournal | Partial | Signal/order/trade writers exist and completed tracked closes can reach `LogTrade`. Signal decisions are now written only after their final strategy/arbitration/risk outcome, rejected direction is preserved, and signal IDs include direction; organic true-tick suffix proof is under `TestEvidence/organic_true_ticks_20260716/`. |
 | Analytics | CounterfactualTracker | Stub | Constructor only. |
-| Testing | SafetyTests | Partial | Embedded deterministic fixtures cover 38 policies/lifecycles, including rejected-signal direction, regime safety, arbitration ranking/duplicate/conflict/exposure/lower-ranked behavior, final-decision signal writing, and performance without file journaling. Organic true-tick data reached accepted FBO BUY/SELL; BO/TP/MR accepted lifecycles, actual broker faults, and normal-terminal restart remain unproven. |
+| Testing | SafetyTests | Partial | Embedded deterministic fixtures cover 51 policies/lifecycles, including rejected-signal direction, regime safety, all arbitration enum modes, duplicate/cooldown persistence, final-decision signal writing, performance without file journaling, live-mode gates, live acknowledgement gating, state scoping, unknown-position no-adoption, alert routing, preflight, session/rollover exits, chart-object suppression, strategy-counter persistence, and strategy-input wiring. Organic true-tick data reached accepted FBO BUY/SELL; BO/TP/MR accepted lifecycles, actual broker faults, and normal-terminal restart remain unproven. |
 | UI | Dashboard | Partial | Basic dashboard exists; not every required field is displayed. |
-| UI | Alerts | Disconnected partial | Terminal/push helper exists but is not included or instantiated by the EA. |
+| UI | Alerts | Partial | Terminal/push helper is included and wired for key signal, order, protection, fill, and reconciliation categories with Strategy Tester emission suppression; real terminal/push delivery remains operator-unverified. |
 
 ## Operating-mode contract
 
@@ -112,9 +112,9 @@ The timer checks terminal connectivity and periodically saves limited state. It 
 
 ## Ownership and state
 
-EA-owned orders and positions are identified by a magic-number range. Order comments include a strategy token when initially placed. Startup reconstruction currently restores minimal position data and labels the strategy `UNKNOWN`; pending-order reconstruction and mismatch resolution are absent.
+EA-owned orders and positions are identified by a magic-number range. Order comments include a strategy token when initially placed. Startup reconstruction can recover selected strategy ownership and original risk from broker history where available; unknown positions follow the configured non-adoption/quarantine/report policy. Owned pending orders are cancelled fail-closed on startup rather than restored.
 
-Required persistent state that is not yet fully preserved includes strategy cooldowns, signal IDs, partial-exit flags, scale-in counts, pending-order state, full daily/weekly counters, and last valid configuration version enforcement.
+Persistent state now includes scoped risk/challenge/kill values, same-day strategy counters, broker-rejection streaks, and bounded arbitration cooldown/duplicate memory. State that is not yet fully preserved includes durable signal IDs beyond journal strings, partial-exit detail, scale-in counts, pending-order lifecycle state, full position-management context, and automatic migration for old schemas.
 
 ## Non-negotiable architectural gates
 

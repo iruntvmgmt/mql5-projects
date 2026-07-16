@@ -1,0 +1,5 @@
+CS	0	11:24:16.878	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 34 PASS: Arbitration policy best=FBO/SELL lower=rejected duplicate=rejected conflict=rejected exposure=rejected regime=selected confluence=selected noConfluence=rejected
+CS	0	11:24:16.878	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Self-tests complete: 48 passed, 0 failed
+CS	0	11:24:34.213	Tester	final balance 10000.00 USD
+CS	0	11:24:34.213	Tester	OnTester result 0
+CS	0	11:24:34.221	Tester	XAUUSD,M5: 22080 ticks, 1104 bars generated. Environment synchronized in 0:00:00.024. Test passed in 0:00:17.749 (including ticks preprocessing 0:00:00.002).

@@ -1,0 +1,7 @@
+timestamp=2026-07-16 10:57:27 EDT
+source_sha256=a985147dbfd36f6dead2f7f467888edb2d3106d8f4e2b5fc83720e049e305b24
+dashboard_sha256=9aad1d1995f4df0999fb18d2f5c7edddfe29c7d240fae755425fa3ef03e6174f
+ex5_sha256=82ff8e1335d7a2bef94b004c0211f6e5dfdda05ef2d404524d93f2e48434fbb4
+config=QuantBeast.ChartObjectToggle.XAUUSD.M5.20260518_20260522.ini
+compile=0 errors, 0 warnings at 2026-07-16 10:56:38
+regression=47 passed, 0 failed

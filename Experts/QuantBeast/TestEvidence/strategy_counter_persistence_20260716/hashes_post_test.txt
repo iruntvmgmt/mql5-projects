@@ -1,0 +1,7 @@
+timestamp=2026-07-16 11:31:57 EDT
+source_sha256=3723de29e9b0caf6dd4ef2201866476c1d77a32f6761f85c5c64e59d5f50ecee
+statestore_sha256=1c43138f0e685c1f52e2f5509768f6873903ea7b81211e39302b32dd830a67eb
+ex5_sha256=e1f34f0bb49bf2b506da3f37f405377bf9903c3c87d084f06cf7756c379b4499
+config=QuantBeast.StrategyCounterPersistence.XAUUSD.M5.20260518_20260522.ini
+compile=0 errors, 0 warnings at 2026-07-16 11:30:53
+regression=49 passed, 0 failed

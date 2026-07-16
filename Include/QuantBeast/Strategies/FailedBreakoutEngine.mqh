@@ -120,11 +120,16 @@ public:
       // Stop beyond the sweep low
       double stop = features.sweep_extreme - m_stopBeyondSweep * features.atr;
 
-      // Target: range midpoint or VWAP
+      // Target: range midpoint or VWAP. If either level is unavailable or on
+      // the wrong side of entry, fall back to that target's configured R.
+      double risk = MathAbs(entry - stop);
       double targetVWAP = features.vwap;
+      if(targetVWAP <= entry)
+         targetVWAP = entry + risk * m_targetVWAPR;
       double targetMid  = features.range_midpoint;
+      if(targetMid <= entry)
+         targetMid = entry + risk * m_targetMidR;
       double target = MathMax(targetVWAP, targetMid); // Higher of the two
-      if(target <= entry) target = entry + MathAbs(entry - stop) * m_targetMidR;
 
       double rewardR;
       if(!CheckRiskReward(ORDER_TYPE_BUY, entry, stop, target, 1.0, rewardR))
@@ -139,7 +144,9 @@ public:
       return MakeSignal(ORDER_TYPE_BUY, entry, stop, target,
                         confidence, rewardR,
                         SETUP_FBO_PD_LOW, TRIGGER_FBO_RECLAIM,
-                        "FBO Long: reclaim above " + DoubleToString(level, m_adapter.Digits()));
+                        "FBO Long: reclaim above " + DoubleToString(level, m_adapter.Digits()) +
+                        " targetMidR=" + DoubleToString(m_targetMidR, 2) +
+                        " targetVWAPR=" + DoubleToString(m_targetVWAPR, 2));
    }
 
    //+------------------------------------------------------------------+
@@ -175,11 +182,15 @@ public:
 
       double entry = market.bid;
       double stop = features.sweep_extreme + m_stopBeyondSweep * features.atr;
+      double risk = MathAbs(entry - stop);
 
       double targetVWAP = features.vwap;
+      if(targetVWAP <= 0 || targetVWAP >= entry)
+         targetVWAP = entry - risk * m_targetVWAPR;
       double targetMid  = features.range_midpoint;
+      if(targetMid <= 0 || targetMid >= entry)
+         targetMid = entry - risk * m_targetMidR;
       double target = MathMin(targetVWAP, targetMid);
-      if(target >= entry) target = entry - MathAbs(entry - stop) * m_targetMidR;
 
       double rewardR;
       if(!CheckRiskReward(ORDER_TYPE_SELL, entry, stop, target, 1.0, rewardR))
@@ -194,7 +205,9 @@ public:
       return MakeSignal(ORDER_TYPE_SELL, entry, stop, target,
                         confidence, rewardR,
                         SETUP_FBO_PD_HIGH, TRIGGER_FBO_RECLAIM,
-                        "FBO Short: reclaim below " + DoubleToString(level, m_adapter.Digits()));
+                        "FBO Short: reclaim below " + DoubleToString(level, m_adapter.Digits()) +
+                        " targetMidR=" + DoubleToString(m_targetMidR, 2) +
+                        " targetVWAPR=" + DoubleToString(m_targetVWAPR, 2));
    }
 };
 

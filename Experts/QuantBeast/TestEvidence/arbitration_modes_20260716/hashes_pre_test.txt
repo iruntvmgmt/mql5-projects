@@ -1,0 +1,6 @@
+timestamp=2026-07-16 11:24:10 EDT
+source_sha256=65a007c3cd091314c7000403c635f0f5fce4a11c5c88d419de86cac4f4635935
+safetytests_sha256=e4fad7fcd448cb2b2d199fbbc5bc6b392a69025a6cdd4d5e1efd174d74fc1dfa
+ex5_sha256=3ecc2d1274891dc02db319ffa2373e1b804ef0fa4ec827dbcaeae3a4c5bafed1
+agent_log_size=8937050
+config=QuantBeast.ArbitrationModes.XAUUSD.M5.20260518_20260522.ini

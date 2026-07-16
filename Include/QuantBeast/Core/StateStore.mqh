@@ -28,6 +28,15 @@
 #define GV_DRAWDOWN_LOCK       GV_PREFIX "DrawdownLock"
 #define GV_CONSEC_LOSSES       GV_PREFIX "ConsecLosses"
 #define GV_BROKER_FAILURES     GV_PREFIX "BrokerFailures"
+#define GV_STRAT_TRADE_DAY     GV_PREFIX "StratTradeDay"
+#define GV_STRAT_TRADES_BO     GV_PREFIX "StratTradesBO"
+#define GV_STRAT_TRADES_FBO    GV_PREFIX "StratTradesFBO"
+#define GV_STRAT_TRADES_TP     GV_PREFIX "StratTradesTP"
+#define GV_STRAT_TRADES_MR     GV_PREFIX "StratTradesMR"
+#define GV_ARB_LAST_ACCEPT     GV_PREFIX "ArbLastAccept"
+#define GV_ARB_RECENT_COUNT    GV_PREFIX "ArbRecentCount"
+#define GV_ARB_RECENT_HASH     GV_PREFIX "ArbRecentHash"
+#define GV_ARB_RECENT_TIME     GV_PREFIX "ArbRecentTime"
 #define GV_CHALLENGE_STAGE     GV_PREFIX "ChallengeStage"
 #define GV_STAGE_START_EQUITY  GV_PREFIX "StageStartEquity"
 #define GV_STAGE_PEAK          GV_PREFIX "StagePeak"
@@ -50,6 +59,7 @@
 #define GV_STATE_VERSION       GV_PREFIX "StateVer"
 
 #define QB_STATE_VERSION_NUM   4
+#define QB_ARB_PERSIST_MAX     20
 
 string g_QBStateScopeSymbol = "";
 
@@ -249,6 +259,90 @@ void LoadKillSwitchState(KillSwitchState &state)
    if(state.emergency) state.emergency_reason = "Restored persisted emergency lock";
 }
 
+void SaveStrategyTradeCounters(datetime tradeDay, const int &counts[])
+{
+   GV_WriteDatetime(GV_STRAT_TRADE_DAY, tradeDay);
+   GV_WriteDouble(GV_STRAT_TRADES_BO,  (double)counts[QB_STRAT_IDX_BO]);
+   GV_WriteDouble(GV_STRAT_TRADES_FBO, (double)counts[QB_STRAT_IDX_FBO]);
+   GV_WriteDouble(GV_STRAT_TRADES_TP,  (double)counts[QB_STRAT_IDX_TP]);
+   GV_WriteDouble(GV_STRAT_TRADES_MR,  (double)counts[QB_STRAT_IDX_MR]);
+}
+
+bool LoadStrategyTradeCounters(datetime &tradeDay, int &counts[])
+{
+   tradeDay = GV_ReadDatetime(GV_STRAT_TRADE_DAY, 0);
+   if(tradeDay == 0) return false;
+
+   ArrayInitialize(counts, 0);
+   counts[QB_STRAT_IDX_BO]  = MathMax(0, (int)GV_ReadDouble(GV_STRAT_TRADES_BO, 0));
+   counts[QB_STRAT_IDX_FBO] = MathMax(0, (int)GV_ReadDouble(GV_STRAT_TRADES_FBO, 0));
+   counts[QB_STRAT_IDX_TP]  = MathMax(0, (int)GV_ReadDouble(GV_STRAT_TRADES_TP, 0));
+   counts[QB_STRAT_IDX_MR]  = MathMax(0, (int)GV_ReadDouble(GV_STRAT_TRADES_MR, 0));
+   return true;
+}
+
+bool QBShouldRestoreStrategyCounters(datetime savedDay, datetime currentDay)
+{
+   return savedDay != 0 && savedDay == currentDay;
+}
+
+string GV_ArbHashSlotName(int idx)
+{
+   return GV_ARB_RECENT_HASH + IntegerToString(idx);
+}
+
+string GV_ArbTimeSlotName(int idx)
+{
+   return GV_ARB_RECENT_TIME + IntegerToString(idx);
+}
+
+void SaveArbitrationState(datetime lastAcceptTime, const double &hashes[],
+                          const datetime &times[], int count)
+{
+   int capped = MathMin(MathMin(count, ArraySize(hashes)), ArraySize(times));
+   capped = MathMin(capped, QB_ARB_PERSIST_MAX);
+
+   GV_WriteDatetime(GV_ARB_LAST_ACCEPT, lastAcceptTime);
+   GV_WriteDouble(GV_ARB_RECENT_COUNT, (double)capped);
+   for(int i = 0; i < QB_ARB_PERSIST_MAX; i++)
+   {
+      if(i < capped)
+      {
+         GV_WriteDouble(GV_ArbHashSlotName(i), hashes[i]);
+         GV_WriteDatetime(GV_ArbTimeSlotName(i), times[i]);
+      }
+      else
+      {
+         GV_WriteDouble(GV_ArbHashSlotName(i), 0);
+         GV_WriteDatetime(GV_ArbTimeSlotName(i), 0);
+      }
+   }
+}
+
+bool LoadArbitrationState(datetime &lastAcceptTime, double &hashes[],
+                          datetime &times[], int &count)
+{
+   lastAcceptTime = GV_ReadDatetime(GV_ARB_LAST_ACCEPT, 0);
+   count = MathMax(0, (int)GV_ReadDouble(GV_ARB_RECENT_COUNT, 0));
+   count = MathMin(count, QB_ARB_PERSIST_MAX);
+
+   ArrayResize(hashes, count);
+   ArrayResize(times, count);
+   for(int i = 0; i < count; i++)
+   {
+      hashes[i] = GV_ReadDouble(GV_ArbHashSlotName(i), 0);
+      times[i] = GV_ReadDatetime(GV_ArbTimeSlotName(i), 0);
+   }
+
+   return lastAcceptTime > 0 || count > 0;
+}
+
+bool QBShouldRestoreArbitrationTimestamp(datetime savedTime, datetime now,
+                                         int windowSeconds)
+{
+   return savedTime > 0 && savedTime <= now && now - savedTime < windowSeconds;
+}
+
 //+------------------------------------------------------------------+
 //| Save state version for migration detection                        |
 //+------------------------------------------------------------------+
@@ -276,7 +370,10 @@ void ClearAllState()
       GV_DAILY_START_EQUITY, GV_DAILY_DATE, GV_DAILY_PNL,
       GV_WEEKLY_START_EQUITY, GV_WEEKLY_DATE, GV_HIGH_WATER_MARK,
       GV_DAILY_LOCK, GV_WEEKLY_LOCK, GV_DRAWDOWN_LOCK, GV_CONSEC_LOSSES,
-      GV_BROKER_FAILURES,
+      GV_BROKER_FAILURES, GV_STRAT_TRADE_DAY,
+      GV_STRAT_TRADES_BO, GV_STRAT_TRADES_FBO,
+      GV_STRAT_TRADES_TP, GV_STRAT_TRADES_MR,
+      GV_ARB_LAST_ACCEPT, GV_ARB_RECENT_COUNT,
       GV_CHALLENGE_STAGE, GV_STAGE_START_EQUITY, GV_STAGE_PEAK,
       GV_STAGE_ATTEMPTS, GV_STAGE_TARGET, GV_STAGE_RISK,
       GV_STAGE_PROFIT_LOCK, GV_STAGE_MAX_EXPOSURE,
@@ -292,6 +389,14 @@ void ClearAllState()
       string key = GV_ScopedName(names[i]);
       if(GlobalVariableCheck(key))
          GlobalVariableDel(key);
+   }
+
+   for(int i = 0; i < QB_ARB_PERSIST_MAX; i++)
+   {
+      string hashKey = GV_ScopedName(GV_ArbHashSlotName(i));
+      string timeKey = GV_ScopedName(GV_ArbTimeSlotName(i));
+      if(GlobalVariableCheck(hashKey)) GlobalVariableDel(hashKey);
+      if(GlobalVariableCheck(timeKey)) GlobalVariableDel(timeKey);
    }
 }
 
@@ -362,6 +467,37 @@ bool QBTestStateScopePolicy(string &detail)
             " account=" + (accountSeparated ? "scoped" : "FAILED") +
             " override=" + (overrideApplied ? "effective" : "FAILED");
    return symbolSeparated && accountSeparated && overrideApplied;
+}
+
+bool QBTestStrategyCounterRestorePolicy(string &detail)
+{
+   datetime today = 1767225600;       // 2026.01.01 00:00:00
+   datetime yesterday = today - 86400;
+   bool sameDayRestores = QBShouldRestoreStrategyCounters(today, today);
+   bool missingRejected = !QBShouldRestoreStrategyCounters(0, today);
+   bool oldRejected = !QBShouldRestoreStrategyCounters(yesterday, today);
+   bool futureRejected = !QBShouldRestoreStrategyCounters(today + 86400, today);
+
+   detail = "same=" + (sameDayRestores ? "restore" : "FAILED") +
+            " missing=" + (missingRejected ? "reject" : "FAILED") +
+            " old=" + (oldRejected ? "reject" : "FAILED") +
+            " future=" + (futureRejected ? "reject" : "FAILED");
+   return sameDayRestores && missingRejected && oldRejected && futureRejected;
+}
+
+bool QBTestArbitrationRestorePolicy(string &detail)
+{
+   datetime now = 1767225900;         // 2026.01.01 00:05:00
+   bool freshRestores = QBShouldRestoreArbitrationTimestamp(now - 60, now, 300);
+   bool expiredRejected = !QBShouldRestoreArbitrationTimestamp(now - 301, now, 300);
+   bool missingRejected = !QBShouldRestoreArbitrationTimestamp(0, now, 300);
+   bool futureRejected = !QBShouldRestoreArbitrationTimestamp(now + 60, now, 300);
+
+   detail = "fresh=" + (freshRestores ? "restore" : "FAILED") +
+            " expired=" + (expiredRejected ? "reject" : "FAILED") +
+            " missing=" + (missingRejected ? "reject" : "FAILED") +
+            " future=" + (futureRejected ? "reject" : "FAILED");
+   return freshRestores && expiredRejected && missingRejected && futureRejected;
 }
 
 #endif // QB_STATESTORE_MQH

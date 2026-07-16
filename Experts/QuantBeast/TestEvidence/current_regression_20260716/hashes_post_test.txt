@@ -1,0 +1,3 @@
+MQL5/Experts/QuantBeast/QuantBeastEA.mq5 sha256=8b36c2f7f66f38d2fbe982cd4d9427e2c14e2d8e55658c041d1d38bcd1b9ba49 bytes=100657
+MQL5/Experts/QuantBeast/QuantBeastEA.ex5 sha256=352c6be5f415370c9548315aea4a5dad9cb645f022c8a0afd9bb37cbc61ad1d3 bytes=484760
+MQL5/Include/QuantBeast/Core/Configuration.mqh sha256=287d8f29198bd829367fcc49650c849afafd5fe95b289411c77a92ab2a9635e6 bytes=21932

@@ -138,8 +138,11 @@ public:
       double stop = entry - risk * m_emergencyStopR;
       if(stop > stopLevel) stop = stopLevel; // Don't place stop above the low
 
-      // Target: VWAP
+      // Target: opposite VWAP standard-deviation band when available.
+      // Fall back to VWAP, then range midpoint, then fixed R.
       double target = features.vwap;
+      if(features.vwap > 0 && features.vwap_sd > 0)
+         target = features.vwap + m_targetSDBandR * features.vwap_sd;
       if(target <= 0 || target <= entry)
       {
          // Fallback: use range midpoint
@@ -163,7 +166,8 @@ public:
                         confidence, rewardR,
                         SETUP_MR_DEVIATION_EXTREME, TRIGGER_MR_RETURN_START,
                         "MR Long: dev=" + DoubleToString(deviation, 2) +
-                        "sd, wick=" + DoubleToString(features.rejection_wick_lower, 2));
+                        "sd, wick=" + DoubleToString(features.rejection_wick_lower, 2) +
+                        ", targetBandR=" + DoubleToString(m_targetSDBandR, 2));
    }
 
    //+------------------------------------------------------------------+
@@ -197,6 +201,8 @@ public:
       if(stop < stopLevel) stop = stopLevel;
 
       double target = features.vwap;
+      if(features.vwap > 0 && features.vwap_sd > 0)
+         target = features.vwap - m_targetSDBandR * features.vwap_sd;
       if(target <= 0 || target >= entry)
       {
          target = features.range_midpoint;
@@ -218,7 +224,8 @@ public:
                         confidence, rewardR,
                         SETUP_MR_DEVIATION_EXTREME, TRIGGER_MR_RETURN_START,
                         "MR Short: dev=" + DoubleToString(deviation, 2) +
-                        "sd, wick=" + DoubleToString(features.rejection_wick_upper, 2));
+                        "sd, wick=" + DoubleToString(features.rejection_wick_upper, 2) +
+                        ", targetBandR=" + DoubleToString(m_targetSDBandR, 2));
    }
 };
 

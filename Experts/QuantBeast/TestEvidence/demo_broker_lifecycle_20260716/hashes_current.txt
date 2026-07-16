@@ -1,0 +1,2 @@
+Experts/QuantBeast/QuantBeastEA.mq5	sha256=b9d2950a56a94838fc4765ca418f8f9c40e1d59006ad1dcef760f99c44276d20	bytes=99454
+Experts/QuantBeast/QuantBeastEA.ex5	sha256=f32f2df50f3c6c76fe64a5df5419a68a1f2d3fe30559f9c6f6c4c6641e2140c5	bytes=482994

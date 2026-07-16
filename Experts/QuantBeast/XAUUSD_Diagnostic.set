@@ -4,6 +4,7 @@
 ;| NO ORDERS WILL BE SENT                                           |
 ;+------------------------------------------------------------------+
 InpMode=0
+InpAcknowledgeLiveBrokerRisk=false
 InpAcknowledgeChallengeRisk=false
 InpDashboardEnabled=true
 InpEnableDebugLogging=true

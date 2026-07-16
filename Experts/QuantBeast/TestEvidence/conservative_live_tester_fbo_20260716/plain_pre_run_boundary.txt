@@ -1,0 +1,5 @@
+created=2026-07-16T14:08:13.642886
+config=QuantBeast.ConservativeLiveTester.FBO.XAUUSD.M5.20260716.plain.ini
+agent_log=/Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/Tester/Agent-127.0.0.1-3000/logs/20260716.log
+pre_size=19014960
+pre_mtime=1784225241.4519486

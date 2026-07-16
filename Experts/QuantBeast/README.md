@@ -2,11 +2,11 @@
 
 **Version:** 1.00 research framework  
 **Current status:** **READY FOR SHADOW MODE — mechanical research only**  
-**Live and Challenge trading:** prohibited
+**Live and Challenge trading:** prohibited; live broker transmission requires explicit `InpAcknowledgeLiveBrokerRisk=true`
 
 QuantBeast is a modular MT5 XAUUSD research EA with separate market-data, feature, regime, strategy, arbitration, risk, execution, position-management, persistence, analytics, and dashboard layers.
 
-The repaired source compiles at **0 errors and 0 warnings**. The latest broker-free Shadow fixture completed with **38 startup tests passed and 0 failed**, now including direction-preserving strategy rejections, regime/arbitration policies, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, and performance updates while file trade journaling is disabled. Production persistence explicitly flushes saved globals. A fresh-process Strategy Tester probe did not retain those globals, which documents tester isolation but does not prove normal-terminal restart safety. These results prove isolated mechanics, not profitability, live restart recovery, or live safety.
+The repaired source compiles at **0 errors and 0 warnings**. The latest broker-free Shadow fixture completed with **51 startup tests passed and 0 failed**, now including direction-preserving strategy rejections, regime/arbitration policies, restored arbitration duplicate/cooldown persistence, deterministic BO/TP/MR strategy-input wiring, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, performance updates while file trade journaling is disabled, live-mode gates, live broker-transmission acknowledgement gating, unknown-position no-adoption behavior, alert routing, entry preflight controls, session/rollover exit policy, self-test detail logging control, chart-object toggle policy, fill/reconciliation alert categories, and strategy-counter same-day restore policy. Manual/MCP demo broker open-close lifecycle evidence exists, but QuantBeast EA-autonomous demo execution is not yet proven. Production persistence explicitly flushes saved globals. A fresh-process Strategy Tester probe did not retain those globals, which documents tester isolation but does not prove normal-terminal restart safety. These results prove isolated mechanics, not profitability, live restart recovery, or live safety.
 
 The aggressive small-account mission is documented in `PROJECT_MISSION_AND_AUDIT_CONTEXT.md`. It is a bounded-risk research objective, not a profit promise or authorization to bypass central safety controls.
 
@@ -26,13 +26,13 @@ Market data -> data quality -> closed-bar features -> regimes
 | Compile | Pass: 0 errors, 0 warnings |
 | Closed-bar indexing and trend direction | Statically repaired |
 | Four strategy classes | Direct long, short, and direction-preserving rejection paths proven; organic true-tick Shadow evidence accepted FBO BUY/SELL and produced BO/FBO/TP/MR BUY/SELL rejections; BO/TP/MR accepted entries remain pending |
-| Arbitration and signal decisions | Deterministic ranking, duplicate, conflict, exposure, and lower-ranked rejection paths pass; signal rows are emitted at their final strategy/arbitration/risk decision and IDs include direction. Organic true-tick CSV proof is under `TestEvidence/organic_true_ticks_20260716/`. |
+| Arbitration and signal decisions | Deterministic ranking, regime-priority, require-confluence, reject-conflicts, duplicate, restored duplicate/cooldown, conflict, exposure, and lower-ranked rejection paths pass; signal rows are emitted at their final strategy/arbitration/risk decision and IDs include direction. Organic true-tick CSV proof is under `TestEvidence/organic_true_ticks_20260716/`. |
 | Broker-aware sizing and risk | Repaired with `OrderCalcProfit`; scenario proof pending |
 | Execution/protection | Retcodes, position reconciliation, SL/TP verification, fail-closed path implemented; runtime proof pending |
 | Trade lifecycle | `OnTradeTransaction` processes owned fills/closes and analytics; runtime proof pending |
 | Persistence/recovery | Incompatible state versions fail closed; deterministic risk-state restoration passes; saves explicitly flush; fresh-process tester globals reset/isolate; normal-terminal broker-position/pending-order restart recovery remains unproven |
 | Shadow mode | Virtual market fills, stop/target, partial, breakeven, ATR trail, time stop, costs, equity, exposure, MFE/MAE, and close journaling implemented |
-| Diagnostic/Shadow runtime | Strategy Tester initialized Shadow mode; 38 tests passed, 0 failed; broker balance unchanged |
+| Diagnostic/Shadow runtime | Strategy Tester initialized Shadow mode; 51 tests passed, 0 failed; broker balance unchanged |
 | Live approval | Prohibited |
 
 ## Operating modes
@@ -75,9 +75,24 @@ Market data -> data quality -> closed-bar features -> regimes
 - `TestEvidence/audit_final_20260716/` — final clean compile evidence, 38/0 deterministic regression, final-decision writer proof, and performance-without-file-journal proof
 - `TestEvidence/organic_true_ticks_20260716/` — organic true-tick Shadow CSV proof with all strategies enabled and self-tests disabled
 - `TestEvidence/performance_readiness_20260716/` — reproducible Shadow performance-readiness configs, completed combined true-tick training baseline, invalid first holdout attempt, completed clean holdout retry, and independent BO/FBO/TP/MR train and holdout baselines
+- `TestEvidence/current_regression_20260716/` — latest clean compile, 51/0 Shadow regression, and current boundary evidence
+- `TestEvidence/arbitration_modes_20260716/` — regime-priority and require-confluence arbitration coverage
+- `TestEvidence/arbitration_persistence_20260716/` — arbitration duplicate/cooldown restart persistence
+- `TestEvidence/strategy_counter_persistence_20260716/` — same-day strategy daily counter persistence
+- `TestEvidence/preset_gate_alignment_20260716/` — live/challenge preset gate alignment
+- `TestEvidence/live_broker_ack_gate_20260716/` — explicit live broker-transmission acknowledgement gating
 - `TestEvidence/live_strategy_gate_20260716/` — production live-mode gates limiting live initialization to FBO-only and market-order-only until BO/TP/MR and pending-order evidence exists
 - `TestEvidence/live_recovery_gate_20260716/` — production live-mode recovery gate blocking passive startup flatten of unknown positions
 - `TestEvidence/state_scope_20260716/` — effective-symbol persistence scope repair and 40/0 Shadow regression evidence
+- `TestEvidence/bo_compression_pct_20260716/` — BO compression-percentile gating against ATR percentile rank
+- `TestEvidence/tp_pullback_age_20260716/` — TP pullback-age gating against completed-bar swing age
+- `TestEvidence/mr_target_band_20260716/` — MR opposite VWAP SD-band target coverage
+- `TestEvidence/fbo_target_variants_20260716/` — FBO midpoint/VWAP target fallback variants
+- `TestEvidence/demo_broker_lifecycle_20260716/` — operator-authorized demo broker open/close lifecycle proof
+- `TestEvidence/conservative_live_tester_fbo_20260716/` — Conservative Live tester fail-closed live-ack gate evidence
+- `TestEvidence/selftest_detail_control_20260716/` — self-test detail logging control
+- `TestEvidence/chart_object_toggle_20260716/` — chart-object rendering toggle behavior
+- `TestEvidence/alert_category_routing_20260716/` — fill/reconciliation alert category wiring
 - `FINAL_ADVERSARIAL_AUDIT_20260716.md` — final safe-phase adversarial audit and readiness classification
 - `HANDOFF.md` — living status and next task
 - `KNOWN_LIMITATIONS.md` — authoritative remaining-debt register

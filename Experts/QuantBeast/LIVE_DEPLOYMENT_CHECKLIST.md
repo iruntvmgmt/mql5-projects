@@ -3,9 +3,9 @@
 **Current decision:** **DO NOT DEPLOY LIVE**  
 This checklist is a release gate, not general advice. Every applicable item requires recorded evidence.
 
-**Latest safe readiness:** `READY FOR SHADOW MODE` as of 2026-07-16. Compile, deterministic Shadow fixtures, and organic true-tick Shadow journal proof passed; real broker execution and restart evidence are still absent.
+**Latest safe readiness:** `READY FOR SHADOW MODE` as of 2026-07-16. Compile, deterministic Shadow fixtures, organic true-tick Shadow journal proof, and manual/MCP demo broker open-close lifecycle passed; QuantBeast EA-autonomous demo execution and restart evidence are still absent.
 
-Current live-mode code gate: Conservative Live and acknowledged Challenge Live initialize only when the enabled strategy set is FBO-only and market-order-only with pending orders disabled. Live startup also rejects `UNKNOWN_FLATTEN`; use `UNKNOWN_QUARANTINE` until explicit operator-approved flatten handling is implemented and proven. BO, TP, MR, and pending orders must remain disabled for any future explicitly authorized demo/live execution until accepted-entry, lifecycle, pending-order, and restart evidence exists.
+Current live-mode code gate: Conservative Live and acknowledged Challenge Live initialize only when `InpAcknowledgeLiveBrokerRisk=true`, the enabled strategy set is FBO-only, and execution is market-order-only with pending orders disabled. Live startup also rejects `UNKNOWN_FLATTEN`; use `UNKNOWN_QUARANTINE` until explicit operator-approved flatten handling is implemented and proven. BO, TP, MR, and pending orders must remain disabled for any future explicitly authorized demo/live execution until accepted-entry, lifecycle, pending-order, and restart evidence exists.
 
 ## A. Source and build gate
 
@@ -118,6 +118,7 @@ Current broker-free evidence satisfies parts of the Shadow/journal gate only: `T
 ## K. Conservative live approval
 
 - [ ] Written approval records EA version/hash, broker, symbol, account, preset, and maximum loss.
+- [ ] `InpAcknowledgeLiveBrokerRisk=true` set deliberately for this specific demo/live validation window.
 - [ ] Enabled strategies are exactly FBO-only unless BO/TP/MR accepted-entry and lifecycle evidence has been added and this checklist is revised.
 - [ ] Execution is market-order-only with stop/limit pending orders disabled and `InpMaxPendingOrders=0` unless pending-order lifecycle/restart evidence has been added and this checklist is revised.
 - [ ] Risk is minimum legal lot or independently verified low fixed risk.

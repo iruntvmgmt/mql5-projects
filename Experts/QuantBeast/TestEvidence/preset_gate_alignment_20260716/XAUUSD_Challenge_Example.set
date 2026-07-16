@@ -1,0 +1,39 @@
+;+------------------------------------------------------------------+
+;|                                    XAUUSD_Challenge_Example.set  |
+;| QuantBeast EA - Challenge Mode Example Preset                    |
+;| WARNING: AGGRESSIVE RISK. Can rapidly lose entire account.       |
+;| InpAcknowledgeChallengeRisk MUST be set to true manually.        |
+;| Current gated scope: FBO-only, market-only, no pending orders.   |
+;| USE AT YOUR OWN RISK.                                            |
+;+------------------------------------------------------------------+
+InpMode=3
+InpAcknowledgeChallengeRisk=false
+InpBO_Enabled=false
+InpFBO_Enabled=true
+InpTP_Enabled=false
+InpMR_Enabled=false
+InpRiskPercent=3.0
+InpMaxRiskPerTrade=3.0
+InpMinRewardRisk=1.0
+InpMaxPositions=1
+InpMaxPendingOrders=0
+InpMaxTotalExposureLots=0.5
+InpMaxSpreadPoints=40
+InpDailyLossLimitPct=10.0
+InpWeeklyLossLimitPct=15.0
+InpMaxDrawdownPct=30.0
+InpEmergencyEquityFloor=50.0
+InpMaxConsecLosses=5
+InpDashboardEnabled=true
+InpUseMarketOrders=true
+InpUseStopOrders=false
+InpUseLimitOrders=false
+InpPersistState=true
+InpUseGlobalVars=true
+InpEnableBreakeven=true
+InpEnablePartialClose=true
+InpEnableATRTrail=true
+InpUnknownPosPolicy=2
+InpChal_MaxAttempts=3
+InpChal_MaxStageDD=30.0
+InpChal_AllowPyramiding=false

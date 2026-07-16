@@ -6,18 +6,18 @@
 
 The original audit correctly failed the generated project at 23 errors and 15 warnings. The repaired source now compiles to `QuantBeastEA.ex5` with **0 errors and 0 warnings**. The repair removed the confirmed compile blockers and corrected multiple critical safety, accounting, indexing, execution, recovery, and strategy-unit defects.
 
-This is not a profitability verdict. The latest Shadow Strategy Tester fixture completed with **45 startup checks passed and 0 failed**, including direction-preserving rejected signals, regime/arbitration policies, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, performance updates when file trade journaling is disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, alert-routing behavior, entry preflight controls, and session/rollover exit policy. Local agent logs are authoritative. The EA is not cleared for Conservative Live or Challenge modes.
+This is not a profitability verdict. The latest Shadow Strategy Tester fixture completed with **51 startup checks passed and 0 failed**, including direction-preserving rejected signals, regime/arbitration policies, arbitration persistence, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, performance updates when file trade journaling is disabled, live-mode strategy/execution gates, live broker-transmission acknowledgement gating, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, alert-routing behavior, entry preflight controls, session/rollover exit policy, self-test detail logging control, chart-object toggle policy, fill/reconciliation alert categories, and strategy-counter same-day restore policy. Local agent logs are authoritative. The EA is not cleared for Conservative Live or Challenge modes.
 
 ## Final evidence
 
 - Source: `QuantBeastEA.mq5`
-- Source SHA-256: `8312ffcd21e9e5a8d051315acd14398e3aba7b7488ab4a8888186957ffde34b8`
-- EX5 SHA-256: `834e063c510e940e2ff366a8deea4edda32511b06f3ec8ff2cfb4b7d361bd5a7`
+- Source SHA-256: `8b36c2f7f66f38d2fbe982cd4d9427e2c14e2d8e55658c041d1d38bcd1b9ba49`
+- EX5 SHA-256: `e64f3f8ce8b201b7614d13c3a6ea4129677883657c01af4528a35735f4e6f859`
 - Shadow module SHA-256: `05885359c865d3c56d738a7ededcd13a49b46b3c8d74dc07c7d040ebece560bb`
 - Compiler: MetaEditor build 6002, X64 Regular
 - Compile result: `0 errors, 0 warnings`
-- Runtime result: deterministic `45 passed, 0 failed`; organic true-tick Shadow run `417423 ticks`, `276 bars`; tester balance unchanged at `10000.00`
-- Evidence: prior folders plus `TestEvidence/broker_fault_matrix_20260715/`, `TestEvidence/organic_pipeline_20260715/`, `TestEvidence/arbitration_journal_20260715/`, `TestEvidence/audit_final_20260716/`, `TestEvidence/organic_true_ticks_20260716/`, `TestEvidence/performance_readiness_20260716/`, `TestEvidence/live_strategy_gate_20260716/`, and `FINAL_ADVERSARIAL_AUDIT_20260716.md`
+- Runtime result: deterministic `51 passed, 0 failed`; organic true-tick Shadow run `417423 ticks`, `276 bars`; tester balance unchanged at `10000.00`
+- Evidence: prior folders plus `TestEvidence/broker_fault_matrix_20260715/`, `TestEvidence/organic_pipeline_20260715/`, `TestEvidence/arbitration_journal_20260715/`, `TestEvidence/audit_final_20260716/`, `TestEvidence/organic_true_ticks_20260716/`, `TestEvidence/performance_readiness_20260716/`, `TestEvidence/live_strategy_gate_20260716/`, `TestEvidence/selftest_detail_control_20260716/`, `TestEvidence/chart_object_toggle_20260716/`, `TestEvidence/alert_category_routing_20260716/`, `TestEvidence/preset_gate_alignment_20260716/`, `TestEvidence/arbitration_modes_20260716/`, `TestEvidence/strategy_counter_persistence_20260716/`, `TestEvidence/arbitration_persistence_20260716/`, `TestEvidence/demo_broker_lifecycle_20260716/`, `TestEvidence/live_broker_ack_gate_20260716/`, `TestEvidence/current_regression_20260716/`, `TestEvidence/bo_compression_pct_20260716/`, `TestEvidence/tp_pullback_age_20260716/`, and `FINAL_ADVERSARIAL_AUDIT_20260716.md`
 
 ## Critical repairs completed
 
@@ -97,7 +97,7 @@ This is not a profitability verdict. The latest Shadow Strategy Tester fixture c
     - Every non-selected valid candidate receives an explicit arbitration rejection reason, including lower-ranked, confluence, duplicate, opposing, and exposure paths.
     - The controller journals valid candidates only after arbitration and central risk produce the final signal decision; broker order/fill outcomes remain in the order journal.
     - Signal IDs include direction, preventing same-strategy BUY and SELL evaluations at one timestamp from sharing an identifier.
-    - Deterministic arbitration coverage and the full 40/0 Shadow regression pass; completed organic post-repair true-tick CSV inspection is under `TestEvidence/organic_true_ticks_20260716/`.
+    - Deterministic arbitration coverage now includes every enum mode and the full 48/0 Shadow regression pass; completed organic post-repair true-tick CSV inspection is under `TestEvidence/organic_true_ticks_20260716/`.
 
 ## Remaining critical/high risks
 
@@ -121,10 +121,6 @@ The production persistence path now calls `GlobalVariablesFlush()` explicitly af
 
 ### Strategy semantics still needing research completion
 
-- BO's strategy-specific compression-percent input does not independently recompute the feature threshold.
-- FBO's two target-R inputs do not fully express separate midpoint/VWAP exit policies.
-- TP's maximum pullback-bar input is not yet measured by a dedicated pullback-age feature.
-- MR's opposite-band target input is not yet a distinct target-selection mode.
 - These are test-design gaps, not evidence of profitability.
 
 ### Challenge Mode remains research-only

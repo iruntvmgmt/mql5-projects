@@ -1,0 +1,9 @@
+timestamp=2026-07-16 10:48:46 EDT
+source_sha256=26b69114f94465a6c901f62c353e24235bcb61bba905644e5e1a2b14a4a7154a
+ex5_sha256=884d316e0560508e21d05d005004e38804c7f230b88f078a16a9a2d5bda97ad8
+config=QuantBeast.SelfTestDetail.XAUUSD.M5.20260518_20260522.ini
+compile=0 errors, 0 warnings at 2026-07-16 10:47:44
+regression=46 passed, 0 failed
+suppression_config=QuantBeast.SelfTestDetailOff.XAUUSD.M5.20260518_20260522.ini
+input=InpLogSelfTestDetails=false
+result=final summary and tester footer present; TEST PASS detail rows absent in new log suffix

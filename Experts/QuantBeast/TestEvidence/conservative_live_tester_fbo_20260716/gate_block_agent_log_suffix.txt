@@ -1,0 +1,230 @@
+CS	0	14:06:32.691	Startup	MetaTester 5 build 6002, 13 Jul 2026
+CS	0	14:06:32.694	Startup	Windows 11 build 22000 on Wine 11.1 Darwin 25.5.0, 8 x Intel Core i5-1038NG7  @ 2.00GHz, AVX2, 4 / 15 Gb memory, 25 / 465 Gb disk, GMT-5
+CS	0	14:06:32.696	Server	MetaTester 5 started on 127.0.0.1:3000
+CS	0	14:06:32.699	Startup	cloud network mode is off
+CS	0	14:06:32.699	Startup	initialization finished
+CS	0	14:06:33.037	127.0.0.1	login (build 6002)
+CS	0	14:06:33.058	Network	10824 bytes of account info loaded
+CS	0	14:06:33.058	Network	1478 bytes of tester parameters loaded
+CS	0	14:06:33.058	Network	100036 bytes of input parameters loaded
+CS	0	14:06:33.059	Network	533 bytes of symbols list loaded (88 symbols)
+CS	0	14:06:33.059	Tester	expert file added: Experts\QuantBeast\QuantBeastEA.ex5. 492591 bytes loaded
+CS	0	14:06:33.065	Tester	initial deposit 10000.00 USD, leverage 1:500
+CS	0	14:06:33.066	Tester	successfully initialized
+CS	0	14:06:33.066	Network	485 Kb of total initialization data received
+CS	0	14:06:33.066	Tester	Intel Core i5-1038NG7  @ 2.00GHz, 16383 MB
+CS	0	14:06:33.082	Symbols	XAUUSD: symbol to be synchronized
+CS	0	14:06:33.084	Symbols	XAUUSD: symbol synchronized, 3720 bytes of symbol info received
+CS	0	14:06:33.102	History	XAUUSD: load 27 bytes of history data to synchronize in 0:00:00.006
+CS	0	14:06:33.102	History	XAUUSD: history synchronized from 2021.01.04 to 2026.07.10
+CS	0	14:06:33.104	Ticks	XAUUSD: ticks synchronization started
+CS	0	14:06:35.106	Ticks	XAUUSD: load 34 bytes of tick data to synchronize in 0:00:02.003
+CS	0	14:06:35.106	Ticks	XAUUSD: history ticks synchronized from 2026.06.19 to 2026.07.09
+CS	0	14:06:35.206	History	XAUUSD,M5: history cache allocated for 104390 bars and contains 103738 bars from 2025.01.02 01:00 to 2026.06.19 19:55
+CS	0	14:06:35.206	History	XAUUSD,M5: history begins from 2025.01.02 01:00
+CS	0	14:06:35.311	Tester	XAUUSD,M5 (Coinexx-Demo): generating based on real ticks
+CS	0	14:06:35.312	Tester	XAUUSD,M5: testing of Experts\QuantBeast\QuantBeastEA.ex5 from 2026.06.22 00:00 to 2026.06.23 00:00 started with inputs:
+CS	0	14:06:35.312	Tester	  ══════════ General ══════════=
+CS	0	14:06:35.312	Tester	  InpMode=2
+CS	0	14:06:35.312	Tester	  InpAcknowledgeChallengeRisk=false
+CS	0	14:06:35.312	Tester	  ══════════ Symbol and Broker ══════════=
+CS	0	14:06:35.312	Tester	  InpPrimarySymbol=
+CS	0	14:06:35.312	Tester	  InpBrokerUTCOffsetHours=2
+CS	0	14:06:35.312	Tester	  InpBrokerIsDST=true
+CS	0	14:06:35.312	Tester	  InpMaxSpreadPoints=30
+CS	0	14:06:35.312	Tester	  InpStaleQuoteMs=5000
+CS	0	14:06:35.312	Tester	  ══════════ Timeframes ══════════=
+CS	0	14:06:35.312	Tester	  InpPrimaryTF=5
+CS	0	14:06:35.312	Tester	  InpShortTF=1
+CS	0	14:06:35.312	Tester	  InpMediumTF=15
+CS	0	14:06:35.312	Tester	  InpLongTF=16385
+CS	0	14:06:35.312	Tester	  InpHTF=16388
+CS	0	14:06:35.312	Tester	  InpDailyTF=16408
+CS	0	14:06:35.312	Tester	  ══════════ Sessions ══════════=
+CS	0	14:06:35.312	Tester	  InpAsiaStartHour=0
+CS	0	14:06:35.312	Tester	  InpAsiaStartMin=0
+CS	0	14:06:35.312	Tester	  InpLondonPreopenHour=6
+CS	0	14:06:35.312	Tester	  InpLondonPreopenMin=0
+CS	0	14:06:35.312	Tester	  InpLondonOpenHour=8
+CS	0	14:06:35.312	Tester	  InpLondonOpenMin=0
+CS	0	14:06:35.312	Tester	  InpNYPreopenHour=12
+CS	0	14:06:35.312	Tester	  InpNYPreopenMin=0
+CS	0	14:06:35.312	Tester	  InpNYOpenHour=13
+CS	0	14:06:35.312	Tester	  InpNYOpenMin=30
+CS	0	14:06:35.312	Tester	  InpNYAfternoonHour=17
+CS	0	14:06:35.312	Tester	  InpNYAfternoonMin=0
+CS	0	14:06:35.312	Tester	  InpRolloverHour=22
+CS	0	14:06:35.312	Tester	  InpRolloverMin=0
+CS	0	14:06:35.312	Tester	  InpFridayCloseHour=21
+CS	0	14:06:35.312	Tester	  InpFridayCloseMin=0
+CS	0	14:06:35.312	Tester	  ══════════ Data Quality ══════════=
+CS	0	14:06:35.312	Tester	  InpRequireDataQuality=true
+CS	0	14:06:35.312	Tester	  InpMaxPriceJumpPoints=200
+CS	0	14:06:35.312	Tester	  InpCheckBarSequence=true
+CS	0	14:06:35.312	Tester	  InpMinBarsRequired=100
+CS	0	14:06:35.312	Tester	  InpBarWarmup=50
+CS	0	14:06:35.312	Tester	  ══════════ Regime Engine ══════════=
+CS	0	14:06:35.312	Tester	  InpRegimeEnabled=true
+CS	0	14:06:35.312	Tester	  InpRegimeATRPeriod=14
+CS	0	14:06:35.312	Tester	  InpTrendSlopeThreshold=0.3
+CS	0	14:06:35.312	Tester	  InpTrendLookback=20
+CS	0	14:06:35.312	Tester	  InpCompressionPct=20.0
+CS	0	14:06:35.312	Tester	  InpCompressionLookback=50
+CS	0	14:06:35.312	Tester	  InpExpansionMinBars=3
+CS	0	14:06:35.312	Tester	  InpShockVolMultiplier=3.0
+CS	0	14:06:35.312	Tester	  ══════════ Breakout Strategy ══════════=
+CS	0	14:06:35.312	Tester	  InpBO_Enabled=false
+CS	0	14:06:35.312	Tester	  InpBO_CompressionPct=15.0
+CS	0	14:06:35.312	Tester	  InpBO_MinCompressionBars=5
+CS	0	14:06:35.312	Tester	  InpBO_TriggerMode=1
+CS	0	14:06:35.312	Tester	  InpBO_MinDisplacement=2.0
+CS	0	14:06:35.312	Tester	  InpBO_StopATRMultiplier=1.5
+CS	0	14:06:35.312	Tester	  InpBO_TargetR=1.5
+CS	0	14:06:35.312	Tester	  InpBO_MinConfidence=0.6
+CS	0	14:06:35.312	Tester	  InpBO_RequireHTFBias=true
+CS	0	14:06:35.312	Tester	  ══════════ Failed Breakout Strategy ══════════=
+CS	0	14:06:35.312	Tester	  InpFBO_Enabled=true
+CS	0	14:06:35.312	Tester	  InpFBO_MinPenetration=3.0
+CS	0	14:06:35.312	Tester	  InpFBO_MaxBarsBeyond=3
+CS	0	14:06:35.312	Tester	  InpFBO_ReclaimThreshold=0.3
+CS	0	14:06:35.312	Tester	  InpFBO_TriggerMode=1
+CS	0	14:06:35.312	Tester	  InpFBO_StopBeyondSweep=1.0
+CS	0	14:06:35.312	Tester	  InpFBO_TargetMidR=1.0
+CS	0	14:06:35.312	Tester	  InpFBO_TargetVWAPR=1.5
+CS	0	14:06:35.312	Tester	  InpFBO_MinConfidence=0.55
+CS	0	14:06:35.312	Tester	  ══════════ Trend Pullback Strategy ══════════=
+CS	0	14:06:35.312	Tester	  InpTP_Enabled=false
+CS	0	14:06:35.312	Tester	  InpTP_MinDirEfficiency=0.4
+CS	0	14:06:35.312	Tester	  InpTP_MinTrendPersistence=5
+CS	0	14:06:35.312	Tester	  InpTP_RequireHTFAgreement=true
+CS	0	14:06:35.312	Tester	  InpTP_MaxPullbackDepth=0.618
+CS	0	14:06:35.312	Tester	  InpTP_MaxPullbackBars=20
+CS	0	14:06:35.312	Tester	  InpTP_TargetExtensionR=1.618
+CS	0	14:06:35.312	Tester	  InpTP_StopBeyondStruct=0.5
+CS	0	14:06:35.312	Tester	  InpTP_TriggerMode=1
+CS	0	14:06:35.312	Tester	  InpTP_MinConfidence=0.55
+CS	0	14:06:35.312	Tester	  ══════════ Mean Reversion Strategy ══════════=
+CS	0	14:06:35.312	Tester	  InpMR_Enabled=false
+CS	0	14:06:35.312	Tester	  InpMR_TriggerMode=1
+CS	0	14:06:35.312	Tester	  InpMR_MaxTrendStrength=0.25
+CS	0	14:06:35.312	Tester	  InpMR_MinDeviationSD=1.5
+CS	0	14:06:35.312	Tester	  InpMR_MinRejectionWick=0.3
+CS	0	14:06:35.312	Tester	  InpMR_TargetVWAPR=1.0
+CS	0	14:06:35.312	Tester	  InpMR_TargetSDBandR=1.5
+CS	0	14:06:35.312	Tester	  InpMR_EmergencyStopR=1.0
+CS	0	14:06:35.312	Tester	  InpMR_MinConfidence=0.5
+CS	0	14:06:35.312	Tester	  ══════════ Signal Arbitration ══════════=
+CS	0	14:06:35.312	Tester	  InpArbitrationMethod=0
+CS	0	14:06:35.312	Tester	  InpCooldownSeconds=300
+CS	0	14:06:35.312	Tester	  InpDuplicateWindowSeconds=600
+CS	0	14:06:35.312	Tester	  InpAllowOppositeSignals=false
+CS	0	14:06:35.312	Tester	  InpAllowSameDirectionStack=false
+CS	0	14:06:35.312	Tester	  ══════════ Position Sizing ══════════=
+CS	0	14:06:35.312	Tester	  InpLotMode=2
+CS	0	14:06:35.312	Tester	  InpFixedLots=0.01
+CS	0	14:06:35.312	Tester	  InpFixedRiskCurrency=20.0
+CS	0	14:06:35.312	Tester	  InpRiskPercent=0.10
+CS	0	14:06:35.312	Tester	  InpVolAdjRiskTarget=1.0
+CS	0	14:06:35.312	Tester	  InpMaxLotSize=1.0
+CS	0	14:06:35.312	Tester	  InpMinLotSize=0.01
+CS	0	14:06:35.312	Tester	  InpSlippageAllowancePts=10.0
+CS	0	14:06:35.312	Tester	  InpCommissionEstimate=7.0
+CS	0	14:06:35.312	Tester	  ══════════ Trade Risk ══════════=
+CS	0	14:06:35.312	Tester	  InpMaxRiskPerTrade=0.25
+CS	0	14:06:35.312	Tester	  InpMinRewardRisk=1.0
+CS	0	14:06:35.312	Tester	  InpMinStopPoints=50
+CS	0	14:06:35.312	Tester	  InpMaxStopPoints=1000
+CS	0	14:06:35.312	Tester	  InpMaxHoldingMinutes=1440
+CS	0	14:06:35.312	Tester	  InpMaxPendingMinutes=60
+CS	0	14:06:35.312	Tester	  ══════════ Account Risk ══════════=
+CS	0	14:06:35.312	Tester	  InpDailyLossLimitPct=5.0
+CS	0	14:06:35.312	Tester	  InpWeeklyLossLimitPct=10.0
+CS	0	14:06:35.312	Tester	  InpMaxDrawdownPct=20.0
+CS	0	14:06:35.312	Tester	  InpMaxConsecLosses=5
+CS	0	14:06:35.312	Tester	  InpMinMarginLevelPct=200.0
+CS	0	14:06:35.312	Tester	  InpEmergencyEquityFloor=50.0
+CS	0	14:06:35.312	Tester	  InpMaxPositions=1
+CS	0	14:06:35.312	Tester	  InpMaxPendingOrders=0
+CS	0	14:06:35.312	Tester	  InpMaxTotalExposureLots=0.03
+CS	0	14:06:35.312	Tester	  ══════════ Challenge Mode ══════════=
+CS	0	14:06:35.312	Tester	  InpChal_Stage0_Target=130.0
+CS	0	14:06:35.312	Tester	  InpChal_Stage1_Target=200.0
+CS	0	14:06:35.312	Tester	  InpChal_Stage2_Target=350.0
+CS	0	14:06:35.312	Tester	  InpChal_Stage3_Target=600.0
+CS	0	14:06:35.312	Tester	  InpChal_Stage4_Target=1000.0
+CS	0	14:06:35.312	Tester	  InpChal_Stage0_RiskPct=3.0
+CS	0	14:06:35.312	Tester	  InpChal_Stage1_RiskPct=2.5
+CS	0	14:06:35.312	Tester	  InpChal_Stage2_RiskPct=2.0
+CS	0	14:06:35.312	Tester	  InpChal_Stage3_RiskPct=1.5
+CS	0	14:06:35.312	Tester	  InpChal_Stage4_RiskPct=1.0
+CS	0	14:06:35.312	Tester	  InpChal_MaxStageDD=30.0
+CS	0	14:06:35.312	Tester	  InpChal_MaxAttempts=3
+CS	0	14:06:35.312	Tester	  InpChal_ProfitLockPct=50.0
+CS	0	14:06:35.312	Tester	  InpChal_AllowPyramiding=false
+CS	0	14:06:35.312	Tester	  ══════════ Execution ══════════=
+CS	0	14:06:35.312	Tester	  InpMaxRetries=2
+CS	0	14:06:35.312	Tester	  InpMaxConsecutiveBrokerFailures=3
+CS	0	14:06:35.313	Tester	  InpRetryDelayMs=500
+CS	0	14:06:35.313	Tester	  InpOrderExpirySeconds=60
+CS	0	14:06:35.313	Tester	  InpUseMarketOrders=true
+CS	0	14:06:35.313	Tester	  InpUseStopOrders=false
+CS	0	14:06:35.313	Tester	  InpUseLimitOrders=false
+CS	0	14:06:35.313	Tester	  InpFillMode=0
+CS	0	14:06:35.313	Tester	  ══════════ Position Management ══════════=
+CS	0	14:06:35.313	Tester	  InpEnableBreakeven=true
+CS	0	14:06:35.313	Tester	  InpBreakevenTriggerR=0.5
+CS	0	14:06:35.313	Tester	  InpBreakevenPlusPips=3.0
+CS	0	14:06:35.313	Tester	  InpEnablePartialClose=true
+CS	0	14:06:35.313	Tester	  InpPartialClosePct=50.0
+CS	0	14:06:35.313	Tester	  InpPartialCloseTriggerR=1.0
+CS	0	14:06:35.313	Tester	  InpEnableATRTrail=true
+CS	0	14:06:35.313	Tester	  InpATRTrailMultiplier=2.0
+CS	0	14:06:35.313	Tester	  InpATRTrailStartR=1.0
+CS	0	14:06:35.313	Tester	  InpEnableTimeStop=false
+CS	0	14:06:35.313	Tester	  InpTimeStopMinutes=240
+CS	0	14:06:35.313	Tester	  InpCloseBeforeSessionEnd=false
+CS	0	14:06:35.313	Tester	  InpCloseBeforeRollover=false
+CS	0	14:06:35.313	Tester	  ══════════ News Lockout ══════════=
+CS	0	14:06:35.313	Tester	  InpNewsEnabled=false
+CS	0	14:06:35.313	Tester	  InpPreNewsLockoutMinutes=15
+CS	0	14:06:35.313	Tester	  InpPostNewsLockoutMinutes=15
+CS	0	14:06:35.313	Tester	  InpNewsTimes=
+CS	0	14:06:35.313	Tester	  ══════════ Persistence ══════════=
+CS	0	14:06:35.313	Tester	  InpPersistState=false
+CS	0	14:06:35.313	Tester	  InpUseGlobalVars=false
+CS	0	14:06:35.313	Tester	  ══════════ Logging ══════════=
+CS	0	14:06:35.313	Tester	  InpEnableSignalJournal=true
+CS	0	14:06:35.313	Tester	  InpEnableOrderJournal=true
+CS	0	14:06:35.313	Tester	  InpEnableTradeJournal=true
+CS	0	14:06:35.313	Tester	  InpEnableDebugLogging=false
+CS	0	14:06:35.313	Tester	  ══════════ Dashboard ══════════=
+CS	0	14:06:35.313	Tester	  InpDashboardEnabled=false
+CS	0	14:06:35.313	Tester	  InpDashboardX=10
+CS	0	14:06:35.313	Tester	  InpDashboardY=20
+CS	0	14:06:35.313	Tester	  InpDashboardFontSize=8
+CS	0	14:06:35.313	Tester	  InpDashboardColor=16777215
+CS	0	14:06:35.313	Tester	  InpShowChartObjects=true
+CS	0	14:06:35.313	Tester	  ══════════ Alerts ══════════=
+CS	0	14:06:35.313	Tester	  InpAlertSignalAccepted=false
+CS	0	14:06:35.313	Tester	  InpAlertSignalRejected=false
+CS	0	14:06:35.313	Tester	  InpAlertOrderFilled=false
+CS	0	14:06:35.313	Tester	  InpAlertOrderRejected=true
+CS	0	14:06:35.313	Tester	  InpAlertPositionClosed=false
+CS	0	14:06:35.313	Tester	  InpAlertKillSwitch=true
+CS	0	14:06:35.313	Tester	  InpAlertReconFailure=true
+CS	0	14:06:35.313	Tester	  InpAlertUnprotectedPos=true
+CS	0	14:06:35.313	Tester	  InpSendPushNotifications=false
+CS	0	14:06:35.313	Tester	  ══════════ Testing ══════════=
+CS	0	14:06:35.313	Tester	  InpSelfTestOnInit=true
+CS	0	14:06:35.313	Tester	  InpLogSelfTestDetails=false
+CS	0	14:06:35.313	Tester	  ══════════ Unknown Positions ══════════=
+CS	0	14:06:35.313	Tester	  InpUnknownPosPolicy=2
+CS	0	14:06:35.346	QuantBeastEA (XAUUSD,M5)	2026.06.22 00:00:00   QuantBeast[INFO] ══════════════════════════════════════════════
+CS	0	14:06:35.346	QuantBeastEA (XAUUSD,M5)	2026.06.22 00:00:00   QuantBeast[INFO] ══════════ QuantBeast v1.00 Initializing ══════════
+CS	0	14:06:35.346	QuantBeastEA (XAUUSD,M5)	2026.06.22 00:00:00   !!! QuantBeast[ERROR] Live broker-transmission gate blocked initialization: Live broker transmission requires explicit InpAcknowledgeLiveBrokerRisk=true
+CS	0	14:06:35.346	QuantBeastEA (XAUUSD,M5)	2026.06.22 00:00:00   QuantBeast[INFO] ══════════ QuantBeast Deinitializing ══════════
+CS	0	14:06:35.346	QuantBeastEA (XAUUSD,M5)	2026.06.22 00:00:00   QuantBeast[INFO] ══════════ QuantBeast Deinitialized ══════════
+CS	2	14:06:35.346	Tester	tester stopped because OnInit returns non-zero code 1
+CS	0	14:06:35.347	Tester	test Experts\QuantBeast\QuantBeastEA.ex5 on XAUUSD,M5 thread finished
+CS	0	14:06:35.370	127.0.0.1	prepare for shutdown
+CS	0	14:06:35.370	127.0.0.1	shutdown finished

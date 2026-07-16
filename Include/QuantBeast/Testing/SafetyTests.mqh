@@ -134,6 +134,21 @@ bool QBTestArbitrationPolicy(string &detail)
    duplicate[0] = ranked[1];
    StrategySignal duplicateBest = highest.Arbitrate(duplicate, 1, regime, f);
 
+   datetime persistedLastAccept = 0;
+   double persistedHashes[];
+   datetime persistedTimes[];
+   int persistedCount = 0;
+   highest.ExportPersistence(persistedLastAccept, persistedHashes, persistedTimes,
+                             persistedCount, 20);
+   CSignalArbitrator restoredDuplicate;
+   restoredDuplicate.Init(ARBITRATION_HIGHEST_SCORE, 0, 600, true, true);
+   restoredDuplicate.RestorePersistence(persistedLastAccept, persistedHashes,
+                                        persistedTimes, persistedCount, TimeCurrent());
+   StrategySignal restoredDup[1];
+   restoredDup[0] = ranked[1];
+   StrategySignal restoredDupBest = restoredDuplicate.Arbitrate(restoredDup, 1,
+                                                                regime, f);
+
    StrategySignal conflict[2];
    QBMakeArbitrationSignal(conflict[0], STRATEGY_ID_BREAKOUT,
                            ORDER_TYPE_BUY, now, 2501.0, 0.8);
@@ -145,6 +160,8 @@ bool QBTestArbitrationPolicy(string &detail)
 
    bool duplicateRejected = !duplicateBest.valid && !duplicate[0].valid &&
                             duplicate[0].rejection_code == REJECT_DUPLICATE_SIGNAL;
+   bool restoredDuplicateRejected = !restoredDupBest.valid && !restoredDup[0].valid &&
+                                    restoredDup[0].rejection_code == REJECT_DUPLICATE_SIGNAL;
    bool conflictRejected = !conflictBest.valid && !conflict[0].valid &&
                            !conflict[1].valid &&
                            conflict[0].rejection_code == REJECT_CONFLICTING_SIGNAL &&
@@ -160,15 +177,89 @@ bool QBTestArbitrationPolicy(string &detail)
    bool exposureRejected = !exposureBest.valid && !exposure[0].valid &&
                            exposure[0].rejection_code == REJECT_EXPOSURE_LIMIT;
 
+   StrategySignal regimePriority[2];
+   RegimeState breakoutRegime = regime;
+   breakoutRegime.structure = STRUCTURE_ACCEPTED_BREAKOUT;
+   FeatureSnapshot neutralFeat = f;
+   neutralFeat.htf_slope = 0.0;
+   QBMakeArbitrationSignal(regimePriority[0], STRATEGY_ID_BREAKOUT,
+                           ORDER_TYPE_BUY, now, 2503.0, 0.5);
+   QBMakeArbitrationSignal(regimePriority[1], STRATEGY_ID_FAILED_BREAKOUT,
+                           ORDER_TYPE_SELL, now, 2503.0, 0.6);
+   CSignalArbitrator regimeArb;
+   regimeArb.Init(ARBITRATION_REGIME_PRIORITY, 0, 600, true, true);
+   StrategySignal regimeBest = regimeArb.Arbitrate(regimePriority, 2,
+                                                   breakoutRegime, neutralFeat);
+   bool regimePrioritySelected = regimeBest.valid &&
+                                 regimeBest.strategy_id == STRATEGY_ID_BREAKOUT &&
+                                 !regimePriority[1].valid &&
+                                 regimePriority[1].rejection_code == REJECT_ARBITRATION_LOST;
+
+   StrategySignal confluence[2];
+   QBMakeArbitrationSignal(confluence[0], STRATEGY_ID_BREAKOUT,
+                           ORDER_TYPE_BUY, now, 2504.0, 0.5);
+   QBMakeArbitrationSignal(confluence[1], STRATEGY_ID_TREND_PULLBACK,
+                           ORDER_TYPE_BUY, now, 2504.0, 0.7);
+   CSignalArbitrator confluenceArb;
+   confluenceArb.Init(ARBITRATION_REQUIRE_CONFLUENCE, 0, 600, true, true);
+   StrategySignal confluenceBest = confluenceArb.Arbitrate(confluence, 2,
+                                                           regime, f);
+   bool confluenceSelected = confluenceBest.valid &&
+                             confluenceBest.strategy_id == STRATEGY_ID_TREND_PULLBACK &&
+                             !confluence[0].valid &&
+                             confluence[0].rejection_code == REJECT_ARBITRATION_LOST;
+
+   StrategySignal noConfluence[1];
+   QBMakeArbitrationSignal(noConfluence[0], STRATEGY_ID_BREAKOUT,
+                           ORDER_TYPE_BUY, now, 2505.0, 0.8);
+   CSignalArbitrator noConfluenceArb;
+   noConfluenceArb.Init(ARBITRATION_REQUIRE_CONFLUENCE, 0, 600, true, true);
+   StrategySignal noConfluenceBest = noConfluenceArb.Arbitrate(noConfluence, 1,
+                                                               regime, f);
+   bool noConfluenceRejected = !noConfluenceBest.valid &&
+                               !noConfluence[0].valid &&
+                               noConfluence[0].rejection_code == REJECT_ARBITRATION_LOST;
+
+   StrategySignal coolFirst[1];
+   QBMakeArbitrationSignal(coolFirst[0], STRATEGY_ID_BREAKOUT,
+                           ORDER_TYPE_BUY, now, 2506.0, 0.9);
+   CSignalArbitrator cooldownSrc;
+   cooldownSrc.Init(ARBITRATION_HIGHEST_SCORE, 300, 600, true, true);
+   StrategySignal coolSelected = cooldownSrc.Arbitrate(coolFirst, 1, regime, f);
+   cooldownSrc.CommitAccepted(coolSelected);
+   datetime coolLastAccept = 0;
+   double coolHashes[];
+   datetime coolTimes[];
+   int coolCount = 0;
+   cooldownSrc.ExportPersistence(coolLastAccept, coolHashes, coolTimes,
+                                 coolCount, 20);
+   CSignalArbitrator cooldownRestored;
+   cooldownRestored.Init(ARBITRATION_HIGHEST_SCORE, 300, 600, true, true);
+   cooldownRestored.RestorePersistence(coolLastAccept, coolHashes, coolTimes,
+                                       coolCount, TimeCurrent());
+   StrategySignal coolSecond[1];
+   QBMakeArbitrationSignal(coolSecond[0], STRATEGY_ID_FAILED_BREAKOUT,
+                           ORDER_TYPE_SELL, now, 2507.0, 0.9);
+   StrategySignal coolBest = cooldownRestored.Arbitrate(coolSecond, 1, regime, f);
+   bool restoredCooldownRejected = !coolBest.valid && !coolSecond[0].valid &&
+                                   coolSecond[0].rejection_code == REJECT_COOLDOWN_ACTIVE;
+
    detail = "best=" + best.strategy_id + "/" +
             (best.direction == ORDER_TYPE_SELL ? "SELL" : "BUY") +
             " lower=" + (lowerRankRejected ? "rejected" : "FAILED") +
             " duplicate=" + (duplicateRejected ? "rejected" : "FAILED") +
+            " restoredDuplicate=" + (restoredDuplicateRejected ? "rejected" : "FAILED") +
             " conflict=" + (conflictRejected ? "rejected" : "FAILED") +
-            " exposure=" + (exposureRejected ? "rejected" : "FAILED");
+            " exposure=" + (exposureRejected ? "rejected" : "FAILED") +
+            " regime=" + (regimePrioritySelected ? "selected" : "FAILED") +
+            " confluence=" + (confluenceSelected ? "selected" : "FAILED") +
+            " noConfluence=" + (noConfluenceRejected ? "rejected" : "FAILED") +
+            " restoredCooldown=" + (restoredCooldownRejected ? "rejected" : "FAILED");
    return best.valid && best.strategy_id == STRATEGY_ID_FAILED_BREAKOUT &&
           best.direction == ORDER_TYPE_SELL && lowerRankRejected &&
-          duplicateRejected && conflictRejected && exposureRejected;
+          duplicateRejected && restoredDuplicateRejected &&
+          conflictRejected && exposureRejected && regimePrioritySelected &&
+          confluenceSelected && noConfluenceRejected && restoredCooldownRejected;
 }
 
 bool QBTestBreakoutReachability(CSymbolAdapter &adapter, string &detail)
@@ -181,6 +272,7 @@ bool QBTestBreakoutReachability(CSymbolAdapter &adapter, string &detail)
    RegimeState regime; QBMakeNormalRegime(regime);
    FeatureSnapshot f; ZeroMemory(f);
    f.atr = d; f.compression_bars = 8; f.htf_aligned = true;
+   f.atr_percentile_rank = 10.0;
 
    f.htf_slope = 1.0;
    f.current_range_low = market.ask - 4.0 * d;
@@ -196,12 +288,17 @@ bool QBTestBreakoutReachability(CSymbolAdapter &adapter, string &detail)
 
    f.compression_bars = 0;
    StrategySignal rejected = strategy.EvaluateShort(market, f, regime);
+   f.compression_bars = 8;
+   f.atr_percentile_rank = 40.0;
+   StrategySignal pctRejected = strategy.EvaluateShort(market, f, regime);
    detail = "L=" + (longSig.valid ? "valid" : longSig.reason) +
             " S=" + (shortSig.valid ? "valid" : shortSig.reason) +
-            " gate=" + (!rejected.valid ? "rejected" : "FAILED");
+            " gate=" + (!rejected.valid ? "rejected" : "FAILED") +
+            " pct=" + (!pctRejected.valid ? "rejected" : "FAILED");
    return longSig.valid && longSig.direction == ORDER_TYPE_BUY &&
           shortSig.valid && shortSig.direction == ORDER_TYPE_SELL &&
-          !rejected.valid && rejected.direction == ORDER_TYPE_SELL;
+          !rejected.valid && rejected.direction == ORDER_TYPE_SELL &&
+          !pctRejected.valid && pctRejected.direction == ORDER_TYPE_SELL;
 }
 
 bool QBTestFailedBreakoutReachability(CSymbolAdapter &adapter, string &detail)
@@ -223,6 +320,12 @@ bool QBTestFailedBreakoutReachability(CSymbolAdapter &adapter, string &detail)
    f.closed_close = market.ask;
    f.vwap = market.ask + 6.0 * d; f.range_midpoint = market.ask + 5.0 * d;
    StrategySignal longSig = strategy.EvaluateLong(market, f, regime);
+   f.vwap = 0.0; f.range_midpoint = 0.0;
+   StrategySignal longFallback = strategy.EvaluateLong(market, f, regime);
+   bool longUsesVWAPR = longFallback.valid &&
+                        longFallback.proposed_target > longFallback.proposed_entry +
+                                                        MathAbs(longFallback.proposed_entry -
+                                                                longFallback.proposed_stop) * 1.4;
 
    f.failed_breakout_down = false; f.failed_breakout_up = true;
    f.reclaim_level = market.bid + 2.0 * d;
@@ -230,14 +333,23 @@ bool QBTestFailedBreakoutReachability(CSymbolAdapter &adapter, string &detail)
    f.closed_close = market.bid;
    f.vwap = market.bid - 6.0 * d; f.range_midpoint = market.bid - 5.0 * d;
    StrategySignal shortSig = strategy.EvaluateShort(market, f, regime);
+   f.vwap = 0.0; f.range_midpoint = 0.0;
+   StrategySignal shortFallback = strategy.EvaluateShort(market, f, regime);
+   bool shortUsesVWAPR = shortFallback.valid &&
+                         shortFallback.proposed_target < shortFallback.proposed_entry -
+                                                          MathAbs(shortFallback.proposed_entry -
+                                                                  shortFallback.proposed_stop) * 1.4;
 
    f.failed_breakout = false; f.reclaim_detected = false;
    StrategySignal rejected = strategy.EvaluateShort(market, f, regime);
    detail = "L=" + (longSig.valid ? "valid" : longSig.reason) +
             " S=" + (shortSig.valid ? "valid" : shortSig.reason) +
+            " targetL=" + (longUsesVWAPR ? "vwapR" : "FAILED") +
+            " targetS=" + (shortUsesVWAPR ? "vwapR" : "FAILED") +
             " gate=" + (!rejected.valid ? "rejected" : "FAILED");
    return longSig.valid && longSig.direction == ORDER_TYPE_BUY &&
           shortSig.valid && shortSig.direction == ORDER_TYPE_SELL &&
+          longUsesVWAPR && shortUsesVWAPR &&
           !rejected.valid && rejected.direction == ORDER_TYPE_SELL;
 }
 
@@ -256,23 +368,33 @@ bool QBTestTrendPullbackReachability(CSymbolAdapter &adapter, string &detail)
 
    regime.trend = TREND_STRONG_UP;
    f.swing_high = market.mid + d;
+   f.swing_high_bars = 6;
    f.swing_low = market.mid - 4.0 * d;
+   f.swing_low_bars = 6;
    f.current_range_high = f.swing_high; f.current_range_low = f.swing_low;
    StrategySignal longSig = strategy.EvaluateLong(market, f, regime);
 
    regime.trend = TREND_STRONG_DOWN;
    f.swing_low = market.mid - d;
+   f.swing_low_bars = 6;
    f.swing_high = market.mid + 4.0 * d;
+   f.swing_high_bars = 6;
    f.current_range_low = f.swing_low; f.current_range_high = f.swing_high;
    StrategySignal shortSig = strategy.EvaluateShort(market, f, regime);
+
+   f.swing_low_bars = 25;
+   StrategySignal ageRejected = strategy.EvaluateShort(market, f, regime);
+   f.swing_low_bars = 6;
 
    regime.structure = STRUCTURE_BALANCED;
    StrategySignal rejected = strategy.EvaluateShort(market, f, regime);
    detail = "L=" + (longSig.valid ? "valid" : longSig.reason) +
             " S=" + (shortSig.valid ? "valid" : shortSig.reason) +
+            " age=" + (!ageRejected.valid ? "rejected" : "FAILED") +
             " gate=" + (!rejected.valid ? "rejected" : "FAILED");
    return longSig.valid && longSig.direction == ORDER_TYPE_BUY &&
           shortSig.valid && shortSig.direction == ORDER_TYPE_SELL &&
+          !ageRejected.valid && ageRejected.direction == ORDER_TYPE_SELL &&
           !rejected.valid && rejected.direction == ORDER_TYPE_SELL;
 }
 
@@ -291,21 +413,28 @@ bool QBTestMeanReversionReachability(CSymbolAdapter &adapter, string &detail)
    f.closed_open = market.ask - 0.2 * d; f.closed_close = market.ask;
    f.current_range_low = market.ask - 2.0 * d;
    f.vwap = market.ask + 2.0 * d; f.range_midpoint = market.ask + d;
+   f.vwap_sd = d;
    StrategySignal longSig = strategy.EvaluateLong(market, f, regime);
+   bool longBandTarget = longSig.valid && longSig.proposed_target > f.vwap;
 
    f.sd_dist = 2.0; f.rejection_wick_upper = 0.6;
    f.closed_open = market.bid + 0.2 * d; f.closed_close = market.bid;
    f.current_range_high = market.bid + 2.0 * d;
    f.vwap = market.bid - 2.0 * d; f.range_midpoint = market.bid - d;
+   f.vwap_sd = d;
    StrategySignal shortSig = strategy.EvaluateShort(market, f, regime);
+   bool shortBandTarget = shortSig.valid && shortSig.proposed_target < f.vwap;
 
    regime.structure = STRUCTURE_ACCEPTED_BREAKOUT;
    StrategySignal rejected = strategy.EvaluateShort(market, f, regime);
    detail = "L=" + (longSig.valid ? "valid" : longSig.reason) +
             " S=" + (shortSig.valid ? "valid" : shortSig.reason) +
+            " bandL=" + (longBandTarget ? "ok" : "FAILED") +
+            " bandS=" + (shortBandTarget ? "ok" : "FAILED") +
             " gate=" + (!rejected.valid ? "rejected" : "FAILED");
    return longSig.valid && longSig.direction == ORDER_TYPE_BUY &&
           shortSig.valid && shortSig.direction == ORDER_TYPE_SELL &&
+          longBandTarget && shortBandTarget &&
           !rejected.valid && rejected.direction == ORDER_TYPE_SELL;
 }
 

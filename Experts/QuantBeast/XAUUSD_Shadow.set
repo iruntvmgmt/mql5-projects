@@ -4,6 +4,7 @@
 ;| Full simulation, no live orders. Use for validation.             |
 ;+------------------------------------------------------------------+
 InpMode=1
+InpAcknowledgeLiveBrokerRisk=false
 InpAcknowledgeChallengeRisk=false
 InpMaxSpreadPoints=50
 InpDashboardEnabled=true

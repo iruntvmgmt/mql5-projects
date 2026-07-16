@@ -1,0 +1,6 @@
+created=2026-07-16T14:06:25.891551
+config=QuantBeast.ConservativeLiveTester.FBO.XAUUSD.M5.20260716.ini
+agent_log=/Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/Tester/Agent-127.0.0.1-3000/logs/20260716.log
+pre_size=18963414
+pre_mtime=1784224427.5396967
+pre_broker_state=no positions/no orders, demo balance 980.40 USD

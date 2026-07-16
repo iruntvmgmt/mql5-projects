@@ -17,6 +17,7 @@
 //| Global debug flag (set from Configuration)                        |
 //+------------------------------------------------------------------+
 bool QB_DebugEnabled = false;
+bool QB_SelfTestDetailsEnabled = true;
 
 //+------------------------------------------------------------------+
 //| Initialize diagnostics                                             |
@@ -24,6 +25,11 @@ bool QB_DebugEnabled = false;
 void DiagInit(bool debugEnabled)
 {
    QB_DebugEnabled = debugEnabled;
+}
+
+void DiagSetSelfTestDetails(bool enabled)
+{
+   QB_SelfTestDetailsEnabled = enabled;
 }
 
 //+------------------------------------------------------------------+
@@ -46,12 +52,26 @@ string LogLevelStr(int level)
    return "???";
 }
 
+bool QBIsSelfTestPassDetail(const string message)
+{
+   return (StringFind(message, "TEST ") == 0 &&
+           StringFind(message, " PASS:") >= 0);
+}
+
+bool QBShouldLogSelfTestMessage(bool detailEnabled, int level, const string message)
+{
+   if(level != QB_LOG_INFO) return true;
+   if(!QBIsSelfTestPassDetail(message)) return true;
+   return detailEnabled;
+}
+
 //+------------------------------------------------------------------+
 //| Core logging function                                             |
 //+------------------------------------------------------------------+
 void QBLog(int level, string message)
 {
    if(level == QB_LOG_DEBUG && !QB_DebugEnabled) return;
+   if(!QBShouldLogSelfTestMessage(QB_SelfTestDetailsEnabled, level, message)) return;
 
    string prefix = QB_EA_NAME + "[" + LogLevelStr(level) + "] ";
    string fullMsg = prefix + message;

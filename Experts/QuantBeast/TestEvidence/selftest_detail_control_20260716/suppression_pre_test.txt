@@ -1,0 +1,3 @@
+timestamp=2026-07-16 10:48:57 EDT
+agent_log_size=4502102
+config=QuantBeast.SelfTestDetailOff.XAUUSD.M5.20260518_20260522.ini

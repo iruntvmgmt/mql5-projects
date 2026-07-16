@@ -1,0 +1,5 @@
+created=2026-07-16T13:53:13.331484
+config=QuantBeast.FBOTargetVariants.XAUUSD.M5.20260716_1355.ini
+agent_log=/Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/Tester/Agent-127.0.0.1-3000/logs/20260716.log
+pre_size=17847186
+pre_mtime=1784224199.3343236

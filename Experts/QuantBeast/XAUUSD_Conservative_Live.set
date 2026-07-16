@@ -6,6 +6,7 @@
 ;| WARNING: InpMode=2 can transmit broker orders if loaded live.    |
 ;+------------------------------------------------------------------+
 InpMode=2
+InpAcknowledgeLiveBrokerRisk=false
 InpAcknowledgeChallengeRisk=false
 InpBO_Enabled=false
 InpFBO_Enabled=true

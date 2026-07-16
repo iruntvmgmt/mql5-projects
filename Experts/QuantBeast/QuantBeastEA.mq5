@@ -327,6 +327,8 @@ void ActivateProtectionEmergency(string reason)
    g_KillSwitch.Emergency(reason);
    EmitConfiguredAlert(InpAlertKillSwitch || InpAlertUnprotectedPos,
                        "Protection emergency: " + reason);
+   EmitConfiguredAlert(InpAlertReconFailure,
+                       "Reconciliation/protection failure: " + reason);
    if(QBModeAllowsBrokerActions(g_EffectiveMode))
    {
       g_Broker.CancelAllPending();
@@ -350,6 +352,14 @@ void PersistRuntimeState()
    GV_WriteDouble(GV_CONSEC_LOSSES, g_RiskEngine.GetConsecLosses());
    GV_WriteDouble(GV_BROKER_FAILURES,
                   g_ConsecutiveBrokerSubmissionFailures);
+   SaveStrategyTradeCounters(g_StrategyTradeDay, g_StrategyTradesToday);
+   datetime arbLastAccept = 0;
+   double arbHashes[];
+   datetime arbTimes[];
+   int arbCount = 0;
+   g_Arbitrator.ExportPersistence(arbLastAccept, arbHashes, arbTimes,
+                                  arbCount, QB_ARB_PERSIST_MAX);
+   SaveArbitrationState(arbLastAccept, arbHashes, arbTimes, arbCount);
    SaveKillSwitchState(g_KillSwitch.GetState());
    SaveChallengeState(g_Challenge.GetState());
    // Make each material checkpoint durable before a terminal/VPS crash.
@@ -383,6 +393,9 @@ void ProcessPendingCloseReconciliation()
       {
          QBLogWarn("Closed owned position was not present in local context: id=" +
                    IntegerToString(candidate.position_identifier));
+         EmitConfiguredAlert(InpAlertReconFailure,
+                             "Closed owned position missing local context: id=" +
+                             IntegerToString(candidate.position_identifier));
          g_TransactionState.RemoveAt(idx);
          continue;
       }
@@ -436,7 +449,13 @@ int StrategyIndexFromId(string strategyId)
 void MarkStrategyTrade(string strategyId)
 {
    int idx = StrategyIndexFromId(strategyId);
-   if(idx >= 0 && idx < QB_STRAT_COUNT) g_StrategyTradesToday[idx]++;
+   if(idx >= 0 && idx < QB_STRAT_COUNT)
+   {
+      if(g_StrategyTradeDay == 0)
+         g_StrategyTradeDay = GetDayStart(TimeCurrent());
+      g_StrategyTradesToday[idx]++;
+      PersistRuntimeState();
+   }
 }
 
 bool QBLiveStrategySetAllowed(bool boEnabled, bool fboEnabled,
@@ -497,6 +516,19 @@ bool QBLiveRecoveryPolicyAllowed(ENUM_UNKNOWN_POS_POLICY unknownPolicy,
    return true;
 }
 
+bool QBLiveBrokerTransmissionAllowed(bool acknowledged, string &reason)
+{
+   if(!acknowledged)
+   {
+      reason = "Live broker transmission requires explicit "
+               "InpAcknowledgeLiveBrokerRisk=true";
+      return false;
+   }
+
+   reason = "live broker transmission explicitly acknowledged";
+   return true;
+}
+
 bool QBEntryPreflightControlsAllow(bool dataQualityOK, int barCount,
                                    int barWarmup, bool abnormalTick,
                                    double priceJumpPoints, string &reason)
@@ -545,6 +577,15 @@ int OnInit()
                              g_EffectiveMode == QB_MODE_CHALLENGE_LIVE);
    if(requestedLiveMode)
    {
+      string liveBrokerRiskReason = "";
+      if(!QBLiveBrokerTransmissionAllowed(InpAcknowledgeLiveBrokerRisk,
+                                          liveBrokerRiskReason))
+      {
+         QBLogError("Live broker-transmission gate blocked initialization: " +
+                    liveBrokerRiskReason);
+         return INIT_FAILED;
+      }
+
       string liveStrategyReason = "";
       if(!QBLiveStrategySetAllowed(InpBO_Enabled, InpFBO_Enabled,
                                    InpTP_Enabled, InpMR_Enabled,
@@ -577,6 +618,7 @@ int OnInit()
 
    // --- Initialize Diagnostics ---
    DiagInit(InpEnableDebugLogging);
+   DiagSetSelfTestDetails(InpLogSelfTestDetails);
    DiagPrintBrokerInfo();
 
    // --- Initialize Symbol Adapter ---
@@ -744,7 +786,8 @@ int OnInit()
 
    // --- Initialize Dashboard ---
    g_Dashboard.Init(InpDashboardEnabled, InpDashboardX, InpDashboardY,
-                    InpDashboardFontSize, InpDashboardColor);
+                    InpDashboardFontSize, InpDashboardColor,
+                    InpShowChartObjects);
    g_Alerts.Init(InpSendPushNotifications);
 
    // --- Persistence: State Store Init ---
@@ -778,6 +821,29 @@ int OnInit()
       int savedConsecLosses = persist ? (int)GV_ReadDouble(GV_CONSEC_LOSSES, 0) : 0;
       g_ConsecutiveBrokerSubmissionFailures = persist ?
          MathMax(0, (int)GV_ReadDouble(GV_BROKER_FAILURES, 0)) : 0;
+      if(persist)
+      {
+         datetime savedStrategyDay = 0;
+         int savedStrategyTrades[];
+         ArrayResize(savedStrategyTrades, QB_STRAT_COUNT);
+         if(LoadStrategyTradeCounters(savedStrategyDay, savedStrategyTrades) &&
+            QBShouldRestoreStrategyCounters(savedStrategyDay, GetDayStart(TimeCurrent())))
+         {
+            for(int st = 0; st < QB_STRAT_COUNT; st++)
+               g_StrategyTradesToday[st] = savedStrategyTrades[st];
+            g_StrategyTradeDay = savedStrategyDay;
+         }
+      }
+      if(persist)
+      {
+         datetime arbLastAccept = 0;
+         double arbHashes[];
+         datetime arbTimes[];
+         int arbCount = 0;
+         if(LoadArbitrationState(arbLastAccept, arbHashes, arbTimes, arbCount))
+            g_Arbitrator.RestorePersistence(arbLastAccept, arbHashes, arbTimes,
+                                            arbCount, TimeCurrent());
+      }
 
       g_RiskEngine.InitDailyTracking(currentEquity,
                                      savedDailyStart, savedDailyDate,
@@ -995,6 +1061,7 @@ void OnTick()
    {
       ArrayInitialize(g_StrategyTradesToday, 0);
       g_StrategyTradeDay = tradeDay;
+      PersistRuntimeState();
    }
 
    // --- Step 10: Position management (every tick for protection) ---
@@ -1318,6 +1385,10 @@ void ExecuteSignal(StrategySignal &signal)
       g_Journal.LogOrder(shadowRec);
       MarkStrategyTrade(signal.strategy_id);
       g_Arbitrator.CommitAccepted(signal);
+      PersistRuntimeState();
+      g_Dashboard.DrawSignalLevels(signal, g_Adapter.Digits());
+      EmitConfiguredAlert(InpAlertOrderFilled,
+                          "Shadow order filled: " + signal.strategy_id);
       EmitConfiguredAlert(InpAlertSignalAccepted,
                           "Shadow signal accepted: " + signal.strategy_id);
       QBLogInfo("SHADOW: " + signal.strategy_id + " " +
@@ -1433,6 +1504,10 @@ void ExecuteSignal(StrategySignal &signal)
             {
                MarkStrategyTrade(signal.strategy_id);
                g_Arbitrator.CommitAccepted(signal);
+               PersistRuntimeState();
+               g_Dashboard.DrawSignalLevels(signal, g_Adapter.Digits());
+               EmitConfiguredAlert(InpAlertOrderFilled,
+                                   "Broker order filled: " + signal.strategy_id);
             }
 
             // Update risk engine consecutive losses tracking
@@ -1445,6 +1520,8 @@ void ExecuteSignal(StrategySignal &signal)
             g_ActiveOrder = rec;
             g_ActiveOrderTradeCounted = false;
             g_Arbitrator.CommitAccepted(signal);
+            PersistRuntimeState();
+            g_Dashboard.DrawSignalLevels(signal, g_Adapter.Digits());
          }
       }
       else
@@ -1669,6 +1746,10 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
          return;
       }
 
+      if(!contextOwned)
+         EmitConfiguredAlert(InpAlertOrderFilled,
+                             "Broker entry transaction filled: " + strategyId);
+
       if(activeOrderMatch)
       {
          bool selected = OrderSelect(trans.order);
@@ -1696,6 +1777,9 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
       PersistRuntimeState();
       QBLogError("Unable to queue close reconciliation: position=" +
                  IntegerToString(identifier) + " deal=" + IntegerToString(trans.deal));
+      EmitConfiguredAlert(InpAlertReconFailure,
+                          "Unable to queue close reconciliation: position=" +
+                          IntegerToString(identifier));
    }
 }
 
@@ -2199,6 +2283,18 @@ void RunSelfTests()
       { g_SelfTestFailed++; QBLogError("TEST 40 FAIL: Unknown position management policy"); }
    }
 
+   // Test 40b: live broker transmission requires an explicit acknowledgement.
+   {
+      string reason = "";
+      bool missingAckRejected = !QBLiveBrokerTransmissionAllowed(false, reason);
+      bool ackAccepted = QBLiveBrokerTransmissionAllowed(true, reason);
+
+      if(missingAckRejected && ackAccepted)
+      { g_SelfTestPassed++; QBLogInfo("TEST 40b PASS: Live broker transmission acknowledgement gate"); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 40b FAIL: Live broker transmission acknowledgement gate"); }
+   }
+
    // Test 41: alert configuration routes enabled alerts and suppresses disabled ones.
    {
       string detail = "";
@@ -2243,6 +2339,69 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 43 PASS: Session exit policy"); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 43 FAIL: Session exit policy " + reason); }
+   }
+
+   // Test 44: self-test PASS detail logging obeys operator verbosity input.
+   {
+      bool detailedPass = QBShouldLogSelfTestMessage(true, QB_LOG_INFO,
+                                                     "TEST X PASS: detail");
+      bool suppressedPass = !QBShouldLogSelfTestMessage(false, QB_LOG_INFO,
+                                                        "TEST X PASS: detail");
+      bool failureVisible = QBShouldLogSelfTestMessage(false, QB_LOG_ERROR,
+                                                       "TEST X FAIL: detail");
+      bool summaryVisible = QBShouldLogSelfTestMessage(false, QB_LOG_INFO,
+                                                       "Self-tests complete: summary");
+
+      if(detailedPass && suppressedPass && failureVisible && summaryVisible)
+      { g_SelfTestPassed++; QBLogInfo("TEST 44 PASS: Self-test detail logging policy"); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 44 FAIL: Self-test detail logging policy"); }
+   }
+
+   // Test 45: chart level objects obey operator toggle and tester suppression.
+   {
+      bool liveEnabled = QBChartObjectsShouldRender(true, false);
+      bool toggleDisabled = !QBChartObjectsShouldRender(false, false);
+      bool testerSuppressed = !QBChartObjectsShouldRender(true, true);
+
+      if(liveEnabled && toggleDisabled && testerSuppressed)
+      { g_SelfTestPassed++; QBLogInfo("TEST 45 PASS: Chart object toggle policy"); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 45 FAIL: Chart object toggle policy"); }
+   }
+
+   // Test 46: fill and reconciliation alert categories route when enabled.
+   {
+      CAlerts alerts;
+      alerts.Init(false);
+      bool fillSuppressed = !alerts.SendIfEnabled(false, "fill-disabled");
+      bool fillRouted = alerts.SendIfEnabled(true, "fill-enabled");
+      bool reconRouted = alerts.SendIfEnabled(true, "recon-enabled");
+      bool countOK = alerts.SentCount() == 2;
+      bool lastOK = alerts.LastMessage() == "recon-enabled";
+
+      if(fillSuppressed && fillRouted && reconRouted && countOK && lastOK)
+      { g_SelfTestPassed++; QBLogInfo("TEST 46 PASS: Fill/reconciliation alert categories"); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 46 FAIL: Fill/reconciliation alert categories"); }
+   }
+
+   // Test 47: same-day strategy trade counters restore; stale/future counters do not.
+   {
+      string detail = "";
+      if(QBTestStrategyCounterRestorePolicy(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 47 PASS: Strategy counter restore policy " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 47 FAIL: Strategy counter restore policy " + detail); }
+   }
+
+   // Test 48: arbitration cooldown/duplicate timestamps restore only while fresh.
+   {
+      string detail = "";
+      if(QBTestArbitrationRestorePolicy(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 48 PASS: Arbitration restore policy " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 48 FAIL: Arbitration restore policy " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

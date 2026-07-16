@@ -16,8 +16,8 @@
 
 //+------------------------------------------------------------------+
 //| Alert System - manages notification channels                      |
-//| IMPLEMENTATION: PARTIAL - Terminal alerts only.                  |
-//| Push notifications and email are stubbed pending configuration.   |
+//| IMPLEMENTATION: PARTIAL - Terminal alerts plus push routing.     |
+//| Push delivery is fail-closed; email is not configured here.       |
 //+------------------------------------------------------------------+
 class CAlerts
 {
@@ -53,9 +53,13 @@ public:
       }
 
       Alert(message);
-      if(m_pushEnabled)
-         SendNotification(QB_EA_NAME + ": " + message);
-      return true;
+      if(!m_pushEnabled)
+         return true;
+
+      bool pushSent = SendNotification(QB_EA_NAME + ": " + message);
+      if(!pushSent)
+         QBLogWarn("Push notification failed: " + message);
+      return pushSent;
    }
 
    bool SendIfEnabled(bool condition, string message)

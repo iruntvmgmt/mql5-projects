@@ -1,0 +1,6 @@
+timestamp=2026-07-16 10:48:05 EDT
+source_sha256=26b69114f94465a6c901f62c353e24235bcb61bba905644e5e1a2b14a4a7154a
+ex5_sha256=884d316e0560508e21d05d005004e38804c7f230b88f078a16a9a2d5bda97ad8
+agent_log_size=3388270
+terminal_log_size=46186
+config=QuantBeast.SelfTestDetail.XAUUSD.M5.20260518_20260522.ini

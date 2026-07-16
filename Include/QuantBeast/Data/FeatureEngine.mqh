@@ -227,7 +227,15 @@ private:
 
       if(m_compressionLookback > 5)
       {
-         double atrPercentile = ArrayPercentileUnsorted(atrValues, MathMin(m_compressionLookback, barCount), m_compressionPct);
+         int atrCount = MathMin(m_compressionLookback, barCount);
+         double atrPercentile = ArrayPercentileUnsorted(atrValues, atrCount, m_compressionPct);
+         int belowOrEqual = 0;
+         for(int i = 0; i < atrCount; i++)
+         {
+            if(atrValues[i] <= m_current.atr)
+               belowOrEqual++;
+         }
+         m_current.atr_percentile_rank = (atrCount > 0 ? 100.0 * belowOrEqual / atrCount : 100.0);
          m_current.is_compressing = (m_current.atr <= atrPercentile);
 
          // Compression bars count

@@ -1,0 +1,5 @@
+timestamp=2026-07-16 11:01:38 EDT
+source_sha256=65a007c3cd091314c7000403c635f0f5fce4a11c5c88d419de86cac4f4635935
+ex5_sha256=bce28bc0c5c019988f2a14f28fd3dd6e9459bf3e6b5743c1ea38a91bcaab69fe
+agent_log_size=7822292
+config=QuantBeast.AlertCategoryRouting.XAUUSD.M5.20260518_20260522.ini

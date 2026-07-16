@@ -1,0 +1,24 @@
+XAUUSD_Challenge_Example.set: keys=31 unknown=[]
+  InpBO_Enabled=false expected=false
+  InpFBO_Enabled=true expected=true
+  InpTP_Enabled=false expected=false
+  InpMR_Enabled=false expected=false
+  InpUseMarketOrders=true expected=true
+  InpUseStopOrders=false expected=false
+  InpUseLimitOrders=false expected=false
+  InpMaxPendingOrders=0 expected=0
+  InpUnknownPosPolicy=2 expected=2
+  InpAcknowledgeChallengeRisk=false expected=false
+XAUUSD_Conservative_Live.set: keys=32 unknown=[]
+  InpBO_Enabled=false expected=false
+  InpFBO_Enabled=true expected=true
+  InpTP_Enabled=false expected=false
+  InpMR_Enabled=false expected=false
+  InpUseMarketOrders=true expected=true
+  InpUseStopOrders=false expected=false
+  InpUseLimitOrders=false expected=false
+  InpMaxPendingOrders=0 expected=0
+  InpUnknownPosPolicy=2 expected=2
+XAUUSD_Diagnostic.set: keys=9 unknown=[]
+XAUUSD_Shadow.set: keys=9 unknown=[]
+preset_validation=PASS

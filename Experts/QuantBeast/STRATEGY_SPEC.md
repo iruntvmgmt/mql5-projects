@@ -32,6 +32,7 @@ Trade expansion after compression near an opening-range, session, or recent stru
 
 - Strategy enabled.
 - Feature engine reports compression for the configured minimum duration.
+- Current ATR percentile rank is no higher than `InpBO_CompressionPct`, so the BO-specific compression-percent input independently affects eligibility.
 - Spread is no more than a hardcoded 40 points.
 - Event state is normal.
 - Volatility is not extreme or shock.
@@ -79,7 +80,7 @@ Trade a formally measured penetration beyond a meaningful level followed by time
 - Requires the closed bar and current price to be back through the recorded level.
 - Applies penetration and maximum-bars checks.
 - Stop is beyond the approximate session extreme plus ATR.
-- Target uses VWAP/range midpoint with fixed-R fallback.
+- Target uses VWAP/range midpoint when valid. If either level is unavailable or on the wrong side of entry, the corresponding configured R fallback is used: `InpFBO_TargetVWAPR` for VWAP fallback and `InpFBO_TargetMidR` for midpoint fallback.
 
 ### Current operational status
 
@@ -91,7 +92,7 @@ FeatureEngine now assigns directional failed-breakout, reclaim, bars-beyond, bre
 - Support previous-day, session, opening-range, confirmed-swing, and recent-range levels.
 - Implement reclaim, confirmation-close, retest, and lower-timeframe-displacement entry modes.
 - Support sweep, volatility, and confirmed microstructure stops.
-- Support midpoint, VWAP, opposite-boundary, fixed-R, partial, and runner targets.
+- Add opposite-boundary, partial, and runner targets.
 - Add deterministic tests preventing ordinary wicks from being mislabeled as failed auctions.
 
 ## Strategy 3: Trend Pullback (`TP`)
@@ -106,12 +107,14 @@ Enter an established directional move after a controlled pullback and momentum r
 - Minimum directional efficiency and trend persistence.
 - Optional HTF slope-direction agreement.
 - Structure classified as impulse or pullback.
+- Pullback age is not greater than `InpTP_MaxPullbackBars` when the relevant swing age is available.
 - Normal event state.
 
 ### Current signal model
 
 - Measures current price retracement inside the recent range.
 - Requires depth between 0.1 and configured maximum.
+- Enforces long pullback age from bars since swing high and short pullback age from bars since swing low.
 - Uses `returning_to_value` as a weak proxy for pullback completion.
 - Stop is beyond the recent swing/range plus ATR.
 - Target is fixed extension R.
@@ -119,7 +122,6 @@ Enter an established directional move after a controlled pullback and momentum r
 ### Required completion
 
 - Calculate a defined impulse leg and its confirmed retracement.
-- Enforce maximum pullback bars.
 - Implement actual trigger modes such as rejection, micro-break, close confirmation, or retest.
 - Add trend maturity/exhaustion constraints.
 - Add failed-continuation, regime-deterioration, session, and time exits.
@@ -146,7 +148,7 @@ Trade a statistically meaningful deviation back toward equilibrium only in balan
 - Short requires positive normalized VWAP deviation and a rejection wick.
 - Strong opposing trends block entry.
 - Stop is based on current range extreme.
-- Target is VWAP, range midpoint, or fixed-R fallback.
+- Target is the opposite VWAP standard-deviation band when `vwap_sd` is available; otherwise MR falls back to VWAP, range midpoint, then fixed-R behavior.
 
 ### Current statistical implementation
 

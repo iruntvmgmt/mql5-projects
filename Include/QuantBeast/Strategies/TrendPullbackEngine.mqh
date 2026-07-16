@@ -126,6 +126,13 @@ public:
       if(recentHigh <= 0) recentHigh = features.current_range_high;
       double mid = market.mid;
 
+      // Pullback age is measured from the most recent swing high in a long
+      // pullback. A zero value means the feature is unavailable and is not
+      // treated as proof of stale age.
+      if(features.swing_high_bars > 0 && features.swing_high_bars > m_maxPullbackBars)
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: pullback age " +
+                             IntegerToString(features.swing_high_bars) + " exceeds maximum");
+
       // Check pullback depth
       double pullbackDepth = (recentHigh - mid) / MathMax(recentHigh - features.current_range_low, 0.0001);
       if(pullbackDepth < 0.1 || pullbackDepth > m_maxPullbackDepth)
@@ -164,6 +171,7 @@ public:
                         confidence, rewardR,
                         SETUP_TP_TREND_QUALIFIED, TRIGGER_TP_MOMENTUM_RESUME,
                         "TP Long: depth=" + DoubleToString(pullbackDepth, 2) +
+                        " age=" + IntegerToString(features.swing_high_bars) +
                         " dirEff=" + DoubleToString(features.dir_efficiency, 2));
    }
 
@@ -181,6 +189,13 @@ public:
       double recentLow = features.swing_low;
       if(recentLow <= 0) recentLow = features.current_range_low;
       double mid = market.mid;
+
+      // Pullback age is measured from the most recent swing low in a short
+      // pullback. A zero value means the feature is unavailable and is not
+      // treated as proof of stale age.
+      if(features.swing_low_bars > 0 && features.swing_low_bars > m_maxPullbackBars)
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: pullback age " +
+                             IntegerToString(features.swing_low_bars) + " exceeds maximum");
 
       double pullbackDepth = (mid - recentLow) / MathMax(features.current_range_high - recentLow, 0.0001);
       if(pullbackDepth < 0.1 || pullbackDepth > m_maxPullbackDepth)
@@ -216,6 +231,7 @@ public:
                         confidence, rewardR,
                         SETUP_TP_TREND_QUALIFIED, TRIGGER_TP_MOMENTUM_RESUME,
                         "TP Short: depth=" + DoubleToString(pullbackDepth, 2) +
+                        " age=" + IntegerToString(features.swing_low_bars) +
                         " dirEff=" + DoubleToString(features.dir_efficiency, 2));
    }
 };

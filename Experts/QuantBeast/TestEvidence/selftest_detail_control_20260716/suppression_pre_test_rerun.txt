@@ -1,0 +1,4 @@
+timestamp=2026-07-16 10:49:43 EDT
+agent_log_size=5611982
+config=QuantBeast.SelfTestDetailOff.XAUUSD.M5.20260518_20260522.ini
+input=InpLogSelfTestDetails=false

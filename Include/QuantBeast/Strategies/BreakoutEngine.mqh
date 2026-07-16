@@ -63,6 +63,12 @@ public:
       if(features.compression_bars < m_minCompressionBars)
          return false;
 
+      // BO has its own compression percentile input. The shared feature engine
+      // still calculates the generic compression bars, but BO must also reject
+      // setups whose current ATR is above the BO-specific percentile threshold.
+      if(features.atr_percentile_rank > m_compressionPct)
+         return false;
+
       // Spread acceptable
       if(market.spread_points > 40.0)
          return false;
@@ -161,7 +167,8 @@ public:
                         confidence, rewardR,
                         SETUP_BO_COMPRESSION, triggerCode,
                         "Breakout Long: comp=" + IntegerToString(features.compression_bars) +
-                        " bars, prox=" + DoubleToString(proximityPct, 2));
+                        " bars, atrRank=" + DoubleToString(features.atr_percentile_rank, 1) +
+                        ", prox=" + DoubleToString(proximityPct, 2));
    }
 
    //+------------------------------------------------------------------+
@@ -230,7 +237,8 @@ public:
                         confidence, rewardR,
                         SETUP_BO_COMPRESSION, triggerCode,
                         "Breakout Short: comp=" + IntegerToString(features.compression_bars) +
-                        " bars, prox=" + DoubleToString(proximityPct, 2));
+                        " bars, atrRank=" + DoubleToString(features.atr_percentile_rank, 1) +
+                        ", prox=" + DoubleToString(proximityPct, 2));
    }
 };
 

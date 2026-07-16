@@ -7,7 +7,7 @@
 
 - The final source compiles at `0 errors, 0 warnings`, but compilation is not runtime proof.
 - The native MT5 tester API still returns the invalid/ambiguous identifier `job_id: 0` and reports `tester stopped`; local agent logs must be inspected to confirm completion.
-- A Shadow fixture completed with 38 startup tests passed and 0 failed, including rejected-direction, regime, arbitration, broker-fault, centralized protection-close, final-decision signal-writer, and performance-without-file-journal policies.
+- A Shadow fixture completed with 51 startup tests passed and 0 failed, including rejected-direction, regime, all arbitration enum modes, broker-fault, centralized protection-close, final-decision signal-writer, performance-without-file-journal, live-mode gate, live broker-transmission acknowledgement gate, recovery, alert, preflight, session-exit, self-test detail-control, chart-object toggle, fill/reconciliation alert-category, strategy-counter restore, and arbitration persistence policies. Latest boundary/regression proof is under `TestEvidence/current_regression_20260716/`, with follow-on wiring proof under `TestEvidence/bo_compression_pct_20260716/`, `TestEvidence/tp_pullback_age_20260716/`, `TestEvidence/mr_target_band_20260716/`, and `TestEvidence/fbo_target_variants_20260716/`.
 - Organic true-tick Shadow evidence reached FBO accepted BUY/SELL entries and BO/FBO/TP/MR BUY/SELL rejections through feature, regime, strategy, arbitration, and central risk. A combined true-tick training baseline completed, the first holdout attempt was invalid/incomplete, a clean holdout retry completed normally, and independent BO/FBO/TP/MR train and holdout baselines completed. Only FBO reached accepted trade state in those baseline windows. BO/TP/MR accepted organic entries, broader holdouts, stress, normal-terminal restart, live-path fault-injection, and demo-forward results remain unproven.
 - Conservative Live and acknowledged Challenge Live are currently gated to FBO-only, market-order-only initialization with pending orders disabled. This is intentional safety debt: BO, TP, MR, and pending orders remain research-only for broker transmission until accepted-entry, lifecycle, pending-order, and restart evidence exists.
 - No profitability claim is supported.
@@ -27,7 +27,7 @@ Shadow mode now maintains market-entry virtual positions through:
 Remaining Shadow limitations:
 
 - Pending-order intents are rejected; stop/limit activation and expiry are not simulated.
-- Session-close and rollover-close lifecycle rules are not implemented in the virtual portfolio.
+- Session-close and rollover-close policy has deterministic Shadow coverage under `TestEvidence/session_exit_policy_20260716/`; live broker flatten behavior remains unproven and requires explicit authorization before use.
 - Virtual positions are intentionally not persisted across terminal restart.
 - Swap is recorded as zero; overnight financing is not modeled.
 - Commission is a configured per-lot estimate rather than broker-history truth.
@@ -43,15 +43,13 @@ Remaining Shadow limitations:
 - The version-policy and risk-state restore contracts have deterministic tests, but a real terminal/VPS restart with broker positions or pending orders has not been executed as evidence.
 - Persistence currently uses Terminal Global Variables only; `InpUseGlobalVars=false` disables it. Production saves now call `GlobalVariablesFlush()` explicitly, and state keys are scoped by account login plus effective adapter symbol rather than chart symbol.
 - A two-process Strategy Tester probe lost all probe globals after the tester/Wine process tree was replaced. Strategy Tester agent globals are isolated/reset in this environment, so this cannot validate or invalidate persistence in the normal live terminal.
-- Strategy cooldowns, duplicate IDs, and daily strategy counts are not persisted.
+- Strategy daily counts are persisted and restored only for the same broker day. Arbitration cooldown and duplicate memory are persisted as bounded timestamp/hash state and restore only while fresh. Full position-management context, virtual positions, and live broker restart reconciliation remain unproven.
+- Manual/MCP demo broker orders were opened and closed successfully, but QuantBeast EA-autonomous demo execution is still unproven. Live modes now require explicit `InpAcknowledgeLiveBrokerRisk=true` in addition to the existing live gates, with current fail-closed tester evidence under `TestEvidence/conservative_live_tester_fbo_20260716/` and demo lifecycle evidence under `TestEvidence/demo_broker_lifecycle_20260716/`.
+- A broker-free Conservative Live Strategy Tester attempt could not reach order-routing because the native tester did not apply/expose `InpAcknowledgeLiveBrokerRisk=true` through inline, `.set`, or plain `[TesterInputs]` overrides. The EA failed closed at initialization, which is correct safety behavior, but EA-autonomous Conservative Live tester execution remains unproven.
 - Unknown ownership applies `InpUnknownPosPolicy`; runtime behavior still needs scenario proof.
 
 ## Strategy semantics still incomplete
 
-- BO's local compression-percent setting does not independently calculate a strategy-specific percentile.
-- FBO does not yet implement independently selectable midpoint and VWAP target policies from both configured R inputs.
-- TP lacks a dedicated pullback-age feature, so `InpTP_MaxPullbackBars` is not fully enforced.
-- MR does not yet implement a distinct opposite-standard-deviation-band target mode.
 - Trigger implementations are intentionally simple closed-candle/displacement confirmations; direct class reachability is proven, but organic market-feature reachability still requires testing.
 - Fixed confidence and spread sub-gates may make strategies too restrictive or permissive; this is unmeasured.
 
@@ -88,7 +86,7 @@ Remaining Shadow limitations:
 - No per-strategy/direction/session/regime report exists.
 - Final strategy/arbitration/risk decision routing is implemented and deterministically tested, rejected signals preserve BUY/SELL direction, and signal IDs include direction. File-level proof from a completed organic post-repair true-tick run is under `TestEvidence/organic_true_ticks_20260716/`. The shared historical journal intentionally retains pre-repair rows and a pre-fix corrupted prefix; only byte-bounded suffixes should be treated as current evidence.
 - Counterfactual tracking remains a stub.
-- Alert routing is wired for key signal/order/protection events and tester-suppressed for validation; real terminal/push delivery still needs operator verification outside Strategy Tester.
+- `UI/Alerts.mqh` now fail-closes push delivery on `SendNotification()` failure and remains tester-suppressed for validation, but the EA still does not instantiate the module; real terminal/push delivery remains unverified outside Strategy Tester.
 - Dashboard values have not been verified against broker state in runtime.
 
 ## Architectural stubs

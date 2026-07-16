@@ -1,0 +1,4 @@
+CS	0	10:49:46.222	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Self-tests complete: 46 passed, 0 failed
+CS	0	10:50:02.379	Tester	final balance 10000.00 USD
+CS	0	10:50:02.379	Tester	OnTester result 0
+CS	0	10:50:02.388	Tester	XAUUSD,M5: 22080 ticks, 1104 bars generated. Test passed in 0:00:16.172.
