@@ -86,7 +86,7 @@ Remaining Shadow limitations:
 - No per-strategy/direction/session/regime report exists.
 - Final strategy/arbitration/risk decision routing is implemented and deterministically tested, rejected signals preserve BUY/SELL direction, and signal IDs include direction. File-level proof from a completed organic post-repair true-tick run is under `TestEvidence/organic_true_ticks_20260716/`. The shared historical journal intentionally retains pre-repair rows and a pre-fix corrupted prefix; only byte-bounded suffixes should be treated as current evidence.
 - Counterfactual tracking remains a stub.
-- `UI/Alerts.mqh` now fail-closes push delivery on `SendNotification()` failure and remains tester-suppressed for validation, but the EA still does not instantiate the module; real terminal/push delivery remains unverified outside Strategy Tester.
+- `UI/Alerts.mqh` now fail-closes push delivery on `SendNotification()` failure and the EA wrapper now latches entries closed when an enabled configured alert cannot be delivered. This source-level propagation still requires a fresh compile and Shadow fixture rerun; current evidence is under `TestEvidence/alert_failclosed_20260716/`. Push delivery itself has been operator-verified through the MT5 app, but end-to-end EA alert behavior remains unproven outside Strategy Tester.
 - Dashboard values have not been verified against broker state in runtime.
 
 ## Architectural stubs

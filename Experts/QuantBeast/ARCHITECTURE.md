@@ -99,7 +99,7 @@ The timer checks terminal connectivity and periodically saves limited state. It 
 | Analytics | CounterfactualTracker | Stub | Constructor only. |
 | Testing | SafetyTests | Partial | Embedded deterministic fixtures cover 51 policies/lifecycles, including rejected-signal direction, regime safety, all arbitration enum modes, duplicate/cooldown persistence, final-decision signal writing, performance without file journaling, live-mode gates, live acknowledgement gating, state scoping, unknown-position no-adoption, alert routing, preflight, session/rollover exits, chart-object suppression, strategy-counter persistence, and strategy-input wiring. Organic true-tick data reached accepted FBO BUY/SELL; BO/TP/MR accepted lifecycles, actual broker faults, and normal-terminal restart remain unproven. |
 | UI | Dashboard | Partial | Basic dashboard exists; not every required field is displayed. |
-| UI | Alerts | Partial | Terminal/push helper is included and wired for key signal, order, protection, fill, and reconciliation categories with Strategy Tester emission suppression; real terminal/push delivery remains operator-unverified. |
+| UI | Alerts | Partial | Terminal/push helper is included and wired for key signal, order, protection, fill, and reconciliation categories with Strategy Tester emission suppression. Source now propagates enabled delivery failure into an entry kill, but this latest change still needs fresh compile and Shadow fixture evidence; real EA terminal/push delivery remains unproven. |
 
 ## Operating-mode contract
 

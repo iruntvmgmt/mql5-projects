@@ -93,6 +93,7 @@ Market data -> data quality -> closed-bar features -> regimes
 - `TestEvidence/selftest_detail_control_20260716/` — self-test detail logging control
 - `TestEvidence/chart_object_toggle_20260716/` — chart-object rendering toggle behavior
 - `TestEvidence/alert_category_routing_20260716/` — fill/reconciliation alert category wiring
+- `TestEvidence/alert_failclosed_20260716/` — source-level enabled-alert delivery failure propagation; fresh compile and Shadow fixture still pending
 - `FINAL_ADVERSARIAL_AUDIT_20260716.md` — final safe-phase adversarial audit and readiness classification
 - `HANDOFF.md` — living status and next task
 - `KNOWN_LIMITATIONS.md` — authoritative remaining-debt register

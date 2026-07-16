@@ -72,6 +72,11 @@ public:
    string LastMessage() const { return m_lastMessage; }
 };
 
+bool QBConfiguredAlertSucceeded(bool enabled, bool sendResult)
+{
+   return !enabled || sendResult;
+}
+
 bool QBTestAlertRouting(string &detail)
 {
    CAlerts alerts;
@@ -81,11 +86,15 @@ bool QBTestAlertRouting(string &detail)
    bool enabledSent = alerts.SendIfEnabled(true, "enabled-alert");
    bool countOK = alerts.SentCount() == 1;
    bool lastOK = alerts.LastMessage() == "enabled-alert";
+   bool disabledDeliveryOK = QBConfiguredAlertSucceeded(false, false);
+   bool enabledFailureClosed = !QBConfiguredAlertSucceeded(true, false);
 
    detail = "disabled=" + (disabledSuppressed ? "suppressed" : "FAILED") +
             " enabled=" + (enabledSent ? "routed" : "FAILED") +
+            " failClosed=" + (enabledFailureClosed ? "yes" : "FAILED") +
             " count=" + IntegerToString(alerts.SentCount());
-   return disabledSuppressed && enabledSent && countOK && lastOK;
+   return disabledSuppressed && enabledSent && countOK && lastOK &&
+          disabledDeliveryOK && enabledFailureClosed;
 }
 
 #endif // QB_ALERTS_MQH

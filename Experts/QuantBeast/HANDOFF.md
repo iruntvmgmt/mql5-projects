@@ -99,9 +99,9 @@ Do not use this abbreviated list in place of `BUG_AUDIT.md`.
 - `Execution/RecoveryEngine.mqh`
 - `Analytics/CounterfactualTracker.mqh`
 
-### Disconnected partial
+### Wired partial
 
-- `UI/Alerts.mqh`
+- `UI/Alerts.mqh` is included, initialized, and routed for key categories; latest fail-closed delivery propagation is source-level only until a fresh compile and Shadow fixture rerun pass.
 
 ### Major partial systems
 
@@ -147,6 +147,7 @@ Live-gate evidence: TestEvidence/live_strategy_gate_20260716/
 Self-test detail-control evidence: TestEvidence/selftest_detail_control_20260716/
 Chart-object-toggle evidence: TestEvidence/chart_object_toggle_20260716/
 Alert-category routing evidence: TestEvidence/alert_category_routing_20260716/
+Alert fail-closed propagation source evidence: TestEvidence/alert_failclosed_20260716/ (fresh compile blocked; rerun required)
 Preset-gate alignment evidence: TestEvidence/preset_gate_alignment_20260716/
 Arbitration-mode coverage evidence: TestEvidence/arbitration_modes_20260716/
 Arbitration persistence evidence: TestEvidence/arbitration_persistence_20260716/
@@ -177,6 +178,16 @@ Restart/recovery: version quarantine and risk-state restore contracts proven; tw
 Demo forward: prohibited until earlier gates pass
 Live: prohibited
 ```
+
+### 2026-07-16 — Alert delivery fail-closed propagation
+
+- Defect demonstrated: `CAlerts::SendAlert()` returned failure when `SendNotification()` failed, but `EmitConfiguredAlert()` discarded the result. A configured push-alert failure could therefore be logged without any controller-level safety consequence.
+- Severity: Medium safety/observability defect. It affects monitoring assumptions, especially for future live-capable validation windows where an operator has enabled push alerting.
+- Fix: added `QBConfiguredAlertSucceeded()` in `UI/Alerts.mqh`; extended `QBTestAlertRouting()` to cover disabled-alert success and enabled-delivery failure; changed `EmitConfiguredAlert()` to return success/failure and to latch entries closed through the existing kill switch plus state persistence when an enabled configured alert cannot be delivered.
+- Validation: source blocks read back correctly. Fresh compile is blocked in this turn because MetaEditor invocations exited with code 0 but did not update `QuantBeastEA.ex5` or write a fresh log. No tester run was performed because the current `.ex5` is stale relative to source.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/alert_failclosed_20260716/`.
+- Files changed: `MQL5/Include/QuantBeast/UI/Alerts.mqh`, `MQL5/Experts/QuantBeast/QuantBeastEA.mq5`, `README.md`, `ARCHITECTURE.md`, `CONFIGURATION_GUIDE.md`, `KNOWN_LIMITATIONS.md`, `HANDOFF.md`, and this evidence folder.
+- Required next action: run a known-working MetaEditor compile and then a Shadow startup fixture; expected self-test detail should include `TEST 41 PASS: Alert routing ... failClosed=yes`. Readiness remains exactly `READY FOR SHADOW MODE`; live and Challenge trading remain prohibited.
 
 ### 2026-07-16 — Live broker-transmission acknowledgement gate
 
@@ -287,6 +298,13 @@ Live: prohibited
 - Validation: compile remained `0 errors, 0 warnings` in `TestEvidence/alert_category_routing_20260716/compile_alert_patch.log`; the existing tester log `Tester/Agent-127.0.0.1-3000/logs/20260716.log` still shows `51 passed, 0 failed`, `OnTester result 0`, and `final balance 10000.00 USD`. No broker orders were transmitted.
 - Documentation: `KNOWN_LIMITATIONS.md` now states that `UI/Alerts.mqh` remains uninstantiated by the EA and terminal/push delivery remains unverified outside Strategy Tester.
 - Readiness remains exactly `READY FOR_SHADOW_MODE`.
+
+### 2026-07-16 — MT5 push transport operator-verified externally
+
+- Operator report: after logging into the MT5 account and the relevant email/account path, push notifications were tested and did reach the phone through the MT5 app.
+- Interpretation: the earlier alert-module concern was not attributable to broken MT5 push transport in the operator environment. The source-level fail-closed patch in `UI/Alerts.mqh` remains valid, but the remaining gap is EA wiring rather than push transport.
+- Documentation: `KNOWN_LIMITATIONS.md` now states that terminal push transport has been operator-verified; the module still is not instantiated by the EA.
+- No source code or compile evidence changed in this note.
 
 ## Next task
 

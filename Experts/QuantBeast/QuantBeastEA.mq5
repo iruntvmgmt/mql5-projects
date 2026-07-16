@@ -187,9 +187,19 @@ void ProcessShadowCloseEvents(ShadowCloseEvent &events[])
 
 void PersistRuntimeState();
 
-void EmitConfiguredAlert(bool enabled, const string message)
+bool EmitConfiguredAlert(bool enabled, const string message)
 {
-   g_Alerts.SendIfEnabled(enabled, message);
+   if(!enabled)
+      return true;
+
+   bool delivered = g_Alerts.SendIfEnabled(true, message);
+   if(QBConfiguredAlertSucceeded(enabled, delivered))
+      return true;
+
+   QBLogError("Configured alert delivery failed; entries locked: " + message);
+   g_KillSwitch.KillEntries("Configured alert delivery failed");
+   PersistRuntimeState();
+   return false;
 }
 
 bool QBSessionExitPolicyTriggered(bool closeBeforeSessionEnd,

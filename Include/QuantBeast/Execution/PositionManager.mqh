@@ -37,7 +37,8 @@ private:
    CBrokerAdapter*   m_broker;
 
    // Tracked positions
-   PositionContext   m_positions[20];
+   enum { POSITION_TRACK_CAPACITY = 64 };
+   PositionContext   m_positions[POSITION_TRACK_CAPACITY];
    int               m_positionCount;
 
    // Management config
@@ -188,7 +189,7 @@ public:
          }
       }
 
-      if(m_positionCount >= 20)
+      if(m_positionCount >= POSITION_TRACK_CAPACITY)
       {
          QBLogError("Max position tracking limit reached");
          return false;
@@ -473,7 +474,7 @@ public:
                   }
                }
 
-               if(m_positionCount < 20)
+               if(m_positionCount < POSITION_TRACK_CAPACITY)
                {
                   m_positions[m_positionCount] = ctx;
                   m_positionCount++;

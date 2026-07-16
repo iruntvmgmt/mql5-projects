@@ -149,7 +149,7 @@ Signal, order, and trade journal inputs open their respective files. Existing CS
 
 ## Alerts
 
-Alert inputs are wired for key signal rejection/acceptance, order fill, order rejection, reconciliation failure, and protection emergency events. `InpSendPushNotifications` enables MetaTrader push delivery outside Strategy Tester. Strategy Tester suppresses actual terminal/push alert emission and logs routing evidence instead. Real terminal/push delivery still requires operator verification before relying on it operationally.
+Alert inputs are wired for key signal rejection/acceptance, order fill, order rejection, reconciliation failure, and protection emergency events. `InpSendPushNotifications` enables MetaTrader push delivery outside Strategy Tester. Strategy Tester suppresses actual terminal/push alert emission and logs routing evidence instead. Source-level alert delivery propagation now treats disabled alerts as OK and latches entries closed if an enabled configured alert cannot be delivered, but this change still requires fresh compile and Shadow fixture evidence under `TestEvidence/alert_failclosed_20260716/`. Real terminal/push delivery still requires operator verification before relying on it operationally.
 
 ## Testing and unknown positions
 
