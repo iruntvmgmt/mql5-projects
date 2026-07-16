@@ -463,6 +463,7 @@ int OnInit()
       QBLogError("Symbol adapter initialization FAILED");
       return INIT_FAILED;
    }
+   SetStateScopeSymbol(g_Adapter.Symbol());
    g_Adapter.PrintDiagnostics();
 
    // --- Initialize Tick State ---
@@ -1782,6 +1783,15 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 20 PASS: State version policy " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 20 FAIL: State version policy " + detail); }
+   }
+
+   // Test 20b: persisted-state keys are scoped by account and effective symbol
+   {
+      string detail = "";
+      if(QBTestStateScopePolicy(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 20b PASS: State scope policy " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 20b FAIL: State scope policy " + detail); }
    }
 
    // Test 21: persisted account locks/counters restore without resetting

@@ -51,9 +51,27 @@
 
 #define QB_STATE_VERSION_NUM   4
 
+string g_QBStateScopeSymbol = "";
+
+void SetStateScopeSymbol(const string symbol)
+{
+   g_QBStateScopeSymbol = symbol;
+}
+
+string GetStateScopeSymbol()
+{
+   return (g_QBStateScopeSymbol == "") ? _Symbol : g_QBStateScopeSymbol;
+}
+
 string GV_ScopedName(string name)
 {
-   return name + "_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "_" + _Symbol;
+   return name + "_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "_" +
+          GetStateScopeSymbol();
+}
+
+string GV_TestScopedName(string name, long login, string symbol)
+{
+   return name + "_" + IntegerToString(login) + "_" + symbol;
 }
 
 //+------------------------------------------------------------------+
@@ -319,6 +337,31 @@ bool QBTestStateVersionPolicy(string &detail)
             " old=" + (oldRejected ? "rejected" : "FAILED") +
             " future=" + (futureRejected ? "rejected" : "FAILED");
    return emptyAccepted && currentAccepted && oldRejected && futureRejected;
+}
+
+bool QBTestStateScopePolicy(string &detail)
+{
+   string chartSymbol = "CHART_XAUUSD";
+   string effectiveSymbol = "BROKER_XAUUSDm";
+   long loginA = 10101;
+   long loginB = 20202;
+
+   string chartKey = GV_TestScopedName(GV_STATE_VERSION, loginA, chartSymbol);
+   string effectiveKey = GV_TestScopedName(GV_STATE_VERSION, loginA, effectiveSymbol);
+   string otherAccountKey = GV_TestScopedName(GV_STATE_VERSION, loginB, effectiveSymbol);
+
+   bool symbolSeparated = (chartKey != effectiveKey);
+   bool accountSeparated = (effectiveKey != otherAccountKey);
+
+   string before = GetStateScopeSymbol();
+   SetStateScopeSymbol(effectiveSymbol);
+   bool overrideApplied = (GetStateScopeSymbol() == effectiveSymbol);
+   SetStateScopeSymbol(before);
+
+   detail = "symbol=" + (symbolSeparated ? "scoped" : "FAILED") +
+            " account=" + (accountSeparated ? "scoped" : "FAILED") +
+            " override=" + (overrideApplied ? "effective" : "FAILED");
+   return symbolSeparated && accountSeparated && overrideApplied;
 }
 
 #endif // QB_STATESTORE_MQH
