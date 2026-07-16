@@ -6,17 +6,17 @@
 
 The original audit correctly failed the generated project at 23 errors and 15 warnings. The repaired source now compiles to `QuantBeastEA.ex5` with **0 errors and 0 warnings**. The repair removed the confirmed compile blockers and corrected multiple critical safety, accounting, indexing, execution, recovery, and strategy-unit defects.
 
-This is not a profitability verdict. The latest Shadow Strategy Tester fixture completed with **42 startup checks passed and 0 failed**, including direction-preserving rejected signals, regime/arbitration policies, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, performance updates when file trade journaling is disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, and unknown-position no-adoption behavior. Local agent logs are authoritative. The EA is not cleared for Conservative Live or Challenge modes.
+This is not a profitability verdict. The latest Shadow Strategy Tester fixture completed with **43 startup checks passed and 0 failed**, including direction-preserving rejected signals, regime/arbitration policies, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, performance updates when file trade journaling is disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, and alert-routing behavior. Local agent logs are authoritative. The EA is not cleared for Conservative Live or Challenge modes.
 
 ## Final evidence
 
 - Source: `QuantBeastEA.mq5`
-- Source SHA-256: `12488268def53445f064bcb2c92369446dee14a396b478074aeb8d0fc4717b07`
-- EX5 SHA-256: `277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b5440f9`
+- Source SHA-256: `2b1dead892b25081d026d63b696776f201f9d2c132e5ea641f2588dcc529685a`
+- EX5 SHA-256: `bed035a8f6b03fe73defde9fac0dd7e641e4b18b3b7f3e09691bb9b507dceb3b`
 - Shadow module SHA-256: `05885359c865d3c56d738a7ededcd13a49b46b3c8d74dc07c7d040ebece560bb`
 - Compiler: MetaEditor build 6002, X64 Regular
 - Compile result: `0 errors, 0 warnings`
-- Runtime result: deterministic `42 passed, 0 failed`; organic true-tick Shadow run `417423 ticks`, `276 bars`; tester balance unchanged at `10000.00`
+- Runtime result: deterministic `43 passed, 0 failed`; organic true-tick Shadow run `417423 ticks`, `276 bars`; tester balance unchanged at `10000.00`
 - Evidence: prior folders plus `TestEvidence/broker_fault_matrix_20260715/`, `TestEvidence/organic_pipeline_20260715/`, `TestEvidence/arbitration_journal_20260715/`, `TestEvidence/audit_final_20260716/`, `TestEvidence/organic_true_ticks_20260716/`, `TestEvidence/performance_readiness_20260716/`, `TestEvidence/live_strategy_gate_20260716/`, and `FINAL_ADVERSARIAL_AUDIT_20260716.md`
 
 ## Critical repairs completed
@@ -134,7 +134,7 @@ Challenge transitions and locks are safer than the generated baseline, but depos
 ### Other limitations
 
 - Manual news times only; no automated calendar feed.
-- Alert module/channels remain disconnected.
+- Alert routing is wired for key signal/order/protection events and tester-suppressed for validation; real terminal/push delivery remains unverified outside Strategy Tester.
 - Fixed local capacity of 20 tracked positions.
 - State-version mismatch has no formal migration/quarantine workflow.
 - Per-strategy magic constants exist, but execution currently relies primarily on the common magic range plus short comments.

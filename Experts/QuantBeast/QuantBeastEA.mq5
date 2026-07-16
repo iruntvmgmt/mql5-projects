@@ -46,6 +46,7 @@
 #include <QuantBeast/Execution/ShadowPortfolio.mqh>
 #include <QuantBeast/Analytics/TradeJournal.mqh>
 #include <QuantBeast/UI/Dashboard.mqh>
+#include <QuantBeast/UI/Alerts.mqh>
 #include <QuantBeast/Testing/SafetyTests.mqh>
 
 //+------------------------------------------------------------------+
@@ -84,6 +85,7 @@ CShadowPortfolio      g_Shadow;
 // Analytics & UI
 CTradeJournal         g_Journal;
 CDashboard            g_Dashboard;
+CAlerts               g_Alerts;
 
 //+------------------------------------------------------------------+
 //| State Variables                                                   |
@@ -185,6 +187,11 @@ void ProcessShadowCloseEvents(ShadowCloseEvent &events[])
 
 void PersistRuntimeState();
 
+void EmitConfiguredAlert(bool enabled, const string message)
+{
+   g_Alerts.SendIfEnabled(enabled, message);
+}
+
 // Service persistent cancel/flatten requests from both OnTick and OnTimer.
 // Only explicitly live modes may transmit broker actions, and retries share a
 // bounded cadence so a fast tick stream cannot hammer the trade server.
@@ -256,6 +263,8 @@ bool ProcessKillSwitchActions()
 void ActivateProtectionEmergency(string reason)
 {
    g_KillSwitch.Emergency(reason);
+   EmitConfiguredAlert(InpAlertKillSwitch || InpAlertUnprotectedPos,
+                       "Protection emergency: " + reason);
    if(QBModeAllowsBrokerActions(g_EffectiveMode))
    {
       g_Broker.CancelAllPending();
@@ -423,6 +432,34 @@ bool QBLiveRecoveryPolicyAllowed(ENUM_UNKNOWN_POS_POLICY unknownPolicy,
    }
 
    reason = "non-transmitting unknown-position startup policy";
+   return true;
+}
+
+bool QBEntryPreflightControlsAllow(bool dataQualityOK, int barCount,
+                                   int barWarmup, bool abnormalTick,
+                                   double priceJumpPoints, string &reason)
+{
+   if(!dataQualityOK)
+   {
+      reason = "Data quality gate";
+      return false;
+   }
+
+   if(barWarmup > 0 && barCount < barWarmup)
+   {
+      reason = "Bar warmup: " + IntegerToString(barCount) + " < " +
+               IntegerToString(barWarmup);
+      return false;
+   }
+
+   if(abnormalTick)
+   {
+      reason = "Price jump: " + DoubleToString(priceJumpPoints, 1) +
+               " pts > configured maximum";
+      return false;
+   }
+
+   reason = "entry preflight passed";
    return true;
 }
 
@@ -646,6 +683,7 @@ int OnInit()
    // --- Initialize Dashboard ---
    g_Dashboard.Init(InpDashboardEnabled, InpDashboardX, InpDashboardY,
                     InpDashboardFontSize, InpDashboardColor);
+   g_Alerts.Init(InpSendPushNotifications);
 
    // --- Persistence: State Store Init ---
    if(PersistenceEnabled())
@@ -833,6 +871,23 @@ void OnTick()
    bool dataQualityOK = g_DataQuality.PreTradeValidation(g_CurrentSnap,
                                                           InpMaxSpreadPoints,
                                                           livePermissionsRequired);
+   double priceJumpPoints = 0.0;
+   bool abnormalTick = (InpMaxPriceJumpPoints > 0) &&
+                       g_TickState.IsAbnormalTick(priceJumpPoints,
+                                                  InpMaxPriceJumpPoints);
+   string entryPreflightReason = "";
+   if(!QBEntryPreflightControlsAllow(dataQualityOK,
+                                     g_BarCache.GetBarCount(InpPrimaryTF),
+                                     InpBarWarmup,
+                                     abnormalTick,
+                                     priceJumpPoints,
+                                     entryPreflightReason))
+   {
+      dataQualityOK = false;
+      g_LastRejection = entryPreflightReason;
+      if(abnormalTick)
+         QBLogWarn("Entry preflight blocked: " + entryPreflightReason);
+   }
 
    // --- Step 7: Calculate features (on new bar only for heavy calcs) ---
    if(dataQualityOK && (isNewBar || !g_StartupReconciled))
@@ -1056,6 +1111,8 @@ void EvaluateAndTrade()
             g_Journal.LogSignal(best, g_CurrentSnap, g_CurrentRegime,
                                 g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
             QBLogWarn("Signal rejected by risk engine: " + rejectReason);
+            EmitConfiguredAlert(InpAlertSignalRejected,
+                                "Signal rejected by risk engine: " + rejectReason);
          }
       }
    }
@@ -1081,6 +1138,8 @@ void ExecuteSignal(StrategySignal &signal)
       g_Journal.LogSignal(signal, g_CurrentSnap, g_CurrentRegime,
                           g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
       QBLogWarn("Position sizing failed: " + sizeReason);
+      EmitConfiguredAlert(InpAlertSignalRejected,
+                          "Position sizing failed: " + sizeReason);
       return;
    }
 
@@ -1095,6 +1154,8 @@ void ExecuteSignal(StrategySignal &signal)
       g_Journal.LogSignal(signal, g_CurrentSnap, g_CurrentRegime,
                           g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
       QBLogWarn("Sized trade rejected: " + sizedRiskReason);
+      EmitConfiguredAlert(InpAlertSignalRejected,
+                          "Sized trade rejected: " + sizedRiskReason);
       return;
    }
 
@@ -1114,6 +1175,7 @@ void ExecuteSignal(StrategySignal &signal)
       g_Journal.LogSignal(signal, g_CurrentSnap, g_CurrentRegime,
                           g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
       QBLogWarn(g_LastRejection);
+      EmitConfiguredAlert(InpAlertSignalRejected, g_LastRejection);
       return;
    }
 
@@ -1143,6 +1205,8 @@ void ExecuteSignal(StrategySignal &signal)
       g_Journal.LogSignal(signal, g_CurrentSnap, g_CurrentRegime,
                           g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
       QBLogWarn("Margin check failed: " + marginReason);
+      EmitConfiguredAlert(InpAlertSignalRejected,
+                          "Margin check failed: " + marginReason);
       return;
    }
 
@@ -1190,6 +1254,8 @@ void ExecuteSignal(StrategySignal &signal)
       g_Journal.LogOrder(shadowRec);
       MarkStrategyTrade(signal.strategy_id);
       g_Arbitrator.CommitAccepted(signal);
+      EmitConfiguredAlert(InpAlertSignalAccepted,
+                          "Shadow signal accepted: " + signal.strategy_id);
       QBLogInfo("SHADOW: " + signal.strategy_id + " " +
                 EnumToString(signal.direction) + " lots=" + DoubleToString(lots, 2) +
                 " entry=" + DoubleToString(signal.proposed_entry, g_Adapter.Digits()) +
@@ -1215,6 +1281,7 @@ void ExecuteSignal(StrategySignal &signal)
          {
             g_LastRejection = isStopClass ? "Stop orders disabled" : "Limit orders disabled";
             QBLogWarn(g_LastRejection);
+            EmitConfiguredAlert(InpAlertOrderRejected, g_LastRejection);
             return;
          }
       }
@@ -1245,6 +1312,7 @@ void ExecuteSignal(StrategySignal &signal)
                          DoubleToString(signal.proposed_entry, g_Adapter.Digits()) +
                          " live=" + DoubleToString(liveEntry, g_Adapter.Digits()));
                g_Journal.LogOrder(rec);
+               EmitConfiguredAlert(InpAlertOrderRejected, g_LastRejection);
                break;
             }
             result = g_Broker.PlaceMarketOrder(signal.direction, lots,
@@ -1336,6 +1404,8 @@ void ExecuteSignal(StrategySignal &signal)
 
          QBLogWarn("Order submission failed after " +
                    IntegerToString(rec.retry_count + 1) + " attempt(s)");
+         EmitConfiguredAlert(InpAlertOrderRejected,
+                             "Order submission failed: " + IntegerToString((long)rec.retcode));
       }
    }
 }
@@ -2063,6 +2133,29 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 40 PASS: Unknown positions unmanaged"); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 40 FAIL: Unknown position management policy"); }
+   }
+
+   // Test 41: alert configuration routes enabled alerts and suppresses disabled ones.
+   {
+      string detail = "";
+      if(QBTestAlertRouting(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 41 PASS: Alert routing " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 41 FAIL: Alert routing " + detail); }
+   }
+
+   // Test 42: entry preflight controls enforce bar warmup and price-jump gates.
+   {
+      string reason = "";
+      bool passOK = QBEntryPreflightControlsAllow(true, 100, 50, false, 0.0, reason);
+      bool dataQualityRejected = !QBEntryPreflightControlsAllow(false, 100, 50, false, 0.0, reason);
+      bool warmupRejected = !QBEntryPreflightControlsAllow(true, 49, 50, false, 0.0, reason);
+      bool jumpRejected = !QBEntryPreflightControlsAllow(true, 100, 50, true, 250.0, reason);
+
+      if(passOK && dataQualityRejected && warmupRejected && jumpRejected)
+      { g_SelfTestPassed++; QBLogInfo("TEST 42 PASS: Entry preflight controls"); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 42 FAIL: Entry preflight controls " + reason); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

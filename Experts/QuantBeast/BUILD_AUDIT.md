@@ -1,6 +1,6 @@
 # QuantBeast EA — Build Audit
 
-> **Historical baseline:** This document preserves the original generated-build audit. The current repaired-state verdict, hashes, compile/runtime evidence, and limitations are in [REPAIR_AUDIT_20260715.md](REPAIR_AUDIT_20260715.md) and [FINAL_ADVERSARIAL_AUDIT_20260716.md](FINAL_ADVERSARIAL_AUDIT_20260716.md). Current compile status is `0 errors, 0 warnings`; the latest broker-free fixture is `42 passed, 0 failed`, and organic true-tick Shadow CSV proof exists; readiness is broker-free Shadow mode only.
+> **Historical baseline:** This document preserves the original generated-build audit. The current repaired-state verdict, hashes, compile/runtime evidence, and limitations are in [REPAIR_AUDIT_20260715.md](REPAIR_AUDIT_20260715.md) and [FINAL_ADVERSARIAL_AUDIT_20260716.md](FINAL_ADVERSARIAL_AUDIT_20260716.md). Current compile status is `0 errors, 0 warnings`; the latest broker-free fixture is `43 passed, 0 failed`, and organic true-tick Shadow CSV proof exists; readiness is broker-free Shadow mode only.
 
 **Audit date:** 2026-07-15  
 **Source version:** 1.00  
@@ -211,7 +211,7 @@ At least 22 inputs are declared but unused. The conservative and challenge prese
 
 ## Known limitations
 
-The authoritative register is `KNOWN_LIMITATIONS.md`. Major limitations include manual news only, tick-volume VWAP proxy, no COMEX confirmation, manual DST, no Shadow pending-order simulation, incomplete live transaction/recovery proof, disconnected alerts/counterfactual analytics, incomplete branch fixtures, and unverified broker portability.
+The authoritative register is `KNOWN_LIMITATIONS.md`. Major limitations include manual news only, tick-volume VWAP proxy, no COMEX confirmation, manual DST, no Shadow pending-order simulation, incomplete live transaction/recovery proof, unverified real alert delivery, counterfactual analytics, incomplete branch fixtures, and unverified broker portability.
 
 ## Unverified claims
 

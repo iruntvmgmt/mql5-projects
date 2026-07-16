@@ -4,7 +4,7 @@
 **Safety default:** Shadow mode.  
 **Live-use status:** Not approved.
 
-**Latest evidence:** 2026-07-16 Shadow regression `42 passed, 0 failed`; organic true-tick CSV proof exists under `TestEvidence/organic_true_ticks_20260716/`, live-mode strategy/execution gates are covered under `TestEvidence/live_strategy_gate_20260716/`, live recovery no-passive-flatten gating is covered under `TestEvidence/live_recovery_gate_20260716/`, and unknown-position no-adoption behavior is covered under `TestEvidence/unknown_position_unmanaged_20260716/`.
+**Latest evidence:** 2026-07-16 Shadow regression `43 passed, 0 failed`; organic true-tick CSV proof exists under `TestEvidence/organic_true_ticks_20260716/`, live-mode strategy/execution gates are covered under `TestEvidence/live_strategy_gate_20260716/`, live recovery no-passive-flatten gating is covered under `TestEvidence/live_recovery_gate_20260716/`, unknown-position no-adoption behavior is covered under `TestEvidence/unknown_position_unmanaged_20260716/`, and alert-routing behavior is covered under `TestEvidence/alert_routing_20260716/`.
 
 ## Loading presets
 
@@ -144,11 +144,11 @@ Daily/weekly dates and equity, locks, high-water mark, consecutive losses, conse
 
 ## Logging and dashboard
 
-Signal, order, and trade journal inputs open their respective files. Existing CSV files append at end and fail closed if append positioning fails. Owned final-close transactions feed completed-trade rows and rolling metrics, and performance metrics update even when file trade journaling is disabled. Organic true-tick suffix evidence proves final signal decisions, separate order rows, and separate trade rows. Dashboard enablement, location, font size, and color are active. `InpShowChartObjects` is unused.
+Signal, order, and trade journal inputs open their respective files. Existing CSV files append at end and fail closed if append positioning fails. Owned final-close transactions feed completed-trade rows and rolling metrics, and performance metrics update even when file trade journaling is disabled. Organic true-tick suffix evidence proves final signal decisions, separate order rows, and separate trade rows. Dashboard enablement, location, font size, and color are active. Alert toggles route key signal rejection/acceptance, order rejection, and protection emergency events; Strategy Tester suppresses actual terminal/push alert emission while preserving routing evidence. `InpShowChartObjects` is unused.
 
 ## Alerts
 
-All alert inputs are currently inactive because `CAlerts` is not instantiated by the EA. Do not rely on terminal or push notifications.
+Alert inputs are wired for key signal rejection/acceptance, order rejection, and protection emergency events. `InpSendPushNotifications` enables MetaTrader push delivery outside Strategy Tester. Strategy Tester suppresses actual terminal/push alert emission and logs routing evidence instead. Real terminal/push delivery still requires operator verification before relying on it operationally.
 
 ## Testing and unknown positions
 

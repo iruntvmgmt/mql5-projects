@@ -40,7 +40,7 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 - `QuantBeastEA.ex5` is present and the final MetaEditor build is `0 errors, 0 warnings`.
 - The original 23-error/15-warning baseline is preserved under `TestEvidence/compile_20260715/`.
 - The Shadow lifecycle build/runtime evidence is under `TestEvidence/shadow_lifecycle_20260715/`.
-- Strategy Tester agent logs prove Shadow initialization and 42 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, and unknown-position no-adoption behavior. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
+- Strategy Tester agent logs prove Shadow initialization and 43 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, and alert-routing policy. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
 - A two-process restart probe is preserved under `TestEvidence/restart_probe_20260715/`: phase 1 passed, but a fresh tester/Wine process loaded schema `0`. This proves tester-state isolation, not live-terminal restart safety. Production persistence now explicitly flushes Terminal Global Variables.
 - Broker submission return values now require both local API success and order-class-specific server acceptance; deterministic mismatched-response injection passes under `TestEvidence/server_ack_policy_20260715/`.
 - Pending tracking now survives delete failure, missing history, and unsafe fill reconciliation; evidence is under `TestEvidence/pending_orphan_policy_20260715/`.
@@ -81,7 +81,7 @@ The authoritative, complete focused findings are in `BUG_AUDIT.md`. Highest-risk
 4. Recovered positions cannot always restore signal/regime/MFE/MAE/exact management state.
 5. Strategy semantic gaps remain: BO local compression threshold, FBO target variants, TP pullback age, MR opposite-band target.
 6. Challenge deposits/withdrawals, attempts, profit locks, and restart scenarios remain unproven.
-7. Alert module and inputs are disconnected.
+7. Alert routing is wired and tester-suppressed, but real terminal/push delivery has not been operator-verified outside Strategy Tester.
 8. State-version mismatch now quarantines entries fail-closed, but no automatic migration exists and real restart recovery remains unproven.
 9. Automated fault-injection, restart, execution, and broker-portability scenarios are incomplete.
 
@@ -142,8 +142,8 @@ Broker-fault-matrix evidence: TestEvidence/broker_fault_matrix_20260715/
 Organic-pipeline evidence: TestEvidence/organic_pipeline_20260715/
 Arbitration/journal evidence: TestEvidence/arbitration_journal_20260715/
 Live-gate evidence: TestEvidence/live_strategy_gate_20260716/
-Final source SHA-256: 12488268def53445f064bcb2c92369446dee14a396b478074aeb8d0fc4717b07
-Final EX5 SHA-256: 277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b5440f9
+Final source SHA-256: 2b1dead892b25081d026d63b696776f201f9d2c132e5ea641f2588dcc529685a
+Final EX5 SHA-256: bed035a8f6b03fe73defde9fac0dd7e641e4b18b3b7f3e09691bb9b507dceb3b
 ```
 
 ## Test status
@@ -152,7 +152,7 @@ Final EX5 SHA-256: 277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b544
 Static content audit: completed
 Focused bug audit: completed — BUG_AUDIT.md
 Compile test: passed after repair — 0 errors, 0 warnings
-Deterministic startup fixtures: runtime pass — 42 passed, 0 failed
+Deterministic startup fixtures: runtime pass — 43 passed, 0 failed
 Shadow attachment: completed per local tester agent log; MCP status remained unreliable
 Shadow lifecycle tests: all core market-position branches passed; no broker orders/deals; tester balance unchanged
 Strategy Tester baseline: not yet valid as performance evidence
@@ -515,9 +515,9 @@ Live: prohibited
 - Defect demonstrated: `CPositionManager::ReconstructFromBroker()` can call `m_broker.ClosePosition(ticket)` for `UNKNOWN_FLATTEN` during startup reconstruction. In a live mode this is a broker-mutating startup path before an operator has explicitly authorized closing unknown positions.
 - Severity: High for live/restart safety; affected paths are Conservative Live and acknowledged Challenge Live startup recovery with `InpUnknownPosPolicy=UNKNOWN_FLATTEN`.
 - Fix: added `QBLiveRecoveryPolicyAllowed()` and wired it into live initialization. Live modes now fail initialization when `InpUnknownPosPolicy=UNKNOWN_FLATTEN`; `UNKNOWN_IGNORE`, `UNKNOWN_REPORT`, and `UNKNOWN_QUARANTINE` remain allowed because they do not transmit close orders during startup.
-- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `42 passed, 0 failed`, including `TEST 39 PASS: Live recovery gate no passive flatten`.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `41 passed, 0 failed`, including `TEST 39 PASS: Live recovery gate no passive flatten`.
 - Evidence: `MQL5/Experts/QuantBeast/TestEvidence/live_recovery_gate_20260716/`.
-- Source SHA-256: `12488268def53445f064bcb2c92369446dee14a396b478074aeb8d0fc4717b07`; EX5 SHA-256: `277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b5440f9`.
+- Source SHA-256: `4611b0a29f54744a3ff4ee75eddb09d83c103d3954300930affc830c2ac487aa`; EX5 SHA-256: `5a266f505530aa67a84a775c38a290d5cb4d24321ddccc1a552ad7de0886bafe`.
 - No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
 
 ### 2026-07-16 — Independent strategy train baselines
@@ -580,6 +580,16 @@ Live: prohibited
 - Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `42 passed, 0 failed`, including `TEST 40 PASS: Unknown positions unmanaged`.
 - Evidence: `MQL5/Experts/QuantBeast/TestEvidence/unknown_position_unmanaged_20260716/`.
 - Source SHA-256: `12488268def53445f064bcb2c92369446dee14a396b478074aeb8d0fc4717b07`; PositionManager SHA-256: `f1eb5c8f75a5342015029488cc57f02bb312f8a8877b04fee4feee59be48eb72`; EX5 SHA-256: `277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b5440f9`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Alert controls wired with tester-safe routing
+
+- Defect demonstrated: alert inputs and `Alerts.mqh` existed but the EA never included, initialized, or called the alert component, leaving operator-facing alert controls disconnected.
+- Severity: Medium operational defect; configured safety warnings could not fire, but no broker exposure was created.
+- Fix: initialized `CAlerts`, added tester-safe suppression, routed key signal rejection/acceptance, order rejection, and protection emergency events through configured alert flags, and added deterministic alert-routing self-test coverage.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `43 passed, 0 failed`, including `TEST 41 PASS: Alert routing disabled=suppressed enabled=routed count=1`.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/alert_routing_20260716/`.
+- Source SHA-256: `2b1dead892b25081d026d63b696776f201f9d2c132e5ea641f2588dcc529685a`; Alerts SHA-256: `7e517231b8a037761627ad687c7364e089d6c8a1d8634ee0ed6038b824433778`; EX5 SHA-256: `bed035a8f6b03fe73defde9fac0dd7e641e4b18b3b7f3e09691bb9b507dceb3b`.
 - No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
 
 ### 2026-07-16 — Effective-symbol persistence scope repair

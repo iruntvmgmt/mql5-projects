@@ -1,0 +1,10 @@
+Compile: 0 errors, 0 warnings at 2026-07-16 10:26:35
+Regression: 43 passed, 0 failed
+Generated-tick Shadow run; no broker orders transmitted.
+Key markers:
+CS	0	10:26:52.301	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Alert suppressed in tester: enabled-alert
+CS	0	10:26:52.301	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 41 PASS: Alert routing disabled=suppressed enabled=routed count=1
+CS	0	10:26:52.301	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Self-tests complete: 43 passed, 0 failed
+CS	0	10:27:04.766	Tester	final balance 10000.00 USD
+CS	0	10:27:04.766	Tester	OnTester result 0
+CS	0	10:27:04.772	Tester	XAUUSD,M5: 22080 ticks, 1104 bars generated. Environment synchronized in 0:00:00.028. Test passed in 0:00:12.837.

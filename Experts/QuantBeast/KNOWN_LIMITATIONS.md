@@ -88,7 +88,7 @@ Remaining Shadow limitations:
 - No per-strategy/direction/session/regime report exists.
 - Final strategy/arbitration/risk decision routing is implemented and deterministically tested, rejected signals preserve BUY/SELL direction, and signal IDs include direction. File-level proof from a completed organic post-repair true-tick run is under `TestEvidence/organic_true_ticks_20260716/`. The shared historical journal intentionally retains pre-repair rows and a pre-fix corrupted prefix; only byte-bounded suffixes should be treated as current evidence.
 - Counterfactual tracking remains a stub.
-- Alert inputs and `UI/Alerts.mqh` remain disconnected.
+- Alert routing is wired for key signal/order/protection events and tester-suppressed for validation; real terminal/push delivery still needs operator verification outside Strategy Tester.
 - Dashboard values have not been verified against broker state in runtime.
 
 ## Architectural stubs

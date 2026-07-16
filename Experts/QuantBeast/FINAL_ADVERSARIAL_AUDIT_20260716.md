@@ -4,15 +4,15 @@
 
 `READY FOR SHADOW MODE`
 
-QuantBeast is not complete in the live-trading sense. It is, however, repaired to the broker-free Shadow readiness gate: the final compiled EA has `0 errors, 0 warnings`; the latest deterministic Shadow regression reports `42 passed, 0 failed`; live modes are gated to FBO-only market-order-only initialization with non-flattening unknown-position recovery; unknown positions are not adopted into active management unless ownership is recovered; and the immediate signal-journal blocker is closed by an organic true-tick Shadow run with all strategies enabled and self-tests disabled.
+QuantBeast is not complete in the live-trading sense. It is, however, repaired to the broker-free Shadow readiness gate: the final compiled EA has `0 errors, 0 warnings`; the latest deterministic Shadow regression reports `43 passed, 0 failed`; live modes are gated to FBO-only market-order-only initialization with non-flattening unknown-position recovery; unknown positions are not adopted into active management unless ownership is recovered; alert controls are wired with tester-safe suppression; and the immediate signal-journal blocker is closed by an organic true-tick Shadow run with all strategies enabled and self-tests disabled.
 
 Live, Conservative Live, Challenge research with broker transmission, and Challenge Live remain prohibited because this run did not authorize broker orders and therefore cannot provide real broker execution, callback, or restart evidence.
 
 ## Final build and hashes
 
 - Compiler: MetaEditor build 6002.
-- Final source SHA-256: `12488268def53445f064bcb2c92369446dee14a396b478074aeb8d0fc4717b07`.
-- Final EX5 SHA-256: `277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b5440f9`.
+- Final source SHA-256: `2b1dead892b25081d026d63b696776f201f9d2c132e5ea641f2588dcc529685a`.
+- Final EX5 SHA-256: `bed035a8f6b03fe73defde9fac0dd7e641e4b18b3b7f3e09691bb9b507dceb3b`.
 - EX5 timestamp: 2026-07-16 10:08:54 EDT.
 - EX5 size: 443512 bytes.
 
@@ -28,7 +28,7 @@ Live, Conservative Live, Challenge research with broker transmission, and Challe
 Evidence: `TestEvidence/audit_final_20260716/`
 
 - Compile: `0 errors, 0 warnings`.
-- Latest deterministic gate run: `42 passed, 0 failed`.
+- Latest deterministic gate run: `43 passed, 0 failed`.
 - Test 35 proved final-decision signal writer rows for strategy rejects, arbitration loser, risk reject, and accepted BUY.
 - Test 36 proved performance metrics update while `InpEnableTradeJournal=false`.
 - Tester result: 22080 generated ticks, 1104 bars, normal completion, final balance `10000.00`.
@@ -112,7 +112,7 @@ State schema quarantine, risk-state restore, Challenge restore, cash-flow cursor
 
 - Shadow pending orders are explicitly rejected; activation, expiry, and cancellation simulation are not implemented.
 - Owned broker pending orders are cancelled fail-closed on startup rather than restored.
-- Alert inputs and `UI/Alerts.mqh` remain disconnected.
+- Alert routing is wired for key signal/order/protection events and tester-suppressed for validation; real terminal/push delivery remains unverified outside Strategy Tester.
 - Several declared inputs remain inactive or partial, including close-before-session/rollover controls and some strategy-specific target/pullback/compression variants.
 - Historical shared Common signal journal contains pre-repair rows and a pre-fix corrupted prefix. Current proof uses byte-bounded suffixes only.
 - Performance baselines are mechanically started: the combined training baseline, a clean combined holdout retry, and independent BO/FBO/TP/MR train and holdout baselines completed, while the first holdout attempt remains preserved as invalid/incomplete evidence. No edge claim is supported.
