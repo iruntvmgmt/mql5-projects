@@ -1,0 +1,4 @@
+0	2026.07.16 10:08:54.869	Compile	MQL5\Experts\QuantBeast\QuantBeastEA.mq5 - 0 errors, 0 warnings, 12581 ms elapsed, cpu='X64 Regular'
+5590b568ce72f9718faad863f763c74e08f1bddc5c056ac11005d866d4b11010  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/QuantBeast/QuantBeastEA.mq5
+ca27819e558e1c1a1a6f14793d7721f9b5f7455de156971d987d5047ffcc77bf  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/QuantBeast/QuantBeastEA.ex5
+984accc08a30094758ff105ad4c093a21f7392baf95b98ed1560ef3d5ea9fa26  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Include/QuantBeast/Core/StateStore.mqh

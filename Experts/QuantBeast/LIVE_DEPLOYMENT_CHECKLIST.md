@@ -5,7 +5,7 @@ This checklist is a release gate, not general advice. Every applicable item requ
 
 **Latest safe readiness:** `READY FOR SHADOW MODE` as of 2026-07-16. Compile, deterministic Shadow fixtures, and organic true-tick Shadow journal proof passed; real broker execution and restart evidence are still absent.
 
-Current live-mode code gate: Conservative Live and acknowledged Challenge Live initialize only when the enabled strategy set is FBO-only and market-order-only with pending orders disabled. BO, TP, MR, and pending orders must remain disabled for any future explicitly authorized demo/live execution until accepted-entry, lifecycle, pending-order, and restart evidence exists.
+Current live-mode code gate: Conservative Live and acknowledged Challenge Live initialize only when the enabled strategy set is FBO-only and market-order-only with pending orders disabled. Live startup also rejects `UNKNOWN_FLATTEN`; use `UNKNOWN_QUARANTINE` until explicit operator-approved flatten handling is implemented and proven. BO, TP, MR, and pending orders must remain disabled for any future explicitly authorized demo/live execution until accepted-entry, lifecycle, pending-order, and restart evidence exists.
 
 ## A. Source and build gate
 
@@ -91,7 +91,7 @@ Current live-mode code gate: Conservative Live and acknowledged Challenge Live i
 - [ ] Strategy owner, signal ID, original risk, partial state, and scale-in state restore.
 - [ ] All reconstructed positions are checked for protection.
 - [ ] Persisted/broker mismatch blocks entries and is reported.
-- [ ] Unknown-position policy works for ignore/report/quarantine/explicit flatten.
+- [ ] Unknown-position policy works for ignore/report/quarantine; explicit flatten remains blocked in live startup until separately authorized and proven.
 - [ ] Daily/weekly locks, HWM, challenge stage, cooldowns, and signal IDs survive restart.
 
 ## I. Journaling, UI, and alert gate

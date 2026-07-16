@@ -40,7 +40,7 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 - `QuantBeastEA.ex5` is present and the final MetaEditor build is `0 errors, 0 warnings`.
 - The original 23-error/15-warning baseline is preserved under `TestEvidence/compile_20260715/`.
 - The Shadow lifecycle build/runtime evidence is under `TestEvidence/shadow_lifecycle_20260715/`.
-- Strategy Tester agent logs prove Shadow initialization and 39 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, and live-mode strategy/execution gates. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
+- Strategy Tester agent logs prove Shadow initialization and 42 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, live-mode strategy/execution gates, state symbol scoping, and live recovery no-passive-flatten gating, and unknown-position no-adoption behavior. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
 - A two-process restart probe is preserved under `TestEvidence/restart_probe_20260715/`: phase 1 passed, but a fresh tester/Wine process loaded schema `0`. This proves tester-state isolation, not live-terminal restart safety. Production persistence now explicitly flushes Terminal Global Variables.
 - Broker submission return values now require both local API success and order-class-specific server acceptance; deterministic mismatched-response injection passes under `TestEvidence/server_ack_policy_20260715/`.
 - Pending tracking now survives delete failure, missing history, and unsafe fill reconciliation; evidence is under `TestEvidence/pending_orphan_policy_20260715/`.
@@ -142,8 +142,8 @@ Broker-fault-matrix evidence: TestEvidence/broker_fault_matrix_20260715/
 Organic-pipeline evidence: TestEvidence/organic_pipeline_20260715/
 Arbitration/journal evidence: TestEvidence/arbitration_journal_20260715/
 Live-gate evidence: TestEvidence/live_strategy_gate_20260716/
-Final source SHA-256: 1dd11c77601fd5cc96db86f78381d4e50c685bf36cf154e57dd8133575660101
-Final EX5 SHA-256: 0b52c488082c766a57b163ddfc75805be26afdbd2c1f9e435f252ed1ac54bc13
+Final source SHA-256: 12488268def53445f064bcb2c92369446dee14a396b478074aeb8d0fc4717b07
+Final EX5 SHA-256: 277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b5440f9
 ```
 
 ## Test status
@@ -152,7 +152,7 @@ Final EX5 SHA-256: 0b52c488082c766a57b163ddfc75805be26afdbd2c1f9e435f252ed1ac54b
 Static content audit: completed
 Focused bug audit: completed — BUG_AUDIT.md
 Compile test: passed after repair — 0 errors, 0 warnings
-Deterministic startup fixtures: runtime pass — 39 passed, 0 failed
+Deterministic startup fixtures: runtime pass — 42 passed, 0 failed
 Shadow attachment: completed per local tester agent log; MCP status remained unreliable
 Shadow lifecycle tests: all core market-position branches passed; no broker orders/deals; tester balance unchanged
 Strategy Tester baseline: not yet valid as performance evidence
@@ -510,6 +510,16 @@ Live: prohibited
 - Evidence: `TestEvidence/audit_final_20260716/`, `TestEvidence/organic_true_ticks_20260716/`, and `FINAL_ADVERSARIAL_AUDIT_20260716.md`.
 - No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
 
+### 2026-07-16 — Live recovery no-passive-flatten gate
+
+- Defect demonstrated: `CPositionManager::ReconstructFromBroker()` can call `m_broker.ClosePosition(ticket)` for `UNKNOWN_FLATTEN` during startup reconstruction. In a live mode this is a broker-mutating startup path before an operator has explicitly authorized closing unknown positions.
+- Severity: High for live/restart safety; affected paths are Conservative Live and acknowledged Challenge Live startup recovery with `InpUnknownPosPolicy=UNKNOWN_FLATTEN`.
+- Fix: added `QBLiveRecoveryPolicyAllowed()` and wired it into live initialization. Live modes now fail initialization when `InpUnknownPosPolicy=UNKNOWN_FLATTEN`; `UNKNOWN_IGNORE`, `UNKNOWN_REPORT`, and `UNKNOWN_QUARANTINE` remain allowed because they do not transmit close orders during startup.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `42 passed, 0 failed`, including `TEST 39 PASS: Live recovery gate no passive flatten`.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/live_recovery_gate_20260716/`.
+- Source SHA-256: `12488268def53445f064bcb2c92369446dee14a396b478074aeb8d0fc4717b07`; EX5 SHA-256: `277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b5440f9`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
 ### 2026-07-16 — Independent strategy train baselines
 
 - Ran BO, FBO, TP, and MR independently on the same XAUUSD M5 true-tick Shadow training window (`2026.06.22` to `2026.06.26`) using the reproducible configs under `TestEvidence/performance_readiness_20260716/`.
@@ -557,7 +567,18 @@ Live: prohibited
 - Updated `XAUUSD_Conservative_Live.set` to be explicitly not approved for live, FBO-only, market-order-only, lower risk, tighter exposure, persistence-enabled, and unknown-position quarantine.
 - Added deterministic self-test coverage: `TEST 37 PASS: Live strategy gate FBO-only` and `TEST 38 PASS: Live execution gate market-only`.
 - Compile: `0 errors, 0 warnings, 31480 ms`.
-- Shadow regression: `39 passed, 0 failed`; `22080` generated ticks, `1104` bars; final balance `10000.00`; test passed in `0:00:21.999`.
+- Shadow regression: `40 passed, 0 failed`; `22080` generated ticks, `1104` bars; final balance `10000.00`; test passed in `0:00:21.999`.
 - Evidence: `TestEvidence/live_strategy_gate_20260716/`.
-- Source SHA-256: `1dd11c77601fd5cc96db86f78381d4e50c685bf36cf154e57dd8133575660101`; EX5 SHA-256: `0b52c488082c766a57b163ddfc75805be26afdbd2c1f9e435f252ed1ac54bc13`.
+- Source SHA-256: `5590b568ce72f9718faad863f763c74e08f1bddc5c056ac11005d866d4b11010`; EX5 SHA-256: `ca27819e558e1c1a1a6f14793d7721f9b5f7455de156971d987d5047ffcc77bf`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Effective-symbol persistence scope repair
+
+- Confirmed a High recovery/isolation defect: persisted Terminal Global Variable keys were scoped by account login and chart `_Symbol`, while QuantBeast supports `InpPrimarySymbol` and can trade a different effective adapter symbol.
+- Added explicit state-scope symbol storage in `StateStore.mqh`; `GV_ScopedName()` now uses the effective adapter symbol after `OnInit()` calls `SetStateScopeSymbol(g_Adapter.Symbol())`.
+- Added deterministic Test 20b: `State scope policy symbol=scoped account=scoped override=effective`.
+- Compile: `0 errors, 0 warnings, 12581 ms`.
+- Shadow regression: `40 passed, 0 failed`; `22080` generated ticks, `1104` bars; final balance `10000.00`; test passed in `0:00:11.537`.
+- Evidence: `TestEvidence/state_scope_20260716/`.
+- Source SHA-256: `5590b568ce72f9718faad863f763c74e08f1bddc5c056ac11005d866d4b11010`; EX5 SHA-256: `ca27819e558e1c1a1a6f14793d7721f9b5f7455de156971d987d5047ffcc77bf`.
 - No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.

@@ -411,6 +411,21 @@ bool QBLiveExecutionSetAllowed(bool useMarketOrders, bool useStopOrders,
    return true;
 }
 
+bool QBLiveRecoveryPolicyAllowed(ENUM_UNKNOWN_POS_POLICY unknownPolicy,
+                                 string &reason)
+{
+   if(unknownPolicy == UNKNOWN_FLATTEN)
+   {
+      reason = "Live startup UNKNOWN_FLATTEN is disabled until explicit "
+               "operator authorization exists; startup must not transmit "
+               "broker close orders passively";
+      return false;
+   }
+
+   reason = "non-transmitting unknown-position startup policy";
+   return true;
+}
+
 //+------------------------------------------------------------------+
 //| Expert initialization function                                     |
 //+------------------------------------------------------------------+
@@ -448,6 +463,15 @@ int OnInit()
       {
          QBLogError("Live execution gate blocked initialization: " +
                     liveExecutionReason);
+         return INIT_FAILED;
+      }
+
+      string liveRecoveryReason = "";
+      if(!QBLiveRecoveryPolicyAllowed(InpUnknownPosPolicy,
+                                      liveRecoveryReason))
+      {
+         QBLogError("Live recovery gate blocked initialization: " +
+                    liveRecoveryReason);
          return INIT_FAILED;
       }
    }
@@ -2012,6 +2036,33 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 38 PASS: Live execution gate market-only"); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 38 FAIL: Live execution gate"); }
+   }
+
+   // Test 39: live startup must not passively transmit close orders for unknown positions.
+   {
+      string reason = "";
+      bool ignoreAccepted = QBLiveRecoveryPolicyAllowed(UNKNOWN_IGNORE, reason);
+      bool reportAccepted = QBLiveRecoveryPolicyAllowed(UNKNOWN_REPORT, reason);
+      bool quarantineAccepted = QBLiveRecoveryPolicyAllowed(UNKNOWN_QUARANTINE, reason);
+      bool flattenRejected = !QBLiveRecoveryPolicyAllowed(UNKNOWN_FLATTEN, reason);
+
+      if(ignoreAccepted && reportAccepted && quarantineAccepted && flattenRejected)
+      { g_SelfTestPassed++; QBLogInfo("TEST 39 PASS: Live recovery gate no passive flatten"); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 39 FAIL: Live recovery gate"); }
+   }
+
+   // Test 40: unknown positions must never be adopted into active management.
+   {
+      bool ignoreUnmanaged = !QBUnknownPositionShouldBeManaged(UNKNOWN_IGNORE);
+      bool reportUnmanaged = !QBUnknownPositionShouldBeManaged(UNKNOWN_REPORT);
+      bool quarantineUnmanaged = !QBUnknownPositionShouldBeManaged(UNKNOWN_QUARANTINE);
+      bool flattenUnmanaged = !QBUnknownPositionShouldBeManaged(UNKNOWN_FLATTEN);
+
+      if(ignoreUnmanaged && reportUnmanaged && quarantineUnmanaged && flattenUnmanaged)
+      { g_SelfTestPassed++; QBLogInfo("TEST 40 PASS: Unknown positions unmanaged"); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 40 FAIL: Unknown position management policy"); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

@@ -1,0 +1,5 @@
+CS	0	10:13:48.429	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 39 PASS: Live recovery gate no passive flatten
+CS	0	10:13:48.429	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Self-tests complete: 41 passed, 0 failed
+CS	0	10:13:59.008	Tester	final balance 10000.00 USD
+CS	0	10:13:59.008	Tester	OnTester result 0
+CS	0	10:13:59.011	Tester	XAUUSD,M5: 22080 ticks, 1104 bars generated. Environment synchronized in 0:00:00.026. Test passed in 0:00:10.950.

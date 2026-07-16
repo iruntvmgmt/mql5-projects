@@ -17,6 +17,16 @@
 #include "../Data/MarketData.mqh"
 #include "BrokerAdapter.mqh"
 
+bool QBUnknownPositionShouldBeManaged(ENUM_UNKNOWN_POS_POLICY unknownPolicy)
+{
+   // Unknown ownership must never enter active management. REPORT and
+   // QUARANTINE are observational policies; IGNORE is explicitly unmanaged;
+   // FLATTEN requests a broker close and, if that close is not confirmed, the
+   // position still remains unmanaged to avoid accidental trailing, partial
+   // close, or stop modification against an unknown strategy context.
+   return false;
+}
+
 //+------------------------------------------------------------------+
 //| Position Manager - manages open positions independently           |
 //+------------------------------------------------------------------+
@@ -453,6 +463,12 @@ public:
                   else if(unknownPolicy == UNKNOWN_IGNORE)
                   {
                      QBLogWarn("Unknown position ignored by configured policy: ticket=" + IntegerToString(ticket));
+                  }
+
+                  if(!QBUnknownPositionShouldBeManaged(unknownPolicy))
+                  {
+                     QBLogWarn("Unknown position left unmanaged by configured policy: ticket=" +
+                               IntegerToString(ticket));
                      continue;
                   }
                }

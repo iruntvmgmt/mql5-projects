@@ -6,17 +6,17 @@
 
 The original audit correctly failed the generated project at 23 errors and 15 warnings. The repaired source now compiles to `QuantBeastEA.ex5` with **0 errors and 0 warnings**. The repair removed the confirmed compile blockers and corrected multiple critical safety, accounting, indexing, execution, recovery, and strategy-unit defects.
 
-This is not a profitability verdict. The latest Shadow Strategy Tester fixture completed with **39 startup checks passed and 0 failed**, including direction-preserving rejected signals, regime/arbitration policies, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, performance updates when file trade journaling is disabled, and live-mode strategy/execution gates. Local agent logs are authoritative. The EA is not cleared for Conservative Live or Challenge modes.
+This is not a profitability verdict. The latest Shadow Strategy Tester fixture completed with **42 startup checks passed and 0 failed**, including direction-preserving rejected signals, regime/arbitration policies, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, performance updates when file trade journaling is disabled, live-mode strategy/execution gates, state symbol scoping, and live recovery no-passive-flatten gating, and unknown-position no-adoption behavior. Local agent logs are authoritative. The EA is not cleared for Conservative Live or Challenge modes.
 
 ## Final evidence
 
 - Source: `QuantBeastEA.mq5`
-- Source SHA-256: `1dd11c77601fd5cc96db86f78381d4e50c685bf36cf154e57dd8133575660101`
-- EX5 SHA-256: `0b52c488082c766a57b163ddfc75805be26afdbd2c1f9e435f252ed1ac54bc13`
+- Source SHA-256: `12488268def53445f064bcb2c92369446dee14a396b478074aeb8d0fc4717b07`
+- EX5 SHA-256: `277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b5440f9`
 - Shadow module SHA-256: `05885359c865d3c56d738a7ededcd13a49b46b3c8d74dc07c7d040ebece560bb`
 - Compiler: MetaEditor build 6002, X64 Regular
 - Compile result: `0 errors, 0 warnings`
-- Runtime result: deterministic `39 passed, 0 failed`; organic true-tick Shadow run `417423 ticks`, `276 bars`; tester balance unchanged at `10000.00`
+- Runtime result: deterministic `42 passed, 0 failed`; organic true-tick Shadow run `417423 ticks`, `276 bars`; tester balance unchanged at `10000.00`
 - Evidence: prior folders plus `TestEvidence/broker_fault_matrix_20260715/`, `TestEvidence/organic_pipeline_20260715/`, `TestEvidence/arbitration_journal_20260715/`, `TestEvidence/audit_final_20260716/`, `TestEvidence/organic_true_ticks_20260716/`, `TestEvidence/performance_readiness_20260716/`, `TestEvidence/live_strategy_gate_20260716/`, and `FINAL_ADVERSARIAL_AUDIT_20260716.md`
 
 ## Critical repairs completed
@@ -97,7 +97,7 @@ This is not a profitability verdict. The latest Shadow Strategy Tester fixture c
     - Every non-selected valid candidate receives an explicit arbitration rejection reason, including lower-ranked, confluence, duplicate, opposing, and exposure paths.
     - The controller journals valid candidates only after arbitration and central risk produce the final signal decision; broker order/fill outcomes remain in the order journal.
     - Signal IDs include direction, preventing same-strategy BUY and SELL evaluations at one timestamp from sharing an identifier.
-    - Deterministic arbitration coverage and the full 39/0 Shadow regression pass; completed organic post-repair true-tick CSV inspection is under `TestEvidence/organic_true_ticks_20260716/`.
+    - Deterministic arbitration coverage and the full 40/0 Shadow regression pass; completed organic post-repair true-tick CSV inspection is under `TestEvidence/organic_true_ticks_20260716/`.
 
 ## Remaining critical/high risks
 

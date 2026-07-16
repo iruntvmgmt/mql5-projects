@@ -1,0 +1,3 @@
+12488268def53445f064bcb2c92369446dee14a396b478074aeb8d0fc4717b07  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/QuantBeast/QuantBeastEA.mq5
+f1eb5c8f75a5342015029488cc57f02bb312f8a8877b04fee4feee59be48eb72  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Include/QuantBeast/Execution/PositionManager.mqh
+277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b5440f9  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/QuantBeast/QuantBeastEA.ex5

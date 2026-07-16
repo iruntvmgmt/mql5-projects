@@ -41,7 +41,7 @@ Remaining Shadow limitations:
 - Owned pending orders are cancelled fail-closed at startup; they are not restored.
 - Incompatible nonzero state versions are quarantined fail-closed: entries are latched off and stale state is not overwritten or loaded. There is no automatic migration workflow; operator review/reset is required.
 - The version-policy and risk-state restore contracts have deterministic tests, but a real terminal/VPS restart with broker positions or pending orders has not been executed as evidence.
-- Persistence currently uses Terminal Global Variables only; `InpUseGlobalVars=false` disables it. Production saves now call `GlobalVariablesFlush()` explicitly.
+- Persistence currently uses Terminal Global Variables only; `InpUseGlobalVars=false` disables it. Production saves now call `GlobalVariablesFlush()` explicitly, and state keys are scoped by account login plus effective adapter symbol rather than chart symbol.
 - A two-process Strategy Tester probe lost all probe globals after the tester/Wine process tree was replaced. Strategy Tester agent globals are isolated/reset in this environment, so this cannot validate or invalidate persistence in the normal live terminal.
 - Strategy cooldowns, duplicate IDs, and daily strategy counts are not persisted.
 - Unknown ownership applies `InpUnknownPosPolicy`; runtime behavior still needs scenario proof.

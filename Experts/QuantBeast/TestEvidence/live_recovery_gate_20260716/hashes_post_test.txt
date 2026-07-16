@@ -1,0 +1,2 @@
+4611b0a29f54744a3ff4ee75eddb09d83c103d3954300930affc830c2ac487aa  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/QuantBeast/QuantBeastEA.mq5
+5a266f505530aa67a84a775c38a290d5cb4d24321ddccc1a552ad7de0886bafe  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/QuantBeast/QuantBeastEA.ex5

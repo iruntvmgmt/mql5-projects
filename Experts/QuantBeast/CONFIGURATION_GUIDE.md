@@ -4,7 +4,7 @@
 **Safety default:** Shadow mode.  
 **Live-use status:** Not approved.
 
-**Latest evidence:** 2026-07-16 Shadow regression `39 passed, 0 failed`; organic true-tick CSV proof exists under `TestEvidence/organic_true_ticks_20260716/`, and live-mode strategy/execution gates are covered under `TestEvidence/live_strategy_gate_20260716/`.
+**Latest evidence:** 2026-07-16 Shadow regression `42 passed, 0 failed`; organic true-tick CSV proof exists under `TestEvidence/organic_true_ticks_20260716/`, live-mode strategy/execution gates are covered under `TestEvidence/live_strategy_gate_20260716/`, and live recovery no-passive-flatten gating is covered under `TestEvidence/live_recovery_gate_20260716/`, and unknown-position no-adoption behavior is covered under `TestEvidence/unknown_position_unmanaged_20260716/`.
 
 ## Loading presets
 
@@ -152,7 +152,7 @@ All alert inputs are currently inactive because `CAlerts` is not instantiated by
 
 ## Testing and unknown positions
 
-`InpSelfTestOnInit` is active and runs symbol, normalization, stop, series-direction, closed-bar, session, and broker-aware sizing fixtures. `InpLogSelfTestDetails` is not yet used to suppress details. `InpUnknownPosPolicy` is enforced during startup reconstruction.
+`InpSelfTestOnInit` is active and runs symbol, normalization, stop, series-direction, closed-bar, session, and broker-aware sizing fixtures. `InpLogSelfTestDetails` is not yet used to suppress details. `InpUnknownPosPolicy` is enforced during startup reconstruction. Conservative Live and acknowledged Challenge Live reject `UNKNOWN_FLATTEN` at initialization because passive startup closing of unknown broker positions requires later explicit operator authorization; use `UNKNOWN_QUARANTINE` for live-candidate presets.
 
 ## Preset intent
 

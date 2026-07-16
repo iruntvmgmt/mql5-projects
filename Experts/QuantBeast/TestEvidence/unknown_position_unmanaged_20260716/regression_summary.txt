@@ -1,0 +1,9 @@
+Compile: 0 errors, 0 warnings at 2026-07-16 10:17:38
+Regression: 42 passed, 0 failed
+Generated-tick Shadow run; no broker orders transmitted.
+Key markers:
+CS	0	10:17:53.134	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 40 PASS: Unknown positions unmanaged
+CS	0	10:17:53.134	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Self-tests complete: 42 passed, 0 failed
+CS	0	10:18:07.999	Tester	final balance 10000.00 USD
+CS	0	10:18:07.999	Tester	OnTester result 0
+CS	0	10:18:08.006	Tester	XAUUSD,M5: 22080 ticks, 1104 bars generated. Environment synchronized in 0:00:00.030. Test passed in 0:00:15.313 (including ticks preprocessing 0:00:00.014).

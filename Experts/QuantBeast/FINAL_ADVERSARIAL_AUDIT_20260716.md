@@ -4,16 +4,16 @@
 
 `READY FOR SHADOW MODE`
 
-QuantBeast is not complete in the live-trading sense. It is, however, repaired to the broker-free Shadow readiness gate: the final compiled EA has `0 errors, 0 warnings`; the latest deterministic Shadow regression reports `39 passed, 0 failed`; live modes are gated to FBO-only market-order-only initialization; and the immediate signal-journal blocker is closed by an organic true-tick Shadow run with all strategies enabled and self-tests disabled.
+QuantBeast is not complete in the live-trading sense. It is, however, repaired to the broker-free Shadow readiness gate: the final compiled EA has `0 errors, 0 warnings`; the latest deterministic Shadow regression reports `42 passed, 0 failed`; live modes are gated to FBO-only market-order-only initialization with non-flattening unknown-position recovery; unknown positions are not adopted into active management unless ownership is recovered; and the immediate signal-journal blocker is closed by an organic true-tick Shadow run with all strategies enabled and self-tests disabled.
 
 Live, Conservative Live, Challenge research with broker transmission, and Challenge Live remain prohibited because this run did not authorize broker orders and therefore cannot provide real broker execution, callback, or restart evidence.
 
 ## Final build and hashes
 
 - Compiler: MetaEditor build 6002.
-- Final source SHA-256: `1dd11c77601fd5cc96db86f78381d4e50c685bf36cf154e57dd8133575660101`.
-- Final EX5 SHA-256: `0b52c488082c766a57b163ddfc75805be26afdbd2c1f9e435f252ed1ac54bc13`.
-- EX5 timestamp: 2026-07-16 09:40:35 EDT.
+- Final source SHA-256: `12488268def53445f064bcb2c92369446dee14a396b478074aeb8d0fc4717b07`.
+- Final EX5 SHA-256: `277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b5440f9`.
+- EX5 timestamp: 2026-07-16 10:08:54 EDT.
 - EX5 size: 443512 bytes.
 
 ## Defects repaired in this run
@@ -28,7 +28,7 @@ Live, Conservative Live, Challenge research with broker transmission, and Challe
 Evidence: `TestEvidence/audit_final_20260716/`
 
 - Compile: `0 errors, 0 warnings`.
-- Latest deterministic gate run: `39 passed, 0 failed`.
+- Latest deterministic gate run: `42 passed, 0 failed`.
 - Test 35 proved final-decision signal writer rows for strategy rejects, arbitration loser, risk reject, and accepted BUY.
 - Test 36 proved performance metrics update while `InpEnableTradeJournal=false`.
 - Tester result: 22080 generated ticks, 1104 bars, normal completion, final balance `10000.00`.
@@ -79,7 +79,8 @@ Evidence: `TestEvidence/performance_readiness_20260716/`
 - Holdout retry suffix metrics: `4,520` signal rows, `10` accepted FBO signals, `10` Shadow orders/trades, closed-trade net `64.66`, profit factor `1.300521`.
 - Independent per-strategy train baselines completed on the train window: BO `940` rejected / `0` accepted / `0` trades; FBO `935` rejected / `5` accepted / `5` trades / net `-193.03`; TP `940` rejected / `0` accepted / `0` trades; MR `940` rejected / `0` accepted / `0` trades.
 - Independent per-strategy holdout baselines completed on the holdout window: BO `1,130` rejected / `0` accepted / `0` trades; FBO `1,120` rejected / `10` accepted / `10` trades / net `64.66`; TP `1,130` rejected / `0` accepted / `0` trades; MR `1,130` rejected / `0` accepted / `0` trades.
-- Added production live-mode strategy and execution gates: Conservative Live and acknowledged Challenge Live now initialize only with FBO enabled, BO/TP/MR disabled, market orders enabled, stop/limit pending orders disabled, and `InpMaxPendingOrders=0`. Evidence: `TestEvidence/live_strategy_gate_20260716/`.
+- Added production live-mode strategy, execution, and recovery gates: Conservative Live and acknowledged Challenge Live now initialize only with FBO enabled, BO/TP/MR disabled, market orders enabled, stop/limit pending orders disabled, `InpMaxPendingOrders=0`, and a non-flattening unknown-position policy. Evidence: `TestEvidence/live_strategy_gate_20260716/` and `TestEvidence/live_recovery_gate_20260716/`.
+- Repaired persisted-state scope to use the effective adapter symbol rather than chart `_Symbol`; Evidence: `TestEvidence/state_scope_20260716/`.
 - These are readiness/baseline mechanics only. No profitability, optimization, or edge claim is supported.
 
 ## Strategy-by-strategy verdict
