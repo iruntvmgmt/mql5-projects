@@ -1,0 +1,350 @@
+NE	0	09:30:55.543	Tester	Cloud servers switched off
+GN	0	09:36:22.827	Tester	loaded file 'C:\Program Files\MetaTrader 5\MQL5\Profiles\Tester\QuantBeast.LiveStrategyGate.XAUUSD.M5.20260518_20260522.ini' with tester settings
+OO	0	09:36:22.828	Tester	"QuantBeast\QuantBeastEA.ex5" X64
+NI	0	09:36:22.937	Tester	XAUUSD: history data begins from 2018.10.11 00:00
+OS	0	09:36:22.938	Tester	XAUUSD: history data begins from 2018.10.11 00:00
+RM	0	09:36:23.061	Core 1	agent process started on 127.0.0.1:3000
+RJ	0	09:36:23.062	Core 1	connecting to 127.0.0.1:3000
+QK	0	09:36:26.529	Core 1	connected
+MM	0	09:36:26.541	Core 1	authorized (agent build 6002)
+OH	0	09:36:26.544	Tester	XAUUSD,M5 (Coinexx-Demo): testing of Experts\QuantBeast\QuantBeastEA.ex5 from 2026.05.18 00:00 to 2026.05.22 00:00
+NF	0	09:36:26.572	Core 1	common synchronization completed
+DM	0	09:36:26.731	Tester	quality of analyzed history is 100%
+IE	0	09:36:32.715	Core 1	MetaTester 5 started on 127.0.0.1:3000
+MP	0	09:36:32.715	Core 1	cloud network mode is off
+LK	0	09:36:32.715	Core 1	initialization finished
+RR	0	09:36:32.715	Core 1	login (build 6002)
+EM	0	09:36:32.715	Core 1	10824 bytes of account info loaded
+HI	0	09:36:32.715	Core 1	1478 bytes of tester parameters loaded
+QN	0	09:36:32.715	Core 1	100036 bytes of input parameters loaded
+GK	0	09:36:32.715	Core 1	533 bytes of symbols list loaded (88 symbols)
+MQ	0	09:36:32.715	Core 1	expert file added: Experts\QuantBeast\QuantBeastEA.ex5. 443551 bytes loaded
+NQ	0	09:36:32.715	Core 1	initial deposit 10000.00 USD, leverage 1:500
+IJ	0	09:36:32.715	Core 1	successfully initialized
+KO	0	09:36:32.715	Core 1	437 Kb of total initialization data received
+ID	0	09:36:32.715	Core 1	Intel Core i5-1038NG7  @ 2.00GHz, 16383 MB
+PM	0	09:36:32.715	Core 1	XAUUSD: symbol to be synchronized
+GI	0	09:36:32.715	Core 1	XAUUSD: symbol synchronized, 3720 bytes of symbol info received
+GR	0	09:36:32.715	Core 1	XAUUSD: load 27 bytes of history data to synchronize in 0:00:00.011
+GM	0	09:36:32.715	Core 1	XAUUSD: history synchronized from 2021.01.04 to 2026.07.10
+OE	0	09:36:32.715	Core 1	XAUUSD,M5: history cache allocated for 98150 bars and contains 96915 bars from 2025.01.02 01:00 to 2026.05.15 23:55
+EE	0	09:36:32.715	Core 1	XAUUSD,M5: history begins from 2025.01.02 01:00
+QJ	0	09:36:32.715	Core 1	XAUUSD,M5 (Coinexx-Demo): 1 minutes OHLC ticks generating
+FQ	0	09:36:32.715	Core 1	XAUUSD,M5: testing of Experts\QuantBeast\QuantBeastEA.ex5 from 2026.05.18 00:00 to 2026.05.22 00:00 started with inputs:
+IP	0	09:36:32.715	Core 1	  ══════════ General ══════════=
+RI	0	09:36:32.715	Core 1	  InpMode=1
+GS	0	09:36:32.715	Core 1	  InpAcknowledgeChallengeRisk=false
+OG	0	09:36:32.715	Core 1	  ══════════ Symbol and Broker ══════════=
+HQ	0	09:36:32.715	Core 1	  InpPrimarySymbol=
+IG	0	09:36:32.715	Core 1	  InpBrokerUTCOffsetHours=2
+NG	0	09:36:32.715	Core 1	  InpBrokerIsDST=true
+KL	0	09:36:32.715	Core 1	  InpMaxSpreadPoints=50
+HD	0	09:36:32.715	Core 1	  InpStaleQuoteMs=5000
+DR	0	09:36:32.715	Core 1	  ══════════ Timeframes ══════════=
+EJ	0	09:36:32.715	Core 1	  InpPrimaryTF=5
+QD	0	09:36:32.715	Core 1	  InpShortTF=1
+ML	0	09:36:32.715	Core 1	  InpMediumTF=15
+IE	0	09:36:32.715	Core 1	  InpLongTF=16385
+DE	0	09:36:32.715	Core 1	  InpHTF=16388
+DQ	0	09:36:32.715	Core 1	  InpDailyTF=16408
+DK	0	09:36:32.715	Core 1	  ══════════ Sessions ══════════=
+LS	0	09:36:32.715	Core 1	  InpAsiaStartHour=0
+DS	0	09:36:32.715	Core 1	  InpAsiaStartMin=0
+CG	0	09:36:32.715	Core 1	  InpLondonPreopenHour=6
+EO	0	09:36:32.715	Core 1	  InpLondonPreopenMin=0
+FE	0	09:36:32.715	Core 1	  InpLondonOpenHour=8
+DE	0	09:36:32.715	Core 1	  InpLondonOpenMin=0
+EO	0	09:36:32.715	Core 1	  InpNYPreopenHour=12
+ND	0	09:36:32.715	Core 1	  InpNYPreopenMin=0
+CM	0	09:36:32.715	Core 1	  InpNYOpenHour=13
+DM	0	09:36:32.715	Core 1	  InpNYOpenMin=30
+II	0	09:36:32.715	Core 1	  InpNYAfternoonHour=17
+QN	0	09:36:32.715	Core 1	  InpNYAfternoonMin=0
+GS	0	09:36:32.715	Core 1	  InpRolloverHour=22
+OD	0	09:36:32.715	Core 1	  InpRolloverMin=0
+NS	0	09:36:32.715	Core 1	  InpFridayCloseHour=21
+QD	0	09:36:32.715	Core 1	  InpFridayCloseMin=0
+LJ	0	09:36:32.715	Core 1	  ══════════ Data Quality ══════════=
+HP	0	09:36:32.715	Core 1	  InpRequireDataQuality=true
+JH	0	09:36:32.715	Core 1	  InpMaxPriceJumpPoints=200
+FS	0	09:36:32.715	Core 1	  InpCheckBarSequence=true
+JI	0	09:36:32.715	Core 1	  InpMinBarsRequired=100
+HP	0	09:36:32.715	Core 1	  InpBarWarmup=50
+PL	0	09:36:32.715	Core 1	  ══════════ Regime Engine ══════════=
+HD	0	09:36:32.715	Core 1	  InpRegimeEnabled=true
+PN	0	09:36:32.715	Core 1	  InpRegimeATRPeriod=14
+LF	0	09:36:32.715	Core 1	  InpTrendSlopeThreshold=0.3
+MP	0	09:36:32.715	Core 1	  InpTrendLookback=20
+KE	0	09:36:32.715	Core 1	  InpCompressionPct=20.0
+GD	0	09:36:32.715	Core 1	  InpCompressionLookback=50
+PS	0	09:36:32.715	Core 1	  InpExpansionMinBars=3
+OI	0	09:36:32.715	Core 1	  InpShockVolMultiplier=3.0
+EQ	0	09:36:32.715	Core 1	  ══════════ Breakout Strategy ══════════=
+KI	0	09:36:32.715	Core 1	  InpBO_Enabled=true
+IP	0	09:36:32.715	Core 1	  InpBO_CompressionPct=15.0
+EI	0	09:36:32.715	Core 1	  InpBO_MinCompressionBars=5
+LK	0	09:36:32.715	Core 1	  InpBO_TriggerMode=1
+EP	0	09:36:32.715	Core 1	  InpBO_MinDisplacement=2.0
+DK	0	09:36:32.715	Core 1	  InpBO_StopATRMultiplier=1.5
+IO	0	09:36:32.715	Core 1	  InpBO_TargetR=1.5
+PE	0	09:36:32.715	Core 1	  InpBO_MinConfidence=0.6
+ND	0	09:36:32.715	Core 1	  InpBO_RequireHTFBias=true
+FL	0	09:36:32.715	Core 1	  ══════════ Failed Breakout Strategy ══════════=
+EF	0	09:36:32.715	Core 1	  InpFBO_Enabled=true
+FS	0	09:36:32.715	Core 1	  InpFBO_MinPenetration=3.0
+NG	0	09:36:32.715	Core 1	  InpFBO_MaxBarsBeyond=3
+GL	0	09:36:32.715	Core 1	  InpFBO_ReclaimThreshold=0.3
+LI	0	09:36:32.715	Core 1	  InpFBO_TriggerMode=1
+HS	0	09:36:32.715	Core 1	  InpFBO_StopBeyondSweep=1.0
+RR	0	09:36:32.715	Core 1	  InpFBO_TargetMidR=1.0
+ID	0	09:36:32.715	Core 1	  InpFBO_TargetVWAPR=1.5
+HP	0	09:36:32.715	Core 1	  InpFBO_MinConfidence=0.55
+IG	0	09:36:32.715	Core 1	  ══════════ Trend Pullback Strategy ══════════=
+NN	0	09:36:32.715	Core 1	  InpTP_Enabled=true
+EI	0	09:36:32.715	Core 1	  InpTP_MinDirEfficiency=0.4
+HN	0	09:36:32.715	Core 1	  InpTP_MinTrendPersistence=5
+FS	0	09:36:32.715	Core 1	  InpTP_RequireHTFAgreement=true
+KG	0	09:36:32.715	Core 1	  InpTP_MaxPullbackDepth=0.618
+IP	0	09:36:32.715	Core 1	  InpTP_MaxPullbackBars=20
+CE	0	09:36:32.715	Core 1	  InpTP_TargetExtensionR=1.618
+JR	0	09:36:32.715	Core 1	  InpTP_StopBeyondStruct=0.5
+CF	0	09:36:32.715	Core 1	  InpTP_TriggerMode=1
+MO	0	09:36:32.715	Core 1	  InpTP_MinConfidence=0.55
+PR	0	09:36:32.715	Core 1	  ══════════ Mean Reversion Strategy ══════════=
+EL	0	09:36:32.715	Core 1	  InpMR_Enabled=true
+HS	0	09:36:32.715	Core 1	  InpMR_TriggerMode=1
+QG	0	09:36:32.715	Core 1	  InpMR_MaxTrendStrength=0.25
+NQ	0	09:36:32.715	Core 1	  InpMR_MinDeviationSD=1.5
+RJ	0	09:36:32.715	Core 1	  InpMR_MinRejectionWick=0.3
+NL	0	09:36:32.715	Core 1	  InpMR_TargetVWAPR=1.0
+OQ	0	09:36:32.715	Core 1	  InpMR_TargetSDBandR=1.5
+RD	0	09:36:32.715	Core 1	  InpMR_EmergencyStopR=1.0
+KQ	0	09:36:32.715	Core 1	  InpMR_MinConfidence=0.5
+RG	0	09:36:32.715	Core 1	  ══════════ Signal Arbitration ══════════=
+PR	0	09:36:32.715	Core 1	  InpArbitrationMethod=0
+MH	0	09:36:32.715	Core 1	  InpCooldownSeconds=300
+FM	0	09:36:32.715	Core 1	  InpDuplicateWindowSeconds=600
+FN	0	09:36:32.715	Core 1	  InpAllowOppositeSignals=false
+CJ	0	09:36:32.715	Core 1	  InpAllowSameDirectionStack=false
+DM	0	09:36:32.715	Core 1	  ══════════ Position Sizing ══════════=
+FG	0	09:36:32.715	Core 1	  InpLotMode=2
+MP	0	09:36:32.715	Core 1	  InpFixedLots=0.01
+PH	0	09:36:32.715	Core 1	  InpFixedRiskCurrency=20.0
+KP	0	09:36:32.715	Core 1	  InpRiskPercent=1.0
+MQ	0	09:36:32.715	Core 1	  InpVolAdjRiskTarget=1.0
+OI	0	09:36:32.715	Core 1	  InpMaxLotSize=1.0
+IM	0	09:36:32.715	Core 1	  InpMinLotSize=0.01
+EG	0	09:36:32.715	Core 1	  InpSlippageAllowancePts=10.0
+FI	0	09:36:32.715	Core 1	  InpCommissionEstimate=7.0
+RR	0	09:36:32.715	Core 1	  ══════════ Trade Risk ══════════=
+FF	0	09:36:32.715	Core 1	  InpMaxRiskPerTrade=2.0
+QN	0	09:36:32.715	Core 1	  InpMinRewardRisk=1.0
+LK	0	09:36:32.715	Core 1	  InpMinStopPoints=50
+FP	0	09:36:32.715	Core 1	  InpMaxStopPoints=1000
+EO	0	09:36:32.715	Core 1	  InpMaxHoldingMinutes=1440
+DE	0	09:36:32.715	Core 1	  InpMaxPendingMinutes=60
+OP	0	09:36:32.715	Core 1	  ══════════ Account Risk ══════════=
+ME	0	09:36:32.715	Core 1	  InpDailyLossLimitPct=5.0
+GO	0	09:36:32.715	Core 1	  InpWeeklyLossLimitPct=10.0
+OG	0	09:36:32.715	Core 1	  InpMaxDrawdownPct=20.0
+GD	0	09:36:32.715	Core 1	  InpMaxConsecLosses=5
+CO	0	09:36:32.715	Core 1	  InpMinMarginLevelPct=200.0
+KK	0	09:36:32.715	Core 1	  InpEmergencyEquityFloor=50.0
+GS	0	09:36:32.715	Core 1	  InpMaxPositions=3
+DD	0	09:36:32.715	Core 1	  InpMaxPendingOrders=2
+GO	0	09:36:32.715	Core 1	  InpMaxTotalExposureLots=2.0
+QS	0	09:36:32.715	Core 1	  ══════════ Challenge Mode ══════════=
+EF	0	09:36:32.715	Core 1	  InpChal_Stage0_Target=130.0
+FO	0	09:36:32.715	Core 1	  InpChal_Stage1_Target=200.0
+GD	0	09:36:32.715	Core 1	  InpChal_Stage2_Target=350.0
+HM	0	09:36:32.715	Core 1	  InpChal_Stage3_Target=600.0
+HI	0	09:36:32.715	Core 1	  InpChal_Stage4_Target=1000.0
+GN	0	09:36:32.715	Core 1	  InpChal_Stage0_RiskPct=3.0
+FE	0	09:36:32.715	Core 1	  InpChal_Stage1_RiskPct=2.5
+FL	0	09:36:32.715	Core 1	  InpChal_Stage2_RiskPct=2.0
+IS	0	09:36:32.715	Core 1	  InpChal_Stage3_RiskPct=1.5
+MI	0	09:36:32.715	Core 1	  InpChal_Stage4_RiskPct=1.0
+DN	0	09:36:32.715	Core 1	  InpChal_MaxStageDD=30.0
+PD	0	09:36:32.715	Core 1	  InpChal_MaxAttempts=3
+LO	0	09:36:32.715	Core 1	  InpChal_ProfitLockPct=50.0
+KK	0	09:36:32.715	Core 1	  InpChal_AllowPyramiding=false
+IJ	0	09:36:32.715	Core 1	  ══════════ Execution ══════════=
+HP	0	09:36:32.715	Core 1	  InpMaxRetries=2
+QJ	0	09:36:32.715	Core 1	  InpMaxConsecutiveBrokerFailures=3
+JP	0	09:36:32.715	Core 1	  InpRetryDelayMs=500
+HE	0	09:36:32.715	Core 1	  InpOrderExpirySeconds=60
+JP	0	09:36:32.715	Core 1	  InpUseMarketOrders=true
+FO	0	09:36:32.715	Core 1	  InpUseStopOrders=true
+DE	0	09:36:32.715	Core 1	  InpUseLimitOrders=false
+FR	0	09:36:32.715	Core 1	  InpFillMode=0
+QK	0	09:36:32.715	Core 1	  ══════════ Position Management ══════════=
+DP	0	09:36:32.715	Core 1	  InpEnableBreakeven=true
+RJ	0	09:36:32.715	Core 1	  InpBreakevenTriggerR=0.5
+LD	0	09:36:32.715	Core 1	  InpBreakevenPlusPips=3.0
+RP	0	09:36:32.715	Core 1	  InpEnablePartialClose=true
+EE	0	09:36:32.715	Core 1	  InpPartialClosePct=50.0
+FL	0	09:36:32.715	Core 1	  InpPartialCloseTriggerR=1.0
+DD	0	09:36:32.715	Core 1	  InpEnableATRTrail=true
+NL	0	09:36:32.715	Core 1	  InpATRTrailMultiplier=2.0
+PQ	0	09:36:32.715	Core 1	  InpATRTrailStartR=1.0
+KF	0	09:36:32.715	Core 1	  InpEnableTimeStop=false
+JO	0	09:36:32.715	Core 1	  InpTimeStopMinutes=240
+GG	0	09:36:32.715	Core 1	  InpCloseBeforeSessionEnd=false
+OM	0	09:36:32.715	Core 1	  InpCloseBeforeRollover=false
+EE	0	09:36:32.715	Core 1	  ══════════ News Lockout ══════════=
+KM	0	09:36:32.715	Core 1	  InpNewsEnabled=false
+HM	0	09:36:32.715	Core 1	  InpPreNewsLockoutMinutes=15
+MK	0	09:36:32.715	Core 1	  InpPostNewsLockoutMinutes=15
+MN	0	09:36:32.715	Core 1	  InpNewsTimes=
+JG	0	09:36:32.715	Core 1	  ══════════ Persistence ══════════=
+HP	0	09:36:32.715	Core 1	  InpPersistState=false
+MF	0	09:36:32.715	Core 1	  InpUseGlobalVars=false
+NK	0	09:36:32.715	Core 1	  ══════════ Logging ══════════=
+IQ	0	09:36:32.715	Core 1	  InpEnableSignalJournal=false
+GE	0	09:36:32.715	Core 1	  InpEnableOrderJournal=false
+OL	0	09:36:32.715	Core 1	  InpEnableTradeJournal=false
+LJ	0	09:36:32.715	Core 1	  InpEnableDebugLogging=false
+GN	0	09:36:32.715	Core 1	  ══════════ Dashboard ══════════=
+PH	0	09:36:32.715	Core 1	  InpDashboardEnabled=false
+CM	0	09:36:32.715	Core 1	  InpDashboardX=10
+KR	0	09:36:32.715	Core 1	  InpDashboardY=20
+NG	0	09:36:32.715	Core 1	  InpDashboardFontSize=8
+KN	0	09:36:32.715	Core 1	  InpDashboardColor=16777215
+MG	0	09:36:32.715	Core 1	  InpShowChartObjects=true
+HS	0	09:36:32.715	Core 1	  ══════════ Alerts ══════════=
+RP	0	09:36:32.715	Core 1	  InpAlertSignalAccepted=false
+II	0	09:36:32.715	Core 1	  InpAlertSignalRejected=false
+GM	0	09:36:32.715	Core 1	  InpAlertOrderFilled=false
+NJ	0	09:36:32.715	Core 1	  InpAlertOrderRejected=true
+LM	0	09:36:32.715	Core 1	  InpAlertPositionClosed=false
+NK	0	09:36:32.715	Core 1	  InpAlertKillSwitch=true
+IP	0	09:36:32.715	Core 1	  InpAlertReconFailure=true
+EN	0	09:36:32.715	Core 1	  InpAlertUnprotectedPos=true
+II	0	09:36:32.715	Core 1	  InpSendPushNotifications=false
+OS	0	09:36:32.715	Core 1	  ══════════ Testing ══════════=
+GH	0	09:36:32.715	Core 1	  InpSelfTestOnInit=true
+FP	0	09:36:32.715	Core 1	  InpLogSelfTestDetails=true
+EH	0	09:36:32.715	Core 1	  ══════════ Unknown Positions ══════════=
+GO	0	09:36:32.715	Core 1	  InpUnknownPosPolicy=1
+FI	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] ══════════════════════════════════════════════
+LR	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] ══════════ QuantBeast v1.00 Initializing ══════════
+QL	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] ── Broker / Server Info ──
+KR	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Account Server = Coinexx-Demo
+EG	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Account Company = Coinexx Limited
+JG	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Account Name = Tester
+RR	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Account Number = 871221
+GS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Account Currency = USD
+RG	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Account Leverage = 500
+JL	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Account Type = Hedging
+KQ	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Account Balance = 10000.00
+FJ	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Account Equity = 10000.00
+FG	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Account Margin = 0.00
+LR	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Free Margin = 10000.00
+QK	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Margin Level (%) = 0.00
+JE	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Trade Mode = 0
+PP	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Trade Allowed = 1
+FH	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Expert Allowed = 1
+GS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] ── Symbol Adapter: XAUUSD ──
+FO	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] ── Symbol Diagnostics: XAUUSD ──
+ME	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Digits = 2
+NG	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Point = 0.01
+JR	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Tick Size = 0.01
+DJ	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Tick Value = 1.00000
+IJ	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Contract Size = 100
+CM	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Min Lot = 0.01
+MF	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Max Lot = 100.00
+GF	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Lot Step = 0.01
+KR	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Stop Level (pts) = 0
+NF	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Freeze Level (pts) = 0
+RD	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Trade Stops Level = 0
+CS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Trade Mode = SYMBOL_TRADE_MODE_FULL
+PS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Is Tradeable = Yes
+QG	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Swap Long = -46.00000
+QQ	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO]   Swap Short = 23.00000
+IQ	0	09:36:32.715	Core 1	XAUUSD,M1: history cache allocated for 490588 bars and contains 484416 bars from 2025.01.02 01:00 to 2026.05.15 23:59
+ON	0	09:36:32.715	Core 1	XAUUSD,M1: history begins from 2025.01.02 01:00
+GE	0	09:36:32.715	Core 1	XAUUSD,M15: history cache allocated for 32722 bars and contains 32310 bars from 2025.01.02 01:00 to 2026.05.15 23:45
+JF	0	09:36:32.715	Core 1	XAUUSD,M15: history begins from 2025.01.02 01:00
+CK	0	09:36:32.715	Core 1	XAUUSD,H1: history cache allocated for 8186 bars and contains 8083 bars from 2025.01.02 01:00 to 2026.05.15 23:00
+LH	0	09:36:32.715	Core 1	XAUUSD,H1: history begins from 2025.01.02 01:00
+IP	0	09:36:32.715	Core 1	XAUUSD,H4: history cache allocated for 2141 bars and contains 2115 bars from 2025.01.02 00:00 to 2026.05.15 20:00
+LO	0	09:36:32.715	Core 1	XAUUSD,H4: history begins from 2025.01.02 00:00
+DG	0	09:36:32.715	Core 1	XAUUSD,Daily: history cache allocated for 359 bars and contains 354 bars from 2025.01.02 00:00 to 2026.05.15 00:00
+QP	0	09:36:32.715	Core 1	XAUUSD,Daily: history begins from 2025.01.02 00:00
+MF	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] BarCache initialized: 6 timeframes, symbol=XAUUSD
+LI	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] SessionEngine initialized (Broker UTC offset=2h)
+CN	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Data quality check PASSED
+KM	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] FeatureEngine initialized (ATR period=14)
+FF	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] NewsInterface disabled - no news lockout
+QJ	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] RegimeEngine initialized (enabled=Yes)
+IH	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] BrokerAdapter initialized. Magic=20260701 deviation_pts=10
+HI	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Risk tracking: dailyStart=10000.00 weeklyStart=10000.00 HWM=10000.00
+GJ	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] ── Running Self-Tests ──
+HO	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 1 PASS: Point valid
+JP	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 1b PASS: TickSize valid
+NE	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 1c PASS: Lot limits valid
+LR	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 2 PASS: Volume normalization
+FO	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 3 PASS: Price normalization
+PO	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 4 PASS: Stop distance check
+FD	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 5 PASS: Series regression up=1.000 down=-1.000
+JK	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 6 PASS: Closed-bar ordering forming=1778889300 closed=1778889000
+NE	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] SessionEngine initialized (Broker UTC offset=2h)
+JH	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 7 PASS: Session boundary SESSION_LONDON_OPEN
+OK	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 8 PASS: Sizer risk bound lots=0.8500 risk=99.45 budget=100.00
+JE	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 9 PASS: Shadow lifecycle net=2.00 balance=10002.00
+RI	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 10 PASS: Shadow stop/flatten stop=-1.21 flatten=closed
+IE	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 11 PASS: Shadow partial/breakeven net=0.50
+KP	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 12 PASS: Shadow trail/time trailNet=1.00 time=closed
+RS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 13 PASS: Shadow costs/multi cost=0.10 multi=2
+LM	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Risk tracking: dailyStart=10000.00 weeklyStart=10000.00 HWM=10000.00
+FH	0	09:36:32.715	Core 1	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] DRAWDOWN LOCK ACTIVATED
+GR	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 14 PASS: Shadow drawdown lock equity=9400.00 dd=6.0
+OM	0	09:36:32.715	Core 1	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] QuantBeast KILL: Entry kill activated: self-test manual lock
+GK	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 15 PASS: Transient entry gate spread=true recovered=true manual=true
+CS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 16 PASS: BO reachability L=valid S=valid gate=rejected
+PO	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 17 PASS: FBO reachability L=valid S=valid gate=rejected
+LS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 18 PASS: TP reachability L=valid S=valid gate=rejected
+PE	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 19 PASS: MR reachability L=valid S=valid gate=rejected
+HK	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 20 PASS: State version policy empty=true current=true old=rejected future=rejected
+ES	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Risk tracking: dailyStart=10000.00 weeklyStart=11000.00 HWM=12000.00
+EL	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 21 PASS: Risk state restore daily=locked weekly=locked dd=locked losses=4
+CN	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 22 PASS: Pending partial fill first=tracked second=tracked final=closed once=true
+GD	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 23 PASS: Deferred close state dedup=true partial=deferred close=finalized hedge=only
+RF	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 24 PASS: Transaction ownership entry=strict exit=position-owned inout=rejected
+JE	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 25 PASS: Protective stop policy buy=safe sell=safe missing=rejected
+PE	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 26 PASS: Broker unit policy tick=aligned deviation=configured
+DL	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 27 PASS: Broker failure/transmission policy entry=bounded broker_action=retained transmission=server-confirmed pending_state=fail-closed reject_counter=latched
+EN	0	09:36:32.715	Core 1	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
+PG	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 28 PASS: Challenge restore policy risk=configured corrupt=rejected
+MN	0	09:36:32.715	Core 1	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
+GJ	0	09:36:32.715	Core 1	2026.05.18 00:00:00   !!! QuantBeast[ERROR] Challenge external cash flow detected: 10000.00
+KS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
+EO	0	09:36:32.715	Core 1	2026.05.18 00:00:00   !!! QuantBeast[ERROR] Challenge external cash flow detected: 10000.00
+QQ	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 29 PASS: Challenge safety flatten profit_lock=flatten drawdown=flatten
+OR	0	09:36:32.715	Core 1	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
+FS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 30 PASS: Challenge cash-flow policy types=classified deposit=fail-closed
+KF	0	09:36:32.715	Core 1	2026.05.18 00:00:00   !!! QuantBeast[ERROR] QuantBeast KILL: EMERGENCY: Equity floor breached
+KK	0	09:36:32.715	Core 1	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] QuantBeast KILL: Entry kill activated: Repeated broker rejection
+NM	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 31 PASS: Kill-switch priority floor=emergency rejection=latched connectivity=transient broker_mode=live-only retry=bounded
+NL	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 32 PASS: Broker fault matrix protection=repair/emergency responses=server-confirmed cancel_fill=retained close_owner=central
+OF	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] RegimeEngine initialized (enabled=Yes)
+GS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 33 PASS: Regime classification healthy=TREND_STRONG_UP/VOL_NORMAL/LIQUIDITY_GOOD/STRUCTURE_ACCEPTED_BREAKOUT shock=VOL_SHOCK
+GE	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 34 PASS: Arbitration policy best=FBO/SELL lower=rejected duplicate=rejected conflict=rejected exposure=rejected
+NL	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 36 PASS: Performance without file journal trades=1 net=9.00 avgR=1.00 file=disabled
+EP	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] TEST 37 PASS: Live strategy gate FBO-only
+QS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Self-tests complete: 38 passed, 0 failed
+RO	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] ══════════ QuantBeast Initialized OK ══════════
+CS	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] Mode: QB_MODE_SHADOW | Symbol: XAUUSD | TF: PERIOD_M5
+LG	0	09:36:32.715	Core 1	2026.05.18 00:00:00   QuantBeast[INFO] ══════════════════════════════════════════════
+OG	0	09:36:32.715	Core 1	2026.05.19 01:00:00   QuantBeast[INFO] Daily risk period reset at equity 10000.00
+RH	0	09:36:38.811	Core 1	2026.05.20 01:00:00   QuantBeast[INFO] Daily risk period reset at equity 10000.00
+KJ	0	09:36:44.904	Core 1	2026.05.21 01:00:00   QuantBeast[INFO] Daily risk period reset at equity 10000.00
+PQ	0	09:36:45.051	Core 1	final balance 10000.00 USD
+HD	0	09:36:45.051	Core 1	OnTester result 0
+DS	0	09:36:45.051	Core 1	2026.05.21 23:59:59   QuantBeast[INFO] ══════════ QuantBeast Deinitializing ══════════
+EO	0	09:36:45.051	Core 1	2026.05.21 23:59:59   QuantBeast[INFO] ══════════ QuantBeast Deinitialized ══════════
+CH	0	09:36:45.051	Core 1	XAUUSD,M5: 22080 ticks, 1104 bars generated. Environment synchronized in 0:00:00.044. Test passed in 0:00:18.484 (including ticks preprocessing 0:00:00.003).
+GO	0	09:36:45.051	Core 1	XAUUSD,M5: total time from login to stop testing 0:00:18.528 (including 0:00:00.044 for history data synchronization)
+LO	0	09:36:45.051	Core 1	2 Mb memory used including 37 Mb of history data, 64 Mb of tick data
+QN	0	09:36:45.051	Core 1	log file "C:\Program Files\MetaTrader 5\Tester\Agent-127.0.0.1-3000\logs\20260716.log" written
+HS	0	09:36:45.074	Core 1	connection closed
