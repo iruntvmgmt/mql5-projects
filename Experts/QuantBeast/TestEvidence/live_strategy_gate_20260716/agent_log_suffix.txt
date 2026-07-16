@@ -1,342 +1,343 @@
-CS	0	09:36:26.130	Startup	MetaTester 5 build 6002, 13 Jul 2026
-CS	0	09:36:26.137	Startup	Windows 11 build 22000 on Wine 11.1 Darwin 25.5.0, 8 x Intel Core i5-1038NG7  @ 2.00GHz, AVX2, 4 / 15 Gb memory, 28 / 465 Gb disk, GMT-5
-CS	0	09:36:26.140	Server	MetaTester 5 started on 127.0.0.1:3000
-CS	0	09:36:26.145	Startup	cloud network mode is off
-CS	0	09:36:26.145	Startup	initialization finished
-CS	0	09:36:26.539	127.0.0.1	login (build 6002)
-CS	0	09:36:26.563	Network	10824 bytes of account info loaded
-CS	0	09:36:26.563	Network	1478 bytes of tester parameters loaded
-CS	0	09:36:26.563	Network	100036 bytes of input parameters loaded
-CS	0	09:36:26.564	Network	533 bytes of symbols list loaded (88 symbols)
-CS	0	09:36:26.566	Tester	expert file added: Experts\QuantBeast\QuantBeastEA.ex5. 443551 bytes loaded
-CS	0	09:36:26.570	Tester	initial deposit 10000.00 USD, leverage 1:500
-CS	0	09:36:26.571	Tester	successfully initialized
-CS	0	09:36:26.571	Network	437 Kb of total initialization data received
-CS	0	09:36:26.571	Tester	Intel Core i5-1038NG7  @ 2.00GHz, 16383 MB
-CS	0	09:36:26.586	Symbols	XAUUSD: symbol to be synchronized
-CS	0	09:36:26.588	Symbols	XAUUSD: symbol synchronized, 3720 bytes of symbol info received
-CS	0	09:36:26.609	History	XAUUSD: load 27 bytes of history data to synchronize in 0:00:00.011
-CS	0	09:36:26.609	History	XAUUSD: history synchronized from 2021.01.04 to 2026.07.10
-CS	0	09:36:26.726	History	XAUUSD,M5: history cache allocated for 98150 bars and contains 96915 bars from 2025.01.02 01:00 to 2026.05.15 23:55
-CS	0	09:36:26.726	History	XAUUSD,M5: history begins from 2025.01.02 01:00
-CS	0	09:36:26.727	Tester	XAUUSD,M5 (Coinexx-Demo): 1 minutes OHLC ticks generating
-CS	0	09:36:26.727	Tester	XAUUSD,M5: testing of Experts\QuantBeast\QuantBeastEA.ex5 from 2026.05.18 00:00 to 2026.05.22 00:00 started with inputs:
-CS	0	09:36:26.727	Tester	  ══════════ General ══════════=
-CS	0	09:36:26.727	Tester	  InpMode=1
-CS	0	09:36:26.727	Tester	  InpAcknowledgeChallengeRisk=false
-CS	0	09:36:26.727	Tester	  ══════════ Symbol and Broker ══════════=
-CS	0	09:36:26.727	Tester	  InpPrimarySymbol=
-CS	0	09:36:26.727	Tester	  InpBrokerUTCOffsetHours=2
-CS	0	09:36:26.727	Tester	  InpBrokerIsDST=true
-CS	0	09:36:26.727	Tester	  InpMaxSpreadPoints=50
-CS	0	09:36:26.727	Tester	  InpStaleQuoteMs=5000
-CS	0	09:36:26.727	Tester	  ══════════ Timeframes ══════════=
-CS	0	09:36:26.727	Tester	  InpPrimaryTF=5
-CS	0	09:36:26.727	Tester	  InpShortTF=1
-CS	0	09:36:26.727	Tester	  InpMediumTF=15
-CS	0	09:36:26.727	Tester	  InpLongTF=16385
-CS	0	09:36:26.727	Tester	  InpHTF=16388
-CS	0	09:36:26.727	Tester	  InpDailyTF=16408
-CS	0	09:36:26.727	Tester	  ══════════ Sessions ══════════=
-CS	0	09:36:26.727	Tester	  InpAsiaStartHour=0
-CS	0	09:36:26.727	Tester	  InpAsiaStartMin=0
-CS	0	09:36:26.727	Tester	  InpLondonPreopenHour=6
-CS	0	09:36:26.727	Tester	  InpLondonPreopenMin=0
-CS	0	09:36:26.727	Tester	  InpLondonOpenHour=8
-CS	0	09:36:26.727	Tester	  InpLondonOpenMin=0
-CS	0	09:36:26.727	Tester	  InpNYPreopenHour=12
-CS	0	09:36:26.727	Tester	  InpNYPreopenMin=0
-CS	0	09:36:26.727	Tester	  InpNYOpenHour=13
-CS	0	09:36:26.727	Tester	  InpNYOpenMin=30
-CS	0	09:36:26.727	Tester	  InpNYAfternoonHour=17
-CS	0	09:36:26.727	Tester	  InpNYAfternoonMin=0
-CS	0	09:36:26.727	Tester	  InpRolloverHour=22
-CS	0	09:36:26.727	Tester	  InpRolloverMin=0
-CS	0	09:36:26.727	Tester	  InpFridayCloseHour=21
-CS	0	09:36:26.727	Tester	  InpFridayCloseMin=0
-CS	0	09:36:26.727	Tester	  ══════════ Data Quality ══════════=
-CS	0	09:36:26.727	Tester	  InpRequireDataQuality=true
-CS	0	09:36:26.727	Tester	  InpMaxPriceJumpPoints=200
-CS	0	09:36:26.727	Tester	  InpCheckBarSequence=true
-CS	0	09:36:26.727	Tester	  InpMinBarsRequired=100
-CS	0	09:36:26.727	Tester	  InpBarWarmup=50
-CS	0	09:36:26.727	Tester	  ══════════ Regime Engine ══════════=
-CS	0	09:36:26.727	Tester	  InpRegimeEnabled=true
-CS	0	09:36:26.727	Tester	  InpRegimeATRPeriod=14
-CS	0	09:36:26.727	Tester	  InpTrendSlopeThreshold=0.3
-CS	0	09:36:26.727	Tester	  InpTrendLookback=20
-CS	0	09:36:26.727	Tester	  InpCompressionPct=20.0
-CS	0	09:36:26.727	Tester	  InpCompressionLookback=50
-CS	0	09:36:26.727	Tester	  InpExpansionMinBars=3
-CS	0	09:36:26.727	Tester	  InpShockVolMultiplier=3.0
-CS	0	09:36:26.727	Tester	  ══════════ Breakout Strategy ══════════=
-CS	0	09:36:26.727	Tester	  InpBO_Enabled=true
-CS	0	09:36:26.727	Tester	  InpBO_CompressionPct=15.0
-CS	0	09:36:26.727	Tester	  InpBO_MinCompressionBars=5
-CS	0	09:36:26.727	Tester	  InpBO_TriggerMode=1
-CS	0	09:36:26.727	Tester	  InpBO_MinDisplacement=2.0
-CS	0	09:36:26.727	Tester	  InpBO_StopATRMultiplier=1.5
-CS	0	09:36:26.727	Tester	  InpBO_TargetR=1.5
-CS	0	09:36:26.727	Tester	  InpBO_MinConfidence=0.6
-CS	0	09:36:26.727	Tester	  InpBO_RequireHTFBias=true
-CS	0	09:36:26.727	Tester	  ══════════ Failed Breakout Strategy ══════════=
-CS	0	09:36:26.727	Tester	  InpFBO_Enabled=true
-CS	0	09:36:26.727	Tester	  InpFBO_MinPenetration=3.0
-CS	0	09:36:26.727	Tester	  InpFBO_MaxBarsBeyond=3
-CS	0	09:36:26.727	Tester	  InpFBO_ReclaimThreshold=0.3
-CS	0	09:36:26.727	Tester	  InpFBO_TriggerMode=1
-CS	0	09:36:26.727	Tester	  InpFBO_StopBeyondSweep=1.0
-CS	0	09:36:26.727	Tester	  InpFBO_TargetMidR=1.0
-CS	0	09:36:26.727	Tester	  InpFBO_TargetVWAPR=1.5
-CS	0	09:36:26.727	Tester	  InpFBO_MinConfidence=0.55
-CS	0	09:36:26.727	Tester	  ══════════ Trend Pullback Strategy ══════════=
-CS	0	09:36:26.727	Tester	  InpTP_Enabled=true
-CS	0	09:36:26.727	Tester	  InpTP_MinDirEfficiency=0.4
-CS	0	09:36:26.727	Tester	  InpTP_MinTrendPersistence=5
-CS	0	09:36:26.728	Tester	  InpTP_RequireHTFAgreement=true
-CS	0	09:36:26.728	Tester	  InpTP_MaxPullbackDepth=0.618
-CS	0	09:36:26.728	Tester	  InpTP_MaxPullbackBars=20
-CS	0	09:36:26.728	Tester	  InpTP_TargetExtensionR=1.618
-CS	0	09:36:26.728	Tester	  InpTP_StopBeyondStruct=0.5
-CS	0	09:36:26.728	Tester	  InpTP_TriggerMode=1
-CS	0	09:36:26.728	Tester	  InpTP_MinConfidence=0.55
-CS	0	09:36:26.728	Tester	  ══════════ Mean Reversion Strategy ══════════=
-CS	0	09:36:26.728	Tester	  InpMR_Enabled=true
-CS	0	09:36:26.728	Tester	  InpMR_TriggerMode=1
-CS	0	09:36:26.728	Tester	  InpMR_MaxTrendStrength=0.25
-CS	0	09:36:26.728	Tester	  InpMR_MinDeviationSD=1.5
-CS	0	09:36:26.728	Tester	  InpMR_MinRejectionWick=0.3
-CS	0	09:36:26.728	Tester	  InpMR_TargetVWAPR=1.0
-CS	0	09:36:26.728	Tester	  InpMR_TargetSDBandR=1.5
-CS	0	09:36:26.728	Tester	  InpMR_EmergencyStopR=1.0
-CS	0	09:36:26.728	Tester	  InpMR_MinConfidence=0.5
-CS	0	09:36:26.728	Tester	  ══════════ Signal Arbitration ══════════=
-CS	0	09:36:26.728	Tester	  InpArbitrationMethod=0
-CS	0	09:36:26.728	Tester	  InpCooldownSeconds=300
-CS	0	09:36:26.728	Tester	  InpDuplicateWindowSeconds=600
-CS	0	09:36:26.728	Tester	  InpAllowOppositeSignals=false
-CS	0	09:36:26.728	Tester	  InpAllowSameDirectionStack=false
-CS	0	09:36:26.728	Tester	  ══════════ Position Sizing ══════════=
-CS	0	09:36:26.728	Tester	  InpLotMode=2
-CS	0	09:36:26.728	Tester	  InpFixedLots=0.01
-CS	0	09:36:26.728	Tester	  InpFixedRiskCurrency=20.0
-CS	0	09:36:26.728	Tester	  InpRiskPercent=1.0
-CS	0	09:36:26.728	Tester	  InpVolAdjRiskTarget=1.0
-CS	0	09:36:26.728	Tester	  InpMaxLotSize=1.0
-CS	0	09:36:26.728	Tester	  InpMinLotSize=0.01
-CS	0	09:36:26.728	Tester	  InpSlippageAllowancePts=10.0
-CS	0	09:36:26.728	Tester	  InpCommissionEstimate=7.0
-CS	0	09:36:26.728	Tester	  ══════════ Trade Risk ══════════=
-CS	0	09:36:26.728	Tester	  InpMaxRiskPerTrade=2.0
-CS	0	09:36:26.728	Tester	  InpMinRewardRisk=1.0
-CS	0	09:36:26.728	Tester	  InpMinStopPoints=50
-CS	0	09:36:26.728	Tester	  InpMaxStopPoints=1000
-CS	0	09:36:26.728	Tester	  InpMaxHoldingMinutes=1440
-CS	0	09:36:26.728	Tester	  InpMaxPendingMinutes=60
-CS	0	09:36:26.728	Tester	  ══════════ Account Risk ══════════=
-CS	0	09:36:26.728	Tester	  InpDailyLossLimitPct=5.0
-CS	0	09:36:26.728	Tester	  InpWeeklyLossLimitPct=10.0
-CS	0	09:36:26.728	Tester	  InpMaxDrawdownPct=20.0
-CS	0	09:36:26.728	Tester	  InpMaxConsecLosses=5
-CS	0	09:36:26.728	Tester	  InpMinMarginLevelPct=200.0
-CS	0	09:36:26.728	Tester	  InpEmergencyEquityFloor=50.0
-CS	0	09:36:26.728	Tester	  InpMaxPositions=3
-CS	0	09:36:26.728	Tester	  InpMaxPendingOrders=2
-CS	0	09:36:26.728	Tester	  InpMaxTotalExposureLots=2.0
-CS	0	09:36:26.728	Tester	  ══════════ Challenge Mode ══════════=
-CS	0	09:36:26.728	Tester	  InpChal_Stage0_Target=130.0
-CS	0	09:36:26.728	Tester	  InpChal_Stage1_Target=200.0
-CS	0	09:36:26.728	Tester	  InpChal_Stage2_Target=350.0
-CS	0	09:36:26.728	Tester	  InpChal_Stage3_Target=600.0
-CS	0	09:36:26.728	Tester	  InpChal_Stage4_Target=1000.0
-CS	0	09:36:26.728	Tester	  InpChal_Stage0_RiskPct=3.0
-CS	0	09:36:26.728	Tester	  InpChal_Stage1_RiskPct=2.5
-CS	0	09:36:26.728	Tester	  InpChal_Stage2_RiskPct=2.0
-CS	0	09:36:26.728	Tester	  InpChal_Stage3_RiskPct=1.5
-CS	0	09:36:26.728	Tester	  InpChal_Stage4_RiskPct=1.0
-CS	0	09:36:26.728	Tester	  InpChal_MaxStageDD=30.0
-CS	0	09:36:26.728	Tester	  InpChal_MaxAttempts=3
-CS	0	09:36:26.728	Tester	  InpChal_ProfitLockPct=50.0
-CS	0	09:36:26.728	Tester	  InpChal_AllowPyramiding=false
-CS	0	09:36:26.728	Tester	  ══════════ Execution ══════════=
-CS	0	09:36:26.728	Tester	  InpMaxRetries=2
-CS	0	09:36:26.728	Tester	  InpMaxConsecutiveBrokerFailures=3
-CS	0	09:36:26.728	Tester	  InpRetryDelayMs=500
-CS	0	09:36:26.728	Tester	  InpOrderExpirySeconds=60
-CS	0	09:36:26.728	Tester	  InpUseMarketOrders=true
-CS	0	09:36:26.728	Tester	  InpUseStopOrders=true
-CS	0	09:36:26.728	Tester	  InpUseLimitOrders=false
-CS	0	09:36:26.728	Tester	  InpFillMode=0
-CS	0	09:36:26.728	Tester	  ══════════ Position Management ══════════=
-CS	0	09:36:26.728	Tester	  InpEnableBreakeven=true
-CS	0	09:36:26.728	Tester	  InpBreakevenTriggerR=0.5
-CS	0	09:36:26.728	Tester	  InpBreakevenPlusPips=3.0
-CS	0	09:36:26.728	Tester	  InpEnablePartialClose=true
-CS	0	09:36:26.728	Tester	  InpPartialClosePct=50.0
-CS	0	09:36:26.728	Tester	  InpPartialCloseTriggerR=1.0
-CS	0	09:36:26.728	Tester	  InpEnableATRTrail=true
-CS	0	09:36:26.728	Tester	  InpATRTrailMultiplier=2.0
-CS	0	09:36:26.728	Tester	  InpATRTrailStartR=1.0
-CS	0	09:36:26.728	Tester	  InpEnableTimeStop=false
-CS	0	09:36:26.728	Tester	  InpTimeStopMinutes=240
-CS	0	09:36:26.728	Tester	  InpCloseBeforeSessionEnd=false
-CS	0	09:36:26.728	Tester	  InpCloseBeforeRollover=false
-CS	0	09:36:26.728	Tester	  ══════════ News Lockout ══════════=
-CS	0	09:36:26.728	Tester	  InpNewsEnabled=false
-CS	0	09:36:26.728	Tester	  InpPreNewsLockoutMinutes=15
-CS	0	09:36:26.728	Tester	  InpPostNewsLockoutMinutes=15
-CS	0	09:36:26.728	Tester	  InpNewsTimes=
-CS	0	09:36:26.728	Tester	  ══════════ Persistence ══════════=
-CS	0	09:36:26.728	Tester	  InpPersistState=false
-CS	0	09:36:26.728	Tester	  InpUseGlobalVars=false
-CS	0	09:36:26.728	Tester	  ══════════ Logging ══════════=
-CS	0	09:36:26.728	Tester	  InpEnableSignalJournal=false
-CS	0	09:36:26.728	Tester	  InpEnableOrderJournal=false
-CS	0	09:36:26.728	Tester	  InpEnableTradeJournal=false
-CS	0	09:36:26.728	Tester	  InpEnableDebugLogging=false
-CS	0	09:36:26.728	Tester	  ══════════ Dashboard ══════════=
-CS	0	09:36:26.728	Tester	  InpDashboardEnabled=false
-CS	0	09:36:26.728	Tester	  InpDashboardX=10
-CS	0	09:36:26.728	Tester	  InpDashboardY=20
-CS	0	09:36:26.728	Tester	  InpDashboardFontSize=8
-CS	0	09:36:26.728	Tester	  InpDashboardColor=16777215
-CS	0	09:36:26.728	Tester	  InpShowChartObjects=true
-CS	0	09:36:26.728	Tester	  ══════════ Alerts ══════════=
-CS	0	09:36:26.728	Tester	  InpAlertSignalAccepted=false
-CS	0	09:36:26.728	Tester	  InpAlertSignalRejected=false
-CS	0	09:36:26.728	Tester	  InpAlertOrderFilled=false
-CS	0	09:36:26.728	Tester	  InpAlertOrderRejected=true
-CS	0	09:36:26.728	Tester	  InpAlertPositionClosed=false
-CS	0	09:36:26.728	Tester	  InpAlertKillSwitch=true
-CS	0	09:36:26.728	Tester	  InpAlertReconFailure=true
-CS	0	09:36:26.728	Tester	  InpAlertUnprotectedPos=true
-CS	0	09:36:26.728	Tester	  InpSendPushNotifications=false
-CS	0	09:36:26.728	Tester	  ══════════ Testing ══════════=
-CS	0	09:36:26.728	Tester	  InpSelfTestOnInit=true
-CS	0	09:36:26.728	Tester	  InpLogSelfTestDetails=true
-CS	0	09:36:26.728	Tester	  ══════════ Unknown Positions ══════════=
-CS	0	09:36:26.728	Tester	  InpUnknownPosPolicy=1
-CS	0	09:36:26.765	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ══════════════════════════════════════════════
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ══════════ QuantBeast v1.00 Initializing ══════════
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ── Broker / Server Info ──
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Server = Coinexx-Demo
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Company = Coinexx Limited
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Name = Tester
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Number = 871221
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Currency = USD
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Leverage = 500
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Type = Hedging
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Balance = 10000.00
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Equity = 10000.00
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Margin = 0.00
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Free Margin = 10000.00
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Margin Level (%) = 0.00
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Trade Mode = 0
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Trade Allowed = 1
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Expert Allowed = 1
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ── Symbol Adapter: XAUUSD ──
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ── Symbol Diagnostics: XAUUSD ──
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Digits = 2
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Point = 0.01
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Tick Size = 0.01
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Tick Value = 1.00000
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Contract Size = 100
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Min Lot = 0.01
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Max Lot = 100.00
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Lot Step = 0.01
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Stop Level (pts) = 0
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Freeze Level (pts) = 0
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Trade Stops Level = 0
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Trade Mode = SYMBOL_TRADE_MODE_FULL
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Is Tradeable = Yes
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Swap Long = -46.00000
-CS	0	09:36:26.766	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Swap Short = 23.00000
-CS	0	09:36:26.934	History	XAUUSD,M1: history cache allocated for 490588 bars and contains 484416 bars from 2025.01.02 01:00 to 2026.05.15 23:59
-CS	0	09:36:26.934	History	XAUUSD,M1: history begins from 2025.01.02 01:00
-CS	0	09:36:27.018	History	XAUUSD,M15: history cache allocated for 32722 bars and contains 32310 bars from 2025.01.02 01:00 to 2026.05.15 23:45
-CS	0	09:36:27.018	History	XAUUSD,M15: history begins from 2025.01.02 01:00
-CS	0	09:36:27.096	History	XAUUSD,H1: history cache allocated for 8186 bars and contains 8083 bars from 2025.01.02 01:00 to 2026.05.15 23:00
-CS	0	09:36:27.096	History	XAUUSD,H1: history begins from 2025.01.02 01:00
-CS	0	09:36:27.173	History	XAUUSD,H4: history cache allocated for 2141 bars and contains 2115 bars from 2025.01.02 00:00 to 2026.05.15 20:00
-CS	0	09:36:27.174	History	XAUUSD,H4: history begins from 2025.01.02 00:00
-CS	0	09:36:27.240	History	XAUUSD,Daily: history cache allocated for 359 bars and contains 354 bars from 2025.01.02 00:00 to 2026.05.15 00:00
-CS	0	09:36:27.240	History	XAUUSD,Daily: history begins from 2025.01.02 00:00
-CS	0	09:36:27.240	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] BarCache initialized: 6 timeframes, symbol=XAUUSD
-CS	0	09:36:27.241	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] SessionEngine initialized (Broker UTC offset=2h)
-CS	0	09:36:27.241	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Data quality check PASSED
-CS	0	09:36:27.241	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] FeatureEngine initialized (ATR period=14)
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] NewsInterface disabled - no news lockout
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] RegimeEngine initialized (enabled=Yes)
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] BrokerAdapter initialized. Magic=20260701 deviation_pts=10
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Risk tracking: dailyStart=10000.00 weeklyStart=10000.00 HWM=10000.00
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ── Running Self-Tests ──
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 1 PASS: Point valid
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 1b PASS: TickSize valid
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 1c PASS: Lot limits valid
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 2 PASS: Volume normalization
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 3 PASS: Price normalization
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 4 PASS: Stop distance check
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 5 PASS: Series regression up=1.000 down=-1.000
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 6 PASS: Closed-bar ordering forming=1778889300 closed=1778889000
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] SessionEngine initialized (Broker UTC offset=2h)
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 7 PASS: Session boundary SESSION_LONDON_OPEN
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 8 PASS: Sizer risk bound lots=0.8500 risk=99.45 budget=100.00
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 9 PASS: Shadow lifecycle net=2.00 balance=10002.00
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 10 PASS: Shadow stop/flatten stop=-1.21 flatten=closed
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 11 PASS: Shadow partial/breakeven net=0.50
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 12 PASS: Shadow trail/time trailNet=1.00 time=closed
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 13 PASS: Shadow costs/multi cost=0.10 multi=2
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Risk tracking: dailyStart=10000.00 weeklyStart=10000.00 HWM=10000.00
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] DRAWDOWN LOCK ACTIVATED
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 14 PASS: Shadow drawdown lock equity=9400.00 dd=6.0
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] QuantBeast KILL: Entry kill activated: self-test manual lock
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 15 PASS: Transient entry gate spread=true recovered=true manual=true
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 16 PASS: BO reachability L=valid S=valid gate=rejected
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 17 PASS: FBO reachability L=valid S=valid gate=rejected
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 18 PASS: TP reachability L=valid S=valid gate=rejected
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 19 PASS: MR reachability L=valid S=valid gate=rejected
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 20 PASS: State version policy empty=true current=true old=rejected future=rejected
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Risk tracking: dailyStart=10000.00 weeklyStart=11000.00 HWM=12000.00
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 21 PASS: Risk state restore daily=locked weekly=locked dd=locked losses=4
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 22 PASS: Pending partial fill first=tracked second=tracked final=closed once=true
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 23 PASS: Deferred close state dedup=true partial=deferred close=finalized hedge=only
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 24 PASS: Transaction ownership entry=strict exit=position-owned inout=rejected
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 25 PASS: Protective stop policy buy=safe sell=safe missing=rejected
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 26 PASS: Broker unit policy tick=aligned deviation=configured
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 27 PASS: Broker failure/transmission policy entry=bounded broker_action=retained transmission=server-confirmed pending_state=fail-closed reject_counter=latched
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 28 PASS: Challenge restore policy risk=configured corrupt=rejected
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   !!! QuantBeast[ERROR] Challenge external cash flow detected: 10000.00
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
-CS	0	09:36:27.242	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   !!! QuantBeast[ERROR] Challenge external cash flow detected: 10000.00
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 29 PASS: Challenge safety flatten profit_lock=flatten drawdown=flatten
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 30 PASS: Challenge cash-flow policy types=classified deposit=fail-closed
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   !!! QuantBeast[ERROR] QuantBeast KILL: EMERGENCY: Equity floor breached
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] QuantBeast KILL: Entry kill activated: Repeated broker rejection
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 31 PASS: Kill-switch priority floor=emergency rejection=latched connectivity=transient broker_mode=live-only retry=bounded
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 32 PASS: Broker fault matrix protection=repair/emergency responses=server-confirmed cancel_fill=retained close_owner=central
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] RegimeEngine initialized (enabled=Yes)
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 33 PASS: Regime classification healthy=TREND_STRONG_UP/VOL_NORMAL/LIQUIDITY_GOOD/STRUCTURE_ACCEPTED_BREAKOUT shock=VOL_SHOCK
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 34 PASS: Arbitration policy best=FBO/SELL lower=rejected duplicate=rejected conflict=rejected exposure=rejected
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 36 PASS: Performance without file journal trades=1 net=9.00 avgR=1.00 file=disabled
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 37 PASS: Live strategy gate FBO-only
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Self-tests complete: 38 passed, 0 failed
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ══════════ QuantBeast Initialized OK ══════════
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Mode: QB_MODE_SHADOW | Symbol: XAUUSD | TF: PERIOD_M5
-CS	0	09:36:27.243	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ══════════════════════════════════════════════
-CS	0	09:36:32.276	QuantBeastEA (XAUUSD,M5)	2026.05.19 01:00:00   QuantBeast[INFO] Daily risk period reset at equity 10000.00
-CS	0	09:36:36.939	QuantBeastEA (XAUUSD,M5)	2026.05.20 01:00:00   QuantBeast[INFO] Daily risk period reset at equity 10000.00
-CS	0	09:36:40.996	QuantBeastEA (XAUUSD,M5)	2026.05.21 01:00:00   QuantBeast[INFO] Daily risk period reset at equity 10000.00
-CS	0	09:36:45.044	Tester	final balance 10000.00 USD
-CS	0	09:36:45.044	Tester	OnTester result 0
-CS	0	09:36:45.044	QuantBeastEA (XAUUSD,M5)	2026.05.21 23:59:59   QuantBeast[INFO] ══════════ QuantBeast Deinitializing ══════════
-CS	0	09:36:45.044	QuantBeastEA (XAUUSD,M5)	2026.05.21 23:59:59   QuantBeast[INFO] ══════════ QuantBeast Deinitialized ══════════
-CS	0	09:36:45.050	Tester	XAUUSD,M5: 22080 ticks, 1104 bars generated. Environment synchronized in 0:00:00.044. Test passed in 0:00:18.484 (including ticks preprocessing 0:00:00.003).
-CS	0	09:36:45.050	Tester	XAUUSD,M5: total time from login to stop testing 0:00:18.528 (including 0:00:00.044 for history data synchronization)
-CS	0	09:36:45.050	Tester	2 Mb memory used including 37 Mb of history data, 64 Mb of tick data
-CS	0	09:36:45.050	Tester	log file "C:\Program Files\MetaTrader 5\Tester\Agent-127.0.0.1-3000\logs\20260716.log" written
-CS	0	09:36:45.050	Tester	test Experts\QuantBeast\QuantBeastEA.ex5 on XAUUSD,M5 thread finished
-CS	0	09:36:45.075	127.0.0.1	prepare for shutdown
-CS	0	09:36:45.078	127.0.0.1	shutdown finished
+CS	0	09:40:58.417	Startup	MetaTester 5 build 6002, 13 Jul 2026
+CS	0	09:40:58.421	Startup	Windows 11 build 22000 on Wine 11.1 Darwin 25.5.0, 8 x Intel Core i5-1038NG7  @ 2.00GHz, AVX2, 4 / 15 Gb memory, 28 / 465 Gb disk, GMT-5
+CS	0	09:40:58.422	Server	MetaTester 5 started on 127.0.0.1:3000
+CS	0	09:40:58.425	Startup	cloud network mode is off
+CS	0	09:40:58.425	Startup	initialization finished
+CS	0	09:40:58.724	127.0.0.1	login (build 6002)
+CS	0	09:40:58.740	Network	10824 bytes of account info loaded
+CS	0	09:40:58.740	Network	1478 bytes of tester parameters loaded
+CS	0	09:40:58.740	Network	100036 bytes of input parameters loaded
+CS	0	09:40:58.741	Network	533 bytes of symbols list loaded (88 symbols)
+CS	0	09:40:58.741	Tester	expert file added: Experts\QuantBeast\QuantBeastEA.ex5. 444299 bytes loaded
+CS	0	09:40:58.744	Tester	initial deposit 10000.00 USD, leverage 1:500
+CS	0	09:40:58.745	Tester	successfully initialized
+CS	0	09:40:58.745	Network	439 Kb of total initialization data received
+CS	0	09:40:58.745	Tester	Intel Core i5-1038NG7  @ 2.00GHz, 16383 MB
+CS	0	09:40:58.755	Symbols	XAUUSD: symbol to be synchronized
+CS	0	09:40:58.757	Symbols	XAUUSD: symbol synchronized, 3720 bytes of symbol info received
+CS	0	09:40:58.769	History	XAUUSD: load 27 bytes of history data to synchronize in 0:00:00.005
+CS	0	09:40:58.769	History	XAUUSD: history synchronized from 2021.01.04 to 2026.07.10
+CS	0	09:40:58.841	History	XAUUSD,M5: history cache allocated for 98150 bars and contains 96915 bars from 2025.01.02 01:00 to 2026.05.15 23:55
+CS	0	09:40:58.841	History	XAUUSD,M5: history begins from 2025.01.02 01:00
+CS	0	09:40:58.842	Tester	XAUUSD,M5 (Coinexx-Demo): 1 minutes OHLC ticks generating
+CS	0	09:40:58.842	Tester	XAUUSD,M5: testing of Experts\QuantBeast\QuantBeastEA.ex5 from 2026.05.18 00:00 to 2026.05.22 00:00 started with inputs:
+CS	0	09:40:58.842	Tester	  ══════════ General ══════════=
+CS	0	09:40:58.842	Tester	  InpMode=1
+CS	0	09:40:58.842	Tester	  InpAcknowledgeChallengeRisk=false
+CS	0	09:40:58.842	Tester	  ══════════ Symbol and Broker ══════════=
+CS	0	09:40:58.842	Tester	  InpPrimarySymbol=
+CS	0	09:40:58.842	Tester	  InpBrokerUTCOffsetHours=2
+CS	0	09:40:58.842	Tester	  InpBrokerIsDST=true
+CS	0	09:40:58.842	Tester	  InpMaxSpreadPoints=50
+CS	0	09:40:58.842	Tester	  InpStaleQuoteMs=5000
+CS	0	09:40:58.842	Tester	  ══════════ Timeframes ══════════=
+CS	0	09:40:58.842	Tester	  InpPrimaryTF=5
+CS	0	09:40:58.842	Tester	  InpShortTF=1
+CS	0	09:40:58.842	Tester	  InpMediumTF=15
+CS	0	09:40:58.842	Tester	  InpLongTF=16385
+CS	0	09:40:58.842	Tester	  InpHTF=16388
+CS	0	09:40:58.842	Tester	  InpDailyTF=16408
+CS	0	09:40:58.842	Tester	  ══════════ Sessions ══════════=
+CS	0	09:40:58.842	Tester	  InpAsiaStartHour=0
+CS	0	09:40:58.843	Tester	  InpAsiaStartMin=0
+CS	0	09:40:58.843	Tester	  InpLondonPreopenHour=6
+CS	0	09:40:58.843	Tester	  InpLondonPreopenMin=0
+CS	0	09:40:58.843	Tester	  InpLondonOpenHour=8
+CS	0	09:40:58.843	Tester	  InpLondonOpenMin=0
+CS	0	09:40:58.843	Tester	  InpNYPreopenHour=12
+CS	0	09:40:58.843	Tester	  InpNYPreopenMin=0
+CS	0	09:40:58.843	Tester	  InpNYOpenHour=13
+CS	0	09:40:58.843	Tester	  InpNYOpenMin=30
+CS	0	09:40:58.843	Tester	  InpNYAfternoonHour=17
+CS	0	09:40:58.843	Tester	  InpNYAfternoonMin=0
+CS	0	09:40:58.843	Tester	  InpRolloverHour=22
+CS	0	09:40:58.843	Tester	  InpRolloverMin=0
+CS	0	09:40:58.843	Tester	  InpFridayCloseHour=21
+CS	0	09:40:58.843	Tester	  InpFridayCloseMin=0
+CS	0	09:40:58.843	Tester	  ══════════ Data Quality ══════════=
+CS	0	09:40:58.843	Tester	  InpRequireDataQuality=true
+CS	0	09:40:58.843	Tester	  InpMaxPriceJumpPoints=200
+CS	0	09:40:58.843	Tester	  InpCheckBarSequence=true
+CS	0	09:40:58.843	Tester	  InpMinBarsRequired=100
+CS	0	09:40:58.843	Tester	  InpBarWarmup=50
+CS	0	09:40:58.843	Tester	  ══════════ Regime Engine ══════════=
+CS	0	09:40:58.843	Tester	  InpRegimeEnabled=true
+CS	0	09:40:58.843	Tester	  InpRegimeATRPeriod=14
+CS	0	09:40:58.843	Tester	  InpTrendSlopeThreshold=0.3
+CS	0	09:40:58.843	Tester	  InpTrendLookback=20
+CS	0	09:40:58.843	Tester	  InpCompressionPct=20.0
+CS	0	09:40:58.843	Tester	  InpCompressionLookback=50
+CS	0	09:40:58.843	Tester	  InpExpansionMinBars=3
+CS	0	09:40:58.843	Tester	  InpShockVolMultiplier=3.0
+CS	0	09:40:58.843	Tester	  ══════════ Breakout Strategy ══════════=
+CS	0	09:40:58.843	Tester	  InpBO_Enabled=true
+CS	0	09:40:58.843	Tester	  InpBO_CompressionPct=15.0
+CS	0	09:40:58.843	Tester	  InpBO_MinCompressionBars=5
+CS	0	09:40:58.843	Tester	  InpBO_TriggerMode=1
+CS	0	09:40:58.843	Tester	  InpBO_MinDisplacement=2.0
+CS	0	09:40:58.843	Tester	  InpBO_StopATRMultiplier=1.5
+CS	0	09:40:58.843	Tester	  InpBO_TargetR=1.5
+CS	0	09:40:58.843	Tester	  InpBO_MinConfidence=0.6
+CS	0	09:40:58.843	Tester	  InpBO_RequireHTFBias=true
+CS	0	09:40:58.843	Tester	  ══════════ Failed Breakout Strategy ══════════=
+CS	0	09:40:58.843	Tester	  InpFBO_Enabled=true
+CS	0	09:40:58.843	Tester	  InpFBO_MinPenetration=3.0
+CS	0	09:40:58.843	Tester	  InpFBO_MaxBarsBeyond=3
+CS	0	09:40:58.843	Tester	  InpFBO_ReclaimThreshold=0.3
+CS	0	09:40:58.843	Tester	  InpFBO_TriggerMode=1
+CS	0	09:40:58.843	Tester	  InpFBO_StopBeyondSweep=1.0
+CS	0	09:40:58.843	Tester	  InpFBO_TargetMidR=1.0
+CS	0	09:40:58.843	Tester	  InpFBO_TargetVWAPR=1.5
+CS	0	09:40:58.843	Tester	  InpFBO_MinConfidence=0.55
+CS	0	09:40:58.843	Tester	  ══════════ Trend Pullback Strategy ══════════=
+CS	0	09:40:58.843	Tester	  InpTP_Enabled=true
+CS	0	09:40:58.843	Tester	  InpTP_MinDirEfficiency=0.4
+CS	0	09:40:58.843	Tester	  InpTP_MinTrendPersistence=5
+CS	0	09:40:58.843	Tester	  InpTP_RequireHTFAgreement=true
+CS	0	09:40:58.843	Tester	  InpTP_MaxPullbackDepth=0.618
+CS	0	09:40:58.843	Tester	  InpTP_MaxPullbackBars=20
+CS	0	09:40:58.843	Tester	  InpTP_TargetExtensionR=1.618
+CS	0	09:40:58.843	Tester	  InpTP_StopBeyondStruct=0.5
+CS	0	09:40:58.843	Tester	  InpTP_TriggerMode=1
+CS	0	09:40:58.843	Tester	  InpTP_MinConfidence=0.55
+CS	0	09:40:58.843	Tester	  ══════════ Mean Reversion Strategy ══════════=
+CS	0	09:40:58.843	Tester	  InpMR_Enabled=true
+CS	0	09:40:58.843	Tester	  InpMR_TriggerMode=1
+CS	0	09:40:58.843	Tester	  InpMR_MaxTrendStrength=0.25
+CS	0	09:40:58.843	Tester	  InpMR_MinDeviationSD=1.5
+CS	0	09:40:58.843	Tester	  InpMR_MinRejectionWick=0.3
+CS	0	09:40:58.843	Tester	  InpMR_TargetVWAPR=1.0
+CS	0	09:40:58.843	Tester	  InpMR_TargetSDBandR=1.5
+CS	0	09:40:58.843	Tester	  InpMR_EmergencyStopR=1.0
+CS	0	09:40:58.843	Tester	  InpMR_MinConfidence=0.5
+CS	0	09:40:58.843	Tester	  ══════════ Signal Arbitration ══════════=
+CS	0	09:40:58.843	Tester	  InpArbitrationMethod=0
+CS	0	09:40:58.843	Tester	  InpCooldownSeconds=300
+CS	0	09:40:58.843	Tester	  InpDuplicateWindowSeconds=600
+CS	0	09:40:58.843	Tester	  InpAllowOppositeSignals=false
+CS	0	09:40:58.843	Tester	  InpAllowSameDirectionStack=false
+CS	0	09:40:58.843	Tester	  ══════════ Position Sizing ══════════=
+CS	0	09:40:58.843	Tester	  InpLotMode=2
+CS	0	09:40:58.843	Tester	  InpFixedLots=0.01
+CS	0	09:40:58.843	Tester	  InpFixedRiskCurrency=20.0
+CS	0	09:40:58.843	Tester	  InpRiskPercent=1.0
+CS	0	09:40:58.843	Tester	  InpVolAdjRiskTarget=1.0
+CS	0	09:40:58.843	Tester	  InpMaxLotSize=1.0
+CS	0	09:40:58.843	Tester	  InpMinLotSize=0.01
+CS	0	09:40:58.843	Tester	  InpSlippageAllowancePts=10.0
+CS	0	09:40:58.843	Tester	  InpCommissionEstimate=7.0
+CS	0	09:40:58.843	Tester	  ══════════ Trade Risk ══════════=
+CS	0	09:40:58.843	Tester	  InpMaxRiskPerTrade=2.0
+CS	0	09:40:58.843	Tester	  InpMinRewardRisk=1.0
+CS	0	09:40:58.843	Tester	  InpMinStopPoints=50
+CS	0	09:40:58.843	Tester	  InpMaxStopPoints=1000
+CS	0	09:40:58.843	Tester	  InpMaxHoldingMinutes=1440
+CS	0	09:40:58.843	Tester	  InpMaxPendingMinutes=60
+CS	0	09:40:58.843	Tester	  ══════════ Account Risk ══════════=
+CS	0	09:40:58.843	Tester	  InpDailyLossLimitPct=5.0
+CS	0	09:40:58.843	Tester	  InpWeeklyLossLimitPct=10.0
+CS	0	09:40:58.843	Tester	  InpMaxDrawdownPct=20.0
+CS	0	09:40:58.843	Tester	  InpMaxConsecLosses=5
+CS	0	09:40:58.843	Tester	  InpMinMarginLevelPct=200.0
+CS	0	09:40:58.843	Tester	  InpEmergencyEquityFloor=50.0
+CS	0	09:40:58.843	Tester	  InpMaxPositions=3
+CS	0	09:40:58.843	Tester	  InpMaxPendingOrders=2
+CS	0	09:40:58.843	Tester	  InpMaxTotalExposureLots=2.0
+CS	0	09:40:58.843	Tester	  ══════════ Challenge Mode ══════════=
+CS	0	09:40:58.843	Tester	  InpChal_Stage0_Target=130.0
+CS	0	09:40:58.843	Tester	  InpChal_Stage1_Target=200.0
+CS	0	09:40:58.843	Tester	  InpChal_Stage2_Target=350.0
+CS	0	09:40:58.843	Tester	  InpChal_Stage3_Target=600.0
+CS	0	09:40:58.843	Tester	  InpChal_Stage4_Target=1000.0
+CS	0	09:40:58.843	Tester	  InpChal_Stage0_RiskPct=3.0
+CS	0	09:40:58.843	Tester	  InpChal_Stage1_RiskPct=2.5
+CS	0	09:40:58.843	Tester	  InpChal_Stage2_RiskPct=2.0
+CS	0	09:40:58.843	Tester	  InpChal_Stage3_RiskPct=1.5
+CS	0	09:40:58.843	Tester	  InpChal_Stage4_RiskPct=1.0
+CS	0	09:40:58.843	Tester	  InpChal_MaxStageDD=30.0
+CS	0	09:40:58.843	Tester	  InpChal_MaxAttempts=3
+CS	0	09:40:58.843	Tester	  InpChal_ProfitLockPct=50.0
+CS	0	09:40:58.843	Tester	  InpChal_AllowPyramiding=false
+CS	0	09:40:58.843	Tester	  ══════════ Execution ══════════=
+CS	0	09:40:58.843	Tester	  InpMaxRetries=2
+CS	0	09:40:58.843	Tester	  InpMaxConsecutiveBrokerFailures=3
+CS	0	09:40:58.843	Tester	  InpRetryDelayMs=500
+CS	0	09:40:58.843	Tester	  InpOrderExpirySeconds=60
+CS	0	09:40:58.843	Tester	  InpUseMarketOrders=true
+CS	0	09:40:58.843	Tester	  InpUseStopOrders=true
+CS	0	09:40:58.843	Tester	  InpUseLimitOrders=false
+CS	0	09:40:58.843	Tester	  InpFillMode=0
+CS	0	09:40:58.843	Tester	  ══════════ Position Management ══════════=
+CS	0	09:40:58.843	Tester	  InpEnableBreakeven=true
+CS	0	09:40:58.843	Tester	  InpBreakevenTriggerR=0.5
+CS	0	09:40:58.843	Tester	  InpBreakevenPlusPips=3.0
+CS	0	09:40:58.843	Tester	  InpEnablePartialClose=true
+CS	0	09:40:58.843	Tester	  InpPartialClosePct=50.0
+CS	0	09:40:58.843	Tester	  InpPartialCloseTriggerR=1.0
+CS	0	09:40:58.843	Tester	  InpEnableATRTrail=true
+CS	0	09:40:58.843	Tester	  InpATRTrailMultiplier=2.0
+CS	0	09:40:58.843	Tester	  InpATRTrailStartR=1.0
+CS	0	09:40:58.843	Tester	  InpEnableTimeStop=false
+CS	0	09:40:58.843	Tester	  InpTimeStopMinutes=240
+CS	0	09:40:58.843	Tester	  InpCloseBeforeSessionEnd=false
+CS	0	09:40:58.843	Tester	  InpCloseBeforeRollover=false
+CS	0	09:40:58.843	Tester	  ══════════ News Lockout ══════════=
+CS	0	09:40:58.843	Tester	  InpNewsEnabled=false
+CS	0	09:40:58.843	Tester	  InpPreNewsLockoutMinutes=15
+CS	0	09:40:58.843	Tester	  InpPostNewsLockoutMinutes=15
+CS	0	09:40:58.843	Tester	  InpNewsTimes=
+CS	0	09:40:58.843	Tester	  ══════════ Persistence ══════════=
+CS	0	09:40:58.843	Tester	  InpPersistState=false
+CS	0	09:40:58.843	Tester	  InpUseGlobalVars=false
+CS	0	09:40:58.843	Tester	  ══════════ Logging ══════════=
+CS	0	09:40:58.843	Tester	  InpEnableSignalJournal=false
+CS	0	09:40:58.843	Tester	  InpEnableOrderJournal=false
+CS	0	09:40:58.843	Tester	  InpEnableTradeJournal=false
+CS	0	09:40:58.843	Tester	  InpEnableDebugLogging=false
+CS	0	09:40:58.843	Tester	  ══════════ Dashboard ══════════=
+CS	0	09:40:58.843	Tester	  InpDashboardEnabled=false
+CS	0	09:40:58.843	Tester	  InpDashboardX=10
+CS	0	09:40:58.843	Tester	  InpDashboardY=20
+CS	0	09:40:58.843	Tester	  InpDashboardFontSize=8
+CS	0	09:40:58.843	Tester	  InpDashboardColor=16777215
+CS	0	09:40:58.843	Tester	  InpShowChartObjects=true
+CS	0	09:40:58.843	Tester	  ══════════ Alerts ══════════=
+CS	0	09:40:58.843	Tester	  InpAlertSignalAccepted=false
+CS	0	09:40:58.843	Tester	  InpAlertSignalRejected=false
+CS	0	09:40:58.843	Tester	  InpAlertOrderFilled=false
+CS	0	09:40:58.843	Tester	  InpAlertOrderRejected=true
+CS	0	09:40:58.843	Tester	  InpAlertPositionClosed=false
+CS	0	09:40:58.843	Tester	  InpAlertKillSwitch=true
+CS	0	09:40:58.843	Tester	  InpAlertReconFailure=true
+CS	0	09:40:58.843	Tester	  InpAlertUnprotectedPos=true
+CS	0	09:40:58.843	Tester	  InpSendPushNotifications=false
+CS	0	09:40:58.843	Tester	  ══════════ Testing ══════════=
+CS	0	09:40:58.843	Tester	  InpSelfTestOnInit=true
+CS	0	09:40:58.843	Tester	  InpLogSelfTestDetails=true
+CS	0	09:40:58.843	Tester	  ══════════ Unknown Positions ══════════=
+CS	0	09:40:58.843	Tester	  InpUnknownPosPolicy=1
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ══════════════════════════════════════════════
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ══════════ QuantBeast v1.00 Initializing ══════════
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ── Broker / Server Info ──
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Server = Coinexx-Demo
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Company = Coinexx Limited
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Name = Tester
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Number = 871221
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Currency = USD
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Leverage = 500
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Type = Hedging
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Balance = 10000.00
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Equity = 10000.00
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Account Margin = 0.00
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Free Margin = 10000.00
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Margin Level (%) = 0.00
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Trade Mode = 0
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Trade Allowed = 1
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Expert Allowed = 1
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ── Symbol Adapter: XAUUSD ──
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ── Symbol Diagnostics: XAUUSD ──
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Digits = 2
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Point = 0.01
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Tick Size = 0.01
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Tick Value = 1.00000
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Contract Size = 100
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Min Lot = 0.01
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Max Lot = 100.00
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Lot Step = 0.01
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Stop Level (pts) = 0
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Freeze Level (pts) = 0
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Trade Stops Level = 0
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Trade Mode = SYMBOL_TRADE_MODE_FULL
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Is Tradeable = Yes
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Swap Long = -46.00000
+CS	0	09:40:58.871	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO]   Swap Short = 23.00000
+CS	0	09:40:58.984	History	XAUUSD,M1: history cache allocated for 490588 bars and contains 484416 bars from 2025.01.02 01:00 to 2026.05.15 23:59
+CS	0	09:40:58.984	History	XAUUSD,M1: history begins from 2025.01.02 01:00
+CS	0	09:40:59.044	History	XAUUSD,M15: history cache allocated for 32722 bars and contains 32310 bars from 2025.01.02 01:00 to 2026.05.15 23:45
+CS	0	09:40:59.044	History	XAUUSD,M15: history begins from 2025.01.02 01:00
+CS	0	09:40:59.097	History	XAUUSD,H1: history cache allocated for 8186 bars and contains 8083 bars from 2025.01.02 01:00 to 2026.05.15 23:00
+CS	0	09:40:59.097	History	XAUUSD,H1: history begins from 2025.01.02 01:00
+CS	0	09:40:59.152	History	XAUUSD,H4: history cache allocated for 2141 bars and contains 2115 bars from 2025.01.02 00:00 to 2026.05.15 20:00
+CS	0	09:40:59.152	History	XAUUSD,H4: history begins from 2025.01.02 00:00
+CS	0	09:40:59.205	History	XAUUSD,Daily: history cache allocated for 359 bars and contains 354 bars from 2025.01.02 00:00 to 2026.05.15 00:00
+CS	0	09:40:59.205	History	XAUUSD,Daily: history begins from 2025.01.02 00:00
+CS	0	09:40:59.205	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] BarCache initialized: 6 timeframes, symbol=XAUUSD
+CS	0	09:40:59.205	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] SessionEngine initialized (Broker UTC offset=2h)
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Data quality check PASSED
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] FeatureEngine initialized (ATR period=14)
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] NewsInterface disabled - no news lockout
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] RegimeEngine initialized (enabled=Yes)
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] BrokerAdapter initialized. Magic=20260701 deviation_pts=10
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Risk tracking: dailyStart=10000.00 weeklyStart=10000.00 HWM=10000.00
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ── Running Self-Tests ──
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 1 PASS: Point valid
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 1b PASS: TickSize valid
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 1c PASS: Lot limits valid
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 2 PASS: Volume normalization
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 3 PASS: Price normalization
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 4 PASS: Stop distance check
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 5 PASS: Series regression up=1.000 down=-1.000
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 6 PASS: Closed-bar ordering forming=1778889300 closed=1778889000
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] SessionEngine initialized (Broker UTC offset=2h)
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 7 PASS: Session boundary SESSION_LONDON_OPEN
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 8 PASS: Sizer risk bound lots=0.8500 risk=99.45 budget=100.00
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 9 PASS: Shadow lifecycle net=2.00 balance=10002.00
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 10 PASS: Shadow stop/flatten stop=-1.21 flatten=closed
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 11 PASS: Shadow partial/breakeven net=0.50
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 12 PASS: Shadow trail/time trailNet=1.00 time=closed
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 13 PASS: Shadow costs/multi cost=0.10 multi=2
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Risk tracking: dailyStart=10000.00 weeklyStart=10000.00 HWM=10000.00
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] DRAWDOWN LOCK ACTIVATED
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 14 PASS: Shadow drawdown lock equity=9400.00 dd=6.0
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] QuantBeast KILL: Entry kill activated: self-test manual lock
+CS	0	09:40:59.206	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 15 PASS: Transient entry gate spread=true recovered=true manual=true
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 16 PASS: BO reachability L=valid S=valid gate=rejected
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 17 PASS: FBO reachability L=valid S=valid gate=rejected
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 18 PASS: TP reachability L=valid S=valid gate=rejected
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 19 PASS: MR reachability L=valid S=valid gate=rejected
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 20 PASS: State version policy empty=true current=true old=rejected future=rejected
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Risk tracking: dailyStart=10000.00 weeklyStart=11000.00 HWM=12000.00
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 21 PASS: Risk state restore daily=locked weekly=locked dd=locked losses=4
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 22 PASS: Pending partial fill first=tracked second=tracked final=closed once=true
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 23 PASS: Deferred close state dedup=true partial=deferred close=finalized hedge=only
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 24 PASS: Transaction ownership entry=strict exit=position-owned inout=rejected
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 25 PASS: Protective stop policy buy=safe sell=safe missing=rejected
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 26 PASS: Broker unit policy tick=aligned deviation=configured
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 27 PASS: Broker failure/transmission policy entry=bounded broker_action=retained transmission=server-confirmed pending_state=fail-closed reject_counter=latched
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 28 PASS: Challenge restore policy risk=configured corrupt=rejected
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   !!! QuantBeast[ERROR] Challenge external cash flow detected: 10000.00
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   !!! QuantBeast[ERROR] Challenge external cash flow detected: 10000.00
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 29 PASS: Challenge safety flatten profit_lock=flatten drawdown=flatten
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] CHALLENGE MODE ACTIVE - Aggressive risk profile
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 30 PASS: Challenge cash-flow policy types=classified deposit=fail-closed
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   !!! QuantBeast[ERROR] QuantBeast KILL: EMERGENCY: Equity floor breached
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   ⚠ QuantBeast[WARN] QuantBeast KILL: Entry kill activated: Repeated broker rejection
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 31 PASS: Kill-switch priority floor=emergency rejection=latched connectivity=transient broker_mode=live-only retry=bounded
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 32 PASS: Broker fault matrix protection=repair/emergency responses=server-confirmed cancel_fill=retained close_owner=central
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] RegimeEngine initialized (enabled=Yes)
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 33 PASS: Regime classification healthy=TREND_STRONG_UP/VOL_NORMAL/LIQUIDITY_GOOD/STRUCTURE_ACCEPTED_BREAKOUT shock=VOL_SHOCK
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 34 PASS: Arbitration policy best=FBO/SELL lower=rejected duplicate=rejected conflict=rejected exposure=rejected
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 36 PASS: Performance without file journal trades=1 net=9.00 avgR=1.00 file=disabled
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 37 PASS: Live strategy gate FBO-only
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] TEST 38 PASS: Live execution gate market-only
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Self-tests complete: 39 passed, 0 failed
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ══════════ QuantBeast Initialized OK ══════════
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] Mode: QB_MODE_SHADOW | Symbol: XAUUSD | TF: PERIOD_M5
+CS	0	09:40:59.207	QuantBeastEA (XAUUSD,M5)	2026.05.18 00:00:00   QuantBeast[INFO] ══════════════════════════════════════════════
+CS	0	09:41:04.182	QuantBeastEA (XAUUSD,M5)	2026.05.19 01:00:00   QuantBeast[INFO] Daily risk period reset at equity 10000.00
+CS	0	09:41:09.352	QuantBeastEA (XAUUSD,M5)	2026.05.20 01:00:00   QuantBeast[INFO] Daily risk period reset at equity 10000.00
+CS	0	09:41:14.984	QuantBeastEA (XAUUSD,M5)	2026.05.21 01:00:00   QuantBeast[INFO] Daily risk period reset at equity 10000.00
+CS	0	09:41:20.742	Tester	final balance 10000.00 USD
+CS	0	09:41:20.742	Tester	OnTester result 0
+CS	0	09:41:20.742	QuantBeastEA (XAUUSD,M5)	2026.05.21 23:59:59   QuantBeast[INFO] ══════════ QuantBeast Deinitializing ══════════
+CS	0	09:41:20.742	QuantBeastEA (XAUUSD,M5)	2026.05.21 23:59:59   QuantBeast[INFO] ══════════ QuantBeast Deinitialized ══════════
+CS	0	09:41:20.750	Tester	XAUUSD,M5: 22080 ticks, 1104 bars generated. Environment synchronized in 0:00:00.027. Test passed in 0:00:21.999 (including ticks preprocessing 0:00:00.002).
+CS	0	09:41:20.750	Tester	XAUUSD,M5: total time from login to stop testing 0:00:22.026 (including 0:00:00.027 for history data synchronization)
+CS	0	09:41:20.750	Tester	2 Mb memory used including 37 Mb of history data, 64 Mb of tick data
+CS	0	09:41:20.750	Tester	log file "C:\Program Files\MetaTrader 5\Tester\Agent-127.0.0.1-3000\logs\20260716.log" written
+CS	0	09:41:20.751	Tester	test Experts\QuantBeast\QuantBeastEA.ex5 on XAUUSD,M5 thread finished
+CS	0	09:41:20.793	127.0.0.1	prepare for shutdown
+CS	0	09:41:20.793	127.0.0.1	shutdown finished

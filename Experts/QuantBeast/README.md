@@ -75,6 +75,7 @@ Market data -> data quality -> closed-bar features -> regimes
 - `TestEvidence/audit_final_20260716/` — final clean compile evidence, 38/0 deterministic regression, final-decision writer proof, and performance-without-file-journal proof
 - `TestEvidence/organic_true_ticks_20260716/` — organic true-tick Shadow CSV proof with all strategies enabled and self-tests disabled
 - `TestEvidence/performance_readiness_20260716/` — reproducible Shadow performance-readiness configs, completed combined true-tick training baseline, invalid first holdout attempt, completed clean holdout retry, and independent BO/FBO/TP/MR train and holdout baselines
+- `TestEvidence/live_strategy_gate_20260716/` — production live-mode gates limiting live initialization to FBO-only and market-order-only until BO/TP/MR and pending-order evidence exists
 - `FINAL_ADVERSARIAL_AUDIT_20260716.md` — final safe-phase adversarial audit and readiness classification
 - `HANDOFF.md` — living status and next task
 - `KNOWN_LIMITATIONS.md` — authoritative remaining-debt register
@@ -102,7 +103,7 @@ MQL5/
 ## Safe next sequence
 
 1. Run deterministic live-path transaction, sizing, duplicate, protection, and unknown-position scenarios without real-money exposure; run restart recovery in the normal terminal because tester globals reset/isolate here.
-2. Expand organic BO/TP/MR accepted-entry plus complete Shadow lifecycle coverage across more true-tick windows; the immediate post-repair signal CSV blocker is closed for FBO BUY/SELL.
+2. Expand organic BO/TP/MR accepted-entry plus complete Shadow lifecycle coverage across more true-tick windows; live-mode initialization is currently gated to FBO-only.
 3. Add or explicitly reject Shadow pending-order simulation; current Shadow mode supports market intents only.
 4. Expand realistic-cost stress tests and additional untouched windows without optimizing against holdout data; treat the completed train/holdout and per-strategy train/holdout results as baseline observations only.
 5. Require prolonged demo validation before considering micro-live.

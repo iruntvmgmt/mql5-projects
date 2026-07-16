@@ -5,6 +5,8 @@ This checklist is a release gate, not general advice. Every applicable item requ
 
 **Latest safe readiness:** `READY FOR SHADOW MODE` as of 2026-07-16. Compile, deterministic Shadow fixtures, and organic true-tick Shadow journal proof passed; real broker execution and restart evidence are still absent.
 
+Current live-mode code gate: Conservative Live and acknowledged Challenge Live initialize only when the enabled strategy set is FBO-only and market-order-only with pending orders disabled. BO, TP, MR, and pending orders must remain disabled for any future explicitly authorized demo/live execution until accepted-entry, lifecycle, pending-order, and restart evidence exists.
+
 ## A. Source and build gate
 
 - [ ] Bug audit completed and all critical/high defects resolved.
@@ -116,6 +118,8 @@ Current broker-free evidence satisfies parts of the Shadow/journal gate only: `T
 ## K. Conservative live approval
 
 - [ ] Written approval records EA version/hash, broker, symbol, account, preset, and maximum loss.
+- [ ] Enabled strategies are exactly FBO-only unless BO/TP/MR accepted-entry and lifecycle evidence has been added and this checklist is revised.
+- [ ] Execution is market-order-only with stop/limit pending orders disabled and `InpMaxPendingOrders=0` unless pending-order lifecycle/restart evidence has been added and this checklist is revised.
 - [ ] Risk is minimum legal lot or independently verified low fixed risk.
 - [ ] One position maximum; pyramiding off.
 - [ ] Strict spread, daily loss, weekly loss, drawdown, and equity floor enabled.

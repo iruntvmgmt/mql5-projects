@@ -3,7 +3,7 @@
 **Status:** Partial implementation; not live validated.  
 **Authority:** All trades must pass centralized risk validation and centralized sizing.
 
-**Latest evidence:** 2026-07-16 deterministic Shadow regression `38 passed, 0 failed`; organic true-tick Shadow evidence includes accepted FBO BUY/SELL entries and a central-risk rejection for excessive stop distance.
+**Latest evidence:** 2026-07-16 deterministic Shadow regression `39 passed, 0 failed`; organic true-tick Shadow evidence includes accepted FBO BUY/SELL entries and a central-risk rejection for excessive stop distance. Live-mode initialization is gated to FBO-only, market-order-only operation until broader evidence exists.
 
 ## Risk flow
 

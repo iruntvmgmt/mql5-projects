@@ -40,7 +40,7 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 - `QuantBeastEA.ex5` is present and the final MetaEditor build is `0 errors, 0 warnings`.
 - The original 23-error/15-warning baseline is preserved under `TestEvidence/compile_20260715/`.
 - The Shadow lifecycle build/runtime evidence is under `TestEvidence/shadow_lifecycle_20260715/`.
-- Strategy Tester agent logs prove Shadow initialization and 38 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, and performance updates with file journaling disabled. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
+- Strategy Tester agent logs prove Shadow initialization and 39 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, and live-mode strategy/execution gates. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
 - A two-process restart probe is preserved under `TestEvidence/restart_probe_20260715/`: phase 1 passed, but a fresh tester/Wine process loaded schema `0`. This proves tester-state isolation, not live-terminal restart safety. Production persistence now explicitly flushes Terminal Global Variables.
 - Broker submission return values now require both local API success and order-class-specific server acceptance; deterministic mismatched-response injection passes under `TestEvidence/server_ack_policy_20260715/`.
 - Pending tracking now survives delete failure, missing history, and unsafe fill reconciliation; evidence is under `TestEvidence/pending_orphan_policy_20260715/`.
@@ -141,8 +141,9 @@ Broker-rejection-counter evidence: TestEvidence/broker_rejection_counter_2026071
 Broker-fault-matrix evidence: TestEvidence/broker_fault_matrix_20260715/
 Organic-pipeline evidence: TestEvidence/organic_pipeline_20260715/
 Arbitration/journal evidence: TestEvidence/arbitration_journal_20260715/
-Final source SHA-256: 220577a689c55b7ee263e0bae779752b610e0c75ca3f5ff528d2bb473a0ce30a
-Final EX5 SHA-256: fca02855e1396c768c974b3ce2650beb45f4af51f81f9d14f4ed714be8590040
+Live-gate evidence: TestEvidence/live_strategy_gate_20260716/
+Final source SHA-256: 1dd11c77601fd5cc96db86f78381d4e50c685bf36cf154e57dd8133575660101
+Final EX5 SHA-256: 0b52c488082c766a57b163ddfc75805be26afdbd2c1f9e435f252ed1ac54bc13
 ```
 
 ## Test status
@@ -151,7 +152,7 @@ Final EX5 SHA-256: fca02855e1396c768c974b3ce2650beb45f4af51f81f9d14f4ed714be8590
 Static content audit: completed
 Focused bug audit: completed — BUG_AUDIT.md
 Compile test: passed after repair — 0 errors, 0 warnings
-Deterministic startup fixtures: runtime pass — 38 passed, 0 failed
+Deterministic startup fixtures: runtime pass — 39 passed, 0 failed
 Shadow attachment: completed per local tester agent log; MCP status remained unreliable
 Shadow lifecycle tests: all core market-position branches passed; no broker orders/deals; tester balance unchanged
 Strategy Tester baseline: not yet valid as performance evidence
@@ -165,7 +166,7 @@ Live: prohibited
 1. Run controlled demo/fault-adapter scenarios for actual modify/close/delete rejection, requotes, disconnect/reconnect, and fill-during-cancel callback ordering. The deterministic policies are covered; actual broker behavior is not.
 2. Run an actual normal-terminal restart fixture with owned positions, pending orders, unknown positions, and incompatible/corrupt state. Do not reuse Strategy Tester global persistence as a substitute and do not optimize profitability yet.
 3. Repeat organic BO/FBO/TP/MR and full Shadow lifecycle coverage on true real ticks when history is available; inspect post-repair CSV status/ID rows.
-4. Decide whether to implement Shadow pending orders or keep the explicit rejection as a documented design limit.
+4. Decide whether to implement Shadow pending orders or keep the explicit rejection as a documented design limit; production live modes are currently market-order-only until pending-order broker evidence exists.
 
 ## Do not touch during the next task
 
@@ -547,4 +548,16 @@ Live: prohibited
 - Updated `TestEvidence/performance_readiness_20260716/EVIDENCE.md`, `README.md`, `TESTING_GUIDE.md`, `KNOWN_LIMITATIONS.md`, and `FINAL_ADVERSARIAL_AUDIT_20260716.md`.
 - Interpretation: strategy-only true-tick holdout configs are runnable and direction-preserving, but only FBO reached accepted trade state in this holdout window. BO/TP/MR accepted organic entries remain unproven.
 - No source or EX5 code changed; hashes remain source `220577a689c55b7ee263e0bae779752b610e0c75ca3f5ff528d2bb473a0ce30a`, EX5 `fca02855e1396c768c974b3ce2650beb45f4af51f81f9d14f4ed714be8590040`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Live strategy/execution gates and FBO-only market-only conservative preset
+
+- Confirmed a High live-safety/configuration risk: the Conservative Live preset could inherit default BO/FBO/TP/MR enablement even though only FBO has organic accepted BUY/SELL evidence.
+- Added a production live-mode initialization gate: Conservative Live and acknowledged Challenge Live now initialize only when the enabled strategy set is exactly FBO-only. Added a second live-mode execution gate requiring market-order-only operation with stop/limit pending orders disabled and `InpMaxPendingOrders=0`. Shadow and Diagnostic research modes remain unchanged.
+- Updated `XAUUSD_Conservative_Live.set` to be explicitly not approved for live, FBO-only, market-order-only, lower risk, tighter exposure, persistence-enabled, and unknown-position quarantine.
+- Added deterministic self-test coverage: `TEST 37 PASS: Live strategy gate FBO-only` and `TEST 38 PASS: Live execution gate market-only`.
+- Compile: `0 errors, 0 warnings, 31480 ms`.
+- Shadow regression: `39 passed, 0 failed`; `22080` generated ticks, `1104` bars; final balance `10000.00`; test passed in `0:00:21.999`.
+- Evidence: `TestEvidence/live_strategy_gate_20260716/`.
+- Source SHA-256: `1dd11c77601fd5cc96db86f78381d4e50c685bf36cf154e57dd8133575660101`; EX5 SHA-256: `0b52c488082c766a57b163ddfc75805be26afdbd2c1f9e435f252ed1ac54bc13`.
 - No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.

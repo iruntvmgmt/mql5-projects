@@ -1,6 +1,6 @@
 # QuantBeast EA — Build Audit
 
-> **Historical baseline:** This document preserves the original generated-build audit. The current repaired-state verdict, hashes, compile/runtime evidence, and limitations are in [REPAIR_AUDIT_20260715.md](REPAIR_AUDIT_20260715.md) and [FINAL_ADVERSARIAL_AUDIT_20260716.md](FINAL_ADVERSARIAL_AUDIT_20260716.md). Current compile status is `0 errors, 0 warnings`; the latest broker-free fixture is `38 passed, 0 failed`, and organic true-tick Shadow CSV proof exists; readiness is broker-free Shadow mode only.
+> **Historical baseline:** This document preserves the original generated-build audit. The current repaired-state verdict, hashes, compile/runtime evidence, and limitations are in [REPAIR_AUDIT_20260715.md](REPAIR_AUDIT_20260715.md) and [FINAL_ADVERSARIAL_AUDIT_20260716.md](FINAL_ADVERSARIAL_AUDIT_20260716.md). Current compile status is `0 errors, 0 warnings`; the latest broker-free fixture is `39 passed, 0 failed`, and organic true-tick Shadow CSV proof exists; readiness is broker-free Shadow mode only.
 
 **Audit date:** 2026-07-15  
 **Source version:** 1.00  

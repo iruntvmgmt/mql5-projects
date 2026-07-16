@@ -389,6 +389,28 @@ bool QBLiveStrategySetAllowed(bool boEnabled, bool fboEnabled,
    return true;
 }
 
+bool QBLiveExecutionSetAllowed(bool useMarketOrders, bool useStopOrders,
+                               bool useLimitOrders, int maxPendingOrders,
+                               string &reason)
+{
+   if(!useMarketOrders)
+   {
+      reason = "Live modes require market orders until pending lifecycle "
+               "and restart evidence is complete";
+      return false;
+   }
+
+   if(useStopOrders || useLimitOrders || maxPendingOrders > 0)
+   {
+      reason = "Live pending orders are disabled until activation, expiry, "
+               "cancellation, fill-race, and restart evidence is complete";
+      return false;
+   }
+
+   reason = "market-order-only live candidate";
+   return true;
+}
+
 //+------------------------------------------------------------------+
 //| Expert initialization function                                     |
 //+------------------------------------------------------------------+
@@ -416,6 +438,16 @@ int OnInit()
       {
          QBLogError("Live strategy gate blocked initialization: " +
                     liveStrategyReason);
+         return INIT_FAILED;
+      }
+
+      string liveExecutionReason = "";
+      if(!QBLiveExecutionSetAllowed(InpUseMarketOrders, InpUseStopOrders,
+                                    InpUseLimitOrders, InpMaxPendingOrders,
+                                    liveExecutionReason))
+      {
+         QBLogError("Live execution gate blocked initialization: " +
+                    liveExecutionReason);
          return INIT_FAILED;
       }
    }
@@ -1954,6 +1986,22 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 37 PASS: Live strategy gate FBO-only"); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 37 FAIL: Live strategy gate"); }
+   }
+
+   // Test 38: live-mode execution remains market-only until pending evidence exists.
+   {
+      string reason = "";
+      bool marketOnlyAccepted = QBLiveExecutionSetAllowed(true, false, false, 0, reason);
+      bool noMarketRejected = !QBLiveExecutionSetAllowed(false, false, false, 0, reason);
+      bool stopRejected = !QBLiveExecutionSetAllowed(true, true, false, 0, reason);
+      bool limitRejected = !QBLiveExecutionSetAllowed(true, false, true, 0, reason);
+      bool pendingCapacityRejected = !QBLiveExecutionSetAllowed(true, false, false, 1, reason);
+
+      if(marketOnlyAccepted && noMarketRejected && stopRejected &&
+         limitRejected && pendingCapacityRejected)
+      { g_SelfTestPassed++; QBLogInfo("TEST 38 PASS: Live execution gate market-only"); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 38 FAIL: Live execution gate"); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +
