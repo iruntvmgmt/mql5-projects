@@ -1,0 +1,262 @@
+//@version=5
+
+indicator(title='PIVOT G-TIER', shorttitle='PVTG-TEIR', overlay=true, max_bars_back=50)
+
+// - INPUTS
+ShowPivots = input(true, title='Show Pivot Points')
+uAuto = input(false, title='Use Auto Strength Pivots Points')
+left = input.int(5, minval=1, title='Pivot Length Left Hand Side')
+right = input.int(5, minval=1, title='Pivot Length Right Hand Side')
+ShowSRLevels = input(true, title='Show S/R Level Extensions')
+ShowChannel = input(false, title='Show Levels as a Fractal Chaos Channel')
+Shunt = input.int(1, minval=0, maxval=1, title='When to start Printing Pivot (0 = no wait, 1 = wait for candle close)')
+maxLvlLen = input.int(0, minval=0, title='Maximum S/R Level Extension Length')
+uRenko = input(false, title='Use Renko Style Pivots (open/close for high/low)')
+sIdeal = input(false, title='Show Only Ideal Pivots (handy for Renko and HA)')
+ShowHHLL = input(false, title='Show HH,LL,LH,HL markers on Pivots Points')
+swing3Levels = input(false, title='Filter HH,LL,LH,HL to Third Level Swings')
+clrPivot = input(false, title='Highlight Pivot with Coloured Bar')
+//
+ShowFB = input(false, title='Show Fractal Break Alert Arrows')
+filterFB = input(false, title='Apply MA Filter to Fractal Break Alerts')
+// Filtering
+uMAf = input(false, title='Use MA Filter on Pivots')
+// Fast MA - type, source, length
+fast_ma_type = input.string(defval='EMA', title='Fast MA Type ', options=['SMA', 'EMA', 'WMA', 'VWMA', 'Smooth SMA', 'DEMA', 'TEMA', 'Hull MA', 'ZeroLag EMA', 'Triangular MA', 'SuperSmooth MA'])
+fast_ma_len = input.int(defval=21, title='Fast MA - Length', minval=1)
+fast_ma_src = input(close, title='Fast MA - Source')
+// Slow MA - type, source, length
+slow_ma_type = input.string(defval='EMA', title='Slow MA Type ', options=['SMA', 'EMA', 'WMA', 'VWMA', 'Smooth SMA', 'DEMA', 'TEMA', 'Hull MA', 'ZeroLag EMA', 'Triangular MA', 'SuperSmooth MA'])
+slow_ma_len = input.int(defval=55, title='Slow MA - Length', minval=1)
+slow_ma_src = input(close, title='Slow MA - Source')
+sMAs = input(false, title='Show MA Lines')
+
+// - /INPUTS
+
+//
+high_ = uRenko ? math.max(close, open) : high
+low_ = uRenko ? math.min(close, open) : low
+
+
+// === FINCTIONS
+
+// - variant(type, src, len)
+// Returns MA input selection variant, default to SMA if blank or typo.
+
+// SuperSmoother filter
+// © 2013  John F. Ehlers
+variant_supersmoother(src, len) =>
+    a1 = math.exp(-1.414 * 3.14159 / len)
+    b1 = 2 * a1 * math.cos(1.414 * 3.14159 / len)
+    c2 = b1
+    c3 = -a1 * a1
+    c1 = 1 - c2 - c3
+    v9 = 0.0
+    v9 := c1 * (src + nz(src[1])) / 2 + c2 * nz(v9[1]) + c3 * nz(v9[2])
+    v9
+
+variant_smoothed(src, len) =>
+    v5 = 0.0
+    sma_1 = ta.sma(src, len)
+    v5 := na(v5[1]) ? sma_1 : (v5[1] * (len - 1) + src) / len
+    v5
+
+variant_zerolagema(src, len) =>
+    xLag = (len - 1) / 2
+    xEMA = src + src - src[xLag]
+    v10 = ta.ema(xEMA, len)
+    v10
+
+
+variant_doubleema(src, len) =>
+    v2 = ta.ema(src, len)
+    v6 = 2 * v2 - ta.ema(v2, len)
+    v6
+
+variant_tripleema(src, len) =>
+    v2 = ta.ema(src, len)
+    v7 = 3 * (v2 - ta.ema(v2, len)) + ta.ema(ta.ema(v2, len), len)  // Triple Exponential
+    v7
+
+// return variant, defaults to SMA 
+variant(type, src, len) =>
+    ema_1 = ta.ema(src, len)
+    wma_1 = ta.wma(src, len)
+    vwma_1 = ta.vwma(src, len)
+    variant_smoothed__1 = variant_smoothed(src, len)
+    variant_doubleema__1 = variant_doubleema(src, len)
+    variant_tripleema__1 = variant_tripleema(src, len)
+    wma_2 = ta.wma(src, len / 2)
+    wma_3 = ta.wma(src, len)
+    wma_4 = ta.wma(2 * wma_2 - wma_3, math.round(math.sqrt(len)))
+    variant_supersmoother__1 = variant_supersmoother(src, len)
+    variant_zerolagema__1 = variant_zerolagema(src, len)
+    sma_1 = ta.sma(src, len)
+    sma_2 = ta.sma(sma_1, len)
+    type == 'EMA' ? ema_1 : type == 'WMA' ? wma_1 : type == 'VWMA' ? vwma_1 : type == 'Smooth SMA' ? variant_smoothed__1 : type == 'DEMA' ? variant_doubleema__1 : type == 'TEMA' ? variant_tripleema__1 : type == 'Hull MA' ? wma_4 : type == 'SuperSmooth MA' ? variant_supersmoother__1 : type == 'ZeroLag EMA' ? variant_zerolagema__1 : type == 'Triangular MA' ? sma_2 : sma_1
+
+// - /variant 
+
+
+// Functions to find ideal Pivot Highs and Lows.
+ipivothigh(src, L, R) =>
+    t = true
+    for i = R to L + R - 1 by 1
+        t := t and src[i] > src[i + 1]
+        t
+    for i = 0 to R - 1 by 1
+        t := t and src[i] < src[i + 1]
+        t
+    t ? src[R] : na
+
+ipivotlow(src, L, R) =>
+    t = true
+    for i = R to L + R - 1 by 1
+        t := t and src[i] < src[i + 1]
+        t
+    for i = 0 to R - 1 by 1
+        t := t and src[i] > src[i + 1]
+        t
+    t ? src[R] : na
+
+// Functions to find normal Pivot High and Lows, allowing for equal highs
+// on left side of pivot.
+// NOTE: To increase processing speed, these functions are replaced by
+//       pivothigh()/pivotlow() calls.
+//
+//npivothigh(src, L, R) =>
+//    t = true
+//    for i = R to L+R-1
+//        t := t and src[R]>=src[i+1]
+//    for i = 0 to R-1
+//        t := t and src[R]>src[i]
+//    t ? src[R] : na
+//
+//npivotlow(src, L, R) =>
+//    t = true
+//    for i = R to L+R-1
+//        t := t and src[R]<=src[i+1]
+//    for i = 0 to R-1
+//        t := t and src[R]<src[i]
+//    t ? src[R] : na
+
+
+// - /FUNCTIONS
+
+// - SERIES VARIABLES
+
+// MA's
+fast_ma_series = variant(fast_ma_type, fast_ma_src, fast_ma_len)
+slow_ma_series = variant(slow_ma_type, slow_ma_src, slow_ma_len)
+
+plot(sMAs ? fast_ma_series : na, color=color.new(color.lime, 15), title='Fast MA', join=true, style=plot.style_circles, linewidth=2)
+plot(sMAs and fast_ma_len <= slow_ma_len ? slow_ma_series : na, color=color.new(color.gray, 15), title='Slow MA', join=true, style=plot.style_circles, linewidth=2)
+
+// Determine pivots
+ema_1 = ta.ema(close, 21)
+pvtLenL = uAuto ? close > ema_1 ? left : left + 1 : left
+pvtLenR = uAuto ? close < ema_1 ? right : right + 1 : right
+
+// Get High and Low Pivot Points
+pvthi_ = uMAf and (fast_ma_len > slow_ma_len or fast_ma_series < slow_ma_series) ? na : sIdeal ? ipivothigh(high_, pvtLenL, pvtLenR) : ta.pivothigh(high_, pvtLenL, pvtLenR)
+pvtlo_ = uMAf and (fast_ma_len > slow_ma_len or fast_ma_series > slow_ma_series) ? na : sIdeal ? ipivotlow(low_, pvtLenL, pvtLenR) : ta.pivotlow(low_, pvtLenL, pvtLenR)
+
+// Force Pivot completion before plotting.
+pvthi = pvthi_[Shunt]
+pvtlo = pvtlo_[Shunt]
+
+//  ||-----------------------------------------------------------------------------------------------------||
+//  ||---   Higher Highs, Lower Highs, Higher Lows, Lower Lows  -------------------------------------------||
+valuewhen_H0 = ta.valuewhen(pvthi, high_[pvtLenR + Shunt], 0)
+valuewhen_H1 = ta.valuewhen(pvthi, high_[pvtLenR + Shunt], 1)
+valuewhen_H2 = ta.valuewhen(pvthi, high_[pvtLenR + Shunt], 2)
+valuewhen_H3 = ta.valuewhen(pvthi, high_[pvtLenR + Shunt], 3)
+higherhigh = swing3Levels ? na(pvthi) ? na : valuewhen_H1 < valuewhen_H0 and valuewhen_H2 < valuewhen_H0 and valuewhen_H3 < valuewhen_H0 ? pvthi : na : na(pvthi) ? na : valuewhen_H1 < valuewhen_H0 ? pvthi : na
+lowerhigh = swing3Levels ? na(pvthi) ? na : valuewhen_H1 > valuewhen_H0 and valuewhen_H2 > valuewhen_H0 and valuewhen_H3 > valuewhen_H0 ? pvthi : na : na(pvthi) ? na : valuewhen_H1 > valuewhen_H0 ? pvthi : na
+//
+valuewhen_L0 = ta.valuewhen(pvtlo, low_[pvtLenR + Shunt], 0)
+valuewhen_L1 = ta.valuewhen(pvtlo, low_[pvtLenR + Shunt], 1)
+valuewhen_L2 = ta.valuewhen(pvtlo, low_[pvtLenR + Shunt], 2)
+valuewhen_L3 = ta.valuewhen(pvtlo, low_[pvtLenR + Shunt], 3)
+higherlow = swing3Levels ? na(pvtlo) ? na : valuewhen_L1 < valuewhen_L0 and valuewhen_L2 < valuewhen_L0 and valuewhen_L3 < valuewhen_L0 ? pvtlo : na : na(pvtlo) ? na : valuewhen_L1 < valuewhen_L0 ? pvtlo : na
+lowerlow = swing3Levels ? na(pvtlo) ? na : valuewhen_L1 > valuewhen_L0 and valuewhen_L2 > valuewhen_L0 and valuewhen_L3 > valuewhen_L0 ? pvtlo : na : na(pvtlo) ? na : valuewhen_L1 > valuewhen_L0 ? pvtlo : na
+//
+anySwing = not(na(higherhigh) and na(lowerhigh) and na(higherlow) and na(lowerlow))
+
+// If selected Display the HH/LL above/below candle.
+plotshape(ShowHHLL ? higherhigh : na, title='HH', style=shape.triangleup, location=location.abovebar, color=color.new(color.green, 0), text='HH', offset=-pvtLenR - Shunt)
+plotshape(ShowHHLL ? higherlow : na, title='HL', style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), text='HL', offset=-pvtLenR - Shunt)
+plotshape(ShowHHLL ? lowerhigh : na, title='LH', style=shape.triangledown, location=location.abovebar, color=color.new(color.maroon, 0), text='LH', offset=-pvtLenR - Shunt)
+plotshape(ShowHHLL ? lowerlow : na, title='LL', style=shape.triangledown, location=location.belowbar, color=color.new(color.maroon, 0), text='LL', offset=-pvtLenR - Shunt)
+
+
+// If Selected Display Pivot points
+//plotshape(ShowPivots and not ShowHHLL ? pvthi :na, title='High Pivot Marker', style=shape.triangleup,location=location.abovebar, color=green, offset=-pvtLenR-Shunt,transp=0,size=size.auto)
+//plotshape(ShowPivots and not ShowHHLL ? pvtlo :na,  title='Low Pivot Marker', style=shape.triangledown, location=location.belowbar, color=maroon, offset=-pvtLenR-Shunt,transp=0,size=size.auto)
+plot(ShowPivots and not ShowHHLL ? pvthi : na, title='High Pivot *', style=plot.style_circles, join=false, color=color.new(color.white, 50), offset=-pvtLenR - Shunt, linewidth=3)
+plot(ShowPivots and not ShowHHLL ? pvtlo : na, title='Low Pivot *', style=plot.style_circles, join=false, color=color.new(color.white, 50), offset=-pvtLenR - Shunt, linewidth=3)
+plot(ShowPivots and not ShowHHLL ? pvthi : na, title='High Pivot *', style=plot.style_circles, join=false, color=color.new(color.green, 0), offset=-pvtLenR - Shunt, linewidth=2)
+plot(ShowPivots and not ShowHHLL ? pvtlo : na, title='Low Pivot *', style=plot.style_circles, join=false, color=color.new(color.maroon, 0), offset=-pvtLenR - Shunt, linewidth=2)
+
+// Highlight Pivot Bar.
+ORANGE = #FFA500FF
+barcolor(clrPivot and (pvthi or pvtlo) ? ORANGE : na, title='Colour Pivot Bar', offset=-pvtLenR - Shunt)
+
+
+
+//Count How many candles for current Pivot Level, If new reset.
+counthi = 0
+countlo = 0
+counthi := na(pvthi) ? nz(counthi[1]) + 1 : 0
+countlo := na(pvtlo) ? nz(countlo[1]) + 1 : 0
+
+pvthis = 0.0
+pvtlos = 0.0
+pvthis := na(pvthi) ? pvthis[1] : high[pvtLenR + Shunt]
+pvtlos := na(pvtlo) ? pvtlos[1] : low[pvtLenR + Shunt]
+
+hipc = pvthis != pvthis[1] ? na : color.maroon
+lopc = pvtlos != pvtlos[1] ? na : color.green
+
+// Show Levels if Selected
+var line pvthiLine = na
+var line pvtloLine = na
+if not ShowChannel and ShowSRLevels
+    if not na(pvthis) and nz(pvthis[1]) != pvthis
+        pvthiLine := line.new(bar_index - (pvtLenR + Shunt), pvthis, bar_index, pvthis, extend=extend.none, width=1, color=color.maroon, style=line.style_solid)
+        pvthiLine
+    if not na(pvthiLine) and not na(pvthis) and line.get_x2(pvthiLine) != bar_index
+        line.set_x2(pvthiLine, bar_index)
+    if not na(pvtlos) and nz(pvtlos[1]) != pvtlos
+        pvtloLine := line.new(bar_index - (pvtLenR + Shunt), pvtlos, bar_index, pvtlos, extend=extend.none, width=1, color=color.green, style=line.style_solid)
+        pvtloLine
+    if not na(pvtloLine) and not na(pvtlos) and line.get_x2(pvtloLine) != bar_index
+        line.set_x2(pvtloLine, bar_index)
+//end if    
+
+// Draw historical levels, "line" objects are limited in history.
+plot(ShowSRLevels and not ShowChannel and (maxLvlLen == 0 or counthi < maxLvlLen) ? pvthis : na, color=hipc, linewidth=1, offset=-pvtLenR - Shunt, title='Top Levels', transp=0)
+plot(ShowSRLevels and not ShowChannel and (maxLvlLen == 0 or countlo < maxLvlLen) ? pvtlos : na, color=lopc, linewidth=1, offset=-pvtLenR - Shunt, title='Bottom Levels', transp=0)
+
+// Show Levels as a Fractal Chaos Channel
+plot(ShowSRLevels and ShowChannel ? pvthis : na, color=color.new(color.green, 0), linewidth=1, style=plot.style_stepline, offset=0, title='Top Chaos Channel', trackprice=false)
+plot(ShowSRLevels and ShowChannel ? pvtlos : na, color=color.new(color.maroon, 0), linewidth=1, style=plot.style_stepline, offset=0, title='Bottom Chaos Channel', trackprice=false)
+
+// Add Optional Fractal Break Alerts
+buy = false
+sell = false
+buy := close > pvthis and open <= pvthis and (not filterFB or (fast_ma_len > slow_ma_len or fast_ma_series > slow_ma_series) and close > fast_ma_series)
+sell := close < pvtlos and open >= pvtlos and (not filterFB or (fast_ma_len > slow_ma_len or fast_ma_series < slow_ma_series) and close < fast_ma_series)
+
+//
+plotarrow(ShowFB and buy ? 1 : na, title='BUY Arrow', colorup=color.new(color.lime, 20), maxheight=60, minheight=50)
+plotarrow(ShowFB and sell ? -1 : na, title='SELL Arrow', colordown=color.new(color.red, 20), maxheight=60, minheight=50)
+//
+alertcondition(buy or sell, title='Fractal Break Arrow', message='Alert')
+alertcondition(buy, title='Fractal Break Long', message='Long')
+alertcondition(sell, title='Fractal Break Short', message='Short')
+alertcondition(anySwing, title='Any Swing', message='AnySwing')
+
+//
+//EOF
+

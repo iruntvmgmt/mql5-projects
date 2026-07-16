@@ -1,0 +1,6 @@
+QuantBeastEA (XAUUSD,M5) 2026.05.18 00:00:00 QuantBeast[INFO] TEST 27 PASS: Broker failure/transmission policy entry=bounded broker_action=retained transmission=server-confirmed pending_state=fail-closed reject_counter=latched
+QuantBeastEA (XAUUSD,M5) 2026.05.18 00:00:00 QuantBeast[INFO] TEST 31 PASS: Kill-switch priority floor=emergency rejection=latched connectivity=transient broker_mode=live-only retry=bounded
+QuantBeastEA (XAUUSD,M5) 2026.05.18 00:00:00 QuantBeast[INFO] Self-tests complete: 33 passed, 0 failed
+Tester final balance 10000.00 USD
+Tester XAUUSD,M5: 5520 ticks, 276 bars generated. Test passed in 0:00:14.550.
+

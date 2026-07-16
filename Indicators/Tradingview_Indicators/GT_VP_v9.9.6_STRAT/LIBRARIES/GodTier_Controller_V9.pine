@@ -1,0 +1,224 @@
+//@version=6
+// @description Session Controller for God Tier Volume Profile
+// Published library version: GodTier_Controller/9
+// Suite patch lineage: v6.2
+//              Manages state, compression, and incremental updates.
+//
+// CHANGELOG v6.1 → v6.2
+// ─────────────────────────────────────────────────────────────────────────
+// REFACTOR 1 — compression block: replaced three separate compress_profile()
+//              calls with a single Opt.compress_profile_triple() call.
+//              vol_map/buy_map/sell_map share identical key sets (built
+//              together in processBarVolume). The old approach sorted and
+//              iterated that shared key list three times per compression event.
+//              compress_profile_triple does it once — single map.keys(),
+//              single array.sort(), single for-loop pass.
+//
+// REFACTOR 2 — new_session(): SessionState.new() now uses named field
+//              initialization. Replaces a 17-argument positional call that
+//              would silently misassign values if any field was ever inserted
+//              or reordered in the type definition. Named init is
+//              order-change-safe and self-documenting.
+//
+// FIX 3       — nz(map.get(...)) in update_incremental not applicable here
+//              (Controller delegates to Engine.processBarVolume which owns
+//              those calls — fixed in GodTier_Binning v4).
+//
+// FIX 4       — compress_profile_triple result destructured into local vars
+//              first, then assigned to struct fields. Pine v6 does not allow
+//              struct field references on the lhs of a tuple destructure, nor
+//              type annotations on lhs tuple identifiers. Bare identifiers only:
+//              [c_vol, c_buy, c_sell] = ... then assign back to struct fields.
+//
+// ✅ RETAINED: v6.1 LTF high/low bug fix
+// ✅ RETAINED: v6.0 compress_profile → Opt.compress_profile routing
+
+library("GodTier_Controller", overlay=true)
+// Version: 9
+// Suite patch lineage: v6.2
+
+// =============================================================================
+// DEPENDENCIES
+// =============================================================================
+
+import iruntvmgmt/GodTierEngine/14       as Engine
+// NOTE: Aligned with main script's confirmed published GodTierEngine/14.
+import iruntvmgmt/GodTier_Binning/4      as Binning   // FIX: must match published v4
+import iruntvmgmt/GodTier_Optimization/6 as Opt
+// NOTE: Aligned with main script's confirmed published Optimization/6.
+// compress_profile_triple() is available and used below.
+
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
+
+export type SessionState
+    map<int, float> vol_map
+    map<int, float> buy_map
+    map<int, float> sell_map
+    float total_buy
+    float total_sell
+    float total_volume
+    float cumulative_delta
+    float max_vol
+    float poc
+    float vah
+    float val
+    int   start_bar
+    float session_high
+    float session_low
+    float bin_size            // Locked bin size for the session
+    bool  compression_applied // Track if compression has triggered
+    int   last_poc_calc_bar   // For throttling expensive calculations
+
+// =============================================================================
+// CORE FUNCTIONS
+// =============================================================================
+
+// @function Initializes a new empty SessionState object
+// @param start_bar  Bar index at session open
+// @param high       Initial session high
+// @param low        Initial session low
+// @returns Fresh SessionState
+export new_session(int start_bar, float high, float low) =>
+    // v6.2: named field initialization — safe against future field reordering
+    SessionState.new(
+        vol_map             = map.new<int, float>(),
+        buy_map             = map.new<int, float>(),
+        sell_map            = map.new<int, float>(),
+        total_buy           = 0.0,
+        total_sell          = 0.0,
+        total_volume        = 0.0,
+        cumulative_delta    = 0.0,
+        max_vol             = 0.0,
+        poc                 = na,
+        vah                 = na,
+        val                 = na,
+        start_bar           = start_bar,
+        session_high        = high,
+        session_low         = low,
+        bin_size            = na,
+        compression_applied = false,
+        last_poc_calc_bar   = start_bar)
+
+// @function Updates the session state incrementally with new LTF bar data.
+//           Handles bin sizing, boundary tracking, volume distribution,
+//           auto-compression, and throttled POC/VA recalculation.
+//
+// @param state               Current SessionState object (mutated in place)
+// @param ltf_opens           Array of lower-timeframe open prices
+// @param ltf_closes          Array of lower-timeframe close prices
+// @param ltf_highs           Array of lower-timeframe high prices (✅ ADDED v6.1)
+// @param ltf_lows            Array of lower-timeframe low prices (✅ ADDED v6.1)
+// @param ltf_vols            Array of lower-timeframe volumes
+// @param va_pct              Value Area percentage (e.g., 70)
+// @param enable_compression  Enable auto-compression when map exceeds threshold
+// @param compression_trigger Map key count threshold to trigger compression
+// @param compression_factor  Factor to compress by (2 = halve resolution)
+// @param granularity         Granularity factor for initial ATR bin sizing
+export update_incremental(SessionState state, array<float> ltf_opens,
+                          array<float> ltf_closes, array<float> ltf_highs,
+                          array<float> ltf_lows, array<float> ltf_vols,
+                          int va_pct, bool enable_compression,
+                          int compression_trigger, int compression_factor,
+                          int granularity) =>
+
+    // A. Calculate bin size ONCE at session start
+    if na(state.bin_size)
+        state.bin_size := Engine.calculate_bin_size(true, granularity,
+            state.session_high, state.session_low, 50)
+
+    // B. Update session price boundaries
+    state.session_high := math.max(state.session_high, high)
+    state.session_low  := math.min(state.session_low,  low)
+
+    // C. Process LTF volume into maps
+    if array.size(ltf_opens) > 0
+        for j = 0 to array.size(ltf_opens) - 1
+            float o = array.get(ltf_opens, j)
+            // ✅ FIX v6.1: Use LTF high/low instead of HTF high/low
+            float h = array.get(ltf_highs, j)
+            float l = array.get(ltf_lows, j)
+            float c = array.get(ltf_closes, j)
+            float v = array.get(ltf_vols, j)
+
+            if enable_compression and map.size(state.vol_map) >= compression_trigger
+                [pre_vol, pre_buy, pre_sell] = Opt.compress_profile_triple(state.vol_map, state.buy_map, state.sell_map, compression_factor)
+                state.vol_map             := pre_vol
+                state.buy_map             := pre_buy
+                state.sell_map            := pre_sell
+                state.bin_size            := state.bin_size * compression_factor
+                state.compression_applied := true
+
+            Engine.processBarVolume(o, h, l, c, v, state.bin_size,
+                state.vol_map, state.buy_map, state.sell_map, state.bin_size)
+
+            if enable_compression and map.size(state.vol_map) >= compression_trigger
+                [post_vol, post_buy, post_sell] = Opt.compress_profile_triple(state.vol_map, state.buy_map, state.sell_map, compression_factor)
+                state.vol_map             := post_vol
+                state.buy_map             := post_buy
+                state.sell_map            := post_sell
+                state.bin_size            := state.bin_size * compression_factor
+                state.compression_applied := true
+
+            float delta = c >= o ? v : -v
+            state.cumulative_delta += delta
+            state.total_volume     += v
+
+            if c >= o
+                state.total_buy  += v
+            else
+                state.total_sell += v
+
+// D. Auto-compression — repeatable safety net when map exceeds threshold
+    int map_size = map.size(state.vol_map)
+    if enable_compression and map_size >= compression_trigger
+        // AUDIT FIX 5: Use compress_profile_triple() per v6.2 changelog.
+        // Single shared key pass instead of three independent sort+iterate passes.
+        // Pine v6: tuple destructure requires bare local vars on lhs — assign to
+        // struct fields in the next three lines (cannot use state.x := on lhs of []).
+        [c_vol, c_buy, c_sell] = Opt.compress_profile_triple(state.vol_map, state.buy_map, state.sell_map, compression_factor)
+        state.vol_map             := c_vol
+        state.buy_map             := c_buy
+        state.sell_map            := c_sell
+        state.bin_size            := state.bin_size * compression_factor
+        state.compression_applied := true
+    // E. POC/VA recalculation.
+    // Warm up immediately after a session reset so POC/VAH/VAL do not appear
+    // to "load" for the first 10 bars, then return to the cheaper throttle.
+    bool early_session = bar_index - state.start_bar <= 3
+    if early_session or (bar_index - state.last_poc_calc_bar) >= 10 or barstate.islast
+        [p, vh, vl, mv, sv] = Engine.getProfileMetrics(state.vol_map,
+            state.bin_size, va_pct)
+        state.poc              := p
+        state.vah              := vh
+        state.val              := vl
+        state.max_vol          := mv
+        state.last_poc_calc_bar := bar_index
+
+    state
+
+// @function Resets all session state fields for a new session boundary.
+//           Clears all volume maps and resets counters to zero/na.
+//
+// @param state          SessionState to reset (mutated in place)
+// @param new_start_bar  Bar index of the new session open
+export reset_session(SessionState state, int new_start_bar) =>
+    map.clear(state.vol_map)
+    map.clear(state.buy_map)
+    map.clear(state.sell_map)
+    state.total_buy           := 0.0
+    state.total_sell          := 0.0
+    state.total_volume        := 0.0
+    state.cumulative_delta    := 0.0
+    state.max_vol             := 0.0
+    state.poc                 := na
+    state.vah                 := na
+    state.val                 := na
+    state.start_bar           := new_start_bar
+    state.session_high        := high
+    state.session_low         := low
+    state.bin_size            := na
+    state.compression_applied := false
+    state.last_poc_calc_bar   := new_start_bar
+    state

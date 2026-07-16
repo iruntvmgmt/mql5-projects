@@ -1,0 +1,315 @@
+//@version=6
+strategy("NQ Opening Range Retest Strategy", shorttitle="NQ ORB Retest", overlay=true, pyramiding=0, process_orders_on_close=true, default_qty_type=strategy.fixed, default_qty_value=1, initial_capital=50000, commission_type=strategy.commission.cash_per_contract, commission_value=2.40, slippage=2, max_labels_count=500, max_lines_count=100)
+
+// ---------------------------------------------------------------------------
+// Inputs
+// ---------------------------------------------------------------------------
+
+g_session = "NQ Session"
+tz = input.string("America/New_York", "Timezone", group=g_session)
+orSession = input.session("0930-0945:23456", "Opening Range", group=g_session)
+tradeWindowMode = input.string("Full RTH", "Trade Window", options=["AM Only", "AM + PM", "Full RTH", "Custom"], group=g_session)
+amSession = input.session("1000-1130:23456", "AM Window", group=g_session)
+pmSession = input.session("1330-1545:23456", "PM Window", group=g_session)
+customSession = input.session("1000-1545:23456", "Custom Window", group=g_session)
+flattenAtSessionEnd = input.bool(true, "Flatten Near Close", group=g_session)
+flattenSession = input.session("1555-1600:23456", "Flatten Window", group=g_session)
+
+g_entry = "Entry Model"
+entryMode = input.string("Breakout + Retest", "Entry Mode", options=["Breakout Only", "Retest Only", "Breakout + Retest"], group=g_entry)
+tradeDirection = input.string("Both", "Direction", options=["Both", "Long Only", "Short Only"], group=g_entry)
+breakoutTrigger = input.string("State", "Breakout Trigger", options=["Cross", "State"], group=g_entry)
+breakoutBufferPts = input.float(0.5, "Breakout Buffer Points", minval=0.0, step=0.25, group=g_entry)
+retestAtrBuffer = input.float(0.35, "Retest Buffer ATR", minval=0.0, step=0.05, group=g_entry)
+retestWindowBars = input.int(20, "Retest Window Bars", minval=1, maxval=100, group=g_entry)
+maxTradesPerDay = input.int(8, "Max Trades Per Day", minval=1, maxval=20, group=g_entry)
+cooldownBars = input.int(1, "Cooldown Bars After Exit", minval=0, maxval=100, group=g_entry)
+
+g_filters = "Filters"
+useVwapFilter = input.bool(false, "Use VWAP Alignment", group=g_filters)
+useEmaFilter = input.bool(false, "Use EMA Trend", group=g_filters)
+fastEmaLen = input.int(21, "Fast EMA", minval=1, group=g_filters)
+slowEmaLen = input.int(55, "Slow EMA", minval=1, group=g_filters)
+useHtfFilter = input.bool(false, "Use HTF EMA Slope", group=g_filters)
+htfTf = input.timeframe("15", "HTF", group=g_filters)
+htfEmaLen = input.int(50, "HTF EMA", minval=1, group=g_filters)
+useAtrFloor = input.bool(false, "Use ATR Floor", group=g_filters)
+atrFloorPts = input.float(8.0, "Minimum ATR Points", minval=0.0, step=0.25, group=g_filters)
+useVolumeFilter = input.bool(false, "Use Volume Surge", group=g_filters)
+volumeLen = input.int(20, "Volume SMA Length", minval=1, group=g_filters)
+volumeMult = input.float(1.1, "Volume Multiplier", minval=0.1, step=0.05, group=g_filters)
+
+g_risk = "Risk"
+riskModel = input.string("ATR", "Stop Model", options=["ATR", "Fixed Points", "Opening Range"], group=g_risk)
+atrLen = input.int(14, "ATR Length", minval=1, group=g_risk)
+atrStopMult = input.float(0.8, "ATR Stop Mult", minval=0.1, step=0.1, group=g_risk)
+fixedStopPts = input.float(8.0, "Fixed Stop Points", minval=0.25, step=0.25, group=g_risk)
+orStopBufferPts = input.float(3.0, "OR Stop Buffer Points", minval=0.0, step=0.25, group=g_risk)
+targetR = input.float(2.5, "Target R", minval=0.1, step=0.1, group=g_risk)
+useRunner = input.bool(false, "Use Runner Trail", group=g_risk)
+runnerQtyPct = input.int(35, "Runner Quantity Percent", minval=1, maxval=99, group=g_risk)
+trailAtrMult = input.float(2.0, "Runner Trail ATR", minval=0.1, step=0.1, group=g_risk)
+moveToBreakeven = input.bool(true, "Move Stop To Breakeven", group=g_risk)
+breakevenR = input.float(1.0, "Breakeven Trigger R", minval=0.1, step=0.1, group=g_risk)
+
+g_visual = "Visuals"
+showOpeningRange = input.bool(true, "Show Opening Range", group=g_visual)
+showSignals = input.bool(true, "Show Signals", group=g_visual)
+showDashboard = input.bool(true, "Show Dashboard", group=g_visual)
+
+g_profile = "Challenge Profile"
+aggressiveProfile = input.bool(true, "Aggressive $100 Challenge Mode", group=g_profile)
+useMomentumFallback = input.bool(true, "Aggressive Momentum Fallback", group=g_profile)
+forcedTradeProbe = input.bool(false, "Temporary Forced Trade Probe", group=g_profile)
+
+activeOrSession = aggressiveProfile ? "0930-0945:23456" : orSession
+activeTradeWindowMode = aggressiveProfile ? "Full RTH" : tradeWindowMode
+activeBreakoutTrigger = aggressiveProfile ? "State" : breakoutTrigger
+activeMaxTradesPerDay = aggressiveProfile ? 8 : maxTradesPerDay
+activeCooldownBars = aggressiveProfile ? 1 : cooldownBars
+activeUseVwapFilter = aggressiveProfile ? false : useVwapFilter
+activeUseEmaFilter = aggressiveProfile ? false : useEmaFilter
+activeUseHtfFilter = aggressiveProfile ? false : useHtfFilter
+activeUseAtrFloor = aggressiveProfile ? false : useAtrFloor
+activeRiskModel = aggressiveProfile ? "ATR" : riskModel
+activeAtrStopMult = aggressiveProfile ? 0.8 : atrStopMult
+activeFixedStopPts = aggressiveProfile ? 8.0 : fixedStopPts
+activeTargetR = aggressiveProfile ? 2.5 : targetR
+activeUseRunner = aggressiveProfile ? false : useRunner
+
+// ---------------------------------------------------------------------------
+// Session State
+// ---------------------------------------------------------------------------
+
+inSession(string sess) =>
+    not na(time(timeframe.period, sess, tz))
+
+nyHour = hour(time, tz)
+nyMinute = minute(time, tz)
+nyMinutes = nyHour * 60 + nyMinute
+nyDow = dayofweek(time, tz)
+nyWeekday = nyDow >= dayofweek.monday and nyDow <= dayofweek.friday
+aggressiveOpeningRange = nyWeekday and nyMinutes >= 9 * 60 + 30 and nyMinutes < 9 * 60 + 45
+aggressiveTradeWindow = nyWeekday and nyMinutes >= 9 * 60 + 45 and nyMinutes < 15 * 60 + 55
+
+inOpeningRange = aggressiveProfile ? aggressiveOpeningRange : inSession(activeOrSession)
+inAmWindow = inSession(amSession)
+inPmWindow = inSession(pmSession)
+inCustomWindow = inSession(customSession)
+inFlattenWindow = inSession(flattenSession)
+
+inFullRthWindow = inSession("0930-1600:23456") and not inOpeningRange
+standardTradeWindow = activeTradeWindowMode == "AM Only" ? inAmWindow : activeTradeWindowMode == "AM + PM" ? inAmWindow or inPmWindow : activeTradeWindowMode == "Full RTH" ? inFullRthWindow : inCustomWindow
+tradeWindow = aggressiveProfile ? aggressiveTradeWindow : standardTradeWindow
+
+dayKey = year(time, tz) * 10000 + month(time, tz) * 100 + dayofmonth(time, tz)
+newDay = ta.change(dayKey) != 0
+
+var float orHigh = na
+var float orLow = na
+var bool rangeReady = false
+var int tradesToday = 0
+var int lastClosedTrades = 0
+var int lastExitBar = na
+var int longBreakBar = na
+var int shortBreakBar = na
+
+if newDay
+    orHigh := na
+    orLow := na
+    rangeReady := false
+    tradesToday := 0
+    longBreakBar := na
+    shortBreakBar := na
+
+if inOpeningRange
+    orHigh := na(orHigh) ? high : math.max(orHigh, high)
+    orLow := na(orLow) ? low : math.min(orLow, low)
+    rangeReady := false
+else if not rangeReady and not na(orHigh) and not na(orLow)
+    rangeReady := true
+
+if strategy.closedtrades > lastClosedTrades
+    lastExitBar := bar_index
+    lastClosedTrades := strategy.closedtrades
+
+cooldownOk = activeCooldownBars == 0 or na(lastExitBar) or bar_index - lastExitBar > activeCooldownBars
+tradeCountOk = tradesToday < activeMaxTradesPerDay
+
+// ---------------------------------------------------------------------------
+// Filters
+// ---------------------------------------------------------------------------
+
+atr = ta.atr(atrLen)
+vwap = ta.vwap(hlc3)
+fastEma = ta.ema(close, fastEmaLen)
+slowEma = ta.ema(close, slowEmaLen)
+htfEma = request.security(syminfo.tickerid, htfTf, ta.ema(close, htfEmaLen), barmerge.gaps_off, barmerge.lookahead_off)
+htfSlopeUp = htfEma > htfEma[1]
+htfSlopeDown = htfEma < htfEma[1]
+volumeOk = not useVolumeFilter or volume > ta.sma(volume, volumeLen) * volumeMult
+atrOk = not activeUseAtrFloor or atr >= atrFloorPts
+
+longFilter = (not activeUseVwapFilter or close > vwap) and (not activeUseEmaFilter or fastEma > slowEma) and (not activeUseHtfFilter or htfSlopeUp) and volumeOk and atrOk
+shortFilter = (not activeUseVwapFilter or close < vwap) and (not activeUseEmaFilter or fastEma < slowEma) and (not activeUseHtfFilter or htfSlopeDown) and volumeOk and atrOk
+
+canLong = tradeDirection != "Short Only"
+canShort = tradeDirection != "Long Only"
+canEnter = rangeReady and tradeWindow and cooldownOk and tradeCountOk and strategy.position_size == 0
+canFallbackEnter = aggressiveProfile and useMomentumFallback and cooldownOk and tradeCountOk and strategy.position_size == 0
+
+// ---------------------------------------------------------------------------
+// Entries
+// ---------------------------------------------------------------------------
+
+longBreakLevel = orHigh + breakoutBufferPts
+shortBreakLevel = orLow - breakoutBufferPts
+longCrossBreakout = ta.crossover(close, longBreakLevel)
+shortCrossBreakout = ta.crossunder(close, shortBreakLevel)
+longStateBreakout = close > longBreakLevel and close > open
+shortStateBreakout = close < shortBreakLevel and close < open
+longBreakoutSignal = activeBreakoutTrigger == "Cross" ? longCrossBreakout : longStateBreakout
+shortBreakoutSignal = activeBreakoutTrigger == "Cross" ? shortCrossBreakout : shortStateBreakout
+
+longBreakout = canEnter and canLong and longFilter and longBreakoutSignal
+shortBreakout = canEnter and canShort and shortFilter and shortBreakoutSignal
+
+if longBreakout
+    longBreakBar := bar_index
+
+if shortBreakout
+    shortBreakBar := bar_index
+
+longRetestActive = not na(longBreakBar) and bar_index > longBreakBar and bar_index - longBreakBar <= retestWindowBars
+shortRetestActive = not na(shortBreakBar) and bar_index > shortBreakBar and bar_index - shortBreakBar <= retestWindowBars
+
+longRetest = canEnter and canLong and longFilter and longRetestActive and low <= orHigh + atr * retestAtrBuffer and close > orHigh
+shortRetest = canEnter and canShort and shortFilter and shortRetestActive and high >= orLow - atr * retestAtrBuffer and close < orLow
+
+useBreakoutEntry = entryMode != "Retest Only"
+useRetestEntry = entryMode != "Breakout Only"
+
+enterLong = (useBreakoutEntry and longBreakout) or (useRetestEntry and longRetest)
+enterShort = (useBreakoutEntry and shortBreakout) or (useRetestEntry and shortRetest)
+fallbackLong = canFallbackEnter and close > high[1] and close > fastEma and close > open
+fallbackShort = canFallbackEnter and close < low[1] and close < fastEma and close < open
+enterLong := enterLong or fallbackLong
+enterShort := enterShort or fallbackShort
+
+if enterLong
+    strategy.entry("Long", strategy.long)
+    tradesToday += 1
+    longBreakBar := na
+    shortBreakBar := na
+
+if enterShort
+    strategy.entry("Short", strategy.short)
+    tradesToday += 1
+    longBreakBar := na
+    shortBreakBar := na
+
+if aggressiveProfile and forcedTradeProbe and strategy.position_size == 0 and bar_index % 20 == 0
+    strategy.entry("Probe Long", strategy.long)
+
+if aggressiveProfile and forcedTradeProbe and strategy.position_size > 0 and bar_index % 20 == 5
+    strategy.close("Probe Long")
+
+// ---------------------------------------------------------------------------
+// Risk Management
+// ---------------------------------------------------------------------------
+
+longStopDistance = activeRiskModel == "Fixed Points" ? activeFixedStopPts : activeRiskModel == "Opening Range" ? math.max(close - (orLow - orStopBufferPts), syminfo.mintick) : atr * activeAtrStopMult
+shortStopDistance = activeRiskModel == "Fixed Points" ? activeFixedStopPts : activeRiskModel == "Opening Range" ? math.max((orHigh + orStopBufferPts) - close, syminfo.mintick) : atr * activeAtrStopMult
+
+var float activeStopDistance = na
+var float activeEntryPrice = na
+
+newLongPosition = strategy.position_size > 0 and strategy.position_size[1] <= 0
+newShortPosition = strategy.position_size < 0 and strategy.position_size[1] >= 0
+flatPosition = strategy.position_size == 0
+
+if newLongPosition
+    activeEntryPrice := strategy.position_avg_price
+    activeStopDistance := longStopDistance
+
+if newShortPosition
+    activeEntryPrice := strategy.position_avg_price
+    activeStopDistance := shortStopDistance
+
+if flatPosition
+    activeEntryPrice := na
+    activeStopDistance := na
+
+riskPts = na(activeStopDistance) ? atr * activeAtrStopMult : activeStopDistance
+
+longBaseStop = strategy.position_avg_price - riskPts
+shortBaseStop = strategy.position_avg_price + riskPts
+
+longBreakevenStop = strategy.position_avg_price + syminfo.mintick
+shortBreakevenStop = strategy.position_avg_price - syminfo.mintick
+
+longBeArmed = moveToBreakeven and strategy.position_size > 0 and high >= strategy.position_avg_price + riskPts * breakevenR
+shortBeArmed = moveToBreakeven and strategy.position_size < 0 and low <= strategy.position_avg_price - riskPts * breakevenR
+
+longStop = longBeArmed ? math.max(longBaseStop, longBreakevenStop) : longBaseStop
+shortStop = shortBeArmed ? math.min(shortBaseStop, shortBreakevenStop) : shortBaseStop
+
+longTarget = strategy.position_avg_price + riskPts * activeTargetR
+shortTarget = strategy.position_avg_price - riskPts * activeTargetR
+
+longTrailOffset = atr * trailAtrMult
+shortTrailOffset = atr * trailAtrMult
+coreQtyPct = activeUseRunner ? 100 - runnerQtyPct : 100
+
+if strategy.position_size > 0
+    strategy.exit("Long Core", "Long", qty_percent=coreQtyPct, stop=longStop, limit=longTarget)
+    if activeUseRunner
+        strategy.exit("Long Runner", "Long", qty_percent=runnerQtyPct, stop=longStop, trail_points=longTrailOffset / syminfo.mintick, trail_offset=longTrailOffset / syminfo.mintick)
+
+if strategy.position_size < 0
+    strategy.exit("Short Core", "Short", qty_percent=coreQtyPct, stop=shortStop, limit=shortTarget)
+    if activeUseRunner
+        strategy.exit("Short Runner", "Short", qty_percent=runnerQtyPct, stop=shortStop, trail_points=shortTrailOffset / syminfo.mintick, trail_offset=shortTrailOffset / syminfo.mintick)
+
+if flattenAtSessionEnd and inFlattenWindow and strategy.position_size != 0
+    strategy.close_all("Session Flatten")
+
+// ---------------------------------------------------------------------------
+// Visuals
+// ---------------------------------------------------------------------------
+
+orHighPlot = showOpeningRange and rangeReady ? orHigh : na
+orLowPlot = showOpeningRange and rangeReady ? orLow : na
+
+plot(orHighPlot, "OR High", color=color.new(color.teal, 0), linewidth=2, style=plot.style_linebr)
+plot(orLowPlot, "OR Low", color=color.new(color.red, 0), linewidth=2, style=plot.style_linebr)
+plot(showOpeningRange ? vwap : na, "VWAP", color=color.new(color.yellow, 0))
+plot(activeUseEmaFilter ? fastEma : na, "Fast EMA", color=color.new(color.aqua, 0))
+plot(activeUseEmaFilter ? slowEma : na, "Slow EMA", color=color.new(color.orange, 0))
+
+plotshape(showSignals and enterLong, "Long Entry", shape.triangleup, location.belowbar, color=color.new(color.lime, 0), size=size.small, text="L")
+plotshape(showSignals and enterShort, "Short Entry", shape.triangledown, location.abovebar, color=color.new(color.red, 0), size=size.small, text="S")
+
+bgcolor(inOpeningRange ? color.new(color.blue, 90) : na, title="Opening Range Background")
+bgcolor(tradeWindow and not inOpeningRange ? color.new(color.green, 94) : na, title="Trade Window Background")
+
+var table dash = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 80), border_color=color.new(color.white, 70), border_width=1)
+
+if showDashboard and barstate.islast
+    biasText = longFilter and not shortFilter ? "Long" : shortFilter and not longFilter ? "Short" : longFilter and shortFilter ? "Mixed" : "Blocked"
+    rangeText = rangeReady ? str.tostring(orHigh - orLow, format.mintick) + " pts" : "Building"
+    table.cell(dash, 0, 0, "NQ ORB", text_color=color.white)
+    table.cell(dash, 1, 0, biasText, text_color=biasText == "Long" ? color.lime : biasText == "Short" ? color.red : color.silver)
+    table.cell(dash, 0, 1, "OR Size", text_color=color.silver)
+    table.cell(dash, 1, 1, rangeText, text_color=color.white)
+    table.cell(dash, 0, 2, "ATR", text_color=color.silver)
+    table.cell(dash, 1, 2, str.tostring(atr, format.mintick), text_color=atrOk ? color.white : color.orange)
+    table.cell(dash, 0, 3, "Window", text_color=color.silver)
+    table.cell(dash, 1, 3, tradeWindow ? "Open" : "Closed", text_color=tradeWindow ? color.lime : color.silver)
+    table.cell(dash, 0, 4, "Trades", text_color=color.silver)
+    table.cell(dash, 1, 4, str.tostring(tradesToday) + "/" + str.tostring(activeMaxTradesPerDay), text_color=tradeCountOk ? color.white : color.orange)
+    table.cell(dash, 0, 5, "Risk", text_color=color.silver)
+    table.cell(dash, 1, 5, str.tostring(riskPts, format.mintick) + " pts", text_color=color.white)
+
+alertcondition(enterLong, "NQ ORB Long", "NQ ORB long entry")
+alertcondition(enterShort, "NQ ORB Short", "NQ ORB short entry")

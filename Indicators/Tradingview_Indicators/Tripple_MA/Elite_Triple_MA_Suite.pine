@@ -1,0 +1,108 @@
+//@version=6
+indicator("Elite Triple MA Suite [MTF + ATR Cloud]", shorttitle="Elite MA Suite", overlay=true, max_lines_count=500)
+
+// ── Inputs ──────────────────────────────────────────────────────────────────
+src         = input.source(close, "Source")
+fastLen     = input.int(9, "Fast MA Length", minval=1, group="MA Settings")
+midLen      = input.int(21, "Medium MA Length", minval=1, group="MA Settings")
+slowLen     = input.int(55, "Slow MA Length", minval=1, group="MA Settings")
+maType      = input.string("EMA", "MA Type", options=["SMA", "EMA", "WMA", "HMA", "VWMA"], group="MA Settings")
+
+atrLen      = input.int(14, "ATR Length", minval=1, group="Volatility Cloud")
+atrMult     = input.float(2.0, "ATR Multiplier", minval=0.1, step=0.1, group="Volatility Cloud")
+showCloud   = input.bool(true, "Show ATR Cloud", group="Volatility Cloud")
+
+showSignals = input.bool(true, "Show Volume-Filtered Signals", group="Signals")
+showTable   = input.bool(true, "Show Elite Analytics Table", group="UI")
+
+// ── MA Calculation Function ──────────────────────────────────────────────────
+getMA(_type, _src, _len) =>
+    switch _type
+        "SMA"  => ta.sma(_src, _len)
+        "EMA"  => ta.ema(_src, _len)
+        "WMA"  => ta.wma(_src, _len)
+        "HMA"  => ta.hma(_src, _len)
+        "VWMA" => ta.vwma(_src, _len)
+        => ta.ema(_src, _len)
+
+fastMA  = getMA(maType, src, fastLen)
+midMA   = getMA(maType, src, midLen)
+slowMA  = getMA(maType, src, slowLen)
+
+// ── Dynamic Slope Coloring Logic ─────────────────────────────────────────────
+// Logic: Bright = Strong Momentum, Dark = Fading Momentum
+c_fast = fastMA > fastMA[1] ? #00ffbb : #ff0055
+c_mid  = midMA > midMA[1]   ? #2196f3 : #3f51b5
+c_slow = slowMA > slowMA[1] ? #ffffff : #787b86
+
+// ── ATR Volatility Visualization ─────────────────────────────────────────────
+atrVal = ta.atr(atrLen)
+upperCloud = slowMA + (atrVal * atrMult)
+lowerCloud = slowMA - (atrVal * atrMult)
+
+p_up = plot(showCloud ? upperCloud : na, "ATR Upper", color=color.new(color.gray, 90))
+p_lo = plot(showCloud ? lowerCloud : na, "ATR Lower", color=color.new(color.gray, 90))
+fill(p_up, p_lo, color=color.new(color.blue, 95), title="ATR Volatility Zone")
+
+// ── Trend & Volume Analysis ──────────────────────────────────────────────────
+bullAlign = fastMA > midMA and midMA > slowMA
+bearAlign = fastMA < midMA and midMA < slowMA
+
+// Elite Filter: Volume Confirmation (Current volume > 20 SMA of volume)
+volConfirm = volume > ta.sma(volume, 20)
+
+// Direction String
+string direction = bullAlign ? "Strong Bullish" : bearAlign ? "Strong Bearish" : "Neutral/Consolidation"
+color dirColor   = bullAlign ? color.lime : bearAlign ? color.red : color.gray
+
+// ── Multi-Timeframe (MTF) Context ───────────────────────────────────────────
+// Checks the trend on the next higher logical timeframe
+higherTF     = timeframe.isintraday ? "D" : "W"
+htfSlowMA    = request.security(syminfo.tickerid, higherTF, ta.ema(close, slowLen))
+htfTrendBull = close > htfSlowMA
+
+// ── Plots ────────────────────────────────────────────────────────────────────
+pFast = plot(fastMA, "Fast MA", color=c_fast, linewidth=2)
+pMid  = plot(midMA,  "Mid MA",  color=c_mid,  linewidth=2)
+pSlow = plot(slowMA, "Slow MA", color=c_slow, linewidth=3)
+
+// ── Advanced Crossover Signals ──────────────────────────────────────────────
+buySignal  = ta.crossover(fastMA, midMA) and midMA > slowMA and volConfirm
+sellSignal = ta.crossunder(fastMA, midMA) and midMA < slowMA and volConfirm
+
+plotshape(showSignals and buySignal,  "Buy",  shape.labelup,   location.belowbar, color.new(color.green, 0),  size=size.small, text="VOL BUY",  textcolor=color.white)
+plotshape(showSignals and sellSignal, "Sell", shape.labeldown, location.abovebar, color.new(color.red, 0),    size=size.small, text="VOL SELL", textcolor=color.white)
+
+// ── Elite Dashboard Table ────────────────────────────────────────────────────
+var table elTable = na
+if barstate.islast and showTable
+    elTable := table.new(position.top_right, 2, 6, bgcolor=#131722, border_color=#363c4e, border_width=1)
+    
+    // Header
+    table.cell(elTable, 0, 0, "ELITE ANALYSIS", text_color=color.white, bgcolor=#363c4e)
+    table.cell(elTable, 1, 0, syminfo.ticker, text_color=color.white, bgcolor=#363c4e)
+    
+    // Trend Row
+    table.cell(elTable, 0, 1, "Trend State", text_color=color.gray)
+    table.cell(elTable, 1, 1, direction, text_color=dirColor)
+    
+    // MTF Row
+    table.cell(elTable, 0, 2, "Higher TF (" + higherTF + ")", text_color=color.gray)
+    table.cell(elTable, 1, 2, htfTrendBull ? "BULLISH" : "BEARISH", text_color=htfTrendBull ? color.lime : color.red)
+    
+    // Volatility Row
+    table.cell(elTable, 0, 3, "ATR (Volatility)", text_color=color.gray)
+    table.cell(elTable, 1, 3, str.tostring(atrVal, format.mintick), text_color=color.white)
+
+    // Volume Row
+    table.cell(elTable, 0, 4, "Volume Surge", text_color=color.gray)
+    table.cell(elTable, 1, 4, volConfirm ? "YES" : "NO", text_color=volConfirm ? color.lime : color.orange)
+
+    // Strategy Note
+    table.cell(elTable, 0, 5, "Recommendation", text_color=color.gray)
+    string rec = bullAlign and htfTrendBull ? "Long Only" : bearAlign and not htfTrendBull ? "Short Only" : "Wait"
+    table.cell(elTable, 1, 5, rec, text_color=color.yellow)
+
+// ── Background & Fill ────────────────────────────────────────────────────────
+fill(pFast, pMid, bullAlign ? color.new(color.green, 90) : bearAlign ? color.new(color.red, 90) : na)
+bgcolor(buySignal ? color.new(color.green, 90) : sellSignal ? color.new(color.red, 90) : na)

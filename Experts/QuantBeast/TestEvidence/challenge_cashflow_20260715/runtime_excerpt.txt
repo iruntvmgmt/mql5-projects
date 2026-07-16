@@ -1,0 +1,4 @@
+14:20:48.832 TEST 30 PASS: Challenge cash-flow policy types=classified deposit=fail-closed
+14:20:48.832 Self-tests complete: 32 passed, 0 failed
+14:21:37.810 final balance 10000.00 USD
+14:21:37.816 60113 ticks, 3007 bars; Test passed in 0:00:50.114.

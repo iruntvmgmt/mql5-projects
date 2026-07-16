@@ -1,0 +1,209 @@
+//@version=6
+// ─────────────────────────────────────────────────────────────────────────────
+// HurstCycleLib — Shared Mathematical Library [RunsTV]
+// ─────────────────────────────────────────────────────────────────────────────
+// Single source of truth for all Hurst Cycle Channel calculations.
+// Imported by HCC_Channel.pine (overlay) and HCC_Oscillator.pine (sub-pane).
+//
+// Theory: J.M. Hurst — "The Profit Magic of Stock Transaction Timing" (1970)
+//
+// Architectural notes:
+//   • MA functions include strict Hurst linear-phase modes plus classic compatibility modes.
+//   • Half-Span Rule: MA length L = λ/2. Centering displacement = L/2 = λ/4.
+//   • FLD = src[λ/2]: historical price shift — zero repainting by construction.
+//   • Oscillator = selected source relative position within MC channel.
+//   • All signals are trough-anchored per Hurst's Synchronicity principle.
+// ─────────────────────────────────────────────────────────────────────────────
+library("HurstCycleLib", overlay=false)
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORTED FUNCTION 1: hurst_ma
+// ═══════════════════════════════════════════════════════════════════════════
+// Returns a linear-phase moving average of the requested type.
+//
+// Parameters:
+//   src     — price series (use hlc3 per Hurst's prescribed source)
+//   len     — MA lookback length (simple int — must be compile-time constant)
+//   ma_type — "SMA", "TMA", "RMA", or "EMA"
+//
+// MA modes:
+//   SMA is a linear-phase FIR filter. All frequencies are delayed equally,
+//   so shifting the output by L/2 achieves perfect phase realignment.
+//   TMA = SMA(SMA(src, L/2), L/2) — triangular impulse response, pseudo-
+//   centers data weighting without physical backward shift. Still linear-phase.
+//   RMA/EMA are included for classic HCC visual compatibility. They are not
+//   strict Hurst filters, but they reproduce the older TradingView oscillator
+//   feel many users are calibrated to.
+
+export hurst_ma(series float src, simple int len, simple string ma_type) =>
+    // Guard: len must be ≥ 2 to avoid Pine Script runtime errors
+    safe_len  = math.max(2, len)
+    half_len  = math.max(2, safe_len / 2)
+    // TMA = SMA(SMA(src, L/2), L/2) — double-smoothed, triangular weighting
+    ma_type == "TMA" ? ta.sma(ta.sma(src, half_len), half_len) : ma_type == "RMA" ? ta.rma(src, safe_len) : ma_type == "EMA" ? ta.ema(src, safe_len) : ta.sma(src, safe_len)
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORTED FUNCTION 2: hurst_channel
+// ═══════════════════════════════════════════════════════════════════════════
+// Constructs a Hurst Cycle Channel for a given cycle wavelength.
+// Returns [base, top, bot, mid] as a tuple.
+//
+// Parameters:
+//   src       — price series
+//   cycle_len — full cycle wavelength λ in bars
+//   atr_mult  — ATR multiplier for band width (Proportionality-compliant)
+//   ma_type   — "SMA", "TMA", "RMA", or "EMA"
+//
+// Half-Span Rule implementation:
+//   Step 1: L = λ/2  → MA length that isolates the target cycle (spectral null
+//           at λ/L = 2, cancelling the sub-harmonic; ~63% target cycle passes)
+//   Step 2: disp = L/2 = λ/4 → centering displacement to phase-align the MA
+//           with the center of the data it smoothed (removes phase lag)
+//
+// Band width uses ATR(L) — scales proportionally with cycle length (Hurst's
+// Principle of Proportionality: amplitude ∝ wavelength).
+//
+// base = ma_raw[disp]: the "FLD of the MA" — reaches into history by λ/4 bars.
+// Non-repainting by construction: only references past resolved bars.
+
+export hurst_channel(
+     series float src,
+     simple int   cycle_len,
+     simple float atr_mult,
+     simple string ma_type
+ ) =>
+    // Step 1: Half-span MA length  (L = λ/2)
+    sc_L   = math.max(3, math.round(cycle_len / 2))
+    // Step 2: Centering displacement  (disp = L/2 = λ/4)
+    disp   = math.max(1, math.round(sc_L / 2))
+    // Compute linear-phase MA then look back by disp (non-repainting)
+    ma_raw = hurst_ma(src, sc_L, ma_type)
+    base   = ma_raw[disp]
+    // ATR period matches half-span (Proportionality: longer cycle → wider ATR)
+    atr_val = ta.atr(sc_L)
+    top    = base + atr_mult * atr_val
+    bot    = base - atr_mult * atr_val
+    mid    = (top + bot) / 2
+    [base, top, bot, mid]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORTED FUNCTION 3: hurst_fld
+// ═══════════════════════════════════════════════════════════════════════════
+// Returns the Future Line of Demarcation for a given cycle wavelength.
+//
+// Formula: FLD_λ(t) = P(t − λ/2)
+//   Price displaced forward by half the cycle length.
+//   In Pine Script: src[λ/2] — fully resolved at bar close, zero repainting.
+//
+// Why this works as a signal trigger:
+//   When current price crosses the FLD (its own historical echo half a cycle
+//   ago), it confirms the cycle has passed its inflection point. The crossover
+//   occurs at the geometric midpoint of the cycle's directional phase, providing
+//   a mathematically confirmed entry without any forward-looking data.
+//
+// Note: Call with hlc3 as src — Hurst's prescribed median price source.
+
+export hurst_fld(series float src, simple int cycle_len) =>
+    // Shift = λ/2 — look back half a full cycle
+    shift = math.max(1, math.round(cycle_len / 2))
+    src[shift]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORTED FUNCTION 4: hurst_osc
+// ═══════════════════════════════════════════════════════════════════════════
+// Normalizes any measured value within the medium cycle's channel.
+// Returns an unbounded value: normal range is 0.0–1.0, with trend extremes
+// allowed to print above 1.0 and below 0.0.
+//
+// Traditional HCC formula:
+//   Oscillator = (price − MC_bot) / (MC_top − MC_bot)
+//
+// Next-gen cycle-midpoint formula:
+//   Oscillator = (SC_mid − MC_bot) / (MC_top − MC_bot)
+//
+// The caller chooses the measured series. Using price reproduces the classic
+// visual oscillator. Using SC_mid measures the short cycle's equilibrium within
+// the medium cycle's bounding channel:
+//   1.0 = SC midpoint at MC top  → peak extension, overbought
+//   0.5 = SC midpoint at MC center → equilibrium
+//   0.0 = SC midpoint at MC bottom → trough exhaustion, oversold
+//
+// Per Hurst's Principle of Proportionality, nested SC channels should
+// oscillate between MC_top and MC_bot during normal cycle behavior.
+// Exceedance of 1.0 or 0.0 signals extreme trend translation.
+
+export hurst_osc(series float measured_value, series float mc_top, series float mc_bot) =>
+    range_val = mc_top - mc_bot
+    // Guard against zero division (flat market edge case)
+    range_val != 0.0 ? (measured_value - mc_bot) / range_val : 0.5
+
+
+// Bounded companion for table/phase logic when a hard 0.0–1.0 readout is needed.
+export hurst_osc_clamped(series float measured_value, series float mc_top, series float mc_bot) =>
+    raw = hurst_osc(measured_value, mc_top, mc_bot)
+    math.max(0.0, math.min(1.0, raw))
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORTED FUNCTION 5: hurst_targets
+// ═══════════════════════════════════════════════════════════════════════════
+// Projects cycle peak/trough targets using Hurst's geometric amplitude formula.
+// Returns [target_up, target_down] — na when no signal is active.
+//
+// Formulae (Hurst Section 3 — geometric sine wave symmetry):
+//   After bullish FLD crossover:  Target_peak   = P_cross + (P_cross − P_trough)
+//   After bearish FLD crossover:  Target_trough = P_cross − (P_peak   − P_cross)
+//
+// Logic: The FLD crossover occurs at the geometric midpoint of the cycle's
+// directional phase. Doubling the distance from the prior pivot to the
+// crossover projects the full cycle amplitude.
+//
+// Parameters:
+//   src            — price series
+//   buy_signal     — bullish FLD crossover confirmed this bar
+//   sell_signal    — bearish FLD crossover confirmed this bar
+//   pivot_lookback — bars left and right to confirm a pivot (e.g. 3)
+
+export hurst_targets(
+     series float src,
+     series bool  buy_signal,
+     series bool  sell_signal,
+     simple int   pivot_lookback
+ ) =>
+    // Track most recent confirmed pivot lows and highs
+    var float last_pivot_low  = na
+    var float last_pivot_high = na
+
+    pl = ta.pivotlow (src, pivot_lookback, pivot_lookback)
+    ph = ta.pivothigh(src, pivot_lookback, pivot_lookback)
+
+    if not na(pl)
+        last_pivot_low  := pl
+    if not na(ph)
+        last_pivot_high := ph
+
+    // Compute targets only on signal bars; na otherwise
+    target_up   = buy_signal  and not na(last_pivot_low)  ?
+                  src + (src - last_pivot_low)  : float(na)
+    target_down = sell_signal and not na(last_pivot_high) ?
+                  src - (last_pivot_high - src) : float(na)
+
+    [target_up, target_down]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORTED FUNCTION 6: hurst_phase_label
+// ═══════════════════════════════════════════════════════════════════════════
+// Returns a human-readable phase label based on the oscillator value.
+// Thresholds based on the oscillator's [0, 1] normalized range:
+//   ≥ 0.85 = approaching MC top → PEAK ZONE
+//   ≤ 0.15 = approaching MC bottom → TROUGH ZONE
+//   0.65–0.85 = upper half, momentum phase → UPPER MID
+//   0.35–0.65 = equilibrium band around 0.5
+//   0.15–0.35 = lower half, decay phase → LOWER MID
+
+export hurst_phase_label(series float osc_val) => osc_val >= 0.85 ? "PEAK ZONE"   : osc_val <= 0.15 ? "TROUGH ZONE" : osc_val >= 0.65 ? "UPPER MID"   : osc_val <= 0.35 ? "LOWER MID"   : "EQUILIBRIUM"

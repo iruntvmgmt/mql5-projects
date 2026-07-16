@@ -1,0 +1,7 @@
+Result: 0 errors, 0 warnings, 13175 ms elapsed, cpu='X64 Regular'
+
+SHA-256
+5c4c024b82324cd3d9b938202c2e9302891051e66e2d1fd6be164ff8c6425888  QuantBeastEA.mq5
+8a5eac230e434109d0a5baff129c8a9d0a9a0cc668f9a25df802c3779eed6a7e  QuantBeastEA.ex5
+28f2a42e78cd69b6ff6b28598eba884399619d002f9dfa63347ef82c4911d1dd  BrokerAdapter.mqh
+1e7803fe2ae45aa7b6fffa5c437e8fd9a7cb2bb6dc0e8d9405f1d67f56cce05b  SafetyTests.mqh

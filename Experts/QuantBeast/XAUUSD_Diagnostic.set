@@ -1,0 +1,14 @@
+;+------------------------------------------------------------------+
+;|                                          XAUUSD_Diagnostic.set   |
+;| QuantBeast EA - Diagnostic Mode Preset                           |
+;| NO ORDERS WILL BE SENT                                           |
+;+------------------------------------------------------------------+
+InpMode=0
+InpAcknowledgeChallengeRisk=false
+InpDashboardEnabled=true
+InpEnableDebugLogging=true
+InpSelfTestOnInit=true
+InpEnableSignalJournal=true
+InpEnableOrderJournal=false
+InpEnableTradeJournal=false
+InpLogSelfTestDetails=true

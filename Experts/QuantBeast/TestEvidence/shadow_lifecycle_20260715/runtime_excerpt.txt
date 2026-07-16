@@ -1,0 +1,13 @@
+12:04:43.862 QuantBeastEA (XAUUSD,M5) TEST 9 PASS: Shadow lifecycle net=2.00 balance=10002.00
+12:04:43.862 QuantBeastEA (XAUUSD,M5) TEST 10 PASS: Shadow stop/flatten stop=-1.21 flatten=closed
+12:04:43.862 QuantBeastEA (XAUUSD,M5) TEST 11 PASS: Shadow partial/breakeven net=0.50
+12:04:43.862 QuantBeastEA (XAUUSD,M5) TEST 12 PASS: Shadow trail/time trailNet=1.00 time=closed
+12:04:43.863 QuantBeastEA (XAUUSD,M5) TEST 13 PASS: Shadow costs/multi cost=0.10 multi=2
+12:04:43.863 QuantBeastEA (XAUUSD,M5) TEST 14 PASS: Shadow drawdown lock equity=9400.00 dd=6.0
+12:04:43.863 QuantBeastEA (XAUUSD,M5) TEST 15 PASS: Transient entry gate spread=true recovered=true manual=true
+12:04:43.863 QuantBeastEA (XAUUSD,M5) Self-tests complete: 17 passed, 0 failed
+12:04:43.863 QuantBeastEA (XAUUSD,M5) Mode: QB_MODE_SHADOW | Symbol: XAUUSD | TF: PERIOD_M5
+12:04:54.169 Tester final balance 10000.00 USD
+12:04:54.174 Tester XAUUSD,M5: 22080 ticks, 1104 bars generated. Test passed in 0:00:10.677.
+
+No deal, order, market-buy, or market-sell line appears in the expanded test section.

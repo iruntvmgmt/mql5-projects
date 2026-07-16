@@ -1,0 +1,5 @@
+18:23:55.947 TEST 34 PASS: Arbitration policy best=FBO/SELL lower=rejected duplicate=rejected conflict=rejected exposure=rejected
+18:23:55.947 Self-tests complete: 36 passed, 0 failed
+18:24:17.812 final balance 10000.00 USD
+18:24:17.819 XAUUSD,M5: 22080 ticks, 1104 bars generated. Test passed in 0:00:22.646.
+

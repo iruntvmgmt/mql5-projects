@@ -1,0 +1,4 @@
+13:14:05.077 TEST 22 PASS: Pending partial fill first=tracked second=tracked final=closed once=true
+13:14:05.077 Self-tests complete: 24 passed, 0 failed
+13:14:18.044 final balance 10000.00 USD
+13:14:18.048 XAUUSD,M5: 27600 ticks, 1380 bars generated. Environment synchronized in 0:00:00.027. Test passed in 0:00:13.384.

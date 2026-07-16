@@ -1,0 +1,3 @@
+QuantBeastRestartProbe (XAUUSD,M5) 2026.05.18 00:00:00 QB_RESTART_PROBE PHASE2 FAIL schema=0 cashflow_msc=0 emergency=false
+QuantBeastRestartProbe (XAUUSD,M5) 2026.05.18 00:00:00 QuantBeast[INFO] Clearing all persisted state
+Tester test Experts\QuantBeast\Testing\QuantBeastRestartProbe.ex5 on XAUUSD,M5 thread finished

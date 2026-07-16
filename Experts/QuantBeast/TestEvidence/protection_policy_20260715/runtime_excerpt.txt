@@ -1,0 +1,4 @@
+13:41:13.869 TEST 25 PASS: Protective stop policy buy=safe sell=safe missing=rejected
+13:41:13.869 Self-tests complete: 27 passed, 0 failed
+13:41:31.293 final balance 10000.00 USD
+13:41:31.297 XAUUSD,M5: 38041 ticks, 1903 bars generated. Environment synchronized in 0:00:00.027. Test passed in 0:00:17.864.

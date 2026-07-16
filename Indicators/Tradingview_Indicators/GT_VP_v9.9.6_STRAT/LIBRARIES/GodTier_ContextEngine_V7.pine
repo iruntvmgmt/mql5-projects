@@ -1,0 +1,1127 @@
+//@version=6
+// ═══════════════════════════════════════════════════════════════════════════
+// 🧠 GodTier_ContextEngine v1.4.1
+// Published library version: GodTier_ContextEngine/7
+// ─────────────────────────────────────────────────────────────────────────
+// Multi-Layer Market Context Intelligence Engine
+// Sits above every signal in the GOD_TIER_VP suite as the arbiter:
+// reads all 6 intelligence layers, weights them, scores 0–100, classifies
+// the market phase, and gates signals accordingly.
+//
+// CHANGELOG v1.3.2 → v1.4.0
+// ─────────────────────────────────────────────────────────────────────────
+// PATCH #33 — Phase 3: Prior VA Context Integration.
+//   L2 Volume Profile scorer now incorporates previous session levels.
+//   - 80% Rule Context: Boosts score when price is accepted inside prior VA.
+//   - NPOC Magnet: Scores untraded POCs from prior sessions as targets.
+//   - Rejection/Acceptance: Adds directional bias based on prior VA interaction.
+//   - Confluence: Reinforces breakouts that clear both current and prior VAH.
+//   API change: f_score_vp and analyze_context signatures expanded.
+//   Breaking change for all importers.
+// ─────────────────────────────────────────────────────────────────────────
+// CHANGELOG v1.3.1 → v1.3.2
+// ─────────────────────────────────────────────────────────────────────────
+// PATCH #28 — gate_structure_break: split CHoCH / BOS gate requirement.
+//   CHoCH is a regime-change signal — it fires because the market is
+//   LEAVING consolidation. Requiring signal_gate == "OPEN" to render it
+//   is self-defeating: OPEN requires composite >= 70 which requires the
+//   market to already be trending — the exact thing CHoCH is announcing.
+//   BOS (trend continuation) correctly requires OPEN (confirming an
+//   already-trending environment). CHoCH now requires gate != "CLOSED"
+//   (CAUTION is sufficient) + same L-score minimums (L1≥55, L5≥40, L3≥35).
+//   API change: gate_structure_break(is_choch=false). Callers that pass
+//   true get the relaxed CAUTION-ok rule; callers that omit the param
+//   (default false = BOS) keep the original OPEN-required behavior.
+//   No other gate methods changed.
+// ─────────────────────────────────────────────────────────────────────────
+// CHANGELOG v1.3 → v1.3.1
+// ─────────────────────────────────────────────────────────────────────────
+// PATCH #3 — f_classify_phase: SMD early-session warmup gate.
+//   During EMA warmup, composite < 40 AND l3 <= 50 can be simultaneously
+//   true, causing valid DISTRIBUTION/ACCUMULATION events to fall through
+//   to RANGING_NOISE and close the gate. Added dual-threshold: l3 > 50
+//   when composite >= 40 (normal), l3 > 20 when composite < 40 (warmup).
+// PATCH #4 — f_score_momentum (L5): delta_strength contribution halved
+//   (12.5 pts max, was 25). Same input already contributes 20 pts in L3.
+//   Double-counting across L3 (weight 25%) + L5 (weight 15%) was inflating
+//   composite by up to 8.75 pts from a single signal.
+// PATCH #5 — f_score_liquidity (L4): added `not hi_conv_bull/bear` guard
+//   to ifvg_flip additions, consistent with existing fa_bull/fa_bear pattern.
+//   Prevents L4 hitting 80 on compound SWEEP+FA+IFVG bars and forcing
+//   max composite regardless of L2/L3 state.
+// PATCH #9 — build_dashboard_str: annotated as dead code / unverified.
+//   Method is exported but never called by GOD_TIER_VP main script.
+// PATCH #10 — f_top_driver: documented intentional STRUCTURE tie-break bias.
+// ─────────────────────────────────────────────────────────────────────────
+//
+// CHANGELOG v1.2 → v1.3
+// ─────────────────────────────────────────────────────────────────────────
+// FIX 1 — L5 Momentum: replaced bool ma_fast_above_med with int ma_partial_align.
+//          A two-MA relationship has three distinct states (fast > med, fast < med,
+//          flat/entangled/na). A bool can only encode two, making the "entangled"
+//          state unreachable — the prior `else if not ma_fast_above_med` branch
+//          was always true when reached, identical to the original broken else.
+//          int ma_partial_align encodes all three states directly:
+//            1  = fast > med  → partial bull, 18 pts, bias  1
+//           -1  = fast < med  → partial bear, 18 pts, bias -1
+//            0  = flat / na   → indeterminate, 0 pts,  bias  0
+//          All three branches are now genuinely reachable. BREAKING CHANGE:
+//          any caller passing bool must update to the tri-state int derivation
+//          shown in the integration patch. Publish as library version 2.
+//
+// REFACTOR 2 — gate_* functions converted to methods on ContextState (v6 syntax).
+//          All five gate functions and build_dashboard_str are now `export method`
+//          on ContextState. Call site changes from ctx_eng.gate_fvg(cie_state)
+//          to cie_state.gate_fvg() — more idiomatic and removes the namespace
+//          prefix. No logic changes.
+//
+// REFACTOR 3 — f_classify_phase no longer recomputes bull/bear votes.
+//          analyze_context pre-computes bull_votes and bear_votes (integer counts,
+//          distinct from the weighted floats used for conflict detection) and
+//          passes them directly into f_classify_phase. Removes redundant
+//          5-bias recount that happened every bar inside the classifier.
+//          f_classify_phase signature shrinks by 5 parameters.
+//
+// REFACTOR 4 — ContextState.new() uses named field initialization.
+//          Long positional constructor call replaced with named fields. Safe
+//          against future field insertion/reordering in the type definition.
+//
+// NOTE    — _smooth_comp var singleton caveat documented in analyze_context.
+//
+// CHANGELOG v1.1 → v1.2
+// ─────────────────────────────────────────────────────────────────────────
+// FIX 1 — L5 Momentum: Repaired `else` branch logic trap.
+//          Previous code fired `score += 18 / bias := -1` on ANY case where
+//          ma_bull_aligned, ma_bear_aligned, and ma_fast_above_med were all
+//          false — including entangled/flat MAs with no real bear signal.
+//          Now uses explicit `else if not ma_fast_above_med` (partial bear)
+//          with true fallthrough `// else` scoring 0 / bias 0 for neutral MAs.
+//
+// FIX 2 — L3 OrderFlow: Semantic floor for conflicted+exhausted state.
+//          ds_fp_conflict (-10) + exhaustion (-8) could combine to -18 before
+//          f_clamp(), making deeply conflicted flow invisible (score=0) —
+//          identical to the "no order flow data" case. A math.max(5.0) floor
+//          is now applied when any meaningful OF input was non-default, so
+//          "contradictory signal present" is distinguishable from "no signal."
+//
+// FIX 3 — f_classify_phase: CHoCH override hardened against stale persistence.
+//          CHoCH now only promotes to STRUCTURE_FLIP when l1 > 20. A CHoCH
+//          firing with degraded structure score indicates multi-bar persistence
+//          and falls through to lower-priority phase logic instead of
+//          overriding a high-composite trending environment.
+//
+// FIX 4 — f_classify_phase: DISTRIBUTION/ACCUMULATION priority raised.
+//          SMD checks now evaluate BEFORE TRENDING_ALIGNED. Previously,
+//          composite >= 75 + bull_votes >= 4 suppressed active DISTRIBUTION
+//          labels entirely — hiding the exact institutional signal the system
+//          was built to surface. SMD gating on l3 > 50 remains to prevent
+//          low-conviction fires.
+//
+// FIX 5 — gate_structure_break: STRUCTURE_FLIP bypass added.
+//          STRUCTURE_FLIP phases now open the gate unconditionally, bypassing
+//          the conflict check. CHoCH fires as conflict resolves — the
+//          transitional bar often still has conflict=true, which previously
+//          blocked the gate on the bar you most needed it open.
+//
+// FIX 6 — L6 Session: Instrument-aware expected_bars for 24h assets.
+//          Previous 390min (US RTH) assumption produced wrong age_pct on
+//          BTCUSD and forex — 15m BTC got expected_bars=26 vs correct 96.
+//          Now uses syminfo.type: crypto/forex → 1440min, equities/futures
+//          → 390min. Directly fixes L6 accuracy on BTCUSD (your primary chart).
+//
+// CHANGELOG v1.0 → v1.1
+// ─────────────────────────────────────────────────────────────────────────
+// FIX 1 — L6 Session: removed va_state double-count. va_state is already
+//          fully scored in L2 (25 pts). L6 is now a pure timing filter
+//          (session age curve only) to avoid inflating Contracting/Expanding
+//          across two independent layers.
+//
+// FIX 2 — Conflict detection: switched from raw unweighted vote counts to
+//          layer-weight-aware conflict scoring. L6 excluded from conflict
+//          detection (it is directionally neutral by design). Threshold
+//          tightened: conflict fires when weighted disagreement is ≤ 0.15
+//          (was any 1-vote spread in a 5-layer raw count).
+//
+// FIX 3 — RANGING_NOISE threshold: changed from abs(votes) <= 1 to
+//          votes == 0 (strictly tied). A 3-2 weighted lean is a real
+//          directional signal, not noise.
+//
+// FIX 4 — L4 Liquidity: removed 15-pt no-event floor. When no liquidity
+//          event fires, L4 now correctly scores 0, allowing f_top_driver
+//          to accurately reflect when liquidity is genuinely absent.
+//
+// FIX 5 — L3 Order Flow: added SMD mutual exclusion guard. If smd_dist
+//          and smd_accum both fire simultaneously (data conflict), score
+//          receives a small neutral bonus with no directional bias commit.
+//
+// FIX 6 — Composite smoothing: added lightweight EMA (0.7/0.3) on the
+//          composite score before gate and high_conviction evaluation.
+//          Prevents bar-to-bar gate flipping from boolean-heavy inputs.
+//          Raw composite still stored in ContextState.score for the HUD.
+//
+// LAYERS (weights):
+//   L1 Structure      25%  — ZigZag, BOS/CHoCH, swing bias, quality scores
+//   L2 Volume Profile 20%  — POC, VA position, profile shape, VA breathing
+//   L3 Order Flow     25%  — CVD, delta strength, flow pressure, absorption,
+//                            exhaustion, iceberg, divergence, SMD, imbalances
+//   L4 Liquidity      10%  — ZZ sweeps, failed auctions, IFVG polarity
+//   L5 Momentum       15%  — MA alignment, rotation factor, delta acceleration
+//   L6 Session         5%  — Session timing curve (instrument-aware)
+//
+// OUTPUT per bar:
+//   ContextState.phase        → string label: TRENDING_ALIGNED, RANGING_NOISE, etc.
+//   ContextState.score        → float 0–100 composite conviction
+//   ContextState.bias         →  1 bull / -1 bear / 0 neutral
+//   ContextState.high_conviction → score >= threshold (default 70)
+//   ContextState.signal_gate  → "OPEN" / "CAUTION" / "CLOSED"
+//   ContextState.phase_color  → display color for HUD
+//   Per-layer sub-scores for radar/bar HUD
+// ═══════════════════════════════════════════════════════════════════════════
+
+library("GodTier_ContextEngine", overlay=true)
+// Version: 7
+// Suite semantic version: 1.4.1
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TYPE DEFINITIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// @type Full context state output — one instance per bar.
+export type ContextState
+    // ── Core outputs ──────────────────────────────────────────────────────
+    string  phase            // Market phase classification string
+    float   score            // Composite conviction score 0–100
+    int     bias             //  1=bull  -1=bear  0=neutral
+    bool    high_conviction  // score >= conviction_threshold
+    string  signal_gate      // "OPEN" / "CAUTION" / "CLOSED"
+    color   phase_color      // Color for HUD / labels
+
+    // ── Layer sub-scores (0–100 each) for HUD radar ───────────────────────
+    float   l1_structure
+    float   l2_vp
+    float   l3_orderflow
+    float   l4_liquidity
+    float   l5_momentum
+    float   l6_session
+
+    // ── Metadata ──────────────────────────────────────────────────────────
+    string  top_driver       // Which layer is driving the score
+    bool    conflict_detected // Layers disagree on direction
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERNAL HELPER: safe normalize to 0–100
+// ═══════════════════════════════════════════════════════════════════════════
+f_clamp(float v) =>
+    math.max(0.0, math.min(100.0, v))
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L1 — STRUCTURE INTELLIGENCE SCORER
+// ─────────────────────────────────────────────────────────────────────────
+// @param score_long   float   ZigZag structure quality score for longs (0–100)
+// @param score_short  float   ZigZag structure quality score for shorts (0–100)
+// @param struct_bias  int     ZZ structural bias: 1=bull -1=bear 0=neutral
+// @param bull_bos     bool    BOS fired in bull direction this bar
+// @param bear_bos     bool    BOS fired in bear direction this bar
+// @param bull_choch   bool    CHoCH fired in bull direction this bar
+// @param bear_choch   bool    CHoCH fired in bear direction this bar
+// @param hi_conv_bull bool    SWEEP+FA high-conviction bull event
+// @param hi_conv_bear bool    SWEEP+FA high-conviction bear event
+// @returns [score 0–100, directional_bias 1/-1/0]
+// ═══════════════════════════════════════════════════════════════════════════
+export f_score_structure(
+    float score_long,
+    float score_short,
+    int   struct_bias,
+    bool  bull_bos,
+    bool  bear_bos,
+    bool  bull_choch,
+    bool  bear_choch,
+    bool  hi_conv_bull,
+    bool  hi_conv_bear) =>
+
+    // Base: use whichever directional quality score is dominant
+    float base = struct_bias == 1  ? score_long  :
+                 struct_bias == -1 ? score_short :
+                 math.max(score_long, score_short) * 0.6   // neutral = penalized
+
+    // Event bonuses
+    float bonus = 0.0
+    bonus += (bull_choch or bear_choch) ? 20.0 : 0.0   // CHoCH is high-signal
+    bonus += (bull_bos   or bear_bos)   ? 10.0 : 0.0   // BOS continuation bonus
+    bonus += (hi_conv_bull or hi_conv_bear) ? 15.0 : 0.0  // SWEEP+FA max bonus
+
+    // Bias value for CIE
+    int bias = struct_bias != 0 ? struct_bias :
+               (hi_conv_bull or bull_choch or bull_bos) ? 1  :
+               (hi_conv_bear or bear_choch or bear_bos) ? -1 : 0
+
+    [f_clamp(base + bonus), bias]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L2 — VOLUME PROFILE INTELLIGENCE SCORER
+// ─────────────────────────────────────────────────────────────────────────
+// @param poc          float   Point of Control price
+// @param vah          float   Value Area High price
+// @param val          float   Value Area Low price
+// @param profile_shape string "P" / "b" / "D" / "Balanced"
+// @param va_state     string  "Expanding" / "Contracting" / "Stable" / "Neutral"
+// @param skewness     float   Profile skewness ratio (1.0 = balanced)
+// @param price        float   Current price (close)
+// @param atr          float   Current ATR for proximity logic
+// @returns [score 0–100, directional_bias 1/-1/0]
+// ═══════════════════════════════════════════════════════════════════════════
+export f_score_vp(
+    float  poc,
+    float  vah,
+    float  val,
+    string profile_shape,
+    string va_state,
+    float  skewness,
+    float  price,
+    float  atr,
+    float  prior_vah,
+    float  prior_val,
+    float  prior_poc_level,
+    int    prior_close_inside,
+    bool   prior_poc_tested) =>
+
+    float score = 0.0
+    int   bias  = 0
+
+    if na(poc) or na(vah) or na(val) or na(price)
+        [0.0, 0]
+    else
+        float va_width  = vah - val
+        float mid_va    = val + va_width * 0.5
+        float prox_atr  = atr * 0.5   // within 0.5 ATR = "at level"
+
+        // ── CURRENT SESSION LEVEL SCORING (75 pts max) ──────────────────────
+        // Position relative to VA — 25 pts
+        if price > vah + prox_atr
+            score += 25.0   // Breakout above VA
+            bias  := 1
+        else if price < val - prox_atr
+            score += 25.0   // Breakdown below VA
+            bias  := -1
+        else if math.abs(price - vah) < prox_atr
+            score += 18.0   // Probing VAH
+            bias  := price > poc ? 1 : -1
+        else if math.abs(price - val) < prox_atr
+            score += 18.0   // Probing VAL
+            bias  := price > poc ? 1 : -1
+        else if math.abs(price - poc) < prox_atr
+            score += 12.0   // At POC
+            bias  := 0
+        else
+            score += 8.0    // Inside VA
+
+        // Profile shape — 20 pts
+        score += profile_shape == "P" or profile_shape == "b" ? 20.0 :
+                 profile_shape == "D"                         ? 12.0 : 5.0
+
+        if profile_shape == "P" and bias == 0
+            bias := -1
+        if profile_shape == "b" and bias == 0
+            bias := 1
+
+        // VA breathing state — 20 pts
+        score += va_state == "Contracting" ? 20.0 :
+                 va_state == "Expanding"   ? 15.0 :
+                 va_state == "Stable"      ? 10.0 : 4.0
+
+        // Skewness — 10 pts
+        float skew_deviation = math.abs(skewness - 1.0)
+        score += skew_deviation > 0.4 ? 10.0 :
+                 skew_deviation > 0.2 ?  7.0 :
+                 skew_deviation > 0.1 ?  4.0 : 0.0
+
+        // ── PRIOR SESSION CONTEXT SCORING (25 pts max) ──────────────────────
+        if not na(prior_vah) and not na(prior_val)
+            // 80% Rule: Accepted inside prior VA (boost score)
+            if prior_close_inside >= 3 and price <= prior_vah and price >= prior_val
+                score += 8.0
+            
+            // Interaction at edges
+            if math.abs(price - prior_vah) < atr * 0.3
+                score += 5.0
+                bias  := price < prior_vah ? -1 : bias // Bearish rejection if under
+            if math.abs(price - prior_val) < atr * 0.3
+                score += 5.0
+                bias  := price > prior_val ? 1 : bias  // Bullish support if above
+
+            // Naked POC Magnet
+            if not na(prior_poc_level) and not prior_poc_tested
+                if math.abs(price - prior_poc_level) < atr * 1.0
+                    score += 7.0
+                    if bias == 0
+                        bias := price > prior_poc_level ? -1 : 1
+
+            // Breakout Confluence
+            if price > vah and price > prior_vah
+                score += 5.0
+                bias  := 1
+
+        [f_clamp(score), bias]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L3 — ORDER FLOW INTELLIGENCE SCORER
+// ─────────────────────────────────────────────────────────────────────────
+// @param flow_pressure    float  Buy/sell pressure -100 to +100
+// @param delta_strength   float  CVD rate-of-change momentum -100 to +100
+// @param normalized_cvd   float  Session-normalized CVD 0–100
+// @param absorption       bool   Absorption detected
+// @param exhaustion       bool   Exhaustion detected
+// @param iceberg          bool   Iceberg order detected
+// @param bear_div         bool   Bearish CVD divergence
+// @param bull_div         bool   Bullish CVD divergence
+// @param smd_dist         bool   Smart money distribution active
+// @param smd_accum        bool   Smart money accumulation active
+// @param stacked_imb      int    Count of stacked imbalance zones this bar
+// @returns [score 0–100, directional_bias 1/-1/0]
+// ═══════════════════════════════════════════════════════════════════════════
+export f_score_orderflow(
+    float flow_pressure,
+    float delta_strength,
+    float normalized_cvd,
+    bool  absorption,
+    bool  exhaustion,
+    bool  iceberg,
+    bool  bear_div,
+    bool  bull_div,
+    bool  smd_dist,
+    bool  smd_accum,
+    int   stacked_imb) =>
+
+    float score = 0.0
+    int   bias  = 0
+
+    // Flow pressure magnitude — 25 pts
+    // High pressure (abs > 50) = directional conviction
+    float fp_abs = math.abs(flow_pressure)
+    score += fp_abs > 75 ? 25.0 :
+             fp_abs > 50 ? 20.0 :
+             fp_abs > 30 ? 12.0 :
+             fp_abs > 15 ?  6.0 : 0.0
+    if flow_pressure > 15
+        bias := 1
+    else if flow_pressure < -15
+        bias := -1
+
+    // Delta strength (CVD acceleration) — 20 pts
+    // Accelerating order flow = increasing conviction
+    float ds_abs = math.abs(delta_strength)
+    score += ds_abs > 60 ? 20.0 :
+             ds_abs > 40 ? 15.0 :
+             ds_abs > 20 ? 8.0  : 2.0
+
+    // If delta_strength contradicts flow_pressure direction — conflict penalty
+    bool ds_fp_conflict = (delta_strength > 20 and flow_pressure < -20) or
+                          (delta_strength < -20 and flow_pressure > 20)
+    if ds_fp_conflict
+        score -= 10.0
+
+    // CVD position (normalized 0–100) — 15 pts
+    // Extremes (near 0 or 100) = accumulation/distribution complete = exhaustion risk
+    // Mid-range with momentum = healthy directional flow
+    float cvd_mid_distance = math.abs(normalized_cvd - 50.0)
+    score += cvd_mid_distance > 35 ? 10.0 :    // at extreme — context is clear
+             cvd_mid_distance > 20 ?  8.0 :
+             cvd_mid_distance > 10 ?  4.0 : 2.0
+
+    // Institutional signatures — 25 pts total
+    // Absorption: smart money defending a level — very high context
+    score += absorption ? 10.0 : 0.0
+    // Iceberg: hidden wall — strong hidden conviction
+    score += iceberg    ?  8.0 : 0.0
+    // Stacked imbalances: institutional footprint
+    score += stacked_imb >= 3 ? 10.0 :
+             stacked_imb >= 1 ?  5.0 : 0.0
+
+    // SMD flags — 12 pts, mutually exclusive guard (v1.1 FIX 5)
+    // Distribution and accumulation are definitionally opposite. If both fire
+    // simultaneously it is a data conflict — add small neutral context score
+    // only, no directional bias commit on either side.
+    if smd_dist and not smd_accum
+        score += 12.0
+        bias   := bias == 0 ? -1 : bias   // SMD dist = bearish pre-signal
+    else if smd_accum and not smd_dist
+        score += 12.0
+        bias   := bias == 0 ? 1  : bias   // SMD accum = bullish pre-signal
+    else if smd_dist and smd_accum
+        score += 4.0                       // Contradictory signals — modest context, no bias
+
+    // Divergence — subtract from directional confidence but ADD context value
+    // (divergence = high context, just conflict context)
+    score += (bear_div or bull_div) ? 5.0 : 0.0
+    if exhaustion
+        score -= 8.0   // Exhaustion = context is deteriorating / move ending
+
+    // FIX v1.2 [2]: Semantic floor for "something happened, just contradictory."
+    // Combined ds_fp_conflict (-10) + exhaustion (-8) can push score to -18
+    // before f_clamp(). That makes deeply conflicted + exhausted flow invisible
+    // (score 0) — identical to the "no order flow data" case. These are
+    // semantically different. A minimum of 5.0 ensures the CIE can distinguish
+    // "conflicted signal present" from "no signal at all" in the L3 sub-score.
+    // Only applied when at least one meaningful input was non-default.
+    bool _any_of_input = fp_abs > 15 or ds_abs > 20 or absorption or iceberg or
+                         smd_dist or smd_accum or bear_div or bull_div or stacked_imb > 0
+    if _any_of_input
+        score := math.max(5.0, score)
+
+    [f_clamp(score), bias]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L4 — LIQUIDITY INTELLIGENCE SCORER
+// ─────────────────────────────────────────────────────────────────────────
+// @param bull_sweep      bool   ZZ structural bull sweep active
+// @param bear_sweep      bool   ZZ structural bear sweep active
+// @param hi_conv_bull    bool   SWEEP+FA high-conviction bull
+// @param hi_conv_bear    bool   SWEEP+FA high-conviction bear
+// @param fa_bull         bool   Failed auction bull (sell failure)
+// @param fa_bear         bool   Failed auction bear (buy failure)
+// @param ifvg_flip_bull  bool   IFVG polarity flip to bullish (new support)
+// @param ifvg_flip_bear  bool   IFVG polarity flip to bearish (new resistance)
+// @returns [score 0–100, directional_bias 1/-1/0]
+// ═══════════════════════════════════════════════════════════════════════════
+export f_score_liquidity(
+    bool bull_sweep,
+    bool bear_sweep,
+    bool hi_conv_bull,
+    bool hi_conv_bear,
+    bool fa_bull,
+    bool fa_bear,
+    bool ifvg_flip_bull,
+    bool ifvg_flip_bear) =>
+
+    float score = 0.0
+    int   bias  = 0
+
+    // SWEEP+FA = maximum liquidity context (sweep hunt complete + failed auction)
+    if hi_conv_bull
+        score += 60.0
+        bias  := 1
+    else if hi_conv_bear
+        score += 60.0
+        bias  := -1
+
+    // Standalone ZZ sweep — high context but needs confirmation
+    else if bull_sweep
+        score += 40.0
+        bias  := 1
+    else if bear_sweep
+        score += 40.0
+        bias  := -1
+
+    // Failed auction alone — strong context
+    if fa_bull and not hi_conv_bull
+        score += 25.0
+        bias   := bias == 0 ? 1 : bias
+    if fa_bear and not hi_conv_bear
+        score += 25.0
+        bias   := bias == 0 ? -1 : bias
+
+    // IFVG polarity flip — zone changed character (adds 20 pts, confirms direction)
+    // v1.3.1 PATCH #5: Added hi_conv guards, consistent with fa_bull/fa_bear pattern.
+    // When SWEEP+FA (hi_conv) already fired, L4 is at 60 pts — an IFVG flip on
+    // the same bar is redundant confluence that was pushing L4 to 80 and forcing
+    // composite to max-conviction regardless of L2/L3 state. If a standalone IFVG
+    // flip fires WITHOUT hi_conv, the full 20 pts remain appropriate.
+    if ifvg_flip_bull and not hi_conv_bull
+        score += 20.0
+        bias   := bias == 0 ? 1 : bias
+    if ifvg_flip_bear and not hi_conv_bear
+        score += 20.0
+        bias   := bias == 0 ? -1 : bias
+
+    // No liquidity event = true zero (v1.1 FIX 4)
+    // Removed 15-pt floor. L4 can now score 0, which lets f_top_driver
+    // correctly identify when liquidity is genuinely absent as a driver.
+
+    [f_clamp(score), bias]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L5 — MOMENTUM INTELLIGENCE SCORER
+// ─────────────────────────────────────────────────────────────────────────
+// @param ma_bull_aligned  bool   Fast/Medium/Slow MAs in full bull stack order
+// @param ma_bear_aligned  bool   Fast/Medium/Slow MAs in full bear stack order
+// @param rotation_factor  float  POC rotation score (positive = up, negative = down)
+// @param delta_strength   float  CVD rate-of-change -100 to +100
+// @param ma_partial_align int    Fast vs Medium MA relationship (tri-state):
+//                                  1 = fast > med  → partial bull stack
+//                                 -1 = fast < med  → partial bear stack
+//                                  0 = flat/entangled/na → no partial conviction
+//                                Derive at call site:
+//                                  not na(ma_fast) and not na(ma_medium)
+//                                      ? (ma_fast > ma_medium ? 1
+//                                       : ma_fast < ma_medium ? -1 : 0)
+//                                      : 0
+// @returns [score 0–100, directional_bias 1/-1/0]
+// ═══════════════════════════════════════════════════════════════════════════
+export f_score_momentum(
+    bool  ma_bull_aligned,
+    bool  ma_bear_aligned,
+    float rotation_factor,
+    float delta_strength,
+    int   ma_partial_align) =>
+
+    float score = 0.0
+    int   bias  = 0
+
+    // Full MA stack alignment — 45 pts (strongest momentum signal)
+    if ma_bull_aligned
+        score += 45.0
+        bias  := 1
+    else if ma_bear_aligned
+        score += 45.0
+        bias  := -1
+    // Partial alignment — 18 pts, three genuinely distinct states (v1.3 FIX 1)
+    // ma_partial_align is a tri-state int so all three branches below are reachable.
+    // Previously a bool parameter made the "flat/entangled" case unreachable.
+    else if ma_partial_align == 1
+        score += 18.0
+        bias  :=  1
+    else if ma_partial_align == -1
+        score += 18.0
+        bias  := -1
+    // else: ma_partial_align == 0 — flat, entangled, or na
+    //       score += 0, bias stays 0 — genuinely reachable now
+
+    // Rotation factor — 30 pts (POC migrating = genuine trend)
+    float rot_abs = math.abs(rotation_factor)
+    score += rot_abs > 0.6 ? 30.0 :
+             rot_abs > 0.4 ? 22.0 :
+             rot_abs > 0.2 ? 14.0 :
+             rot_abs > 0.1 ?  6.0 : 0.0
+
+    if rotation_factor > 0.1 and bias == 0
+        bias :=  1
+    else if rotation_factor < -0.1 and bias == 0
+        bias := -1
+
+    // Delta strength momentum — 12.5 pts (v1.3.1 PATCH #4: halved from 25)
+    // delta_strength already contributes up to 20 pts in L3 (f_score_orderflow).
+    // Double-counting the same input across L3 (weight 25%) + L5 (weight 15%)
+    // inflated composite by up to 8.75 pts from a single signal, causing
+    // premature high_conviction flags on strong CVD runs without VP/structure
+    // confirmation. L5 is an MA+momentum layer — delta strength acts here as
+    // a confirmer only, so half-weight is semantically correct.
+    float ds_abs = math.abs(delta_strength)
+    score += ds_abs > 60 ? 12.5 :
+             ds_abs > 40 ?  9.0 :
+             ds_abs > 20 ?  5.0 : 1.5
+
+    [f_clamp(score), bias]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L6 — SESSION INTELLIGENCE SCORER
+// ─────────────────────────────────────────────────────────────────────────
+// @param session_bar_count  int    Bars elapsed in current session
+// @param is_intraday        bool   Is the chart on an intraday timeframe
+// @param tf_multiplier      int    Timeframe multiplier in minutes
+// @param expected_session_bars int  Caller-derived expected bars for the active session
+// @returns score 0–100 (no directional bias — session is a timing filter only)
+//
+// v1.1 NOTE: va_state removed from L6 (was double-counted from L2 which
+// already scores it for up to 25 pts). L6 is now a pure session-timing
+// filter. No va_state parameter needed.
+// ═══════════════════════════════════════════════════════════════════════════
+export f_score_session(
+    int    session_bar_count,
+    bool   is_intraday,
+    int    tf_multiplier,
+    int    expected_session_bars) =>
+
+    // Pure session timing curve — no VP state (that belongs to L2).
+    // Normalize bar count against expected bars for the timeframe.
+    // Caller-derived session length keeps L6 aligned with Tokyo/London/New York,
+    // Daily/Weekly/Monthly/etc., and actual completed session lengths.
+    int _session_mins  = (syminfo.type == "crypto" or syminfo.type == "forex") ? 1440 : 390
+    int fallback_bars  = is_intraday ? math.max(10, math.round(_session_mins / math.max(1, tf_multiplier))) : 50
+    int expected_bars  = expected_session_bars > 0 ? expected_session_bars : fallback_bars
+    float age_pct      = session_bar_count > 0 ? math.min(1.0, session_bar_count / expected_bars) : 0.0
+
+    // Session age score curve:
+    // 0–10%:  Opening noise — low context, gaps/spikes common         →  20 pts
+    // 10–25%: Context building — profile forming, directional emerging → 40 pts
+    // 25–65%: Peak RTH activity — highest signal quality window        → 80 pts
+    // 65–85%: Late session — still valid, momentum slowing             → 55 pts
+    // 85–100%: Closing fade — position squaring noise, avoid           → 25 pts
+    float score = age_pct < 0.10 ? 20.0 :
+                  age_pct < 0.25 ? 40.0 :
+                  age_pct < 0.65 ? 80.0 :
+                  age_pct < 0.85 ? 55.0 : 25.0
+
+    f_clamp(score)
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERNAL: Phase classifier from sub-scores + bias votes
+// ─────────────────────────────────────────────────────────────────────────
+// REFACTOR v1.3: bull_votes and bear_votes are now passed in from analyze_context
+// rather than recomputed here. analyze_context already counts them for the
+// RANGING_NOISE composite check — computing them again here was redundant.
+// The five individual bias params (struct_bias … liq_bias) are removed;
+// callers pass the already-tallied vote integers.
+// ═══════════════════════════════════════════════════════════════════════════
+f_classify_phase(
+    float  composite,
+    int    bull_votes,    // pre-computed in analyze_context
+    int    bear_votes,    // pre-computed in analyze_context
+    float  l1,
+    float  l2,
+    float  l3,
+    float  l4,
+    float  l5,
+    bool   hi_conv_bull,
+    bool   hi_conv_bear,
+    bool   bull_choch,
+    bool   bear_choch,
+    bool   bull_sweep,
+    bool   bear_sweep,
+    bool   smd_dist,
+    bool   smd_accum,
+    string va_state,
+    float  rotation_factor) =>
+
+    int bias = bull_votes > bear_votes ? 1 : bear_votes > bull_votes ? -1 : 0
+
+    // v1.3.1 PATCH #3: Pre-compute SMD l3 gate BEFORE the if/else chain.
+    // Cannot declare variables mid-chain in Pine v6 — declaration breaks the
+    // else-if linkage (CE10156). Dual-threshold: l3 > 50 on normal bars,
+    // l3 > 20 during EMA warmup (composite < 40) so SMD events are not swallowed
+    // by RANGING_NOISE on the exact session-open bars they matter most.
+    bool _smd_l3_gate = composite >= 40 ? l3 > 50 : l3 > 20
+
+    // Phase classification — priority order matters
+    string phase = ""
+
+    if hi_conv_bull or hi_conv_bear
+        // Highest: SWEEP + FA coinciding — maximum institutional confluence
+        phase := hi_conv_bull ? "SWEEP+FA BULL" : "SWEEP+FA BEAR"
+
+    else if bull_choch or bear_choch
+        // Structure trend flip confirmed.
+        // FIX v1.2 [3]: CHoCH booleans must only be true on the confirmation bar.
+        // EliteMA_ATRZigZag guarantees single-bar events, but as a defensive guard
+        // we only promote to STRUCTURE_FLIP if the CHoCH fires alongside meaningful
+        // structure score (l1 > 20). A stale CHoCH with degraded structure score
+        // indicates persistence from a prior bar and should fall through to lower
+        // priority phases rather than override a high-composite trending environment.
+        phase := (l1 > 20) ? (bull_choch ? "STRUCTURE_FLIP_BULL" : "STRUCTURE_FLIP_BEAR")
+                           : (composite >= 75 and bull_votes >= 4 ? "TRENDING_ALIGNED_BULL"
+                              : composite >= 75 and bear_votes >= 4 ? "TRENDING_ALIGNED_BEAR"
+                              : "NEUTRAL")
+
+    // FIX v1.2 [4]: DISTRIBUTION / ACCUMULATION now checked BEFORE TRENDING_ALIGNED.
+    // SMD events are higher-order institutional signals than a generic trending phase.
+    // Old order caused TRENDING_ALIGNED_BULL to suppress active DISTRIBUTION at 75+ score,
+    // hiding the precise warning the trader needs. Gate uses _smd_l3_gate (see above).
+    else if smd_dist and _smd_l3_gate
+        // Smart money distributing into imbalance — pre-move bearish context
+        phase := "DISTRIBUTION"
+
+    else if smd_accum and _smd_l3_gate
+        // Smart money accumulating into imbalance — pre-move bullish context
+        phase := "ACCUMULATION"
+
+    else if composite >= 75 and bull_votes >= 4
+        phase := "TRENDING_ALIGNED_BULL"
+
+    else if composite >= 75 and bear_votes >= 4
+        phase := "TRENDING_ALIGNED_BEAR"
+
+    else if (bull_sweep or bear_sweep) and l4 > 35
+        // Liquidity hunt in progress — wait for confirmation
+        phase := bull_sweep ? "LIQUIDITY_HUNT_BULL" : "LIQUIDITY_HUNT_BEAR"
+
+    else if va_state == "Contracting" and l2 > 40 and composite > 50
+        // VA coiling — expansion setup loading
+        phase := "EXPANSION_IMMINENT"
+
+    else if math.abs(rotation_factor) > 0.3 and l5 > 50
+        // Momentum with rotation — trending but not fully aligned
+        phase := bias == 1 ? "TRENDING_BULL" : "TRENDING_BEAR"
+
+    else if composite < 40 or math.abs(bull_votes - bear_votes) == 0
+        // Low score OR perfectly tied votes — genuine noise / no directional conviction.
+        // v1.1 FIX 3: was <= 1 which incorrectly flagged 3-2 vote leans as RANGING_NOISE.
+        // A one-vote margin (e.g. 3-2) is a real directional lean and should not close gates.
+        phase := "RANGING_NOISE"
+
+    else
+        phase := bias == 1 ? "MILD_BULL" : bias == -1 ? "MILD_BEAR" : "NEUTRAL"
+
+    [phase, bias]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERNAL: Top driver identifier (which layer is contributing most)
+// ═══════════════════════════════════════════════════════════════════════════
+f_top_driver(float l1, float l2, float l3, float l4, float l5, float l6) =>
+    float w1 = l1 * 0.25
+    float w2 = l2 * 0.20
+    float w3 = l3 * 0.25
+    float w4 = l4 * 0.10
+    float w5 = l5 * 0.15
+    float w6 = l6 * 0.05
+
+    float mx = math.max(w1, math.max(w2, math.max(w3, math.max(w4, math.max(w5, w6)))))
+
+    // v1.3.1 PATCH #10: Tie-break order is intentional — left-to-right evaluation
+    // means STRUCTURE > VOL_PROFILE > ORDER_FLOW > LIQUIDITY > MOMENTUM > SESSION
+    // on exact ties. Structure is the highest-priority layer by design (price action
+    // framework foundation), so its tie-break preference is architecturally correct.
+    // This is documented here to prevent future "fix" attempts on non-bugs.
+    mx == w1 ? "STRUCTURE" : mx == w2 ? "VOL_PROFILE" : mx == w3 ? "ORDER_FLOW" : mx == w4 ? "LIQUIDITY" : mx == w5 ? "MOMENTUM" : "SESSION"
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERNAL: Phase → Color mapping
+// ═══════════════════════════════════════════════════════════════════════════
+f_phase_color(string phase) =>
+    switch phase
+        "SWEEP+FA BULL"          => color.new(color.lime, 0)
+        "SWEEP+FA BEAR"          => color.new(color.red,  0)
+        "STRUCTURE_FLIP_BULL"    => color.new(color.green, 10)
+        "STRUCTURE_FLIP_BEAR"    => color.new(color.fuchsia, 10)
+        "TRENDING_ALIGNED_BULL"  => color.new(color.lime, 20)
+        "TRENDING_ALIGNED_BEAR"  => color.new(color.red,  20)
+        "TRENDING_BULL"          => color.new(color.teal, 20)
+        "TRENDING_BEAR"          => color.new(color.orange, 20)
+        "DISTRIBUTION"           => color.new(color.orange, 10)
+        "ACCUMULATION"           => color.new(color.teal, 10)
+        "LIQUIDITY_HUNT_BULL"    => color.new(color.yellow, 20)
+        "LIQUIDITY_HUNT_BEAR"    => color.new(color.yellow, 20)
+        "EXPANSION_IMMINENT"     => color.new(color.purple, 10)
+        "MILD_BULL"              => color.new(color.green, 50)
+        "MILD_BEAR"              => color.new(color.red,   50)
+        "NEUTRAL"                => color.new(color.gray,  30)
+        =>                          color.new(color.gray,  60)   // RANGING_NOISE
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERNAL: Signal gate logic
+// ─────────────────────────────────────────────────────────────────────────
+// OPEN    → score >= 70 and layers not conflicted
+// CAUTION → score 45–69 or single-layer conflict
+// CLOSED  → score < 45 or RANGING_NOISE phase
+// ═══════════════════════════════════════════════════════════════════════════
+f_signal_gate(float score, string phase, bool conflict) =>
+    phase == "RANGING_NOISE" ? "CLOSED" : score >= 70 and not conflict  ? "OPEN"    : score >= 45               ? "CAUTION" : "CLOSED"
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MASTER EXPORT: analyze_context
+// ─────────────────────────────────────────────────────────────────────────
+// Single call that runs all 6 layers and returns the full ContextState.
+// All inputs must be passed explicitly from the main indicator.
+//
+// ── L1 STRUCTURE ──
+// @param zz_score_long    float  Structure quality score for longs (0–100)
+// @param zz_score_short   float  Structure quality score for shorts (0–100)
+// @param struct_bias      int    ZZ structural bias 1/-1/0
+// @param bull_bos         bool   BOS bull fired this bar
+// @param bear_bos         bool   BOS bear fired this bar
+// @param bull_choch       bool   CHoCH bull fired this bar
+// @param bear_choch       bool   CHoCH bear fired this bar
+// @param hi_conv_bull     bool   SWEEP+FA bull high-conviction
+// @param hi_conv_bear     bool   SWEEP+FA bear high-conviction
+//
+// ── L2 VOL PROFILE ──
+// @param poc              float  Point of Control price
+// @param vah              float  Value Area High
+// @param val              float  Value Area Low
+// @param profile_shape    string "P" / "b" / "D" / "Balanced"
+// @param va_state         string "Expanding" / "Contracting" / "Stable" / "Neutral"
+// @param skewness         float  Profile skewness ratio
+//
+// ── L3 ORDER FLOW ──
+// @param flow_pressure    float  Buy-sell pressure -100 to +100
+// @param delta_strength   float  CVD rate-of-change -100 to +100
+// @param normalized_cvd   float  Session CVD normalized 0–100
+// @param absorption       bool   Absorption signal
+// @param exhaustion       bool   Exhaustion signal
+// @param iceberg          bool   Iceberg detection
+// @param bear_div         bool   Bearish CVD divergence
+// @param bull_div         bool   Bullish CVD divergence
+// @param smd_dist         bool   Smart money distribution
+// @param smd_accum        bool   Smart money accumulation
+// @param stacked_imb      int    Stacked imbalance zone count
+//
+// ── L4 LIQUIDITY ──
+// @param bull_sweep       bool   ZZ bull structural sweep
+// @param bear_sweep       bool   ZZ bear structural sweep
+// @param fa_bull          bool   Failed auction bull
+// @param fa_bear          bool   Failed auction bear
+// @param ifvg_flip_bull   bool   IFVG flipped to bullish support this bar
+// @param ifvg_flip_bear   bool   IFVG flipped to bearish resistance this bar
+//
+// ── L5 MOMENTUM ──
+// @param ma_bull_aligned  bool   Full bull MA stack
+// @param ma_bear_aligned  bool   Full bear MA stack
+// @param rotation_factor  float  POC rotation (positive = up)
+// @param ma_partial_align int    Fast vs Medium MA tri-state: 1=bull / -1=bear / 0=flat
+//
+// ── L6 SESSION ──
+// @param session_bar_count int   Bars elapsed in current session
+// @param is_intraday       bool  Is the chart intraday
+// @param tf_multiplier     int   Timeframe multiplier (minutes)
+// @param expected_session_bars int Caller-derived expected bars for this session type
+//                                NOTE: va_state removed from L6 in v1.1 (was double-counted
+//                                from L2). L6 is now a pure timing filter.
+//
+// ── GLOBAL ──
+// @param current_atr       float Current ATR(14) value
+// @param price             float Current price (close)
+// @param conviction_threshold simple float Score threshold for high_conviction (default 70)
+//
+// @returns ContextState
+// ═══════════════════════════════════════════════════════════════════════════
+export analyze_context(
+    // L1
+    float zz_score_long,
+    float zz_score_short,
+    int   struct_bias,
+    bool  bull_bos,
+    bool  bear_bos,
+    bool  bull_choch,
+    bool  bear_choch,
+    bool  hi_conv_bull,
+    bool  hi_conv_bear,
+    // L2
+    float  poc,
+    float  vah,
+    float  val,
+    string profile_shape,
+    string va_state,
+    float  skewness,
+    // Phase 3: Prior VA Context
+    float  prior_vah,
+    float  prior_val,
+    float  prior_poc_level,
+    int    prior_close_inside,
+    bool   prior_poc_tested,
+    // L3
+    float flow_pressure,
+    float delta_strength,
+    float normalized_cvd,
+    bool  absorption,
+    bool  exhaustion,
+    bool  iceberg,
+    bool  bear_div,
+    bool  bull_div,
+    bool  smd_dist,
+    bool  smd_accum,
+    int   stacked_imb,
+    // L4
+    bool bull_sweep,
+    bool bear_sweep,
+    bool fa_bull,
+    bool fa_bear,
+    bool ifvg_flip_bull,
+    bool ifvg_flip_bear,
+    // L5
+    bool  ma_bull_aligned,
+    bool  ma_bear_aligned,
+    float rotation_factor,
+    int   ma_partial_align,
+    // L6
+    int  session_bar_count,
+    bool is_intraday,
+    int  tf_multiplier,
+    int  expected_session_bars,
+    // Global
+    float current_atr,
+    float price,
+    simple float conviction_threshold = 70.0) =>
+
+    // ── Run all 6 scorers ─────────────────────────────────────────────────
+    [l1, bias1] = f_score_structure(
+        zz_score_long, zz_score_short, struct_bias,
+        bull_bos, bear_bos, bull_choch, bear_choch,
+        hi_conv_bull, hi_conv_bear)
+
+    [l2, bias2] = f_score_vp(
+        poc, vah, val, profile_shape, va_state, skewness, price, current_atr,
+        prior_vah, prior_val, prior_poc_level, prior_close_inside, prior_poc_tested)
+
+    [l3, bias3] = f_score_orderflow(
+        flow_pressure, delta_strength, normalized_cvd,
+        absorption, exhaustion, iceberg,
+        bear_div, bull_div, smd_dist, smd_accum, stacked_imb)
+
+    [l4, bias4] = f_score_liquidity(
+        bull_sweep, bear_sweep, hi_conv_bull, hi_conv_bear,
+        fa_bull, fa_bear, ifvg_flip_bull, ifvg_flip_bear)
+
+    [l5, bias5] = f_score_momentum(
+        ma_bull_aligned, ma_bear_aligned, rotation_factor,
+        delta_strength, ma_partial_align)
+
+    float l6 = f_score_session(session_bar_count, is_intraday, tf_multiplier, expected_session_bars)
+
+    // ── Weighted composite ────────────────────────────────────────────────
+    float composite = f_clamp(
+        l1 * 0.25 +
+        l2 * 0.20 +
+        l3 * 0.25 +
+        l4 * 0.10 +
+        l5 * 0.15 +
+        l6 * 0.05)
+
+    // ── Composite smoothing (v1.1 FIX 6) ─────────────────────────────────
+    // Light EMA prevents bar-to-bar gate flipping from boolean-heavy inputs.
+    // Gates and high_conviction use smoothed value; raw composite goes to HUD.
+    //
+    // SINGLETON GUARD (AUDIT): _smooth_comp is a module-level var —
+    // a single shared EMA instance for the entire script. analyze_context()
+    // MUST be called from exactly one location per importing script. Calling
+    // it from two sites (e.g. in a comparison test) will corrupt both callers'
+    // EMA state. The guard below detects double-calls on the same bar.
+    var float _smooth_comp       = na
+    var int   _singleton_last_bi = -1
+    if _singleton_last_bi == bar_index
+        // Second call on same bar — EMA already advanced once this bar.
+        // Warn via log.warning if available; silently degrade otherwise.
+        // The composite will be double-smoothed but won't crash.
+        log.warning("⚠️ CIE analyze_context() called twice on bar " + str.tostring(bar_index) + " — EMA corrupted. Ensure single call site.")
+    _singleton_last_bi := bar_index
+    _smooth_comp    := na(_smooth_comp) ? composite : _smooth_comp * 0.7 + composite * 0.3
+    float gating_composite = _smooth_comp
+
+    // ── Conflict detection (v1.1 FIX 2) ──────────────────────────────────
+    // Layer-weight-aware scoring. L6 excluded (directionally neutral).
+    // Conflict fires when both directions have meaningful weight AND
+    // weighted difference is ≤ 0.15 (roughly equal split).
+    float bull_weight = (bias1 ==  1 ? 0.25 : 0.0) + (bias2 ==  1 ? 0.20 : 0.0) + (bias3 ==  1 ? 0.25 : 0.0) + (bias4 ==  1 ? 0.10 : 0.0) + (bias5 ==  1 ? 0.15 : 0.0)
+    float bear_weight = (bias1 == -1 ? 0.25 : 0.0) + (bias2 == -1 ? 0.20 : 0.0) + (bias3 == -1 ? 0.25 : 0.0) + (bias4 == -1 ? 0.10 : 0.0) + (bias5 == -1 ? 0.15 : 0.0)
+    bool conflict = bull_weight > 0.0 and bear_weight > 0.0 and math.abs(bull_weight - bear_weight) <= 0.15
+
+    // ── Pre-compute integer vote counts (REFACTOR v1.3) ───────────────────
+    // These are the simple unweighted counts used by f_classify_phase for
+    // threshold checks (e.g. bull_votes >= 4). Computed once here and passed
+    // in — f_classify_phase no longer recounts from individual bias params.
+    int bull_votes = (bias1 ==  1 ? 1 : 0) + (bias2 ==  1 ? 1 : 0) +
+                     (bias3 ==  1 ? 1 : 0) + (bias4 ==  1 ? 1 : 0) + (bias5 ==  1 ? 1 : 0)
+    int bear_votes = (bias1 == -1 ? 1 : 0) + (bias2 == -1 ? 1 : 0) +
+                     (bias3 == -1 ? 1 : 0) + (bias4 == -1 ? 1 : 0) + (bias5 == -1 ? 1 : 0)
+
+    // ── Phase + bias ──────────────────────────────────────────────────────
+    [phase, bias] = f_classify_phase(
+        composite, bull_votes, bear_votes,
+        l1, l2, l3, l4, l5,
+        hi_conv_bull, hi_conv_bear, bull_choch, bear_choch,
+        bull_sweep, bear_sweep, smd_dist, smd_accum,
+        va_state, rotation_factor)
+
+    // ── Derive output fields ──────────────────────────────────────────────
+    // Gates use gating_composite (smoothed). score field = raw for HUD display.
+    string gate       = f_signal_gate(gating_composite, phase, conflict)
+    color  p_color    = f_phase_color(phase)
+    string top_driver = f_top_driver(l1, l2, l3, l4, l5, l6)
+    bool   hi_conv    = gating_composite >= conviction_threshold
+
+    // Named field initialization (REFACTOR v1.3) — order-change-safe.
+    ContextState.new(
+        phase            = phase,
+        score            = composite,
+        bias             = bias,
+        high_conviction  = hi_conv,
+        signal_gate      = gate,
+        phase_color      = p_color,
+        l1_structure     = l1,
+        l2_vp            = l2,
+        l3_orderflow     = l3,
+        l4_liquidity     = l4,
+        l5_momentum      = l5,
+        l6_session       = l6,
+        top_driver       = top_driver,
+        conflict_detected = conflict)
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: Signal-specific gate queries
+// ─────────────────────────────────────────────────────────────────────────
+// These are the per-signal convenience wrappers the main indicator calls
+// to decide whether a given signal type should render / alert.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// @function Returns true if FVG touch signals should be considered valid.
+// FVGs require structure alignment + non-noise order flow + not in RANGING_NOISE.
+// @param this  ContextState  Output from analyze_context()
+// @param dir   int           Signal direction: 1 = bull, -1 = bear, 0 = neutral (default)
+// @returns bool
+export method gate_fvg(ContextState this, int dir = 0) =>
+    bool magnitude_ok = this.signal_gate != "CLOSED" and this.l1_structure >= 40.0 and this.l3_orderflow >= 35.0 and this.phase != "RANGING_NOISE"
+    bool direction_ok = dir == 0 or (dir == 1 ? this.bias >= 0 : this.bias <= 0)
+    magnitude_ok and direction_ok
+
+
+// @function Returns true if VP level (POC/VAH/VAL) signals should fire.
+// VP levels require order flow confirmation + non-conflicted context.
+// @param this  ContextState  Output from analyze_context()
+// @param dir   int           Signal direction: 1 = bull, -1 = bear, 0 = neutral (default)
+// @returns bool
+export method gate_vp_level(ContextState this, int dir = 0) =>
+    bool magnitude_ok = this.signal_gate != "CLOSED" and this.l2_vp >= 45.0 and this.l3_orderflow >= 30.0 and not this.conflict_detected
+    bool direction_ok = dir == 0 or (dir == 1 ? this.bias >= 0 : this.bias <= 0)
+    magnitude_ok and direction_ok
+
+
+// @function Returns true if BOS/CHoCH entry signals should be acted on.
+// Structure breaks require momentum + flow pressure confirmation.
+// STRUCTURE_FLIP phases bypass conflict gate: CHoCH fires as conflict resolves —
+// transitional bar still has conflict=true, which would otherwise block the
+// gate on exactly the bar you most need it open.
+// @param this      ContextState  Output from analyze_context()
+// @param is_choch  bool          Pass true for CHoCH call sites (relaxed CAUTION-ok rule).
+// @param dir       int           Signal direction: 1 = bull, -1 = bear, 0 = neutral (default)
+// @returns bool
+export method gate_structure_break(ContextState this, bool is_choch = false, int dir = 0) =>
+    bool is_correct_flip = (dir == 1 and this.phase == "STRUCTURE_FLIP_BULL") or
+                           (dir == -1 and this.phase == "STRUCTURE_FLIP_BEAR")
+    bool score_ok = this.l1_structure >= 55.0 and this.l5_momentum  >= 40.0 and this.l3_orderflow >= 35.0
+    bool phase_ok = this.phase != "RANGING_NOISE"
+    // CHoCH: CAUTION gate is sufficient — it fires as consolidation breaks.
+    // BOS:   OPEN gate required — it confirms an already-trending environment.
+    bool gate_ok  = is_choch ? this.signal_gate != "CLOSED" : this.signal_gate == "OPEN"
+    bool direction_ok = dir == 0 or (dir == 1 ? this.bias >= 0 : this.bias <= 0)
+    is_correct_flip or (gate_ok and score_ok and phase_ok and direction_ok)
+
+
+// @function Returns true if MA cross / trend-following signals should fire.
+// MA crosses require full trend alignment and no conflict.
+// @param this  ContextState  Output from analyze_context()
+// @param dir   int           Signal direction: 1 = bull, -1 = bear, 0 = neutral (default)
+// @returns bool
+export method gate_ma_cross(ContextState this, int dir = 0) =>
+    bool magnitude_ok = this.signal_gate == "OPEN" and this.l5_momentum  >= 50.0 and this.l1_structure >= 45.0 and not this.conflict_detected
+    bool direction_ok = dir == 0 or (dir == 1 ? this.bias >= 0 : this.bias <= 0)
+    magnitude_ok and direction_ok
+
+
+// @function Returns true if liquidity sweep reversal setups should fire.
+// Sweeps require high liquidity score + order flow shift confirmation.
+// @param this  ContextState  Output from analyze_context()
+// @param dir   int           Signal direction: 1 = bull, -1 = bear, 0 = neutral (default)
+// @returns bool
+export method gate_sweep_reversal(ContextState this, int dir = 0) =>
+    bool magnitude_ok = this.l4_liquidity >= 40.0 and this.l3_orderflow >= 30.0 and this.signal_gate  != "CLOSED"
+    bool direction_ok = dir == 0 or (dir == 1 ? this.bias >= 0 : this.bias <= 0)
+    magnitude_ok and direction_ok
+
+
+// =========================================================================
+// END — GodTier_ContextEngine v1.4.1 / published v7
+// =========================================================================
+// AUDIT: build_dashboard_str() removed — dead code (PATCH #9).
+// Main script builds CIE dashboard cells via individual table.cell() calls.
+// =========================================================================

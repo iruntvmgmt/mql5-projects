@@ -1,0 +1,3 @@
+MetaEditor build 6002, X64 Regular
+Result: 0 errors, 0 warnings, 9072 ms elapsed, cpu='X64 Regular'
+

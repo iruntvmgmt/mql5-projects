@@ -1,0 +1,303 @@
+//@version=6
+// ─────────────────────────────────────────────────────────────────────────────
+// HCC_Oscillator.pine — Hurst Cycle Channel Oscillator [RunsTV]
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-pane oscillator companion to HCC_Channel.pine.
+// Add both scripts to one chart for the complete Hurst Cycle Suite.
+//
+// Oscillator formulas:
+//   Classic HCC:      (price − MC_bot)  / (MC_top − MC_bot)
+//   Next-gen cycle:   (SC_mid − MC_bot) / (MC_top − MC_bot)
+//
+//   Classic mode reproduces the traditional visual oscillator: raw price
+//   position inside the medium channel, with real excursions beyond 0/1.
+//   Cycle-midpoint mode measures where the SHORT cycle's equilibrium sits:
+//     1.0 = SC midpoint at MC top    → peak extension, overbought
+//     0.5 = SC midpoint at MC center → equilibrium (zero-line equivalent)
+//     0.0 = SC midpoint at MC bottom → trough exhaustion, oversold
+//
+// Divergence detection:
+//   Bullish: price makes lower low, oscillator makes higher low
+//            → Short cycle losing downside amplitude. Macro cycle beginning up.
+//   Bearish: price makes higher high, oscillator makes lower high
+//            → Short cycle losing upside amplitude. Macro cycle beginning down.
+//   (Per Hurst's Principle of Summation — amplitude dampening by larger cycle)
+//
+// ⚠ SETUP: HurstCycleLib v2 is published under TradingView username: iruntvmgmt
+//   Use IDENTICAL Cycle Settings inputs as HCC_Channel.pine on the same chart.
+// ─────────────────────────────────────────────────────────────────────────────
+indicator("Hurst Cycle Oscillator [RunsTV]", shorttitle="HCC·OSC", overlay=false, max_labels_count=500)
+import iruntvmgmt/HurstCycleLib/2 as hurst
+
+
+// ─────────────────────────────────────────────
+// GROUPS
+// ─────────────────────────────────────────────
+grp_cycle   = "Cycle Settings — Nominal Model"
+grp_ma      = "Moving Average Engine"
+grp_osc     = "Oscillator Display"
+grp_div     = "Divergence Detection"
+
+
+// ─────────────────────────────────────────────
+// INPUTS — must match HCC_Channel.pine exactly
+// ─────────────────────────────────────────────
+
+// ── Cycle Settings (mirror of HCC_Channel) ────
+scl_bars = input.int  (10,    "Short Cycle Length (λ, bars)",  group=grp_cycle, minval=6,  maxval=200,
+             tooltip="Must match HCC_Channel.pine. Classic HCC default is 10. Half-span MA = λ/2.")
+mcl_bars = input.int  (30,    "Medium Cycle Length (λ, bars)", group=grp_cycle, minval=12, maxval=500,
+             tooltip="Must match HCC_Channel.pine. Classic HCC default is 30.")
+scm      = input.float(1.0,   "Short Band ATR Multiplier",     group=grp_cycle, minval=0.1, step=0.1,
+             tooltip="Must match HCC_Channel.pine. Oscillator range depends on band width consistency.")
+mcm      = input.float(3.0,   "Medium Band ATR Multiplier",    group=grp_cycle, minval=0.1, step=0.1)
+src      = input.source(close, "Price Source",                 group=grp_cycle,
+             tooltip="Classic HCC uses close. hlc3 is available if you prefer median-price smoothing. Must match HCC_Channel.pine.")
+
+// ── Moving Average Engine (mirror of HCC_Channel) ─
+ma_type  = input.string("RMA", "MA Type", options=["RMA", "SMA", "TMA", "EMA"], group=grp_ma,
+             tooltip="Must match HCC_Channel.pine. RMA reproduces the classic HCC visual. SMA/TMA are stricter Hurst-style linear-phase modes.")
+
+// ── Oscillator Display ────────────────────────
+show_histogram = input.bool(true, "Show Histogram Fill", group=grp_osc,
+                 tooltip="Fills the oscillator area with a trend-aware color.\nLime = medium cycle bullish phase (price above MC FLD).\nDeep red = medium cycle bearish phase (price below MC FLD).\nOpacity increases toward cycle extremes (0.0 / 1.0) — deeper color = more stretched cycle.")
+osc_mode       = input.string("Classic Price Position", "Oscillator Mode", group=grp_osc,
+                 options=["Classic Price Position", "Next-Gen Cycle Midpoint"],
+                 tooltip="Classic Price Position matches the traditional HCC oscillator: price normalized inside the medium channel. Next-Gen Cycle Midpoint uses the short-cycle median inside the medium channel.")
+clamp_osc      = input.bool(false, "Clamp Output to 0–1", group=grp_osc,
+                 tooltip="Off preserves traditional HCC excursions beyond 0 and 1. On pins extremes to the pane bounds.")
+osc_upper_band = input.float(0.8,   "Upper Band Level",        group=grp_osc, minval=0.5, maxval=1.0, step=0.05,
+                 tooltip="Oscillator above this level = peak zone / overbought. Color shifts to red.")
+osc_lower_band = input.float(0.2,   "Lower Band Level",        group=grp_osc, minval=0.0, maxval=0.5, step=0.05,
+                 tooltip="Oscillator below this level = trough zone / oversold. Color shifts to lime.")
+
+// ── Divergence Detection ──────────────────────
+show_divergence  = input.bool(true, "Show Divergence Labels",  group=grp_div,
+                   tooltip="Detects bullish and bearish divergences between price pivots and oscillator pivots.\nBullish: price LL + oscillator HL → downward cycle losing amplitude (macro cycle turning up).\nBearish: price HH + oscillator LH → upward cycle losing amplitude (macro cycle turning down).")
+div_pivot_bars   = input.int(8, "Divergence Pivot Bars", group=grp_div,
+                   minval=2, maxval=15,
+                   tooltip="Bars left and right to confirm a pivot for divergence detection.\nDefault 8 suits 5m–15m intraday charts (40–120min confirmation window).\nReduce to 5 for daily charts. Increase to 10–15 for very clean, low-frequency signals.")
+
+
+// ─────────────────────────────────────────────
+// ── CHANNEL CALCULATIONS ──
+// ─────────────────────────────────────────────
+// Identical math to HCC_Channel.pine — same library functions, same inputs.
+// Both scripts MUST use the same parameters for the oscillator to be meaningful.
+
+[sc_base, sc_top, sc_bot, sc_mid] = hurst.hurst_channel(src, scl_bars, scm, ma_type)
+[mc_base, mc_top, mc_bot, mc_mid] = hurst.hurst_channel(src, mcl_bars, mcm, ma_type)
+
+
+// ─────────────────────────────────────────────
+// ── FLD ──
+// ─────────────────────────────────────────────
+// fld_mc used for MC bias direction. fld_sc not required in oscillator pane.
+fld_mc  = hurst.hurst_fld(src, mcl_bars)
+mc_bull = src > fld_mc   // true = price above MC FLD = medium cycle bullish phase
+
+
+// ─────────────────────────────────────────────
+// ── OSCILLATOR ──
+// ─────────────────────────────────────────────
+// Classic formula: (price − MC_bot) / (MC_top − MC_bot)
+// Next-gen formula: (SC_mid − MC_bot) / (MC_top − MC_bot)
+// Output is unbounded by default so traditional excursions beyond 0/1 remain visible.
+
+osc_source = osc_mode == "Next-Gen Cycle Midpoint" ? sc_mid : src
+osc_raw    = hurst.hurst_osc(osc_source, mc_top, mc_bot)
+osc_val    = clamp_osc ? math.max(0.0, math.min(1.0, osc_raw)) : osc_raw
+osc_phase  = math.max(0.0, math.min(1.0, osc_val))
+
+
+// ─────────────────────────────────────────────
+// ── DIVERGENCE DETECTION ──
+// ─────────────────────────────────────────────
+// Uses pivot comparison on both price and oscillator.
+// Bullish divergence: price lower low + oscillator higher low
+//   → Short cycle downward amplitude is dampened by an emerging macro upswing.
+//     Per Hurst Summation: larger cycle's upward phase diminishes the smaller
+//     cycle's downward excursion, creating oscillator non-confirmation.
+// Bearish divergence: price higher high + oscillator lower high
+//   → Short cycle upward amplitude is dampened by an emerging macro downswing.
+
+// Current bar pivots (confirmed div_pivot_bars bars ago on each side)
+osc_piv_low    = ta.pivotlow (osc_val, div_pivot_bars, div_pivot_bars)
+osc_piv_high   = ta.pivothigh(osc_val, div_pivot_bars, div_pivot_bars)
+price_piv_low  = ta.pivotlow (src,     div_pivot_bars, div_pivot_bars)
+price_piv_high = ta.pivothigh(src,     div_pivot_bars, div_pivot_bars)
+
+// State: store the second-most-recent pivot for two-pivot comparison
+var float prev_osc_low    = na
+var float prev_price_low  = na
+var float prev_osc_high   = na
+var float prev_price_high = na
+var float curr_osc_low    = na
+var float curr_price_low  = na
+var float curr_osc_high   = na
+var float curr_price_high = na
+
+// Pivot state tracking — INDEPENDENT per series.
+// Do NOT combine osc and price into a single `and` condition.
+// Divergence is defined by their DIFFERENT behavior — they will
+// almost never confirm a pivot on the same bar by design.
+
+if not na(osc_piv_low)
+    // Promote: second-most-recent ← most-recent ← new confirmed pivot
+    prev_osc_low := curr_osc_low
+    curr_osc_low := osc_piv_low
+
+if not na(price_piv_low)
+    prev_price_low := curr_price_low
+    curr_price_low := price_piv_low
+
+if not na(osc_piv_high)
+    prev_osc_high := curr_osc_high
+    curr_osc_high := osc_piv_high
+
+if not na(price_piv_high)
+    prev_price_high := curr_price_high
+    curr_price_high := price_piv_high
+
+// DIVERGENCE EXPRESSIONS — freshness-gated on osc_piv_low/high.
+// The `not na(osc_piv_low/high)` gate is mandatory.
+// Without it, bull_div/bear_div evaluate true on every bar once the stored
+// curr_*/prev_* state is set, flooding label.new() until max_labels_count
+// is exhausted. The gate restricts firing to the single bar where
+// ta.pivotlow/pivothigh confirms a new pivot — one label per divergence,
+// always positioned at a valid Y coordinate.
+
+// Bullish divergence: price LL + oscillator HL
+bull_div = not na(osc_piv_low)         and   // GATE: fires only on pivot confirmation bar
+           not na(curr_osc_low)        and
+           not na(curr_price_low)      and
+           not na(prev_price_low)      and
+           not na(prev_osc_low)        and
+           curr_price_low < prev_price_low and   // price making lower low
+           curr_osc_low   > prev_osc_low          // oscillator making higher low (non-confirmation)
+
+// Bearish divergence: price HH + oscillator LH
+bear_div = not na(osc_piv_high)          and   // GATE: fires only on pivot confirmation bar
+           not na(curr_osc_high)         and
+           not na(curr_price_high)       and
+           not na(prev_price_high)       and
+           not na(prev_osc_high)         and
+           curr_price_high > prev_price_high and  // price making higher high
+           curr_osc_high   < prev_osc_high         // oscillator making lower high (non-confirmation)
+
+
+// ─────────────────────────────────────────────
+// ── COLORS ──
+// ─────────────────────────────────────────────
+// osc_color: zone-aware line color — unchanged, reflects short cycle position.
+osc_color = osc_val >= osc_upper_band ? color.red  : osc_val <= osc_lower_band ? color.lime  : color.aqua
+
+// ── TREND-AWARE FILL COLORS ──
+// Distance from equilibrium: 0.0 at midline → 1.0 at extremes
+osc_dist    = math.min(1.0, math.abs(osc_phase - 0.5) * 2.0)
+// Transparency: 88% near equilibrium, 45% at extremes
+fill_transp = show_histogram ? math.round(88 - osc_dist * 43) : 100
+// MC bias determines base color
+// Lime = bullish medium cycle phase (price above MC FLD)
+// Deep red = bearish medium cycle phase (price below MC FLD)
+bear_fill_base = color.rgb(150, 0, 0)
+fill_color  = show_histogram ? color.new(mc_bull ? color.lime : bear_fill_base, fill_transp) : color.new(color.white, 100)
+
+
+// ─────────────────────────────────────────────
+// ── PLOTS — LEVELS ──
+// ─────────────────────────────────────────────
+// Traditional bounds [0, 1] — exceedance indicates extreme trend translation
+hline(1.0, "Max (Peak Extension)",    color=color.new(color.red,  30), linewidth=1)
+hline(0.0, "Min (Trough Exhaustion)", color=color.new(color.lime, 30), linewidth=1)
+
+// User-defined overbought/oversold bands
+hline(osc_upper_band, "Upper Band",
+      color=color.new(color.red,  50), linestyle=hline.style_dotted, linewidth=1)
+hline(osc_lower_band, "Lower Band",
+      color=color.new(color.lime, 50), linestyle=hline.style_dotted, linewidth=1)
+
+// Equilibrium — equivalent to the zero-line of a standard oscillator
+hline(0.5, "Equilibrium (0.5)",
+      color=color.new(color.white, 60), linestyle=hline.style_dashed, linewidth=1)
+
+
+// ─────────────────────────────────────────────
+// ── PLOTS — OSCILLATOR LINE ──
+// ─────────────────────────────────────────────
+osc_p = plot(osc_val, "Oscillator",
+             color=osc_color, linewidth=2)
+
+// Hidden midline plot for fill() reference
+mid_p = plot(0.5, "Midline (hidden)", display=display.none)
+
+// Histogram fill — MC bias color, intensity proportional to cycle stretch
+fill(osc_p, mid_p,
+     top_color    = fill_color,
+     bottom_color = fill_color,
+     title        = "Histogram Fill")
+
+
+// ─────────────────────────────────────────────
+// ── LABELS — DIVERGENCE ──
+// ─────────────────────────────────────────────
+// Plotted at the pivot bar (div_pivot_bars ago) using bar_index offset.
+// Label position = pivot value on the oscillator pane.
+
+if show_divergence and bull_div
+    label.new(bar_index[div_pivot_bars], osc_piv_low,
+              "▲ BULL DIV",
+              style    = label.style_label_up,
+              color    = color.new(color.lime, 60),
+              textcolor= color.white,
+              size     = size.small)
+
+if show_divergence and bear_div
+    label.new(bar_index[div_pivot_bars], osc_piv_high,
+              "▼ BEAR DIV",
+              style    = label.style_label_down,
+              color    = color.new(color.red, 60),
+              textcolor= color.white,
+              size     = size.small)
+
+
+// ─────────────────────────────────────────────
+// ── LABEL — CURRENT PHASE (last bar only) ──
+// ─────────────────────────────────────────────
+// Phase label at the right edge of the oscillator pane.
+// Only rendered on the most recent bar to avoid hitting max_labels_count.
+
+if barstate.islast
+    phase_label = hurst.hurst_phase_label(osc_phase)
+    phase_color = osc_val >= osc_upper_band ? color.red  :
+                  osc_val <= osc_lower_band ? color.lime  : color.gray
+    label.new(bar_index, osc_val,
+              phase_label,
+              xloc      = xloc.bar_index,
+              style     = label.style_label_left,
+              color     = color.new(color.black, 70),
+              textcolor = phase_color,
+              size      = size.tiny)
+
+
+// ─────────────────────────────────────────────
+// ── ALERTS ──
+// ─────────────────────────────────────────────
+alertcondition(bull_div,
+               "HCC OSC – Bullish Divergence",
+               "Hurst oscillator bullish divergence: price lower low + oscillator higher low. Macro cycle potentially turning up.")
+alertcondition(bear_div,
+               "HCC OSC – Bearish Divergence",
+               "Hurst oscillator bearish divergence: price higher high + oscillator lower high. Macro cycle potentially turning down.")
+alertcondition(ta.crossover(osc_val, 0.5),
+               "HCC OSC – Cross Above Equilibrium",
+               "Oscillator crossed above 0.5 — measured oscillator source is now in the medium cycle's upper half. Bullish phase shift.")
+alertcondition(ta.crossunder(osc_val, 0.5),
+               "HCC OSC – Cross Below Equilibrium",
+               "Oscillator crossed below 0.5 — measured oscillator source is now in the medium cycle's lower half. Bearish phase shift.")
+alertcondition(osc_val >= osc_upper_band and osc_val[1] < osc_upper_band,
+               "HCC OSC – Entered Peak Zone",
+               "Oscillator entered upper band — measured oscillator source is approaching MC top. Peak extension / potential reversal zone.")
+alertcondition(osc_val <= osc_lower_band and osc_val[1] > osc_lower_band,
+               "HCC OSC – Entered Trough Zone",
+               "Oscillator entered lower band — measured oscillator source is approaching MC bottom. Trough exhaustion / potential reversal zone.")

@@ -1,0 +1,224 @@
+//@version=5
+// Trendline projection and breakout state logic adapted from
+// "Trendlines with Breaks [LuxAlgo]" under CC BY-NC-SA 4.0.
+// ZigZag swing detection is a fresh ATR-reversal engine.
+indicator("ZigZag Trendlines with Breaks [Lux Logic]", "ZZ Lux TL Breaks", overlay=true, max_bars_back=500, max_lines_count=500, max_labels_count=500)
+
+//------------------------------------------------------------------------------
+// Settings
+//------------------------------------------------------------------------------
+g_zz = "ZigZag Engine"
+atrLen = input.int(14, "ATR Length", minval=1, group=g_zz)
+atrMult = input.float(1.5, "ATR Reversal Multiplier", minval=0.1, step=0.1, group=g_zz)
+minSwingBars = input.int(3, "Minimum Bars Between Swings", minval=1, group=g_zz)
+reversalSource = input.string("High/Low wicks", "Reversal Confirmation Source", options=["High/Low wicks", "Close"], group=g_zz)
+useBodyExtremes = input.bool(false, "Use Candle Bodies", group=g_zz, tooltip="Uses max/min of open and close for ZigZag extremes. Useful for Renko-style charts.")
+
+g_lux = "Lux Trendline Logic"
+projectionMode = input.string("ZigZag Pivot Pair", "Projection Mode", options=["ZigZag Pivot Pair", "Lux Volatility Slope"], group=g_lux, tooltip="Pivot Pair connects the last two confirmed ZigZag highs/lows. Lux Volatility Slope keeps the original single-pivot ATR/Stdev/Linreg projection behavior.")
+slopeLen = input.int(14, "Slope Length", minval=1, group=g_lux)
+mult = input.float(1.0, "Slope", minval=0, step=0.1, group=g_lux)
+calcMethod = input.string("Atr", "Slope Calculation Method", options=["Atr", "Stdev", "Linreg"], group=g_lux)
+breakoutSource = input.string("Close", "Breakout Source", options=["Close", "High/Low wicks"], group=g_lux)
+backpaint = input.bool(true, "Backpaint Trendlines", group=g_lux, tooltip="When enabled, projected lines begin from the actual ZigZag swing bar. Disable to begin drawings on the confirmation bar.")
+
+g_style = "Style"
+upCss = input.color(color.teal, "Up Trendline Color", group=g_style)
+dnCss = input.color(color.red, "Down Trendline Color", group=g_style)
+showExt = input.bool(true, "Show Extended Lines", group=g_style)
+showZigZag = input.bool(true, "Show ZigZag Swings", group=g_style)
+showPivotLabels = input.bool(true, "Show HH/HL/LH/LL Labels", group=g_style)
+keepHistorical = input.bool(true, "Keep Historical Lines", group=g_style)
+
+//------------------------------------------------------------------------------
+// ZigZag engine
+//------------------------------------------------------------------------------
+float zzHigh = useBodyExtremes ? math.max(open, close) : high
+float zzLow = useBodyExtremes ? math.min(open, close) : low
+float reversalHigh = reversalSource == "Close" ? close : zzHigh
+float reversalLow = reversalSource == "Close" ? close : zzLow
+float atrThreshold = ta.atr(atrLen) * atrMult
+
+var int trendDir = 1
+var float extreme = na
+var int extremeBar = na
+var int lastPivotBar = na
+var float lastPivotPrice = na
+var int lastPivotType = 0
+
+var float prevSwingHigh = na
+var float prevSwingLow = na
+var float high1Price = na
+var int high1Bar = na
+var float high2Price = na
+var int high2Bar = na
+var float low1Price = na
+var int low1Bar = na
+var float low2Price = na
+var int low2Bar = na
+
+bool ph = false
+bool pl = false
+float pivotPrice = na
+int pivotBar = na
+string pivotText = ""
+
+if na(extreme)
+    trendDir := close >= nz(close[1], close) ? 1 : -1
+    extreme := trendDir == 1 ? zzHigh : zzLow
+    extremeBar := bar_index
+
+if trendDir == 1
+    if zzHigh >= extreme
+        extreme := zzHigh
+        extremeBar := bar_index
+
+    bool reversalDown = reversalSource == "Close" ? close <= extreme - atrThreshold : reversalLow <= extreme - atrThreshold
+    bool highSpacingOk = na(lastPivotBar) or math.abs(extremeBar - lastPivotBar) >= minSwingBars
+
+    if reversalDown and highSpacingOk
+        ph := true
+        pivotPrice := extreme
+        pivotBar := extremeBar
+        pivotText := na(prevSwingHigh) ? "H" : pivotPrice > prevSwingHigh ? "HH" : "LH"
+        prevSwingHigh := pivotPrice
+        trendDir := -1
+        extreme := zzLow
+        extremeBar := bar_index
+else
+    if zzLow <= extreme
+        extreme := zzLow
+        extremeBar := bar_index
+
+    bool reversalUp = reversalSource == "Close" ? close >= extreme + atrThreshold : reversalHigh >= extreme + atrThreshold
+    bool lowSpacingOk = na(lastPivotBar) or math.abs(extremeBar - lastPivotBar) >= minSwingBars
+
+    if reversalUp and lowSpacingOk
+        pl := true
+        pivotPrice := extreme
+        pivotBar := extremeBar
+        pivotText := na(prevSwingLow) ? "L" : pivotPrice > prevSwingLow ? "HL" : "LL"
+        prevSwingLow := pivotPrice
+        trendDir := 1
+        extreme := zzHigh
+        extremeBar := bar_index
+
+bool newPivot = ph or pl
+
+if newPivot
+    if showZigZag and not na(lastPivotBar) and lastPivotType != (ph ? 1 : -1)
+        line.new(lastPivotBar, lastPivotPrice, pivotBar, pivotPrice, xloc=xloc.bar_index, color=color.new(color.gray, 25), width=1)
+
+    if showPivotLabels
+        color txtColor = ph ? dnCss : upCss
+        label.new(pivotBar, pivotPrice, pivotText, xloc=xloc.bar_index, yloc=yloc.price, style=label.style_none, textcolor=txtColor, size=size.small)
+
+    lastPivotBar := pivotBar
+    lastPivotPrice := pivotPrice
+    lastPivotType := ph ? 1 : -1
+
+//------------------------------------------------------------------------------
+// Lux-style slope and projected trendlines fed by ZigZag pivots
+//------------------------------------------------------------------------------
+float n = bar_index
+float src = close
+float slope = switch calcMethod
+    "Atr" => ta.atr(slopeLen) / slopeLen * mult
+    "Stdev" => ta.stdev(src, slopeLen) / slopeLen * mult
+    "Linreg" => math.abs(ta.sma(src * n, slopeLen) - ta.sma(src, slopeLen) * ta.sma(n, slopeLen)) / ta.variance(n, slopeLen) / 2 * mult
+
+var float upper = na
+var float lower = na
+var float slopePh = 0.0
+var float slopePl = 0.0
+var int upperBar = na
+var int lowerBar = na
+var line uptl = na
+var line dntl = na
+
+if ph
+    high2Price := high1Price
+    high2Bar := high1Bar
+    high1Price := pivotPrice
+    high1Bar := pivotBar
+
+    bool canUseHighPair = projectionMode == "ZigZag Pivot Pair" and not na(high2Price) and not na(high2Bar) and high1Bar != high2Bar
+    bool useHighProjection = projectionMode == "Lux Volatility Slope" or canUseHighPair
+
+    if useHighProjection
+        slopePh := canUseHighPair ? (high1Price - high2Price) / (high1Bar - high2Bar) : -slope
+        upper := high1Price
+        upperBar := high1Bar
+
+        if showExt
+            if not keepHistorical and not na(uptl)
+                line.delete(uptl)
+
+            int upperX1 = canUseHighPair and backpaint ? high2Bar : backpaint ? high1Bar : bar_index
+            float upperY1 = canUseHighPair and backpaint ? high2Price : backpaint ? high1Price : high1Price + slopePh * (bar_index - high1Bar)
+            int upperX2 = canUseHighPair and backpaint ? high1Bar : upperX1 + 1
+            float upperY2 = canUseHighPair and backpaint ? high1Price : upperY1 + slopePh
+            uptl := line.new(upperX1, upperY1, upperX2, upperY2, xloc=xloc.bar_index, extend=extend.right, color=upCss, style=line.style_dashed, width=2)
+
+if pl
+    low2Price := low1Price
+    low2Bar := low1Bar
+    low1Price := pivotPrice
+    low1Bar := pivotBar
+
+    bool canUseLowPair = projectionMode == "ZigZag Pivot Pair" and not na(low2Price) and not na(low2Bar) and low1Bar != low2Bar
+    bool useLowProjection = projectionMode == "Lux Volatility Slope" or canUseLowPair
+
+    if useLowProjection
+        slopePl := canUseLowPair ? (low1Price - low2Price) / (low1Bar - low2Bar) : slope
+        lower := low1Price
+        lowerBar := low1Bar
+
+        if showExt
+            if not keepHistorical and not na(dntl)
+                line.delete(dntl)
+
+            int lowerX1 = canUseLowPair and backpaint ? low2Bar : backpaint ? low1Bar : bar_index
+            float lowerY1 = canUseLowPair and backpaint ? low2Price : backpaint ? low1Price : low1Price + slopePl * (bar_index - low1Bar)
+            int lowerX2 = canUseLowPair and backpaint ? low1Bar : lowerX1 + 1
+            float lowerY2 = canUseLowPair and backpaint ? low1Price : lowerY1 + slopePl
+            dntl := line.new(lowerX1, lowerY1, lowerX2, lowerY2, xloc=xloc.bar_index, extend=extend.right, color=dnCss, style=line.style_dashed, width=2)
+
+float upperNow = not na(upper) and not na(upperBar) ? upper + slopePh * (bar_index - upperBar) : na
+float lowerNow = not na(lower) and not na(lowerBar) ? lower + slopePl * (bar_index - lowerBar) : na
+
+plot(upperNow, "Upper", color=ph ? na : upCss)
+plot(lowerNow, "Lower", color=pl ? na : dnCss)
+
+//------------------------------------------------------------------------------
+// Breakouts
+//------------------------------------------------------------------------------
+bool useCloseBreakout = breakoutSource == "Close"
+float boHigh = useCloseBreakout ? close : high
+float boLow = useCloseBreakout ? close : low
+
+var int upos = 0
+var int dnos = 0
+
+upos := ph ? 0 : not na(upperNow) and boHigh > upperNow ? 1 : upos
+dnos := pl ? 0 : not na(lowerNow) and boLow < lowerNow ? 1 : dnos
+
+bool upperBreak = upos > nz(upos[1])
+bool lowerBreak = dnos > nz(dnos[1])
+
+if upperBreak and not na(uptl)
+    line.set_extend(uptl, extend.none)
+    line.set_color(uptl, color.new(upCss, 70))
+
+if lowerBreak and not na(dntl)
+    line.set_extend(dntl, extend.none)
+    line.set_color(dntl, color.new(dnCss, 70))
+
+plotshape(upperBreak ? low : na, "Upper Break", shape.labelup, location.absolute, upCss, text="B", textcolor=color.white, size=size.tiny)
+plotshape(lowerBreak ? high : na, "Lower Break", shape.labeldown, location.absolute, dnCss, text="B", textcolor=color.white, size=size.tiny)
+
+//------------------------------------------------------------------------------
+// Alerts
+//------------------------------------------------------------------------------
+alertcondition(upperBreak, "Upward Breakout", "Price broke the ZigZag down-trendline upward")
+alertcondition(lowerBreak, "Downward Breakout", "Price broke the ZigZag up-trendline downward")

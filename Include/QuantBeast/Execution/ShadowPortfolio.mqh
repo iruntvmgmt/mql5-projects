@@ -1,0 +1,411 @@
+//+------------------------------------------------------------------+
+//|                                  QuantBeast/ShadowPortfolio.mqh   |
+//| Broker-order-free virtual position lifecycle for Shadow mode.    |
+//+------------------------------------------------------------------+
+#property strict
+
+#ifndef QB_SHADOWPORTFOLIO_MQH
+#define QB_SHADOWPORTFOLIO_MQH
+
+#include "../Core/Types.mqh"
+#include "../Core/Constants.mqh"
+#include "../Core/Diagnostics.mqh"
+#include "../Data/MarketData.mqh"
+
+struct ShadowCloseEvent
+{
+   string strategy_id;
+   ulong signal_id;
+   ENUM_POSITION_TYPE position_type;
+   double original_entry;
+   double original_stop;
+   double initial_target;
+   double initial_volume;
+   double mfe;
+   double mae;
+   ENUM_TREND_REGIME entry_regime_trend;
+   ENUM_VOLATILITY_REGIME entry_regime_vol;
+   ENUM_SESSION_TYPE entry_session;
+   double entry_spread;
+   double entry_slippage;
+   datetime entry_time;
+   double exit_price;
+   double gross_pnl;
+   double commission;
+   double swap;
+   double net_pnl;
+   ENUM_EXIT_REASON exit_reason;
+};
+
+class CShadowPortfolio
+{
+private:
+   CSymbolAdapter *m_adapter;
+   PositionContext m_contexts[20];
+   double m_currentVolumes[20];
+   double m_realizedGross[20];
+   int m_count;
+   ulong m_nextId;
+   double m_balance;
+   double m_initialBalance;
+   double m_commissionPerLot;
+   double m_slippagePoints;
+
+   bool m_enableBreakeven;
+   double m_beTriggerR;
+   double m_bePlusPoints;
+   bool m_enablePartial;
+   double m_partialPct;
+   double m_partialTriggerR;
+   bool m_enableTrail;
+   double m_trailATRMult;
+   double m_trailStartR;
+   bool m_enableTimeStop;
+   int m_timeStopMinutes;
+
+   double ExitQuote(ENUM_POSITION_TYPE type, const MarketSnapshot &snap) const
+   {
+      return (type == POSITION_TYPE_BUY) ? snap.bid : snap.ask;
+   }
+
+   double Profit(ENUM_POSITION_TYPE type, double volume,
+                 double entry, double exitPrice) const
+   {
+      double pnl = 0;
+      ENUM_ORDER_TYPE orderType = (type == POSITION_TYPE_BUY) ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+      if(OrderCalcProfit(orderType, m_adapter.Symbol(), volume, entry, exitPrice, pnl))
+         return pnl;
+      int direction = (type == POSITION_TYPE_BUY) ? 1 : -1;
+      return m_adapter.CalculateProfit(volume, entry, exitPrice, direction);
+   }
+
+   double AdverseExit(ENUM_POSITION_TYPE type, double rawPrice) const
+   {
+      double slip = m_slippagePoints * m_adapter.Point();
+      return m_adapter.NormalizePrice((type == POSITION_TYPE_BUY) ? rawPrice - slip : rawPrice + slip);
+   }
+
+   void RemoveAt(int idx)
+   {
+      for(int i = idx; i < m_count - 1; i++)
+      {
+         m_contexts[i] = m_contexts[i + 1];
+         m_currentVolumes[i] = m_currentVolumes[i + 1];
+         m_realizedGross[i] = m_realizedGross[i + 1];
+      }
+      m_count--;
+   }
+
+   void AppendCloseEvent(ShadowCloseEvent &events[], const PositionContext &ctx,
+                         double realizedGross,
+                         double exitPrice, double finalGross,
+                         ENUM_EXIT_REASON reason)
+   {
+      int n = ArraySize(events);
+      ArrayResize(events, n + 1);
+      events[n].strategy_id = ctx.strategy_id;
+      events[n].signal_id = ctx.signal_id;
+      events[n].position_type = ctx.position_type;
+      events[n].original_entry = ctx.original_entry;
+      events[n].original_stop = ctx.original_stop;
+      events[n].initial_target = ctx.initial_target;
+      events[n].initial_volume = ctx.initial_volume;
+      events[n].mfe = ctx.mfe;
+      events[n].mae = ctx.mae;
+      events[n].entry_regime_trend = ctx.entry_regime_trend;
+      events[n].entry_regime_vol = ctx.entry_regime_vol;
+      events[n].entry_session = ctx.entry_session;
+      events[n].entry_spread = ctx.entry_spread;
+      events[n].entry_slippage = ctx.entry_slippage;
+      events[n].entry_time = ctx.entry_time;
+      events[n].exit_price = exitPrice;
+      events[n].gross_pnl = realizedGross + finalGross;
+      events[n].commission = -m_commissionPerLot * ctx.initial_volume;
+      events[n].swap = 0;
+      events[n].net_pnl = events[n].gross_pnl + events[n].commission;
+      events[n].exit_reason = reason;
+   }
+
+   bool CloseFull(int idx, double rawExitPrice, ENUM_EXIT_REASON reason,
+                  ShadowCloseEvent &events[])
+   {
+      if(idx < 0 || idx >= m_count) return false;
+      PositionContext ctx = m_contexts[idx];
+      double exitPrice = AdverseExit(ctx.position_type, rawExitPrice);
+      double finalGross = Profit(ctx.position_type, m_currentVolumes[idx],
+                                 ctx.original_entry, exitPrice);
+
+      // Partial closes were already credited with their proportional costs.
+      double finalCommission = -m_commissionPerLot * m_currentVolumes[idx];
+      m_balance += finalGross + finalCommission;
+      AppendCloseEvent(events, ctx, m_realizedGross[idx], exitPrice, finalGross, reason);
+      RemoveAt(idx);
+      return true;
+   }
+
+public:
+   CShadowPortfolio()
+   {
+      m_adapter = NULL;
+      m_count = 0;
+      m_nextId = 1;
+      m_balance = 0;
+      m_initialBalance = 0;
+      m_commissionPerLot = 0;
+      m_slippagePoints = 0;
+      m_enableBreakeven = false;
+      m_beTriggerR = 0;
+      m_bePlusPoints = 0;
+      m_enablePartial = false;
+      m_partialPct = 0;
+      m_partialTriggerR = 0;
+      m_enableTrail = false;
+      m_trailATRMult = 0;
+      m_trailStartR = 0;
+      m_enableTimeStop = false;
+      m_timeStopMinutes = 0;
+   }
+
+   void Init(CSymbolAdapter &adapter, double startingBalance,
+             double commissionPerLot, double slippagePoints,
+             bool breakeven, double beTriggerR, double bePlusPoints,
+             bool partialClose, double partialPct, double partialTriggerR,
+             bool atrTrail, double trailATRMult, double trailStartR,
+             bool timeStop, int timeStopMinutes)
+   {
+      m_adapter = &adapter;
+      m_count = 0;
+      m_nextId = 1;
+      m_initialBalance = startingBalance;
+      m_balance = startingBalance;
+      m_commissionPerLot = MathMax(0.0, commissionPerLot);
+      m_slippagePoints = MathMax(0.0, slippagePoints);
+      m_enableBreakeven = breakeven;
+      m_beTriggerR = beTriggerR;
+      m_bePlusPoints = bePlusPoints;
+      m_enablePartial = partialClose;
+      m_partialPct = Clamp(partialPct, 0.0, 100.0);
+      m_partialTriggerR = partialTriggerR;
+      m_enableTrail = atrTrail;
+      m_trailATRMult = trailATRMult;
+      m_trailStartR = trailStartR;
+      m_enableTimeStop = timeStop;
+      m_timeStopMinutes = timeStopMinutes;
+   }
+
+   bool Open(const StrategySignal &signal, double volume,
+             const RegimeState &regime, const MarketSnapshot &snap,
+             ulong signalId, string &reason)
+   {
+      if(m_adapter == NULL || m_count >= 20)
+      {
+         reason = "Shadow position capacity reached";
+         return false;
+      }
+      if(volume <= 0)
+      {
+         reason = "Invalid shadow volume";
+         return false;
+      }
+
+      ENUM_POSITION_TYPE type = (signal.direction == ORDER_TYPE_BUY) ?
+                                POSITION_TYPE_BUY : POSITION_TYPE_SELL;
+      double slip = m_slippagePoints * m_adapter.Point();
+      double marketPrice = (type == POSITION_TYPE_BUY) ? snap.ask : snap.bid;
+      double entry = m_adapter.NormalizePrice((type == POSITION_TYPE_BUY) ?
+                                               marketPrice + slip : marketPrice - slip);
+      bool geometry = (type == POSITION_TYPE_BUY && signal.proposed_stop < entry &&
+                       signal.proposed_target > entry) ||
+                      (type == POSITION_TYPE_SELL && signal.proposed_stop > entry &&
+                       signal.proposed_target < entry);
+      if(!geometry)
+      {
+         reason = "Slippage invalidated shadow stop/target geometry";
+         return false;
+      }
+
+      int idx = m_count;
+      ZeroMemory(m_contexts[idx]);
+      m_contexts[idx].strategy_id = signal.strategy_id;
+      m_contexts[idx].signal_id = signalId;
+      m_contexts[idx].order_ticket = m_nextId;
+      m_contexts[idx].position_ticket = m_nextId;
+      m_contexts[idx].position_identifier = m_nextId++;
+      m_contexts[idx].position_type = type;
+      m_contexts[idx].original_entry = entry;
+      m_contexts[idx].original_stop = signal.proposed_stop;
+      m_contexts[idx].current_stop = signal.proposed_stop;
+      m_contexts[idx].initial_target = signal.proposed_target;
+      m_contexts[idx].initial_volume = volume;
+      m_contexts[idx].original_risk = MathAbs(entry - signal.proposed_stop);
+      m_contexts[idx].entry_time = TimeCurrent();
+      m_contexts[idx].last_update = TimeCurrent();
+      m_contexts[idx].entry_regime_trend = regime.trend;
+      m_contexts[idx].entry_regime_vol = regime.volatility;
+      m_contexts[idx].entry_session = regime.session;
+      m_contexts[idx].entry_spread = snap.spread_points;
+      m_contexts[idx].entry_slippage = m_slippagePoints;
+      m_contexts[idx].mgmt_state = MGMT_FIXED_STOP;
+      m_currentVolumes[idx] = volume;
+      m_realizedGross[idx] = 0;
+      m_count++;
+      reason = "Shadow position opened";
+      return true;
+   }
+
+   int Update(const MarketSnapshot &snap, const FeatureSnapshot &feat,
+              ShadowCloseEvent &events[], datetime evaluationTime=0)
+   {
+      ArrayResize(events, 0);
+      if(m_adapter == NULL) return 0;
+      datetime now = (evaluationTime > 0) ? evaluationTime : TimeCurrent();
+
+      for(int i = m_count - 1; i >= 0; i--)
+      {
+         PositionContext ctx = m_contexts[i];
+         double currentVolume = m_currentVolumes[i];
+         double realizedGross = m_realizedGross[i];
+         int direction = (ctx.position_type == POSITION_TYPE_BUY) ? 1 : -1;
+         double quote = ExitQuote(ctx.position_type, snap);
+         double riskDistance = MathAbs(ctx.original_entry - ctx.original_stop);
+         if(riskDistance <= 0) continue;
+
+         double excursion = (quote - ctx.original_entry) * direction;
+         ctx.current_r = excursion / riskDistance;
+         if(excursion > ctx.mfe) ctx.mfe = excursion;
+         if(excursion < ctx.mae) ctx.mae = excursion;
+
+         bool stopHit = (direction > 0) ? quote <= ctx.current_stop : quote >= ctx.current_stop;
+         bool targetHit = (direction > 0) ? quote >= ctx.initial_target : quote <= ctx.initial_target;
+         if(stopHit)
+         {
+            double raw = (direction > 0) ? MathMin(quote, ctx.current_stop) :
+                                           MathMax(quote, ctx.current_stop);
+            m_contexts[i] = ctx;
+            CloseFull(i, raw, EXIT_STOP_LOSS, events);
+            continue;
+         }
+         if(targetHit)
+         {
+            m_contexts[i] = ctx;
+            CloseFull(i, ctx.initial_target, EXIT_TARGET_HIT, events);
+            continue;
+         }
+
+         bool stopBehindBreakeven = (direction > 0) ? ctx.current_stop < ctx.original_entry :
+                                                     ctx.current_stop > ctx.original_entry;
+         if(m_enableBreakeven && ctx.current_r >= m_beTriggerR && stopBehindBreakeven)
+         {
+            double candidate = ctx.original_entry + direction * m_bePlusPoints * m_adapter.Point();
+            if((direction > 0 && candidate > ctx.current_stop) ||
+               (direction < 0 && candidate < ctx.current_stop))
+            {
+               ctx.current_stop = m_adapter.NormalizePrice(candidate);
+               ctx.mgmt_state = MGMT_BREAKEVEN_PLUS;
+            }
+         }
+
+         if(m_enablePartial && !ctx.partial_exit_done &&
+            ctx.current_r >= m_partialTriggerR)
+         {
+            double closeVolume = m_adapter.NormalizeVolumeDown(currentVolume * m_partialPct / 100.0);
+            if(closeVolume >= m_adapter.MinLot() && closeVolume < currentVolume - QB_EPSILON)
+            {
+               double exitPrice = AdverseExit(ctx.position_type, quote);
+               double gross = Profit(ctx.position_type, closeVolume,
+                                     ctx.original_entry, exitPrice);
+               double commission = m_commissionPerLot * closeVolume;
+               m_balance += gross - commission;
+               realizedGross += gross;
+               currentVolume = m_adapter.NormalizeVolumeDown(currentVolume - closeVolume);
+               ctx.partial_exit_done = true;
+               ctx.partial_exit_count++;
+               ctx.mgmt_state = MGMT_PARTIAL_CLOSE;
+            }
+         }
+
+         if(m_enableTrail && feat.atr > 0 && ctx.current_r >= m_trailStartR)
+         {
+            double candidate = quote - direction * m_trailATRMult * feat.atr;
+            double minDistance = MathMax(m_adapter.StopLevel(), m_adapter.FreezeLevel()) * m_adapter.Point();
+            bool legalSide = (direction > 0) ? candidate < snap.bid - minDistance :
+                                              candidate > snap.ask + minDistance;
+            bool improves = (direction > 0) ? candidate > ctx.current_stop :
+                                              candidate < ctx.current_stop;
+            if(legalSide && improves)
+            {
+               ctx.current_stop = m_adapter.NormalizePrice(candidate);
+               ctx.mgmt_state = MGMT_ATR_TRAIL;
+            }
+         }
+
+         if(m_enableTimeStop && m_timeStopMinutes > 0 &&
+            now - ctx.entry_time >= m_timeStopMinutes * 60)
+         {
+            m_contexts[i] = ctx;
+            m_currentVolumes[i] = currentVolume;
+            m_realizedGross[i] = realizedGross;
+            CloseFull(i, quote, EXIT_TIME_STOP, events);
+            continue;
+         }
+         ctx.last_update = now;
+         m_contexts[i] = ctx;
+         m_currentVolumes[i] = currentVolume;
+         m_realizedGross[i] = realizedGross;
+      }
+      return ArraySize(events);
+   }
+
+   int CloseAll(const MarketSnapshot &snap, ShadowCloseEvent &events[])
+   {
+      ArrayResize(events, 0);
+      for(int i = m_count - 1; i >= 0; i--)
+         CloseFull(i, ExitQuote(m_contexts[i].position_type, snap), EXIT_EMERGENCY_FLATTEN, events);
+      return ArraySize(events);
+   }
+
+   double GetBalance() const { return m_balance; }
+   double GetInitialBalance() const { return m_initialBalance; }
+   int GetPositionCount() const { return m_count; }
+
+   double GetEquity(const MarketSnapshot &snap) const
+   {
+      double equity = m_balance;
+      for(int i = 0; i < m_count; i++)
+      {
+         double quote = ExitQuote(m_contexts[i].position_type, snap);
+         equity += Profit(m_contexts[i].position_type,
+                          m_currentVolumes[i],
+                          m_contexts[i].original_entry, quote);
+         equity -= m_commissionPerLot * m_currentVolumes[i];
+      }
+      return equity;
+   }
+
+   double GetExposure() const
+   {
+      double total = 0;
+      for(int i = 0; i < m_count; i++) total += m_currentVolumes[i];
+      return total;
+   }
+
+   void CountPositions(int &longCount, int &shortCount) const
+   {
+      longCount = 0; shortCount = 0;
+      for(int i = 0; i < m_count; i++)
+      {
+         if(m_contexts[i].position_type == POSITION_TYPE_BUY) longCount++;
+         else shortCount++;
+      }
+   }
+
+   int GetStrategyCount(const string strategyId) const
+   {
+      int count = 0;
+      for(int i = 0; i < m_count; i++)
+         if(m_contexts[i].strategy_id == strategyId) count++;
+      return count;
+   }
+};
+
+#endif // QB_SHADOWPORTFOLIO_MQH

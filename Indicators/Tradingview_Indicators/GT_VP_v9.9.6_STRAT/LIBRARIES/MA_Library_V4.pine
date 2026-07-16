@@ -1,0 +1,308 @@
+//@version=6
+// @description Moving Average Library with Dual MA Trend Filter System - TYPE SAFE
+// Enhanced with trend detection, color coding, and signal generation
+//
+// ✅ FIX: Upgraded from @version=5 to @version=6 for suite consistency.
+//         Cross-version imports cause silent series/simple int coercion differences.
+//         Verified: analyzeDualMA() and t3() simple/series params unchanged.
+
+library("MA_Library")
+
+// ==========================================
+// EXPORTED TYPES
+// ==========================================
+
+export type MAConfig
+    string maType
+    int    length
+    float  source
+    int    t3Factor
+
+export type DualMAConfig
+    string fastType
+    int    fastLength
+    string slowType
+    int    slowLength
+    float  source
+    string colorMode
+
+export type TrendSignal
+    int   trend
+    float strength
+    float fastMA
+    float slowMA
+    float distance
+    color fastColor
+    color slowColor
+    bool  crossover
+    bool  crossunder
+
+// ==========================================
+// CORE MA FUNCTIONS
+// ==========================================
+
+export supersmoother(series float src, simple int len) =>
+    a1 = math.exp(-1.414 * 3.14159 / len)
+    b1 = 2 * a1 * math.cos(1.414 * 3.14159 / len)
+    c2 = b1
+    c3 = -a1 * a1
+    c1 = 1 - c2 - c3
+    v9 = 0.0
+    v9 := c1 * (src + nz(src[1])) / 2 + c2 * nz(v9[1]) + c3 * nz(v9[2])
+    v9
+
+export smoothed(series float src, simple int len) =>
+    v5 = 0.0
+    sma_1 = ta.sma(src, len)
+    v5 := na(v5[1]) ? sma_1 : (v5[1] * (len - 1) + src) / len
+    v5
+
+export zerolagema(series float src, simple int len) =>
+    xLag = math.round((len - 1) / 2)
+    xEMA = src + src - src[xLag]
+    ta.ema(xEMA, len)
+
+export dema(series float src, simple int len) =>
+    v2 = ta.ema(src, len)
+    2 * v2 - ta.ema(v2, len)
+
+export tema(series float src, simple int len) =>
+    v2     = ta.ema(src, len)
+    v7_ema = ta.ema(v2, len)
+    3 * (v2 - v7_ema) + ta.ema(v7_ema, len)
+
+export hullma(series float src, simple int len) =>
+    len_adjusted = math.max(len, 2)
+    len_2        = math.round(len_adjusted / 2)
+    sqrt_len     = math.round(math.sqrt(len_adjusted))
+    ta.wma(2 * ta.wma(src, len_2) - ta.wma(src, len_adjusted), sqrt_len)
+
+export triangular(series float src, simple int len) =>
+    ta.sma(ta.sma(src, len), len)
+
+gd(series float src, simple int len, series float factor, simple int iterations) =>
+    result = src
+    for i = 1 to iterations
+        result := ta.ema(result, len) * (1 + factor) - ta.ema(ta.ema(result, len), len) * factor
+    result
+
+export t3(series float src, simple int len, series int factor) =>
+    factorConverted = factor * 0.10
+    gd(src, len, factorConverted, 3)
+
+// ==========================================
+// MAIN VARIANT SELECTOR
+// ==========================================
+
+export calculate(series string maType, series float src, simple int len,
+                 series int t3Factor = 7) =>
+    switch maType
+        'SMA'           => ta.sma(src, len)
+        'EMA'           => ta.ema(src, len)
+        'WMA'           => ta.wma(src, len)
+        'VWMA'          => ta.vwma(src, len)
+        'Smooth SMA'    => smoothed(src, len)
+        'DEMA'          => dema(src, len)
+        'TEMA'          => tema(src, len)
+        'Hull MA'       => hullma(src, len)
+        'ZeroLag EMA'   => zerolagema(src, len)
+        'Triangular MA' => triangular(src, len)
+        'SuperSmooth MA'=> supersmoother(src, len)
+        'T3'            => t3(src, len, t3Factor)
+        =>                 ta.sma(src, len)
+
+// ==========================================
+// MA ANALYSIS FUNCTIONS
+// ==========================================
+
+export getTrend(series float maValue, simple int smoothing = 1) =>
+    smoothing_adjusted = math.max(1, smoothing)
+    maValue >= maValue[smoothing_adjusted] ? 1 : maValue < maValue[smoothing_adjusted] ? -1 : 0
+
+export getCrossover(series float price, series float maValue) =>
+    ta.crossover(price, maValue)
+
+export getCrossunder(series float price, series float maValue) =>
+    ta.crossunder(price, maValue)
+
+export getDistance(series float price, series float maValue, simple bool asPercentage = false) =>
+    distance = price - maValue
+    asPercentage ? (distance / maValue) * 100 : distance
+
+export isAbove(series float price, series float maValue) =>
+    price > maValue
+
+export isBelow(series float price, series float maValue) =>
+    price < maValue
+
+export getMACross(series float fastMA, series float slowMA) =>
+    ta.crossover(fastMA, slowMA) ? 1 : ta.crossunder(fastMA, slowMA) ? -1 : 0
+
+export getMASlope(series float maValue, simple int lookback = 1) =>
+    (maValue - maValue[lookback]) / lookback
+
+export getMAColor(series float maValue, simple int smoothing,
+                  simple color upColor, simple color downColor, simple color neutralColor) =>
+    trend = getTrend(maValue, smoothing)
+    trend == 1 ? upColor : trend == -1 ? downColor : neutralColor
+
+export validateLength(simple int length, simple int minLength = 1, simple int maxLength = 500) =>
+    math.max(minLength, math.min(maxLength, length))
+
+// ==========================================
+// DUAL MA TREND FILTER SYSTEM
+// ==========================================
+
+// @function calculateTrendStrength — internal, not exported
+calculateTrendStrength(series float fastMA, series float slowMA, series float atr) =>
+    float separation = math.abs(fastMA - slowMA)
+    float normalized = atr > 0 ? (separation / atr) * 20 : 0
+    math.min(100, normalized)
+
+// @function getTrendColors — internal, not exported
+getTrendColors(series int trend, series float strength, series string colorMode,
+               series float fastMA, series float slowMA) =>
+    color fast_col = color.gray
+    color slow_col = color.gray
+
+    if colorMode == "Trend"
+        if trend == 1
+            fast_col := color.new(color.lime, 0)
+            slow_col := color.new(color.green, 30)
+        else if trend == -1
+            fast_col := color.new(color.red, 0)
+            slow_col := color.new(color.maroon, 30)
+        else
+            fast_col := color.new(color.gray, 20)
+            slow_col := color.new(color.gray, 50)
+
+    else if colorMode == "Strength"
+        if trend == 1
+            int transparency = math.round(math.max(0, 80 - strength))
+            fast_col := color.new(color.lime, transparency)
+            slow_col := color.new(color.green, transparency + 20)
+        else if trend == -1
+            int transparency = math.round(math.max(0, 80 - strength))
+            fast_col := color.new(color.red, transparency)
+            slow_col := color.new(color.maroon, transparency + 20)
+        else
+            fast_col := color.new(color.gray, 60)
+            slow_col := color.new(color.gray, 80)
+
+    else if colorMode == "Distance"
+        float distance_pct = slowMA != 0 ? ((fastMA - slowMA) / slowMA) * 100 : 0
+
+        if distance_pct > 2.0
+            fast_col := color.new(color.lime, 0)
+            slow_col := color.new(color.green, 40)
+        else if distance_pct > 0.5
+            fast_col := color.new(color.green, 10)
+            slow_col := color.new(color.teal, 40)
+        else if distance_pct > -0.5
+            fast_col := color.new(color.yellow, 20)
+            slow_col := color.new(color.orange, 40)
+        else if distance_pct > -2.0
+            fast_col := color.new(color.orange, 10)
+            slow_col := color.new(color.red, 40)
+        else
+            fast_col := color.new(color.red, 0)
+            slow_col := color.new(color.maroon, 40)
+
+    [fast_col, slow_col]
+
+// @function analyzeDualMA — Comprehensive dual MA trend analysis
+// @param fastType   Fast MA type string
+// @param fastLength Fast MA period (simple int — cannot be series)
+// @param slowType   Slow MA type string
+// @param slowLength Slow MA period (simple int — cannot be series)
+// @param source     Price source
+// @param colorMode  "Trend" | "Distance" | "Strength"
+// @returns TrendSignal object with full signal metadata
+export analyzeDualMA(series string fastType, simple int fastLength,
+                     series string slowType,  simple int slowLength,
+                     series float source, series string colorMode = "Trend") =>
+    float fast = calculate(fastType, source, fastLength)
+    float slow = calculate(slowType, source, slowLength)
+
+    int current_trend = 0
+    if fast > slow
+        current_trend := 1
+    else if fast < slow
+        current_trend := -1
+
+    float atr_val      = ta.atr(14)
+    float strength_val = calculateTrendStrength(fast, slow, atr_val)
+    float distance_pct = slow != 0 ? ((fast - slow) / slow) * 100 : 0
+
+    bool bull_cross = ta.crossover(fast, slow)
+    bool bear_cross = ta.crossunder(fast, slow)
+
+    [fast_color, slow_color] = getTrendColors(current_trend, strength_val, colorMode, fast, slow)
+
+    TrendSignal.new(current_trend, strength_val, fast, slow, distance_pct,
+                    fast_color, slow_color, bull_cross, bear_cross)
+
+// @function getDualMATrend — Simple trend integer from two MA values
+export getDualMATrend(series float fastMA, series float slowMA,
+                      simple bool priceConfirm = false, series float currentPrice = close) =>
+    int trend = 0
+    if fastMA > slowMA
+        trend := priceConfirm ? (currentPrice > fastMA ? 1 : 0) : 1
+    else if fastMA < slowMA
+        trend := priceConfirm ? (currentPrice < fastMA ? -1 : 0) : -1
+    trend
+
+// @function getDualMASignal — Converts TrendSignal to a trade signal integer (1, -1, 0)
+// @param signal      TrendSignal object from analyzeDualMA()
+// @param minStrength Minimum strength threshold (0–100)
+// @param requireCross Only fire on crossover bars if true
+export getDualMASignal(TrendSignal signal, simple float minStrength = 20.0,
+                       simple bool requireCross = false) =>
+    int  trade_signal = 0
+    bool strength_ok  = signal.strength >= minStrength
+
+    if requireCross
+        if signal.crossover and strength_ok
+            trade_signal := 1
+        else if signal.crossunder and strength_ok
+            trade_signal := -1
+    else
+        if signal.trend == 1 and strength_ok
+            trade_signal := 1
+        else if signal.trend == -1 and strength_ok
+            trade_signal := -1
+
+    trade_signal
+
+// @function isTrendValid — Returns true if trend meets minimum strength + distance criteria
+// @param signal      TrendSignal object
+// @param minStrength Minimum strength (default 30)
+// @param minDistance Minimum % distance between fast and slow MA (default 0.5)
+export isTrendValid(TrendSignal signal, simple float minStrength = 30.0,
+                    simple float minDistance = 0.5) =>
+    bool strong_enough    = signal.strength >= minStrength
+    bool separated_enough = math.abs(signal.distance) >= minDistance
+    bool trending         = signal.trend != 0
+    strong_enough and separated_enough and trending
+
+// @function getDualMAZone — Returns "Above", "Below", or "Between" relative to both MAs
+export getDualMAZone(series float price, series float fastMA, series float slowMA) =>
+    float  upper = math.max(fastMA, slowMA)
+    float  lower = math.min(fastMA, slowMA)
+    string zone  = price > upper ? "Above" : price < lower ? "Below" : "Between"
+    zone
+
+// @function getTrendDescription — Human-readable trend description with emoji
+export getTrendDescription(TrendSignal signal) =>
+    string desc = ""
+    if signal.trend == 1
+        desc := signal.strength > 70 ? "🟢 Strong Uptrend" : signal.strength > 40 ? "🟢 Moderate Uptrend" : "🟢 Weak Uptrend"
+    else if signal.trend == -1
+        desc := signal.strength > 70 ? "🔴 Strong Downtrend" : signal.strength > 40 ? "🔴 Moderate Downtrend" : "🔴 Weak Downtrend"
+    else
+        desc := "⚪ Neutral/Choppy"
+    desc
+
+// NOTE: getAdaptiveTrendFilter() was intentionally excluded.
+// analyzeDualMA() requires simple int lengths — calculate adaptive lengths
+// before calling it, then pass the result in.

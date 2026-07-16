@@ -1,0 +1,3 @@
+server_time,new_york_time,open,high,low,close,tick_volume,or_ready,or_high,or_low,squeeze_on,squeeze_release,squeeze_bars,momentum,momentum_delta,release_bias
+2026.07.13 23:15,2026.07.13 16:15,29271.6,29272.3,29207.3,29236.8,1226,1,29553.3,29370.6,0,0,0,-24.41132143,-3.81178571,0
+2026.07.13 23:20,2026.07.13 16:20,29237.1,29252.1,29233.3,29249.6,757,1,29553.3,29370.6,0,0,0,-24.72310714,-0.31178571,0

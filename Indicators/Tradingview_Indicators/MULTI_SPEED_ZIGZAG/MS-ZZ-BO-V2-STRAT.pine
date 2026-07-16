@@ -1,0 +1,970 @@
+//@version=6
+strategy('Multi-Speed ZigZag Trendline Breakouts [V2 Strategy Research]', shorttitle='MS-ZZ-BO-V2-STRAT', overlay=true, max_bars_back=500, max_labels_count=500, max_lines_count=500, pyramiding=0, process_orders_on_close=true, default_qty_type=strategy.fixed, default_qty_value=1)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INPUTS & STYLING
+// ═══════════════════════════════════════════════════════════════════════════
+
+g_preset = "📋 Trader Preset"
+preset = input.string("Swing Trader", "Profile", options=["Scalp", "Swing Trader", "Position"], group=g_preset, tooltip="Auto-configures speed multipliers for your trading style.")
+
+g_gen = "General Settings"
+use_renko_bodies = input.bool(false, "Use Candle Bodies (Renko Mode)", group=g_gen, tooltip="Global override — ignores wicks entirely and bases BOTH reversal and breakout detection on candle bodies (max/min of open & close), mimicking Renko brick behavior.")
+reversal_src_input = input.string("High/Low wicks", "Reversal Confirmation Source", options=["High/Low wicks", "Close"], group=g_gen, tooltip="Use wicks or close to confirm ZigZag leg reversal. Ignored when Renko Mode is on.")
+breakout_src_input = input.string("Close", "Breakout Source", options=["Close", "High/Low wicks"], group=g_gen, tooltip="Use close or wicks to confirm trendline breakout. Ignored when Renko Mode is on.")
+keep_historical = input.bool(true, "Keep Historical Trendlines", group=g_gen, tooltip="Keep old trendlines on chart after new ones form or when broken.")
+show_pivot_labels = input.bool(true, "Show Pivot Labels (HH/HL/LH/LL)", group=g_gen)
+pivot_shelf_width = input.int(1, "Pivot Shelf Width", minval=1, maxval=4, group=g_gen)
+show_hud = input.bool(true, "Show Dashboard HUD Table", group=g_gen, tooltip="Displays a summary table of trend directions and distance to trendlines.")
+show_live_pivots = input.bool(false, "Show Setup-Forming Pivots", group=g_gen, tooltip="Display potential pivots before confirmation (helps anticipate breakouts).")
+
+g_lux = "🔮 LuxAlgo Style Controls"
+draw_mode = input.string("Connect Last 2 Pivots", "Trendline Projection Mode", options=["Connect Last 2 Pivots", "Single Pivot + Volatility Slope"], group=g_lux)
+calcMethod = input.string("Atr", "Slope Calculation Method", options=["Atr", "Stdev", "Linreg"], group=g_lux)
+slope_mult = input.float(1.0, "Slope Multiplier", minval=0.0, step=0.1, group=g_lux)
+historical_projection_count = input.int(3, "Historical Projection Count", minval=1, maxval=10, group=g_lux, tooltip="In Single Pivot mode, keep this many recent projected resistance/support lines extended visually. Breakout logic still uses the newest line only.")
+backpaint = input.bool(true, "Backpaint Trendlines", group=g_lux)
+
+g_quality = "🎯 Signal Quality & Confluence"
+require_confluence = input.bool(true, "Require Multi-Speed Confluence", group=g_quality, tooltip="Only signal if 2+ speeds agree on direction. Kills solo false breaks.")
+min_quality_score = input.int(5, "Minimum Quality Score (1-10)", minval=1, maxval=10, group=g_quality, tooltip="Only emit signals with quality >= this threshold. Higher = fewer, higher-conviction breaks.")
+apply_wick_test = input.bool(true, "Filter Wick-Only Breakouts", group=g_quality, tooltip="Ignore breakouts that are just wicks; require close to sustain past line.")
+wick_buffer_atr = input.float(0.3, "Wick Test Buffer (ATR multiples)", minval=0.1, step=0.05, group=g_quality)
+apply_consolidation_filter = input.bool(true, "Filter Weak Consolidations", group=g_quality, tooltip="Skip pivots that form too close together (weak reversal setups).")
+min_bars_between_pivots = input.int(3, "Min Bars Between Pivots (Consolidation)", minval=1, group=g_quality)
+
+g_flt = "🛡️ Classic Filters"
+filter_trend = input.bool(true, "Align Signals with Slow Trend", group=g_flt, tooltip="Only show Fast & Medium breakouts that align with the Slow trend direction.")
+filter_volume = input.bool(false, "Require Volume Confirmation", group=g_flt, tooltip="Breakout volume must exceed an SMA of volume.")
+vol_mult = input.float(1.2, "Volume SMA Multiplier", minval=0.5, step=0.1, group=g_flt)
+filter_mom = input.bool(false, "Require Momentum confirmation", group=g_flt, tooltip="Breakout candle body size must exceed a multiplier of ATR.")
+mom_mult = input.float(0.5, "Momentum ATR Multiplier", minval=0.0, step=0.1, group=g_flt)
+mom_atr_len = input.int(14, "Momentum ATR Length", minval=1, group=g_flt)
+
+g_hurst = "🔗 Hurst Cycle Integration (Advanced)"
+use_hurst_filter = input.bool(false, "Filter breakouts by Hurst Phase", group=g_hurst, tooltip="If enabled, connect to a Hurst Cycle indicator via external input (requires setup).")
+hurst_phase_input = input.int(0, "Hurst Phase (0-7, external input)", minval=0, maxval=7, group=g_hurst, tooltip="Connect to your Hurst indicator's phase output. Not used if use_hurst_filter is off.")
+
+g_strat = "Strategy Research"
+entry_mode = input.string("Fast + Medium Confluence", "Entry Mode", options=["Fast Breakout", "Fast + Medium Confluence", "Medium Breakout", "Medium + Slow Context", "Slow Breakout"], group=g_strat)
+trade_direction = input.string("Both", "Trade Direction", options=["Both", "Long Only", "Short Only"], group=g_strat)
+exit_on_opposite = input.bool(true, "Exit on Opposite Setup", group=g_strat)
+use_max_bars_exit = input.bool(true, "Exit After Max Bars", group=g_strat)
+max_bars_in_trade = input.int(20, "Max Bars in Trade", minval=1, group=g_strat)
+use_atr_measure_exit = input.bool(false, "Use ATR Measuring Stop/Target", group=g_strat, tooltip="Temporary research exit only. Risk model comes later.")
+measure_atr_len = input.int(14, "ATR Measuring Length", minval=1, group=g_strat)
+measure_stop_atr = input.float(1.0, "ATR Measuring Stop", minval=0.1, step=0.1, group=g_strat)
+measure_target_atr = input.float(1.5, "ATR Measuring Target", minval=0.1, step=0.1, group=g_strat)
+
+g_fast = "⚡ Fast Speed Settings"
+enable_fast = input.bool(true, "Enable Fast Speed", group=g_fast)
+fast_atr_len = input.int(14, "Fast ATR Length", minval=1, group=g_fast)
+fast_atr_mult = input.float(1.0, "Fast ATR Multiplier", minval=0.1, step=0.1, group=g_fast)
+show_fast_pivots = input.bool(true, "Show Fast Pivot Markers", group=g_fast)
+show_fast_shelves = input.bool(true, "Show Fast Pivot Shelves", group=g_fast)
+show_fast_lines = input.bool(true, "Show Fast Trendlines", group=g_fast)
+show_fast_breaks = input.bool(true, "Show Fast Breakout Signals", group=g_fast)
+fast_color_bull = input.color(color.new(#089981, 0), "Fast Support/Bullish Color", group=g_fast)
+fast_color_bear = input.color(color.new(#f23645, 0), "Fast Resistance/Bearish Color", group=g_fast)
+fast_line_style = input.string("Solid", "Fast Line Style", options=["Solid", "Dotted", "Dashed"], group=g_fast)
+
+g_med = "🌀 Medium Speed Settings"
+enable_med = input.bool(true, "Enable Medium Speed", group=g_med)
+med_atr_len = input.int(14, "Medium ATR Length", minval=1, group=g_med)
+med_atr_mult = input.float(2.0, "Medium ATR Multiplier", minval=0.1, step=0.1, group=g_med)
+show_med_pivots = input.bool(true, "Show Medium Pivot Markers", group=g_med)
+show_med_shelves = input.bool(true, "Show Medium Pivot Shelves", group=g_med)
+show_med_lines = input.bool(true, "Show Medium Trendlines", group=g_med)
+show_med_breaks = input.bool(true, "Show Medium Breakout Signals", group=g_med)
+med_color_bull = input.color(color.new(#2962ff, 0), "Medium Support/Bullish Color", group=g_med)
+med_color_bear = input.color(color.new(#ff6d00, 0), "Medium Resistance/Bearish Color", group=g_med)
+med_line_style = input.string("Dashed", "Medium Line Style", options=["Solid", "Dotted", "Dashed"], group=g_med)
+
+g_slow = "🐢 Slow Speed Settings"
+enable_slow = input.bool(true, "Enable Slow Speed", group=g_slow)
+slow_atr_len = input.int(14, "Slow ATR Length", minval=1, group=g_slow)
+slow_atr_mult = input.float(3.5, "Slow ATR Multiplier", minval=0.1, step=0.1, group=g_slow)
+show_slow_pivots = input.bool(true, "Show Slow Pivot Markers", group=g_slow)
+show_slow_shelves = input.bool(true, "Show Slow Pivot Shelves", group=g_slow)
+show_slow_lines = input.bool(true, "Show Slow Trendlines", group=g_slow)
+show_slow_breaks = input.bool(true, "Show Slow Breakout Signals", group=g_slow)
+slow_color_bull = input.color(color.new(#9c27b0, 0), "Slow Support/Bullish Color", group=g_slow)
+slow_color_bear = input.color(color.new(#e91e63, 0), "Slow Resistance/Bearish Color", group=g_slow)
+slow_line_style = input.string("Dotted", "Slow Line Style", options=["Solid", "Dotted", "Dashed"], group=g_slow)
+
+// Apply preset configs
+if barstate.isfirst
+    if preset == "Scalp"
+        fast_atr_mult := 0.8
+        med_atr_mult := 1.5
+        slow_atr_mult := 2.5
+        require_confluence := false
+        min_quality_score := 3
+    else if preset == "Position"
+        fast_atr_mult := 1.5
+        med_atr_mult := 3.0
+        slow_atr_mult := 5.0
+        require_confluence := true
+        min_quality_score := 7
+
+// Helper function to map string line styles to line.style.* constants
+get_line_style(style_str) =>
+    switch style_str
+        "Dotted" => line.style_dotted
+        "Dashed" => line.style_dashed
+        => line.style_solid
+
+// ═══════════════════════════════════════════════════════════════════════════
+// USER DEFINED TYPES (UDTs)
+// ═══════════════════════════════════════════════════════════════════════════
+
+type PivotPoint
+    int bar_index
+    float price
+    string label_text // "HH", "LH", "HL", "LL"
+    bool is_confirmed
+
+type TrendlineInfo
+    int x1
+    float y1
+    int x2
+    float y2
+    int confirm_bar
+    bool is_broken
+    line line_obj
+    float slope_val
+    int age_bars
+    float quality_score
+
+type BreakoutSignal
+    bool triggered
+    int quality_score
+    float distance_atr
+    float momentum_ratio
+    int confluence_count
+    bool passes_filters
+
+type SpeedState
+    int trend_dir          // 1 = Up leg, -1 = Down leg
+    float extreme_val      // Current leg extreme price
+    int extreme_bar        // Bar index of current leg extreme
+    array<PivotPoint> highs // List of recent high pivots
+    array<PivotPoint> lows  // List of recent low pivots
+    TrendlineInfo res_tl   // Current active resistance trendline
+    TrendlineInfo sup_tl   // Current active support trendline
+    line res_line          // Persistent, reused line object for resistance (solid confirmed portion)
+    line sup_line          // Persistent, reused line object for support (solid confirmed portion)
+    line res_proj_line     // Persistent, reused dashed projection line for resistance
+    line sup_proj_line     // Persistent, reused dashed projection line for support
+    line res_shelf         // Active horizontal resistance shelf from last high pivot
+    line sup_shelf         // Active horizontal support shelf from last low pivot
+    array<line> res_projection_lines // Recent visual-only resistance projections
+    array<line> sup_projection_lines // Recent visual-only support projections
+    int bars_since_last_pivot  // Track consolidation
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Calculate breakout quality score (1-10)
+calc_breakout_quality(float dist_atr, float body_ratio, float vol_surge, float age_weight) =>
+    base_quality = math.min(10.0, 
+        (dist_atr * 2.0) +                    // Distance past line (0-5 pts)
+        (body_ratio * 1.5) +                  // Momentum strength (0-3 pts)
+        (vol_surge > 1.0 ? math.min(2.0, vol_surge - 1.0) : 0.0)  // Volume spike (0-2 pts)
+    )
+    
+    // Age weighting: old lines are more trusted
+    aged_quality = base_quality * age_weight
+    math.max(1, math.min(10, aged_quality))
+
+// Check trendline breakout with all filters
+check_trendline_breakout(
+    TrendlineInfo tl,
+    float tl_val,
+    bool is_resistance,
+    float bo_src_high,
+    float bo_src_low,
+    float close_price,
+    bool vol_ok,
+    bool mom_ok,
+    float atr_val,
+    bool passes_hurst
+) =>
+    distance_atr = 0.0
+    quality_score = 0
+    is_broken = false
+    sustained = false
+    
+    if not na(tl) and not tl.is_broken
+        // Distance in ATR multiples
+        distance_atr := math.abs(close_price - tl_val) / atr_val
+        
+        if is_resistance
+            // Bullish breakout (above resistance)
+            if bo_src_high > tl_val
+                // Wick test: close must be meaningfully past (not just wick)
+                if apply_wick_test
+                    sustained := close_price > (tl_val + atr_val * wick_buffer_atr)
+                else
+                    sustained := true
+                
+                if sustained and vol_ok and mom_ok and passes_hurst
+                    is_broken := true
+                    body = math.abs(close_price - open)
+                    body_ratio = body / atr_val
+                    vol_surge = filter_volume ? (volume / ta.sma(volume, 20)) : 1.0
+                    age_weight = 1.0
+                    if not na(tl.age_bars) and tl.age_bars > 0
+                        age_weight := math.min(1.0, tl.age_bars / 5.0)
+                    quality_score := math.max(1, math.min(10, int(calc_breakout_quality(distance_atr, body_ratio, vol_surge, age_weight))))
+        else
+            // Bearish breakout (below support)
+            if bo_src_low < tl_val
+                if apply_wick_test
+                    sustained := close_price < (tl_val - atr_val * wick_buffer_atr)
+                else
+                    sustained := true
+                
+                if sustained and vol_ok and mom_ok and passes_hurst
+                    is_broken := true
+                    body = math.abs(close_price - open)
+                    body_ratio = body / atr_val
+                    vol_surge = filter_volume ? (volume / ta.sma(volume, 20)) : 1.0
+                    age_weight = 1.0
+                    if not na(tl.age_bars) and tl.age_bars > 0
+                        age_weight := math.min(1.0, tl.age_bars / 5.0)
+                    quality_score := math.max(1, math.min(10, int(calc_breakout_quality(distance_atr, body_ratio, vol_surge, age_weight))))
+    
+    BreakoutSignal.new(
+        triggered = is_broken,
+        quality_score = quality_score,
+        distance_atr = distance_atr,
+        momentum_ratio = na,
+        confluence_count = 0,
+        passes_filters = (is_broken and quality_score >= min_quality_score)
+    )
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ZIGZAG & TRENDLINE ENGINE FUNCTION
+// ═══════════════════════════════════════════════════════════════════════════
+
+process_speed(bool enabled, int atr_len, float atr_mult, color color_bull, color color_bear, string line_style_str, string speed_label, bool show_pivots, bool show_shelves, bool show_lines, int slow_trend, bool align_trend) =>
+    // Declare return variables with proper types so both branches return consistent types
+    buy_signal = false
+    sell_signal = false
+    trend_result = 0
+    distance_result = 0.0
+    quality_result = 0
+    breakout_result = false
+    
+    if not enabled
+        [buy_signal, sell_signal, trend_result, distance_result, quality_result, breakout_result]
+    else
+        // Stateful variables for this speed instance
+        var SpeedState state = SpeedState.new(
+             trend_dir      = 1,
+             extreme_val    = high,
+             extreme_bar    = bar_index,
+             highs          = array.new<PivotPoint>(),
+             lows           = array.new<PivotPoint>(),
+             res_tl         = na,
+             sup_tl         = na,
+             res_line       = line.new(na, na, na, na, xloc=xloc.bar_index, extend=extend.none),
+             sup_line       = line.new(na, na, na, na, xloc=xloc.bar_index, extend=extend.none),
+             res_proj_line  = line.new(na, na, na, na, xloc=xloc.bar_index, extend=extend.none),
+             sup_proj_line  = line.new(na, na, na, na, xloc=xloc.bar_index, extend=extend.none),
+             res_shelf      = line.new(na, na, na, na, xloc=xloc.bar_index, extend=extend.none),
+             sup_shelf      = line.new(na, na, na, na, xloc=xloc.bar_index, extend=extend.none),
+             res_projection_lines = array.new_line(0),
+             sup_projection_lines = array.new_line(0),
+             bars_since_last_pivot = 0
+             )
+
+        // Breakout state machine: plain series for native edge detection
+        var int upos = 0  // Resistance: 1 = broken, 0 = active
+        var int dnos = 0  // Support: 1 = broken, 0 = active
+
+        // Bootstrap on first bar
+        if barstate.isfirst
+            state.extreme_val := high
+            state.extreme_bar := bar_index
+            state.trend_dir   := 1
+
+        float atr_val       = ta.atr(atr_len)
+        float atr_threshold = atr_val * atr_mult
+
+        // Calculate slope based on selected LuxAlgo method
+        float current_slope = na
+        if draw_mode == "Single Pivot + Volatility Slope"
+            if calcMethod == "Atr"
+                current_slope := atr_val / atr_len * slope_mult
+            else if calcMethod == "Stdev"
+                current_slope := ta.stdev(close, atr_len) / atr_len * slope_mult
+            else if calcMethod == "Linreg"
+                current_slope := math.abs(ta.sma(close * bar_index, atr_len) - ta.sma(close, atr_len) * ta.sma(bar_index, atr_len)) / ta.variance(bar_index, atr_len) / 2 * slope_mult
+
+        bool use_close_reversal = use_renko_bodies or (reversal_src_input == "Close")
+        float src_high = use_close_reversal ? math.max(open, close) : high
+        float src_low  = use_close_reversal ? math.min(open, close) : low
+
+        bool use_close_breakout = (breakout_src_input == "Close")
+        float bo_src_high = use_renko_bodies ? math.max(open, close) : (use_close_breakout ? close : high)
+        float bo_src_low  = use_renko_bodies ? math.min(open, close) : (use_close_breakout ? close : low)
+
+        string lst = get_line_style(line_style_str)
+
+        // Reversal and Extreme tracking
+        bool pivot_high_confirmed = false
+        bool pivot_low_confirmed  = false
+        float confirmed_pivot_price = na
+        int confirmed_pivot_bar     = na
+
+        if state.trend_dir == 1
+            if src_high > state.extreme_val
+                state.extreme_val := src_high
+                state.extreme_bar := bar_index
+            
+            bool reversal_down = use_close_reversal ? (close <= state.extreme_val - atr_threshold) : (low <= state.extreme_val - atr_threshold)
+            if reversal_down
+                pivot_high_confirmed  := true
+                confirmed_pivot_price := state.extreme_val
+                confirmed_pivot_bar   := state.extreme_bar
+                
+                state.trend_dir   := -1
+                state.extreme_val := src_low
+                state.extreme_bar := bar_index
+        else
+            if src_low < state.extreme_val
+                state.extreme_val := src_low
+                state.extreme_bar := bar_index
+            
+            bool reversal_up = use_close_reversal ? (close >= state.extreme_val + atr_threshold) : (high >= state.extreme_val + atr_threshold)
+            if reversal_up
+                pivot_low_confirmed   := true
+                confirmed_pivot_price := state.extreme_val
+                confirmed_pivot_bar   := state.extreme_bar
+                
+                state.trend_dir   := 1
+                state.extreme_val := src_high
+                state.extreme_bar := bar_index
+
+        // Handle confirmed High Pivot
+        if pivot_high_confirmed
+            state.bars_since_last_pivot := 0
+            
+            // Consolidation filter: skip if pivot forms too close to last one
+            skip_pivot = false
+            if apply_consolidation_filter and array.size(state.highs) > 0
+                last_high_bar = array.get(state.highs, array.size(state.highs) - 1).bar_index
+                if bar_index - last_high_bar < min_bars_between_pivots
+                    skip_pivot := true
+            
+            if not skip_pivot
+                string p_label = "H"
+                int highs_size = array.size(state.highs)
+                if highs_size > 0
+                    float prev_high = array.get(state.highs, highs_size - 1).price
+                    p_label := (confirmed_pivot_price > prev_high) ? "HH" : "LH"
+                
+                PivotPoint new_high = PivotPoint.new(confirmed_pivot_bar, confirmed_pivot_price, p_label, true)
+                array.push(state.highs, new_high)
+                if array.size(state.highs) > 5
+                    array.shift(state.highs)
+
+                upos := 0
+
+                if show_pivot_labels and show_pivots
+                    color high_pivot_label_color = (p_label == "HH" or p_label == "HL") ? color_bull : (p_label == "LH" or p_label == "LL") ? color_bear : color_bear
+                    label.new(
+                         x=confirmed_pivot_bar,
+                         y=confirmed_pivot_price + atr_val * 0.12,
+                         text=p_label,
+                         color=color.new(color.white, 100),
+                         textcolor=high_pivot_label_color,
+                         style=label.style_none,
+                         size=size.small
+                         )
+
+                if show_shelves and show_pivots
+                    if keep_historical
+                        state.res_shelf := line.new(
+                             x1=confirmed_pivot_bar,
+                             y1=confirmed_pivot_price,
+                             x2=bar_index,
+                             y2=confirmed_pivot_price,
+                             xloc=xloc.bar_index,
+                             extend=extend.none,
+                             color=color_bear,
+                             width=pivot_shelf_width,
+                             style=line.style_solid
+                             )
+                    else
+                        line.set_xy1(state.res_shelf, confirmed_pivot_bar, confirmed_pivot_price)
+                        line.set_xy2(state.res_shelf, bar_index, confirmed_pivot_price)
+                        line.set_extend(state.res_shelf, extend.none)
+                        line.set_color(state.res_shelf, color_bear)
+                        line.set_width(state.res_shelf, pivot_shelf_width)
+                        line.set_style(state.res_shelf, line.style_solid)
+
+                // Draw Resistance Trendline
+                int updated_highs_size = array.size(state.highs)
+                if not na(state.res_tl)
+                    if show_lines and keep_historical and not na(state.res_tl.line_obj) and not state.res_tl.is_broken
+                        line.set_extend(state.res_tl.line_obj, extend.none)
+                        line.set_color(state.res_tl.line_obj, color.new(color_bear, 80))
+                        if not na(state.res_proj_line)
+                            line.set_extend(state.res_proj_line, extend.none)
+                            line.set_color(state.res_proj_line, color.new(color_bear, 80))
+
+                line new_line = na
+                if draw_mode == "Connect Last 2 Pivots" and updated_highs_size >= 2
+                    PivotPoint p1 = array.get(state.highs, updated_highs_size - 2)
+                    PivotPoint p2 = array.get(state.highs, updated_highs_size - 1)
+                    
+                    int line_start_x = backpaint ? p1.bar_index : bar_index
+                    float line_start_y = backpaint ? p1.price : p1.price + (p2.price - p1.price) * (bar_index - p1.bar_index) / (p2.bar_index - p1.bar_index)
+                    float slope_per_bar = (p2.price - p1.price) / (p2.bar_index - p1.bar_index)
+
+                    if show_lines
+                        // Solid confirmed line: pivot-1 → pivot-2, no extend
+                        if keep_historical
+                            new_line := line.new(
+                                 x1=line_start_x,
+                                 y1=line_start_y,
+                                 x2=p2.bar_index,
+                                 y2=p2.price,
+                                 xloc=xloc.bar_index,
+                                 extend=extend.none,
+                                 color=color_bear,
+                                 width=2,
+                                 style=line.style_solid
+                                 )
+                        else
+                            line.set_xy1(state.res_line, line_start_x, line_start_y)
+                            line.set_xy2(state.res_line, p2.bar_index, p2.price)
+                            line.set_extend(state.res_line, extend.none)
+                            line.set_color(state.res_line, color_bear)
+                            line.set_width(state.res_line, 2)
+                            line.set_style(state.res_line, line.style_solid)
+                            new_line := state.res_line
+                        
+                        // Dashed projection line: from pivot-2 extending right along same slope
+                        if keep_historical
+                            line proj = line.new(
+                                 x1=p2.bar_index,
+                                 y1=p2.price,
+                                 x2=p2.bar_index + 1,
+                                 y2=p2.price + slope_per_bar,
+                                 xloc=xloc.bar_index,
+                                 extend=extend.right,
+                                 color=color_bear,
+                                 width=2,
+                                 style=line.style_dashed
+                                 )
+                            if not na(state.res_proj_line)
+                                line.delete(state.res_proj_line)
+                            state.res_proj_line := proj
+                        else
+                            line.set_xy1(state.res_proj_line, p2.bar_index, p2.price)
+                            line.set_xy2(state.res_proj_line, p2.bar_index + 1, p2.price + slope_per_bar)
+                            line.set_extend(state.res_proj_line, extend.right)
+                            line.set_color(state.res_proj_line, color_bear)
+                            line.set_width(state.res_proj_line, 2)
+                            line.set_style(state.res_proj_line, line.style_dashed)
+                    state.res_tl := TrendlineInfo.new(p1.bar_index, p1.price, p2.bar_index, p2.price, bar_index, false, new_line, na, 0, 0.0)
+                
+                else if draw_mode == "Single Pivot + Volatility Slope"
+                    int line_start_x = backpaint ? confirmed_pivot_bar : bar_index
+                    float line_start_y = backpaint ? confirmed_pivot_price : confirmed_pivot_price - current_slope * (bar_index - confirmed_pivot_bar)
+                    
+                    if show_lines
+                        // Solid confirmed line: short segment, no extend
+                        if keep_historical
+                            new_line := line.new(
+                                 x1=line_start_x,
+                                 y1=line_start_y,
+                                 x2=line_start_x + 1,
+                                 y2=line_start_y - current_slope,
+                                 xloc=xloc.bar_index,
+                                 extend=extend.none,
+                                 color=color_bear,
+                                 width=2,
+                                 style=line.style_solid
+                                 )
+                            // Dashed projection line
+                            line proj = line.new(
+                                 x1=line_start_x,
+                                 y1=line_start_y,
+                                 x2=line_start_x + 1,
+                                 y2=line_start_y - current_slope,
+                                 xloc=xloc.bar_index,
+                                 extend=extend.right,
+                                 color=color_bear,
+                                 width=2,
+                                 style=line.style_dashed
+                                 )
+                            array.push(state.res_projection_lines, proj)
+                            while array.size(state.res_projection_lines) > historical_projection_count
+                                line expired_res_projection = array.shift(state.res_projection_lines)
+                                line.set_extend(expired_res_projection, extend.none)
+                                line.set_color(expired_res_projection, color.new(color_bear, 85))
+                        else
+                            line.set_xy1(state.res_line, line_start_x, line_start_y)
+                            line.set_xy2(state.res_line, line_start_x + 1, line_start_y - current_slope)
+                            line.set_extend(state.res_line, extend.none)
+                            line.set_color(state.res_line, color_bear)
+                            line.set_width(state.res_line, 2)
+                            line.set_style(state.res_line, line.style_solid)
+                            new_line := state.res_line
+                            // Dashed projection line
+                            line.set_xy1(state.res_proj_line, line_start_x, line_start_y)
+                            line.set_xy2(state.res_proj_line, line_start_x + 1, line_start_y - current_slope)
+                            line.set_extend(state.res_proj_line, extend.right)
+                            line.set_color(state.res_proj_line, color_bear)
+                            line.set_width(state.res_proj_line, 2)
+                            line.set_style(state.res_proj_line, line.style_dashed)
+                    state.res_tl := TrendlineInfo.new(confirmed_pivot_bar, confirmed_pivot_price, confirmed_pivot_bar + 1, confirmed_pivot_price - current_slope, bar_index, false, new_line, current_slope, 0, 0.0)
+
+        // Handle confirmed Low Pivot
+        if pivot_low_confirmed
+            state.bars_since_last_pivot := 0
+            
+            skip_pivot = false
+            if apply_consolidation_filter and array.size(state.lows) > 0
+                last_low_bar = array.get(state.lows, array.size(state.lows) - 1).bar_index
+                if bar_index - last_low_bar < min_bars_between_pivots
+                    skip_pivot := true
+            
+            if not skip_pivot
+                string p_label = "L"
+                int lows_size = array.size(state.lows)
+                if lows_size > 0
+                    float prev_low = array.get(state.lows, lows_size - 1).price
+                    p_label := (confirmed_pivot_price > prev_low) ? "HL" : "LL"
+
+                PivotPoint new_low = PivotPoint.new(confirmed_pivot_bar, confirmed_pivot_price, p_label, true)
+                array.push(state.lows, new_low)
+                if array.size(state.lows) > 5
+                    array.shift(state.lows)
+
+                dnos := 0
+
+                if show_pivot_labels and show_pivots
+                    color low_pivot_label_color = (p_label == "HH" or p_label == "HL") ? color_bull : (p_label == "LH" or p_label == "LL") ? color_bear : color_bull
+                    label.new(
+                         x=confirmed_pivot_bar,
+                         y=confirmed_pivot_price - atr_val * 0.12,
+                         text=p_label,
+                         color=color.new(color.white, 100),
+                         textcolor=low_pivot_label_color,
+                         style=label.style_none,
+                         size=size.small
+                         )
+
+                if show_shelves and show_pivots
+                    if keep_historical
+                        state.sup_shelf := line.new(
+                             x1=confirmed_pivot_bar,
+                             y1=confirmed_pivot_price,
+                             x2=bar_index,
+                             y2=confirmed_pivot_price,
+                             xloc=xloc.bar_index,
+                             extend=extend.none,
+                             color=color_bull,
+                             width=pivot_shelf_width,
+                             style=line.style_solid
+                             )
+                    else
+                        line.set_xy1(state.sup_shelf, confirmed_pivot_bar, confirmed_pivot_price)
+                        line.set_xy2(state.sup_shelf, bar_index, confirmed_pivot_price)
+                        line.set_extend(state.sup_shelf, extend.none)
+                        line.set_color(state.sup_shelf, color_bull)
+                        line.set_width(state.sup_shelf, pivot_shelf_width)
+                        line.set_style(state.sup_shelf, line.style_solid)
+
+                // Draw Support Trendline
+                int updated_lows_size = array.size(state.lows)
+                if not na(state.sup_tl)
+                    if show_lines and keep_historical and not na(state.sup_tl.line_obj) and not state.sup_tl.is_broken
+                        line.set_extend(state.sup_tl.line_obj, extend.none)
+                        line.set_color(state.sup_tl.line_obj, color.new(color_bull, 80))
+                        if not na(state.sup_proj_line)
+                            line.set_extend(state.sup_proj_line, extend.none)
+                            line.set_color(state.sup_proj_line, color.new(color_bull, 80))
+
+                line new_line = na
+                if draw_mode == "Connect Last 2 Pivots" and updated_lows_size >= 2
+                    PivotPoint p1 = array.get(state.lows, updated_lows_size - 2)
+                    PivotPoint p2 = array.get(state.lows, updated_lows_size - 1)
+                    
+                    int line_start_x = backpaint ? p1.bar_index : bar_index
+                    float line_start_y = backpaint ? p1.price : p1.price + (p2.price - p1.price) * (bar_index - p1.bar_index) / (p2.bar_index - p1.bar_index)
+                    float slope_per_bar = (p2.price - p1.price) / (p2.bar_index - p1.bar_index)
+
+                    if show_lines
+                        // Solid confirmed line: pivot-1 → pivot-2, no extend
+                        if keep_historical
+                            new_line := line.new(
+                                 x1=line_start_x,
+                                 y1=line_start_y,
+                                 x2=p2.bar_index,
+                                 y2=p2.price,
+                                 xloc=xloc.bar_index,
+                                 extend=extend.none,
+                                 color=color_bull,
+                                 width=2,
+                                 style=line.style_solid
+                                 )
+                        else
+                            line.set_xy1(state.sup_line, line_start_x, line_start_y)
+                            line.set_xy2(state.sup_line, p2.bar_index, p2.price)
+                            line.set_extend(state.sup_line, extend.none)
+                            line.set_color(state.sup_line, color_bull)
+                            line.set_width(state.sup_line, 2)
+                            line.set_style(state.sup_line, line.style_solid)
+                            new_line := state.sup_line
+                        
+                        // Dashed projection line: from pivot-2 extending right along same slope
+                        if keep_historical
+                            line proj = line.new(
+                                 x1=p2.bar_index,
+                                 y1=p2.price,
+                                 x2=p2.bar_index + 1,
+                                 y2=p2.price + slope_per_bar,
+                                 xloc=xloc.bar_index,
+                                 extend=extend.right,
+                                 color=color_bull,
+                                 width=2,
+                                 style=line.style_dashed
+                                 )
+                            if not na(state.sup_proj_line)
+                                line.delete(state.sup_proj_line)
+                            state.sup_proj_line := proj
+                        else
+                            line.set_xy1(state.sup_proj_line, p2.bar_index, p2.price)
+                            line.set_xy2(state.sup_proj_line, p2.bar_index + 1, p2.price + slope_per_bar)
+                            line.set_extend(state.sup_proj_line, extend.right)
+                            line.set_color(state.sup_proj_line, color_bull)
+                            line.set_width(state.sup_proj_line, 2)
+                            line.set_style(state.sup_proj_line, line.style_dashed)
+                    state.sup_tl := TrendlineInfo.new(p1.bar_index, p1.price, p2.bar_index, p2.price, bar_index, false, new_line, na, 0, 0.0)
+                
+                else if draw_mode == "Single Pivot + Volatility Slope"
+                    int line_start_x = backpaint ? confirmed_pivot_bar : bar_index
+                    float line_start_y = backpaint ? confirmed_pivot_price : confirmed_pivot_price + current_slope * (bar_index - confirmed_pivot_bar)
+                    
+                    if show_lines
+                        // Solid confirmed line: short segment, no extend
+                        if keep_historical
+                            new_line := line.new(
+                                 x1=line_start_x,
+                                 y1=line_start_y,
+                                 x2=line_start_x + 1,
+                                 y2=line_start_y + current_slope,
+                                 xloc=xloc.bar_index,
+                                 extend=extend.none,
+                                 color=color_bull,
+                                 width=2,
+                                 style=line.style_solid
+                                 )
+                            // Dashed projection line
+                            line proj = line.new(
+                                 x1=line_start_x,
+                                 y1=line_start_y,
+                                 x2=line_start_x + 1,
+                                 y2=line_start_y + current_slope,
+                                 xloc=xloc.bar_index,
+                                 extend=extend.right,
+                                 color=color_bull,
+                                 width=2,
+                                 style=line.style_dashed
+                                 )
+                            array.push(state.sup_projection_lines, proj)
+                            while array.size(state.sup_projection_lines) > historical_projection_count
+                                line expired_sup_projection = array.shift(state.sup_projection_lines)
+                                line.set_extend(expired_sup_projection, extend.none)
+                                line.set_color(expired_sup_projection, color.new(color_bull, 85))
+                        else
+                            line.set_xy1(state.sup_line, line_start_x, line_start_y)
+                            line.set_xy2(state.sup_line, line_start_x + 1, line_start_y + current_slope)
+                            line.set_extend(state.sup_line, extend.none)
+                            line.set_color(state.sup_line, color_bull)
+                            line.set_width(state.sup_line, 2)
+                            line.set_style(state.sup_line, line.style_solid)
+                            new_line := state.sup_line
+                            // Dashed projection line
+                            line.set_xy1(state.sup_proj_line, line_start_x, line_start_y)
+                            line.set_xy2(state.sup_proj_line, line_start_x + 1, line_start_y + current_slope)
+                            line.set_extend(state.sup_proj_line, extend.right)
+                            line.set_color(state.sup_proj_line, color_bull)
+                            line.set_width(state.sup_proj_line, 2)
+                            line.set_style(state.sup_proj_line, line.style_dashed)
+                    state.sup_tl := TrendlineInfo.new(confirmed_pivot_bar, confirmed_pivot_price, confirmed_pivot_bar + 1, confirmed_pivot_price + current_slope, bar_index, false, new_line, current_slope, 0, 0.0)
+
+        if show_shelves
+            if not na(state.res_shelf) and not na(line.get_y1(state.res_shelf)) and line.get_x2(state.res_shelf) != bar_index
+                line.set_x2(state.res_shelf, bar_index)
+            if not na(state.sup_shelf) and not na(line.get_y1(state.sup_shelf)) and line.get_x2(state.sup_shelf) != bar_index
+                line.set_x2(state.sup_shelf, bar_index)
+
+        // Update trendline age
+        if not na(state.res_tl)
+            state.res_tl.age_bars := bar_index - state.res_tl.confirm_bar
+        if not na(state.sup_tl)
+            state.sup_tl.age_bars := bar_index - state.sup_tl.confirm_bar
+
+        // Check for Trendline Breakouts
+        bool buy_signal  = false
+        bool sell_signal = false
+        BreakoutSignal res_bo = na
+        BreakoutSignal sup_bo = na
+        float active_distance = na
+        int signal_quality = 0
+
+        // Filter criteria
+        bool vol_ok = not filter_volume or (volume > ta.sma(volume, 20) * vol_mult)
+        float body = math.abs(close - open)
+        float filter_atr = ta.atr(mom_atr_len)
+        bool mom_ok = not filter_mom or (body > filter_atr * mom_mult)
+        
+        // Hurst phase check
+        bool hurst_favorable = not use_hurst_filter or (hurst_phase_input >= 4 or hurst_phase_input <= 1)
+
+        // Resistance Breakout (Bullish)
+        if not na(state.res_tl) and not state.res_tl.is_broken
+            if bar_index >= state.res_tl.confirm_bar
+                float x1 = state.res_tl.x1
+                float y1 = state.res_tl.y1
+                float x2 = state.res_tl.x2
+                float y2 = state.res_tl.y2
+                float tl_val = na
+                
+                if draw_mode == "Connect Last 2 Pivots"
+                    tl_val := y1 + (y2 - y1) * (bar_index - x1) / (x2 - x1)
+                else
+                    tl_val := y1 - state.res_tl.slope_val * (bar_index - x1)
+                
+                res_bo := check_trendline_breakout(state.res_tl, tl_val, true, bo_src_high, bo_src_low, close, vol_ok, mom_ok, atr_val, hurst_favorable)
+                
+                if res_bo.triggered
+                    active_distance := res_bo.distance_atr
+                    if not align_trend or slow_trend == 1
+                        if res_bo.passes_filters
+                            upos := 1
+                            buy_signal := (upos == 1 and upos[1] == 0)
+                            signal_quality := res_bo.quality_score
+                            state.res_tl.is_broken := true
+                            state.res_tl.quality_score := float(res_bo.quality_score)
+                            // Clean up projection line
+                            if show_lines and not na(state.res_proj_line)
+                                line.set_extend(state.res_proj_line, extend.none)
+                                if keep_historical
+                                    line.set_color(state.res_proj_line, color.new(color_bear, 80))
+                                else
+                                    line.delete(state.res_proj_line)
+                            if show_lines and not na(state.res_tl.line_obj)
+                                line.set_extend(state.res_tl.line_obj, extend.none)
+                                line.set_x2(state.res_tl.line_obj, bar_index)
+                                line.set_y2(state.res_tl.line_obj, tl_val)
+                                if keep_historical
+                                    line.set_color(state.res_tl.line_obj, color.new(color_bear, 80))
+                                else
+                                    line.delete(state.res_tl.line_obj)
+
+        // Support Breakout (Bearish)
+        if not na(state.sup_tl) and not state.sup_tl.is_broken
+            if bar_index >= state.sup_tl.confirm_bar
+                float x1 = state.sup_tl.x1
+                float y1 = state.sup_tl.y1
+                float x2 = state.sup_tl.x2
+                float y2 = state.sup_tl.y2
+                float tl_val = na
+                
+                if draw_mode == "Connect Last 2 Pivots"
+                    tl_val := y1 + (y2 - y1) * (bar_index - x1) / (x2 - x1)
+                else
+                    tl_val := y1 + state.sup_tl.slope_val * (bar_index - x1)
+                
+                sup_bo := check_trendline_breakout(state.sup_tl, tl_val, false, bo_src_high, bo_src_low, close, vol_ok, mom_ok, atr_val, hurst_favorable)
+                
+                if sup_bo.triggered
+                    active_distance := sup_bo.distance_atr
+                    if not align_trend or slow_trend == -1
+                        if sup_bo.passes_filters
+                            dnos := 1
+                            sell_signal := (dnos == 1 and dnos[1] == 0)
+                            signal_quality := sup_bo.quality_score
+                            state.sup_tl.is_broken := true
+                            state.sup_tl.quality_score := float(sup_bo.quality_score)
+                            // Clean up projection line
+                            if show_lines and not na(state.sup_proj_line)
+                                line.set_extend(state.sup_proj_line, extend.none)
+                                if keep_historical
+                                    line.set_color(state.sup_proj_line, color.new(color_bull, 80))
+                                else
+                                    line.delete(state.sup_proj_line)
+                            if show_lines and not na(state.sup_tl.line_obj)
+                                line.set_extend(state.sup_tl.line_obj, extend.none)
+                                line.set_x2(state.sup_tl.line_obj, bar_index)
+                                line.set_y2(state.sup_tl.line_obj, tl_val)
+                                if keep_historical
+                                    line.set_color(state.sup_tl.line_obj, color.new(color_bull, 80))
+                                else
+                                    line.delete(state.sup_tl.line_obj)
+
+        // Show live pivot setup forming (unconfirmed)
+        if show_live_pivots
+            if state.trend_dir == 1 and src_high > state.extreme_val
+                // Show potential pivot forming
+                if show_lines
+                    label.new(x=bar_index, y=state.extreme_val, text="◆", color=color.new(color_bear, 50), size=size.tiny)
+            else if state.trend_dir == -1 and src_low < state.extreme_val
+                if show_lines
+                    label.new(x=bar_index, y=state.extreme_val, text="◆", color=color.new(color_bull, 50), size=size.tiny)
+
+        // Before returning, ensure all values are properly typed
+        trend_result := state.trend_dir
+        distance_result := na(active_distance) ? 0.0 : active_distance
+        quality_result := signal_quality
+        breakout_result := (not na(res_bo) and res_bo.triggered) or (not na(sup_bo) and sup_bo.triggered)
+        
+        [buy_signal, sell_signal, trend_result, distance_result, quality_result, breakout_result]
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXECUTE FOR EACH SPEED
+// ═══════════════════════════════════════════════════════════════════════════
+
+[slow_buy, slow_sell, slow_trend, slow_dist, slow_qual, slow_any] = process_speed(enable_slow, slow_atr_len, slow_atr_mult, slow_color_bull, slow_color_bear, slow_line_style, "Slow", show_slow_pivots, show_slow_shelves, show_slow_lines, 0, false)
+
+[med_buy, med_sell, med_trend, med_dist, med_qual, med_any]   = process_speed(enable_med, med_atr_len, med_atr_mult, med_color_bull, med_color_bear, med_line_style, "Medium", show_med_pivots, show_med_shelves, show_med_lines, slow_trend, filter_trend)
+
+[fast_buy, fast_sell, fast_trend, fast_dist, fast_qual, fast_any] = process_speed(enable_fast, fast_atr_len, fast_atr_mult, fast_color_bull, fast_color_bear, fast_line_style, "Fast", show_fast_pivots, show_fast_shelves, show_fast_lines, slow_trend, filter_trend)
+
+// Apply confluence requirement
+fast_buy_final = fast_buy and (not require_confluence or (med_buy or slow_buy))
+fast_sell_final = fast_sell and (not require_confluence or (med_sell or slow_sell))
+
+med_buy_final = med_buy and (not require_confluence or slow_buy)
+med_sell_final = med_sell and (not require_confluence or slow_sell)
+
+slow_buy_final = slow_buy
+slow_sell_final = slow_sell
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STRATEGY RESEARCH ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+
+bool long_setup = switch entry_mode
+    "Fast Breakout" => fast_buy
+    "Fast + Medium Confluence" => fast_buy and (med_buy or med_trend == 1)
+    "Medium Breakout" => med_buy
+    "Medium + Slow Context" => med_buy and slow_trend == 1
+    "Slow Breakout" => slow_buy
+    => fast_buy and (med_buy or med_trend == 1)
+
+bool short_setup = switch entry_mode
+    "Fast Breakout" => fast_sell
+    "Fast + Medium Confluence" => fast_sell and (med_sell or med_trend == -1)
+    "Medium Breakout" => med_sell
+    "Medium + Slow Context" => med_sell and slow_trend == -1
+    "Slow Breakout" => slow_sell
+    => fast_sell and (med_sell or med_trend == -1)
+
+bool allow_long = trade_direction == "Both" or trade_direction == "Long Only"
+bool allow_short = trade_direction == "Both" or trade_direction == "Short Only"
+
+if allow_long and long_setup
+    strategy.entry("Long", strategy.long)
+
+if allow_short and short_setup
+    strategy.entry("Short", strategy.short)
+
+var int entry_bar = na
+if strategy.position_size != 0 and strategy.position_size[1] == 0
+    entry_bar := bar_index
+else if strategy.position_size == 0
+    entry_bar := na
+
+int bars_in_trade = na(entry_bar) ? 0 : bar_index - entry_bar
+bool max_bars_reached = use_max_bars_exit and strategy.position_size != 0 and bars_in_trade >= max_bars_in_trade
+
+if exit_on_opposite and strategy.position_size > 0 and short_setup
+    strategy.close("Long", comment="Opposite setup")
+
+if exit_on_opposite and strategy.position_size < 0 and long_setup
+    strategy.close("Short", comment="Opposite setup")
+
+if max_bars_reached
+    if strategy.position_size > 0
+        strategy.close("Long", comment="Max bars")
+    else if strategy.position_size < 0
+        strategy.close("Short", comment="Max bars")
+
+float measure_atr = ta.atr(measure_atr_len)
+if use_atr_measure_exit and strategy.position_size > 0
+    strategy.exit("Long ATR Measure", from_entry="Long", stop=strategy.position_avg_price - measure_atr * measure_stop_atr, limit=strategy.position_avg_price + measure_atr * measure_target_atr)
+
+if use_atr_measure_exit and strategy.position_size < 0
+    strategy.exit("Short ATR Measure", from_entry="Short", stop=strategy.position_avg_price + measure_atr * measure_stop_atr, limit=strategy.position_avg_price - measure_atr * measure_target_atr)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PLOTTING & ALERTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Plot breakouts with quality-based sizing
+plotshape(fast_buy_final and show_fast_breaks,  title="Fast Bullish Breakout",  style=shape.triangleup,   location=location.belowbar, color=fast_color_bull, size=size.small)
+plotshape(fast_sell_final and show_fast_breaks, title="Fast Bearish Breakout",  style=shape.triangledown, location=location.abovebar, color=fast_color_bear, size=size.small)
+
+plotshape(med_buy_final and show_med_breaks,   title="Medium Bullish Breakout", style=shape.triangleup,   location=location.belowbar, color=med_color_bull, size=size.normal)
+plotshape(med_sell_final and show_med_breaks,  title="Medium Bearish Breakout", style=shape.triangledown, location=location.abovebar, color=med_color_bear, size=size.normal)
+
+plotshape(slow_buy_final and show_slow_breaks,  title="Slow Bullish Breakout",   style=shape.triangleup,   location=location.belowbar, color=slow_color_bull, size=size.large)
+plotshape(slow_sell_final and show_slow_breaks, title="Slow Bearish Breakout",   style=shape.triangledown, location=location.abovebar, color=slow_color_bear, size=size.large)
+
+// Alert triggers
+alertcondition(fast_buy_final,  title="Fast Bullish Breakout Alert",  message="⚡ Fast Bullish Breakout on {{ticker}} at {{close}}")
+alertcondition(fast_sell_final, title="Fast Bearish Breakout Alert",  message="⚡ Fast Bearish Breakout on {{ticker}} at {{close}}")
+
+alertcondition(med_buy_final,   title="Medium Bullish Breakout Alert",  message="🌀 Medium Bullish Breakout on {{ticker}} at {{close}}")
+alertcondition(med_sell_final,  title="Medium Bearish Breakout Alert",  message="🌀 Medium Bearish Breakout on {{ticker}} at {{close}}")
+
+alertcondition(slow_buy_final,  title="Slow Bullish Breakout Alert",  message="🐢 Slow Bullish Breakout on {{ticker}} at {{close}}")
+alertcondition(slow_sell_final, title="Slow Bearish Breakout Alert",  message="🐢 Slow Bearish Breakout on {{ticker}} at {{close}}")
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DASHBOARD HUD TABLE
+// ═══════════════════════════════════════════════════════════════════════════
+
+var table hud = table.new(position=position.top_right, columns=4, rows=4, bgcolor=color.new(color.black, 30), border_width=1, border_color=color.new(color.gray, 50))
+
+if show_hud and barstate.islast
+    // Header Row
+    table.cell(hud, 0, 0, "Speed", bgcolor=color.new(color.gray, 30), text_color=color.white, text_size=size.small)
+    table.cell(hud, 1, 0, "Trend", bgcolor=color.new(color.gray, 30), text_color=color.white, text_size=size.small)
+    table.cell(hud, 2, 0, "Dist (ATR)", bgcolor=color.new(color.gray, 30), text_color=color.white, text_size=size.small)
+    table.cell(hud, 3, 0, "Quality", bgcolor=color.new(color.gray, 30), text_color=color.white, text_size=size.small)
+
+    // Fast Speed Row
+    table.cell(hud, 0, 1, "⚡ Fast", text_color=color.white, text_size=size.small)
+    table.cell(hud, 1, 1, enable_fast ? (fast_trend == 1 ? "Bullish" : "Bearish") : "Disabled", 
+               bgcolor=enable_fast ? (fast_trend == 1 ? color.new(fast_color_bull, 70) : color.new(fast_color_bear, 70)) : color.new(color.gray, 80), 
+               text_color=color.white, text_size=size.small)
+    table.cell(hud, 2, 1, enable_fast and not na(fast_dist) ? str.tostring(fast_dist, "0.0x") : "-", text_color=color.white, text_size=size.small)
+    table.cell(hud, 3, 1, enable_fast and fast_any ? str.tostring(fast_qual) + "/10" : "-", text_color=color.white, text_size=size.small)
+
+    // Medium Speed Row
+    table.cell(hud, 0, 2, "🌀 Medium", text_color=color.white, text_size=size.small)
+    table.cell(hud, 1, 2, enable_med ? (med_trend == 1 ? "Bullish" : "Bearish") : "Disabled", 
+               bgcolor=enable_med ? (med_trend == 1 ? color.new(med_color_bull, 70) : color.new(med_color_bear, 70)) : color.new(color.gray, 80), 
+               text_color=color.white, text_size=size.small)
+    table.cell(hud, 2, 2, enable_med and not na(med_dist) ? str.tostring(med_dist, "0.0x") : "-", text_color=color.white, text_size=size.small)
+    table.cell(hud, 3, 2, enable_med and med_any ? str.tostring(med_qual) + "/10" : "-", text_color=color.white, text_size=size.small)
+
+    // Slow Speed Row
+    table.cell(hud, 0, 3, "🐢 Slow", text_color=color.white, text_size=size.small)
+    table.cell(hud, 1, 3, enable_slow ? (slow_trend == 1 ? "Bullish" : "Bearish") : "Disabled", 
+               bgcolor=enable_slow ? (slow_trend == 1 ? color.new(slow_color_bull, 70) : color.new(slow_color_bear, 70)) : color.new(color.gray, 80), 
+               text_color=color.white, text_size=size.small)
+    table.cell(hud, 2, 3, enable_slow and not na(slow_dist) ? str.tostring(slow_dist, "0.0x") : "-", text_color=color.white, text_size=size.small)
+    table.cell(hud, 3, 3, enable_slow and slow_any ? str.tostring(slow_qual) + "/10" : "-", text_color=color.white, text_size=size.small)

@@ -1,0 +1,9 @@
+12:29:54.433 Tester XAUUSD,M5: testing of Experts\QuantBeast\QuantBeastEA.ex5 from 2026.05.18 00:00 to 2026.05.22 started
+12:29:54.765 QuantBeastEA TEST 16 PASS: BO reachability L=valid S=valid gate=rejected
+12:29:54.765 QuantBeastEA TEST 17 PASS: FBO reachability L=valid S=valid gate=rejected
+12:29:54.765 QuantBeastEA TEST 18 PASS: TP reachability L=valid S=valid gate=rejected
+12:29:54.765 QuantBeastEA TEST 19 PASS: MR reachability L=valid S=valid gate=rejected
+12:29:54.765 QuantBeastEA Self-tests complete: 21 passed, 0 failed
+12:30:06.209 Tester final balance 10000.00 USD
+12:30:06.212 Tester XAUUSD,M5: 22080 ticks, 1104 bars generated. Test passed in 0:00:11.866.
+

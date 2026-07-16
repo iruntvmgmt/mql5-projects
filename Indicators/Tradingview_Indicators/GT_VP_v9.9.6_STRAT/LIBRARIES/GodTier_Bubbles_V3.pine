@@ -1,0 +1,491 @@
+//@version=6
+// @description Enhanced footprint bubble system with PRICE-LEVEL TRACKING for accurate spatial filtering
+library("GodTier_Bubbles", true)
+
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
+
+export type BubbleData
+    label bubble_label
+    int bar_idx
+    float delta_value
+    float volume_value
+    float buy_vol
+    float sell_vol
+    float price_level  // ✅ NEW: Actual price where bubble was created
+
+export type BubbleConfig
+    float vol_threshold
+    int min_delta
+    string size_mode
+    bool show_ratio
+    int max_bubbles
+    int vertical_offset
+    color bull_color
+    color bear_color
+    string color_mode
+    float tier_threshold
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+// @function Calculates appropriate bubble size based on volume statistics
+// @param vol Current volume
+// @param vol_mean Average volume
+// @param vol_stdev Volume standard deviation
+// @param mode Sizing mode: "Fixed", "Dynamic", or "Volume-Weighted"
+// @returns Size constant as string
+export get_bubble_size(float vol, float vol_mean, float vol_stdev, string mode) =>
+    string bubble_size = size.tiny
+    
+    if mode == "Fixed"
+        bubble_size := size.small
+    else if mode == "Dynamic"
+        float z_score = vol_stdev > 0 ? (vol - vol_mean) / vol_stdev : 0
+        if z_score > 3.0
+            bubble_size := size.large
+        else if z_score > 2.0
+            bubble_size := size.normal
+        else if z_score > 1.0
+            bubble_size := size.small
+        else
+            bubble_size := size.tiny
+    else  // Volume-Weighted
+        float vol_ratio = vol_mean > 0 ? vol / vol_mean : 1.0
+        if vol_ratio > 3.0
+            bubble_size := size.huge
+        else if vol_ratio > 2.5
+            bubble_size := size.large
+        else if vol_ratio > 2.0
+            bubble_size := size.normal
+        else if vol_ratio > 1.5
+            bubble_size := size.small
+        else
+            bubble_size := size.tiny
+    
+    bubble_size
+
+// @function Generates gradient color based on delta intensity
+// @param delta The delta value
+// @param max_delta Maximum recent delta for normalization
+// @param bull_color Base color for positive delta
+// @param bear_color Base color for negative delta
+// @returns Color with gradient transparency
+export get_bubble_color(float delta, float max_delta, color bull_color, color bear_color) =>
+    float intensity = max_delta > 0 ? math.abs(delta) / max_delta : 0.5
+    color base_col = delta > 0 ? bull_color : bear_color
+    int transparency = math.round(math.max(20, 80 - (intensity * 60)))
+    color.new(base_col, transparency)
+
+// @function Generates VIVID color coding (no gradient)
+// @param delta The delta value
+// @param bull_color Base color for positive delta
+// @param bear_color Base color for negative delta
+// @returns Solid color with fixed transparency
+export get_bubble_color_vivid(float delta, color bull_color, color bear_color) =>
+    color base_col = delta > 0 ? bull_color : bear_color
+    color.new(base_col, 10)
+
+// @function Generates tiered color (Strong Buy/Neutral/Strong Sell)
+// @param delta The delta value
+// @param buy_vol Buy volume
+// @param sell_vol Sell volume
+// @param threshold Minimum buy/sell ratio for "strong" classification
+// @returns Color based on strength tier
+export get_bubble_color_tiered(float delta, float buy_vol, float sell_vol, float threshold) =>
+    color result = color.gray
+    
+    if buy_vol > 0 and sell_vol > 0
+        float ratio = buy_vol / sell_vol
+        
+        if ratio > threshold
+            result := color.new(color.lime, 5)  // Strong buying
+        else if ratio > 1.0
+            result := color.new(color.green, 30)  // Moderate buying
+        else if ratio < (1.0 / threshold)
+            result := color.new(color.red, 5)  // Strong selling
+        else if ratio < 1.0
+            result := color.new(color.maroon, 30)  // Moderate selling
+        else
+            result := color.new(color.gray, 50)  // Balanced
+    else
+        result := delta > 0 ? color.new(color.lime, 0) : color.new(color.red, 0)
+    
+    result
+
+// @function Calculates buy/sell volumes from LTF data arrays
+// @param ltf_opens Array of LTF open prices
+// @param ltf_closes Array of LTF close prices
+// @param ltf_volumes Array of LTF volumes
+// @returns Tuple [buy_volume, sell_volume, delta]
+export calculate_ltf_delta(array<float> ltf_opens, array<float> ltf_closes, array<float> ltf_volumes) =>
+    float bar_buy_vol = 0.0
+    float bar_sell_vol = 0.0
+    
+    if array.size(ltf_opens) > 0
+        for j = 0 to array.size(ltf_opens) - 1
+            float ltf_close = array.get(ltf_closes, j)
+            float ltf_open = array.get(ltf_opens, j)
+            float ltf_vol = array.get(ltf_volumes, j)
+            
+            if ltf_close >= ltf_open
+                bar_buy_vol += ltf_vol
+            else
+                bar_sell_vol += ltf_vol
+    
+    float bar_delta = bar_buy_vol - bar_sell_vol
+    [bar_buy_vol, bar_sell_vol, bar_delta]
+
+// @function Builds detailed tooltip text for bubble
+// @param delta Delta value
+// @param buy_vol Buy volume
+// @param sell_vol Sell volume
+// @param total_vol Total volume
+// @param z_score Volume Z-score
+// @param price_level Price where bubble is located
+// @returns Formatted tooltip string
+export build_tooltip(float delta, float buy_vol, float sell_vol, float total_vol, float z_score, float price_level) =>
+    float buy_pct = buy_vol + sell_vol > 0 ? buy_vol / (buy_vol + sell_vol) * 100 : 50
+    
+    string tooltip = "═══ Point of Truth ═══\n"
+    tooltip += "Price: " + str.tostring(price_level, format.mintick) + "\n"
+    tooltip += "Delta: " + str.tostring(delta, format.volume) + "\n"
+    tooltip += "Buy Vol: " + str.tostring(buy_vol, format.volume) + "\n"
+    tooltip += "Sell Vol: " + str.tostring(sell_vol, format.volume) + "\n"
+    tooltip += "Buy%: " + str.tostring(buy_pct, "#.#") + "%\n"
+    tooltip += "Total: " + str.tostring(total_vol, format.volume) + "\n"
+    tooltip += "Z-Score: " + str.tostring(z_score, "#.##")
+    
+    tooltip
+
+// =============================================================================
+// CORE BUBBLE RENDERING
+// =============================================================================
+
+// @function Creates a footprint bubble with price tracking
+// @param config BubbleConfig with all settings
+// @param bar_idx Current bar index
+// @param high_price Bar high
+// @param low_price Bar low
+// @param buy_vol Buy volume
+// @param sell_vol Sell volume
+// @param volume Total volume
+// @param vol_mean Volume average
+// @param vol_stdev Volume standard deviation
+// @param max_recent_delta Maximum recent delta for color scaling
+// @returns BubbleData object with label reference and PRICE LEVEL
+export create_bubble(BubbleConfig config, int bar_idx, float high_price, float low_price, float buy_vol, float sell_vol, float volume, float vol_mean, float vol_stdev, float max_recent_delta) =>
+    float bar_delta = buy_vol - sell_vol
+    float buy_ratio = buy_vol + sell_vol > 0 ? buy_vol / (buy_vol + sell_vol) * 100 : 50
+    
+    // ✅ CRITICAL: Store actual price where bubble is placed
+    float bubble_price = bar_delta > 0 ? high_price : low_price
+    
+    // Calculate color based on mode
+    color bubble_col = color.gray
+    if config.color_mode == "Vivid"
+        bubble_col := get_bubble_color_vivid(bar_delta, config.bull_color, config.bear_color)
+    else if config.color_mode == "Tiered"
+        bubble_col := get_bubble_color_tiered(bar_delta, buy_vol, sell_vol, config.tier_threshold)
+    else  // Gradient (default)
+        bubble_col := get_bubble_color(bar_delta, max_recent_delta, config.bull_color, config.bear_color)
+    
+    string bubble_sz = get_bubble_size(volume, vol_mean, vol_stdev, config.size_mode)
+    
+    // Position: above for bullish, below for bearish
+    float bubble_y = bar_delta > 0 ? high_price + (syminfo.mintick * config.vertical_offset) : low_price - (syminfo.mintick * config.vertical_offset)
+    
+    // Build label text
+    string bubble_text = str.tostring(math.round(bar_delta))
+    if config.show_ratio
+        bubble_text += "\n" + str.tostring(buy_ratio, "#") + "%"
+    
+    // Build tooltip with price info
+    float z_score = vol_stdev > 0 ? (volume - vol_mean) / vol_stdev : 0
+    string bubble_tooltip = build_tooltip(bar_delta, buy_vol, sell_vol, volume, z_score, bubble_price)
+    
+    // Create label
+    label bub = label.new(
+        x = bar_idx, 
+        y = bubble_y, 
+        text = bubble_text,
+        color = bubble_col, 
+        style = label.style_circle, 
+        textcolor = color.white, 
+        size = bubble_sz,
+        yloc = yloc.price,
+        tooltip = bubble_tooltip
+    )
+    
+    // ✅ Return BubbleData with price_level
+    BubbleData.new(bub, bar_idx, bar_delta, volume, buy_vol, sell_vol, bubble_price)
+
+// =============================================================================
+// BUBBLE MANAGEMENT
+// =============================================================================
+
+// @function Checks if bubble should be created based on thresholds
+// @param volume Current volume
+// @param vol_mean Volume average
+// @param vol_stdev Volume standard deviation
+// @param delta Current delta
+// @param config BubbleConfig with thresholds
+// @returns True if bubble qualifies
+export should_create_bubble(float volume, float vol_mean, float vol_stdev, float delta, BubbleConfig config) =>
+    bool high_activity = vol_stdev > 0 ? volume > (vol_mean + (config.vol_threshold * vol_stdev)) : volume > vol_mean * 1.5
+    bool significant_delta = math.abs(delta) >= config.min_delta
+    high_activity and significant_delta
+
+// @function Adds bubble to array and prunes if needed
+// @param bubble_array Array of BubbleData
+// @param new_bubble New BubbleData to add
+// @param max_bubbles Maximum allowed bubbles
+export manage_bubble_array(array<BubbleData> bubble_array, BubbleData new_bubble, int max_bubbles) =>
+    array.push(bubble_array, new_bubble)
+    
+    while array.size(bubble_array) > max_bubbles
+        BubbleData old_bubble = array.shift(bubble_array)
+        label.delete(old_bubble.bubble_label)
+
+// @function Clears all bubbles from array
+// @param bubble_array Array of BubbleData to clear
+export clear_bubbles(array<BubbleData> bubble_array) =>
+    while array.size(bubble_array) > 0
+        BubbleData old_bubble = array.shift(bubble_array)
+        label.delete(old_bubble.bubble_label)
+
+// =============================================================================
+// ✅ NEW: SPATIAL FILTERING FUNCTIONS
+// =============================================================================
+
+// @function Counts bubbles within price tolerance of a target level
+// @param bubble_array Array of all bubbles
+// @param target_price Price level to check (e.g., POC, VAH, VAL)
+// @param tolerance Maximum price distance (e.g., bin_size * 3)
+// @param lookback Maximum bars to look back
+// @returns Tuple [bullish_count, bearish_count]
+export count_bubbles_at_price(array<BubbleData> bubble_array, float target_price, float tolerance, int lookback) =>
+    int bull_count = 0
+    int bear_count = 0
+    
+    if array.size(bubble_array) > 0
+        int start_idx = math.max(0, array.size(bubble_array) - lookback)
+        
+        for i = start_idx to array.size(bubble_array) - 1
+            BubbleData bubble = array.get(bubble_array, i)
+            
+            // ✅ Check ACTUAL PRICE DISTANCE (not just bar recency)
+            float price_distance = math.abs(bubble.price_level - target_price)
+            
+            if price_distance <= tolerance
+                bool is_bullish = bubble.buy_vol > bubble.sell_vol
+                
+                if is_bullish
+                    bull_count += 1
+                else
+                    bear_count += 1
+    
+    [bull_count, bear_count]
+
+// @function Counts bubbles near a level using actual bar recency.
+// @description Safer replacement for count_bubbles_at_price() when sessions are
+//              very active. The legacy function treats lookback as an array
+//              window; this version requires bar_index - bubble.bar_idx <= lookback.
+// @param bubble_array Array of all bubbles
+// @param target_price Price level to check (e.g., POC, VAH, VAL)
+// @param tolerance Maximum price distance
+// @param lookback Maximum bars to look back
+// @returns Tuple [bullish_count, bearish_count]
+export count_recent_bubbles_at_price(array<BubbleData> bubble_array, float target_price, float tolerance, int lookback) =>
+    int bull_count = 0
+    int bear_count = 0
+
+    if array.size(bubble_array) > 0
+        for i = array.size(bubble_array) - 1 to 0 by -1
+            BubbleData bubble = array.get(bubble_array, i)
+            int bars_ago = bar_index - bubble.bar_idx
+            if bars_ago > lookback
+                break
+
+            float price_distance = math.abs(bubble.price_level - target_price)
+            if price_distance <= tolerance
+                bool is_bullish = bubble.buy_vol > bubble.sell_vol
+                if is_bullish
+                    bull_count += 1
+                else
+                    bear_count += 1
+
+    [bull_count, bear_count]
+
+// @function Finds most recent bubble near a price level
+// @param bubble_array Array of all bubbles
+// @param target_price Price level to check
+// @param tolerance Maximum price distance
+// @param is_bullish True to find bullish bubbles, false for bearish
+// @param lookback Maximum bars to look back
+// @returns True if qualifying bubble found within lookback
+export find_recent_bubble_at_price(array<BubbleData> bubble_array, float target_price, float tolerance, bool is_bullish, int lookback) =>
+    bool found = false
+    
+    if array.size(bubble_array) > 0
+        // Search backwards from most recent
+        for i = array.size(bubble_array) - 1 to math.max(0, array.size(bubble_array) - lookback) by -1
+            BubbleData bubble = array.get(bubble_array, i)
+            
+            // Check price proximity
+            float price_distance = math.abs(bubble.price_level - target_price)
+            
+            if price_distance <= tolerance
+                bool bubble_is_bullish = bubble.buy_vol > bubble.sell_vol
+                
+                // Check if direction matches
+                if bubble_is_bullish == is_bullish
+                    // Check bar recency
+                    int bars_ago = bar_index - bubble.bar_idx
+                    if bars_ago <= lookback
+                        found := true
+                        break
+    
+    found
+
+// @function Gets strongest bubble (highest delta) within price range
+// @param bubble_array Array of all bubbles
+// @param price_low Bottom of price range
+// @param price_high Top of price range
+// @param lookback Maximum bars to look back
+// @returns BubbleData of strongest bubble, or na if none found
+export get_strongest_bubble_in_range(array<BubbleData> bubble_array, float price_low, float price_high, int lookback) =>
+    BubbleData strongest = na
+    float max_delta = 0.0
+    
+    if array.size(bubble_array) > 0
+        int start_idx = math.max(0, array.size(bubble_array) - lookback)
+        
+        for i = start_idx to array.size(bubble_array) - 1
+            BubbleData bubble = array.get(bubble_array, i)
+            
+            // Check if bubble is in price range
+            if bubble.price_level >= price_low and bubble.price_level <= price_high
+                float abs_delta = math.abs(bubble.delta_value)
+                
+                if abs_delta > max_delta
+                    max_delta := abs_delta
+                    strongest := bubble
+    
+    strongest
+
+// @function Counts bubbles in a vertical price zone (e.g., between VAH and VAL)
+// @param bubble_array Array of all bubbles
+// @param zone_top Top of zone (e.g., VAH)
+// @param zone_bottom Bottom of zone (e.g., VAL)
+// @param lookback Maximum bars to look back
+// @returns Tuple [total_bubbles, bullish_count, bearish_count, avg_delta]
+export analyze_bubbles_in_zone(array<BubbleData> bubble_array, float zone_top, float zone_bottom, int lookback) =>
+    int total = 0
+    int bullish = 0
+    int bearish = 0
+    float sum_delta = 0.0
+    
+    if array.size(bubble_array) > 0
+        int start_idx = math.max(0, array.size(bubble_array) - lookback)
+        
+        for i = start_idx to array.size(bubble_array) - 1
+            BubbleData bubble = array.get(bubble_array, i)
+            
+            // Check if price is within zone
+            if bubble.price_level >= zone_bottom and bubble.price_level <= zone_top
+                total += 1
+                sum_delta += bubble.delta_value
+                
+                if bubble.buy_vol > bubble.sell_vol
+                    bullish += 1
+                else
+                    bearish += 1
+    
+    float avg_delta = total > 0 ? sum_delta / total : 0.0
+    
+    [total, bullish, bearish, avg_delta]
+
+// =============================================================================
+// ANALYTICS
+// =============================================================================
+
+// @function Calculates bubble statistics for dashboard
+// @param bubble_array Array of BubbleData
+// @returns Tuple [total_bubbles, bullish_count, bearish_count, net_delta]
+export calculate_bubble_stats(array<BubbleData> bubble_array) =>
+    int bullish_count = 0
+    int bearish_count = 0
+    float net_delta = 0.0
+    
+    if array.size(bubble_array) > 0
+        for bubble_data in bubble_array
+            if bubble_data.delta_value > 0
+                bullish_count += 1
+            else
+                bearish_count += 1
+            net_delta += bubble_data.delta_value
+    
+    [array.size(bubble_array), bullish_count, bearish_count, net_delta]
+
+// @function Gets max recent delta for color normalization
+// @param delta_history Array of recent deltas
+// @returns Maximum absolute delta value
+export get_max_recent_delta(array<float> delta_history) =>
+    float max_delta = 0.0
+    
+    if array.size(delta_history) > 0
+        for i = 0 to array.size(delta_history) - 1
+            max_delta := math.max(max_delta, math.abs(array.get(delta_history, i)))
+    
+    max_delta
+
+// @function Calculates bubble density (bubbles per price unit)
+// @param bubble_array Array of BubbleData
+// @param lookback Bars to analyze
+// @returns Bubbles per 1% price movement
+export calculate_bubble_density(array<BubbleData> bubble_array, int lookback) =>
+    float density = 0.0
+    
+    if array.size(bubble_array) > 1
+        int start_idx = math.max(0, array.size(bubble_array) - lookback)
+        
+        // Find price range of bubbles
+        float min_price = array.get(bubble_array, start_idx).price_level
+        float max_price = min_price
+        int count = 0
+        
+        for i = start_idx to array.size(bubble_array) - 1
+            BubbleData bubble = array.get(bubble_array, i)
+            min_price := math.min(min_price, bubble.price_level)
+            max_price := math.max(max_price, bubble.price_level)
+            count += 1
+        
+        float price_range = max_price - min_price
+        if price_range > 0
+            // Normalize to 1% of current price
+            float one_pct_range = close * 0.01
+            density := count / (price_range / one_pct_range)
+    
+    density
+
+// =============================================================================
+// CONFIGURATION BUILDER
+// =============================================================================
+
+// @function Creates a BubbleConfig with all settings
+// @param vol_threshold Volume threshold in standard deviations
+// @param min_delta Minimum delta to display
+// @param size_mode Size mode string
+// @param show_ratio Show buy/sell ratio
+// @param max_bubbles Maximum bubbles on chart
+// @param vertical_offset Vertical offset in ticks
+// @param bull_color Color for bullish bubbles
+// @param bear_color Color for bearish bubbles
+// @param color_mode Color mode: "Gradient", "Vivid", or "Tiered"
+// @param tier_threshold Threshold for tiered mode
+// @returns BubbleConfig object
+export new_config(float vol_threshold, int min_delta, string size_mode, bool show_ratio, int max_bubbles, int vertical_offset, color bull_color, color bear_color, string color_mode = "Gradient", float tier_threshold = 2.0) =>
+    BubbleConfig.new(vol_threshold, min_delta, size_mode, show_ratio, max_bubbles, vertical_offset, bull_color, bear_color, color_mode, tier_threshold)

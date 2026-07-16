@@ -1,0 +1,5 @@
+13:55:49.932 QuantBeast[INFO] BrokerAdapter initialized. Magic=20260701 deviation_pts=11
+13:55:49.950 QuantBeast[INFO] TEST 27 PASS: Broker failure policy entry=bounded broker_action=retained
+13:55:49.950 QuantBeast[INFO] Self-tests complete: 29 passed, 0 failed
+13:56:31.512 Tester final balance 10000.00 USD
+13:56:31.517 Tester XAUUSD,M5: 49073 ticks, 2455 bars generated. Test passed in 0:00:43.771.

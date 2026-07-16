@@ -1,0 +1,248 @@
+//@version=6
+// @description Performance & memory optimization for high-density Volume Profiles.
+// Published library version: GodTier_Optimization/6
+//              Canonical home for compress_profile(), compress_profile_triple(),
+//              adaptive_granularity(), and drawing/memory management utilities.
+//
+// CHANGELOG v1 → v2
+// ─────────────────────────────────────────────────────────────────────────
+// ADD  — compress_profile_triple(): compresses vol_map, buy_map, sell_map in
+//         a single shared key iteration pass. vol_map, buy_map, sell_map always
+//         have identical key sets (built together in processBarVolume). Calling
+//         compress_profile() three times independently sorted and iterated the
+//         same key list three times per compression event. compress_profile_triple
+//         does it once. GodTier_Controller compression block should use this.
+//
+// FIX  — compress_profile() and compress_profile_triple(): map.get(key, default)
+//         two-arg overload does not exist in Pine v6. map.get(map, key) returns
+//         na when the key is absent. Restored nz(map.get(...)) as the correct
+//         pattern throughout both functions. The intermediate attempt to use
+//         map.get(..., 0.0) was incorrect and would have caused a compile error.
+//
+// FIX  — pruneOutliers(): map.remove() calls now guarded behind
+//         array.size(prune_keys) > 0. Previous code allocated the prune_keys
+//         array every bar and called map.remove() even when no outliers existed,
+//         adding unnecessary work on quiet bars. Also applied to buy/sell map
+//         removals via a shared key list (single iteration over prune_keys).
+//
+// CHANGELOG v2 → v3 (AUDIT FIX 3)
+// ─────────────────────────────────────────────────────────────────────────
+// FIX  — estimate_memory_usage(): added optional box_limit/line_limit/label_limit
+//         parameters (defaults 500/500/500 for backward compatibility).
+//         Callers can pass explicit drawing ceilings when they use tighter local
+//         budgets than the Pine defaults.
+//         Old 3-arg call sites are unaffected — defaults match the prior behaviour.
+
+library("GodTier_Optimization", true)
+// Version: 6
+// Suite patch lineage: v3
+
+// =============================================================================
+// COMPRESSION ENGINE
+// =============================================================================
+
+// @function Down-samples a high-res volume map into a lower-res version.
+//           Groups adjacent bins by integer division — bin N/factor merges into one.
+// @param original_map  The high-density volume map.
+// @param factor        Compression factor (2 = 50% fewer bins, 3 = 66% fewer).
+// @returns New compressed map. Keys are in compressed index space.
+export compress_profile(map<int, float> original_map, simple int factor = 2) =>
+    map<int, float> compressed_map = map.new<int, float>()
+    int[] keys = map.keys(original_map)
+
+    if array.size(keys) > 0
+        array.sort(keys)
+        for k in keys
+            int   new_key      = math.floor(k / factor)
+            // FIX v2: nz(map.get(...)) is the correct Pine v6 pattern.
+            // map.get(key, default) two-arg overload does not exist.
+            float existing_vol = nz(compressed_map.get(new_key))
+            compressed_map.put(new_key, existing_vol + nz(original_map.get(k)))
+
+    compressed_map
+
+
+// @function Compresses vol_map, buy_map, and sell_map in a single shared key
+//           iteration pass. These three maps always share identical key sets
+//           (they are built together in processBarVolume). Calling compress_profile()
+//           three times independently sorted and iterated that key list three times
+//           per compression event. This function does it once.
+//           GodTier_Controller compression block should use this instead of three
+//           separate compress_profile() calls.
+//
+// @param vol_map   Total volume map.
+// @param buy_map   Buy volume map.
+// @param sell_map  Sell volume map.
+// @param factor    Compression factor (default 2).
+// @returns [compressed_vol, compressed_buy, compressed_sell]
+export compress_profile_triple(
+    map<int, float> vol_map,
+    map<int, float> buy_map,
+    map<int, float> sell_map,
+    simple int factor = 2) =>
+
+    map<int, float> c_vol  = map.new<int, float>()
+    map<int, float> c_buy  = map.new<int, float>()
+    map<int, float> c_sell = map.new<int, float>()
+
+    int[] keys = map.keys(vol_map)   // single key list — all three maps share the same keys
+
+    if array.size(keys) > 0
+        array.sort(keys)
+        for k in keys
+            int new_key = math.floor(k / factor)
+            // FIX v2: nz(map.get(...)) is the correct Pine v6 pattern.
+            // map.get(key, default) two-arg overload does not exist.
+            c_vol.put( new_key, nz(c_vol.get( new_key)) + nz(vol_map.get( k)))
+            c_buy.put( new_key, nz(c_buy.get( new_key)) + nz(buy_map.get( k)))
+            c_sell.put(new_key, nz(c_sell.get(new_key)) + nz(sell_map.get(k)))
+
+    [c_vol, c_buy, c_sell]
+
+// =============================================================================
+// RESOURCE MANAGEMENT
+// =============================================================================
+
+// @function Removes oldest box objects to stay under TradingView 500-object limit.
+// @param box_array  Array of profile boxes.
+// @param max_count  Target maximum box count (default 450, hard limit is 500).
+export prune_drawings(box[] box_array, simple int max_count = 450) =>
+    if array.size(box_array) > max_count
+        box to_remove = array.shift(box_array)
+        box.delete(to_remove)
+
+// @function Batch-removes multiple boxes per call for better throughput.
+// @param box_array   Array of profile boxes.
+// @param max_count   Target maximum count.
+// @param batch_size  How many to remove per call (default 10).
+export batch_prune_drawings(box[] box_array, simple int max_count = 450,
+                             simple int batch_size = 10) =>
+    int current_size = array.size(box_array)
+    if current_size > max_count
+        int to_remove = math.min(batch_size, current_size - max_count)
+        for i = 0 to to_remove - 1
+            if array.size(box_array) > 0
+                box.delete(array.shift(box_array))
+
+// @function Removes oldest line objects to stay under TradingView 500-object limit.
+// @param line_array  Array of lines (POC trails, level lines, etc.).
+// @param max_count   Target maximum line count (default 450).
+export prune_lines(line[] line_array, simple int max_count = 450) =>
+    if array.size(line_array) > max_count
+        line to_remove = array.shift(line_array)
+        line.delete(to_remove)
+
+// @function Returns true if session is recent enough to justify full-res rendering.
+// @param session_start   Bar index where the session began.
+// @param lookback_limit  Maximum bars back to keep high-res (default 1000).
+export is_high_res_eligible(int session_start, simple int lookback_limit = 1000) =>
+    (bar_index - session_start) < lookback_limit
+
+// =============================================================================
+// ADAPTIVE OPTIMIZATION
+// =============================================================================
+
+// @function Calculates optimal granularity based on session bar count and price range.
+//           Reduces bin resolution for very long or very volatile sessions to
+//           prevent excessive map key counts and memory overhead.
+//
+// @param bar_count        Number of bars elapsed in the session.
+// @param price_range      Session high - session low.
+// @param base_granularity User's preferred granularity input.
+// @returns Adjusted granularity factor (lower = coarser bins = fewer map keys).
+export adaptive_granularity(int bar_count, float price_range, int base_granularity) =>
+    int adjusted = base_granularity
+
+    // Scale down for long sessions
+    if bar_count > 5000
+        adjusted := math.max(20, math.round(base_granularity * 0.6))
+    else if bar_count > 2000
+        adjusted := math.max(25, math.round(base_granularity * 0.8))
+
+    // Scale down further for extreme price ranges (crypto, high-ATR instruments)
+    if not na(price_range) and price_range > 0
+        float volatility_factor = price_range / syminfo.mintick
+        if volatility_factor > 100000
+            adjusted := math.max(15, math.round(adjusted * 0.7))
+
+    adjusted
+
+// =============================================================================
+// MEMORY FOOTPRINT ESTIMATION
+// =============================================================================
+
+// @function Estimates current drawing object memory usage as a percentage of limits.
+//           Uses the highest single-type usage as the effective bottleneck.
+// @param num_boxes    Current box object count.
+// @param num_lines    Current line object count.
+// @param num_labels   Current label object count.
+// @param box_limit    Pine max_boxes_count ceiling (default 500).
+// @param line_limit   Pine max_lines_count ceiling (default 500).
+// @param label_limit  Pine max_labels_count ceiling (default 500).
+// @returns Usage percentage 0–100 (above 90 triggers emergency_cleanup).
+// AUDIT: Added optional limit params. Old 3-arg call sites keep defaults → backward-compatible.
+export estimate_memory_usage(int num_boxes, int num_lines, int num_labels,
+                             simple int box_limit = 500, simple int line_limit = 500,
+                             simple int label_limit = 500) =>
+    float box_pct   = num_boxes   / (box_limit   * 1.0) * 100
+    float line_pct  = num_lines   / (line_limit  * 1.0) * 100
+    float label_pct = num_labels  / (label_limit * 1.0) * 100
+    math.max(box_pct, math.max(line_pct, label_pct))
+
+// =============================================================================
+// PERFORMANCE PROFILING
+// =============================================================================
+
+// @function Returns true if bar count is within safe full-detail rendering range.
+// @param total_bars  Total bars loaded on chart (default safe ceiling 25000).
+export can_render_full_detail(simple int total_bars = 10000) =>
+    bar_index < total_bars
+
+// =============================================================================
+// SMART CLEANUP
+// =============================================================================
+
+// @function Emergency cleanup — removes 30% of boxes and lines when usage exceeds threshold.
+//           Called automatically by the main indicator performance monitoring block.
+// @param box_array            Array of boxes.
+// @param line_array           Array of lines.
+// @param emergency_threshold  Usage % to trigger cleanup (default 90).
+// @returns true if cleanup was performed, false if not needed.
+export emergency_cleanup(box[] box_array, line[] line_array,
+                         simple float emergency_threshold = 90.0) =>
+    int   box_count  = array.size(box_array)
+    int   line_count = array.size(line_array)
+    float usage      = estimate_memory_usage(box_count, line_count, 0)
+
+    if usage > emergency_threshold
+        int boxes_to_remove = math.round(box_count  * 0.3)
+        int lines_to_remove = math.round(line_count * 0.3)
+
+        for i = 0 to boxes_to_remove - 1
+            if array.size(box_array) > 0
+                box.delete(array.shift(box_array))
+
+        for i = 0 to lines_to_remove - 1
+            if array.size(line_array) > 0
+                line.delete(array.shift(line_array))
+
+        true
+    else
+        false
+
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
+// @function Safe array get with bounds checking — returns na instead of runtime error.
+// @param arr    Float array to access.
+// @param index  Index to retrieve.
+export safe_array_get(array<float> arr, int index) =>
+    array.size(arr) > 0 and index >= 0 and index < array.size(arr) ? array.get(arr, index) : na
+
+// @function Caps profile width to 20% of visible session length to prevent overlap.
+// @param user_preference  User's width input.
+// @param bars_available   Number of bars in the current session window.
+export optimize_profile_width(int user_preference, int bars_available) =>
+    int max_allowed = math.round(bars_available * 0.2)
+    math.min(user_preference, max_allowed)

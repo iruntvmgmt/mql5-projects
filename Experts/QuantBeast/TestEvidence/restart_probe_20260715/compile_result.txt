@@ -1,0 +1,11 @@
+QuantBeastRestartProbe.mq5
+Result: 0 errors, 0 warnings, 729 ms elapsed, cpu='X64 Regular'
+
+QuantBeastEA.mq5 after explicit persistence flush repair
+Result: 0 errors, 0 warnings, 17621 ms elapsed, cpu='X64 Regular'
+
+SHA-256
+8f848885b06ed6b8a56e496a8b941a7699eedfa0044c31a3f7ad6983f538d4ce  QuantBeastEA.mq5
+d014de37bf21defaf5b62308a6afd373843d1013ae9860f621dad623dd278b29  QuantBeastEA.ex5
+23d6aaa4c7d373df4125288040637633632490b4843f6d0c9d60b76cd8ba3bb4  QuantBeastRestartProbe.mq5
+aa67b1ad879198c2add7ab40ae949fe54e621a98249f2f99b7f52193bafe9ffe  QuantBeastRestartProbe.ex5

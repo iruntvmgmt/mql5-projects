@@ -1,0 +1,31 @@
+Post-repair deterministic Shadow regression:
+
+18:04:21.465 TEST 16 PASS: BO reachability L=valid S=valid gate=rejected
+18:04:21.465 TEST 17 PASS: FBO reachability L=valid S=valid gate=rejected
+18:04:21.465 TEST 18 PASS: TP reachability L=valid S=valid gate=rejected
+18:04:21.465 TEST 19 PASS: MR reachability L=valid S=valid gate=rejected
+18:04:21.466 Self-tests complete: 34 passed, 0 failed
+18:04:47.519 final balance 10000.00 USD
+18:04:47.527 XAUUSD,M5: 22080 ticks, 1104 bars generated. Test passed in 0:00:27.003.
+
+Final classifier/arbitration coverage regression:
+
+18:15:32.763 TEST 33 PASS: Regime classification healthy=TREND_STRONG_UP/VOL_NORMAL/LIQUIDITY_GOOD/STRUCTURE_ACCEPTED_BREAKOUT shock=VOL_SHOCK
+18:15:32.763 TEST 34 PASS: Arbitration policy best=FBO/SELL duplicate=rejected conflict=rejected
+18:15:32.763 Self-tests complete: 36 passed, 0 failed
+18:15:49.116 final balance 10000.00 USD
+18:15:49.124 XAUUSD,M5: 22080 ticks, 1104 bars generated. Test passed in 0:00:17.166.
+
+Generated-tick fallback organic pipeline observations (pre-repair run):
+
+17:55:16.028 XAUUSD: real ticks begin from 2026.06.19 00:00:00, every tick generation used
+17:57:23.795 2026.03.02 16:35 FBO BUY reached arbitration/risk; rejected by risk: Stop too far 2779 > 1000
+17:57:43.645 2026.03.02 18:05 FBO SELL reached arbitration/risk; rejected by risk: Stop too far 6084 > 1000
+
+Attempted true-real-tick boundary probe:
+
+18:07:18.035 XAUUSD: real ticks begin from 2026.06.19 00:00:00
+18:08:02.543 prepare for shutdown
+18:08:02.544 test thread finished
+
+The boundary probe produced no test ticks, bars, signals, balance result, or completion metrics and is recorded as BLOCKED, not passed.

@@ -1,0 +1,6 @@
+13:48:38.493 Tester XAUUSD,M5: testing of Experts\QuantBeast\QuantBeastEA.ex5 from 2026.05.18 00:00 to 2026.05.28 00:00 started
+13:48:38.853 QuantBeast[INFO] BrokerAdapter initialized. Magic=20260701 deviation_pts=11
+13:48:38.856 QuantBeast[INFO] TEST 26 PASS: Broker unit policy tick=aligned deviation=configured
+13:48:38.856 QuantBeast[INFO] Self-tests complete: 28 passed, 0 failed
+13:49:20.849 Tester final balance 10000.00 USD
+13:49:20.855 Tester XAUUSD,M5: 43553 ticks, 2179 bars generated. Test passed in 0:00:42.449.

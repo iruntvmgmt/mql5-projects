@@ -1,0 +1,417 @@
+//@version=6
+// @description Enhanced Core Engine - Heavy computations moved from indicator
+// Published library version: GodTierEngine/13
+library("GodTierEngine", true)
+// Version: 13
+
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
+export type ProfileMetrics
+    float poc
+    float vah
+    float val
+    float max_vol
+    float total_vol
+    string shape
+    float skewness
+    float rotation
+
+export type ShapeAnalysis
+    string shape_type
+    float skewness_ratio
+    int peaks_found
+    bool has_valley
+
+export type SessionMetrics
+    float poc
+    float vah
+    float val
+    float max_volume
+    float rotation
+    float cumulative_delta
+    string profile_shape
+    float skewness
+
+// =============================================================================
+// HELPER FUNCTIONS - EXPORTED
+// =============================================================================
+
+// @function Converts price to bin index
+export f_get_bin_index(float price, float bin_sz) =>
+    float safe_bin = na(bin_sz) or bin_sz <= 0 ? syminfo.mintick : bin_sz
+    math.round(price / safe_bin)
+
+// @function Converts bin index to price
+export f_get_price_from_index(int idx, float bin_sz) =>
+    float safe_bin = na(bin_sz) or bin_sz <= 0 ? syminfo.mintick : bin_sz
+    idx * safe_bin
+
+// @function Calculates overlapping volume between zones
+get_vol(float y11, float y12, float y21, float y22, float height, float vol) =>
+    nz(math.max(math.min(math.max(y11, y12), math.max(y21, y22)) - 
+        math.max(math.min(y11, y12), math.min(y21, y22)), 0) * vol / height)
+
+// =============================================================================
+// BINNING SYSTEM - MOVED FROM INDICATOR
+// =============================================================================
+
+// @function Calculates optimal bin size based on ATR or fixed bins
+// @param use_dynamic Whether to use ATR-based binning
+// @param granularity Granularity factor for ATR method
+// @param prof_high Session high
+// @param prof_low Session low
+// @param fixed_bins Number of fixed bins if not using dynamic
+// @returns Calculated bin size
+export calculate_bin_size(bool use_dynamic, int granularity, float prof_high, float prof_low, int fixed_bins) =>
+    float safe_bin = 0.0
+    
+    if use_dynamic
+        float current_atr = ta.atr(14)
+        safe_bin := current_atr / granularity
+    else
+        float range_val = prof_high - prof_low
+        safe_bin := range_val / fixed_bins
+    
+    if na(safe_bin) or safe_bin <= 0
+        safe_bin := syminfo.mintick * 10
+    
+    math.max(safe_bin, syminfo.mintick * 2)
+
+// =============================================================================
+// VOLUME DISTRIBUTION - OPTIMIZED (UPDATED)- Changing to a dynamic while loop
+// =============================================================================
+
+// @function Distributes volume across price bins using Wick-Body logic
+export processBarVolume(float o, float h, float l, float c, float v, float g, map<int, float> vol_map, map<int, float> buy_map, map<int, float> sell_map, float bin_sz) =>
+    if v == 0 or g <= 0
+        true
+    else
+        float current_top = h
+        int i = 0
+        int max_iterations = 10000  // Adjustable safety limit (very rare to hit)
+        while current_top > l and i < max_iterations
+            float zoneTop = current_top
+            float zoneBot = math.max(current_top - g, l)  // Handles partial final zone
+            // --- Existing zone calculations below (unchanged) ---
+            float body_top = math.max(c, o)
+            float body_bot = math.min(c, o)
+            bool itsgreen = c >= o
+
+            float topwick = h - body_top
+            float bottomwick = body_bot - l
+            float body = body_top - body_bot
+
+            float den = (2 * topwick + 2 * bottomwick + body)
+            float bodyvol = den != 0 ? body * v / den : 0
+            float topwickvol = den != 0 ? 2 * topwick * v / den : 0
+            float bottomwickvol = den != 0 ? 2 * bottomwick * v / den : 0
+
+            int idx = f_get_bin_index((zoneTop + zoneBot) / 2, bin_sz)
+            
+            float green_vol = (itsgreen ? get_vol(zoneBot, zoneTop, body_bot, body_top, body, bodyvol) : 0) + 
+                             get_vol(zoneBot, zoneTop, body_top, h, topwick, topwickvol) / 2 + 
+                             get_vol(zoneBot, zoneTop, body_bot, l, bottomwick, bottomwickvol) / 2
+            
+            float red_vol = (itsgreen ? 0 : get_vol(zoneBot, zoneTop, body_bot, body_top, body, bodyvol)) + 
+                           get_vol(zoneBot, zoneTop, body_top, h, topwick, topwickvol) / 2 + 
+                           get_vol(zoneBot, zoneTop, body_bot, l, bottomwick, bottomwickvol) / 2
+            
+            float total_vol = green_vol + red_vol
+
+            // Keep below TradingView's 50,000 map pair hard limit.
+            bool existing_bin = vol_map.contains(idx)
+            bool room_for_new_bin = map.size(vol_map) < 49900
+            if existing_bin or room_for_new_bin
+                vol_map.put(idx, nz(vol_map.get(idx)) + total_vol)
+                buy_map.put(idx, nz(buy_map.get(idx)) + green_vol)
+                sell_map.put(idx, nz(sell_map.get(idx)) + red_vol)
+            else
+                break
+            // --- End of zone calculations ---
+            
+            current_top -= g
+            i += 1
+        true
+
+// =============================================================================
+// PROFILE METRICS - CONSOLIDATED
+// =============================================================================
+
+// @function Calculates POC, VAH, and VAL from maps
+export getProfileMetrics(map<int, float> vol_map, float bin_sz, int va_pct) =>
+    int[] keys = vol_map.keys()
+    float max_vol = 0.0
+    float poc_price = na
+    float session_vol = 0.0
+    float vah_price = na
+    float val_price = na
+    
+    if keys.size() > 0
+        for i = 0 to keys.size() - 1
+            int idx = keys.get(i)
+            float vol = vol_map.get(idx)
+            session_vol += vol
+            if vol > max_vol
+                max_vol := vol
+                poc_price := f_get_price_from_index(idx, bin_sz)
+        
+        keys.sort()
+        
+        if not na(poc_price)
+            int poc_key = f_get_bin_index(poc_price, bin_sz)
+            int poc_idx = 0
+            
+            for i = 0 to keys.size() - 1
+                if keys.get(i) == poc_key
+                    poc_idx := i
+                    break
+            
+            float va_target = session_vol * (va_pct / 100.0)
+            float va_accum = max_vol
+            int upper_idx = poc_idx
+            int lower_idx = poc_idx
+            
+            while va_accum < va_target and (upper_idx < keys.size() - 1 or lower_idx > 0)
+                float upper_vol = (upper_idx < keys.size() - 1) ? vol_map.get(keys.get(upper_idx + 1)) : 0
+                float lower_vol = (lower_idx > 0) ? vol_map.get(keys.get(lower_idx - 1)) : 0
+                
+                if upper_vol >= lower_vol and upper_idx < keys.size() - 1
+                    upper_idx += 1
+                    va_accum += upper_vol
+                else if lower_idx > 0
+                    lower_idx -= 1
+                    va_accum += lower_vol
+                else
+                    break
+            
+            vah_price := f_get_price_from_index(keys.get(upper_idx), bin_sz)
+            val_price := f_get_price_from_index(keys.get(lower_idx), bin_sz)
+    
+    [poc_price, vah_price, val_price, max_vol, session_vol]
+
+// =============================================================================
+// SHAPE ANALYSIS - MOVED FROM INDICATOR
+// =============================================================================
+
+// @function Comprehensive profile shape analysis with peak detection
+// @param vol_map Volume distribution map
+// @param buy_map Buy volume map
+// @param sell_map Sell volume map
+// @param current_poc Current POC price
+// @param max_vol Maximum volume in profile
+// @param bin_sz Bin size
+// @returns ShapeAnalysis object with shape type and metrics
+export analyzeProfileShape(map<int, float> vol_map, map<int, float> buy_map, map<int, float> sell_map, float current_poc, float max_vol, float bin_sz) =>
+    string shape = "Balanced"
+    float skew_ratio = 1.0
+    int peak_count = 0
+    bool valley = false
+    
+    int[] keys = map.keys(vol_map)
+    
+    if array.size(keys) > 10 and not na(current_poc)
+        array.sort(keys)
+        
+        float vol_above = 0.0
+        float vol_below = 0.0
+        float buy_above = 0.0
+        float buy_below = 0.0
+        float sell_above = 0.0
+        float sell_below = 0.0
+        int poc_idx_val = f_get_bin_index(current_poc, bin_sz)
+        int last_peak_idx = -1
+        
+        for i = 1 to array.size(keys) - 2
+            int idx = array.get(keys, i)
+            float vol = map.get(vol_map, idx)
+            float buy_vol = nz(map.get(buy_map, idx))
+            float sell_vol = nz(map.get(sell_map, idx))
+            float prev = map.get(vol_map, array.get(keys, i-1))
+            float next = map.get(vol_map, array.get(keys, i+1))
+            
+            // Volume distribution calculation (now includes buy/sell breakdown)
+            if idx > poc_idx_val
+                vol_above += vol
+                buy_above += buy_vol
+                sell_above += sell_vol
+            else if idx < poc_idx_val
+                vol_below += vol
+                buy_below += buy_vol
+                sell_below += sell_vol
+            
+            // Peak detection
+            if vol > prev and vol > next and vol > max_vol * 0.3
+                peak_count += 1
+                if last_peak_idx != -1
+                    // Check for valley between peaks
+                    for v_chk = last_peak_idx + 1 to i - 1
+                        if v_chk < array.size(keys)
+                            float v_vol = map.get(vol_map, array.get(keys, v_chk))
+                            if v_vol < max_vol * 0.6
+                                valley := true
+                last_peak_idx := i
+        
+        // Calculate skewness with buy/sell pressure consideration
+        skew_ratio := vol_above / math.max(vol_below, 1)
+        
+        // Enhanced shape classification using buy/sell imbalance
+        float buy_pressure = (buy_above + buy_below) > 0 ? buy_above / (buy_above + buy_below) : 0.5
+        float sell_pressure = (sell_above + sell_below) > 0 ? sell_below / (sell_above + sell_below) : 0.5
+        
+        // Classify shape with order flow context
+        if peak_count >= 2 and valley
+            shape := "B-Shape (Bimodal)"
+        else if skew_ratio > 1.5
+            // P-shape with strong buying confirms bullish structure
+            shape := buy_pressure > 0.6 ? "P-Shape (Bullish)" : "P-Shape (Weak)"
+        else if skew_ratio < 0.67
+            // b-shape with strong selling confirms bearish structure
+            shape := sell_pressure > 0.6 ? "b-Shape (Bearish)" : "b-Shape (Weak)"
+        else
+            shape := "D-Shape (Balanced)"
+    
+    ShapeAnalysis.new(shape, skew_ratio, peak_count, valley)
+
+// =============================================================================
+// ROTATION TRACKING - MOVED FROM INDICATOR
+// =============================================================================
+
+// @function Updates rotation metrics based on POC movement
+// @param prior_poc Previous POC price
+// @param current_poc Current POC price
+// @param rot_up Current up rotation count
+// @param rot_dn Current down rotation count
+// @returns [new_rot_up, new_rot_dn, rotation_factor]
+export updateRotation(float prior_poc, float current_poc, int rot_up, int rot_dn) =>
+    int n_up = rot_up
+    int n_dn = rot_dn
+    
+    if not na(prior_poc) and not na(current_poc) and current_poc != prior_poc
+        if current_poc > prior_poc
+            n_up += 1
+        else
+            n_dn += 1
+    
+    int total_moves = n_up + n_dn
+    float factor = total_moves > 0 ? float(n_up - n_dn) / total_moves : 0.0
+    
+    [n_up, n_dn, factor]
+
+// =============================================================================
+// PATTERN DETECTION - CONSOLIDATED
+// =============================================================================
+
+// @function Detects failed auctions (breakout with low volume)
+export detect_failed_auction(float hi, float lo, float close, float prior_vah, float prior_val, map<int, float> vol_map, float max_v, float bin_sz) =>
+    bool thin_break = false
+    
+    if hi > ta.highest(hi[1], 20) and not na(prior_vah)
+        int idx = math.round(hi / bin_sz)
+        float breakout_vol = nz(map.get(vol_map, idx))
+        thin_break := breakout_vol < (max_v * 0.15) and close < prior_vah
+    
+    if lo < ta.lowest(lo[1], 20) and not na(prior_val)
+        int idx = math.round(lo / bin_sz)
+        float breakout_vol = nz(map.get(vol_map, idx))
+        thin_break := breakout_vol < (max_v * 0.15) and close > prior_val
+    
+    thin_break
+
+// @function Finds the "Point of Truth" (highest volume node)
+export get_point_of_truth(map<int, float> vol_map, float bin_sz) =>
+    int[] keys = map.keys(vol_map)
+    float m_vol = 0.0
+    float pot_p = na
+    for k in keys
+        float v = map.get(vol_map, k)
+        if v > m_vol
+            m_vol := v
+            pot_p := k * bin_sz
+    pot_p
+
+// @function Detects absorption (high volume, low movement)
+export detectAbsorption(float vol, float body_size, float atr) =>
+    float vol_sma = ta.sma(vol, 20)
+    bool high_vol = vol > vol_sma * 1.8 and not na(vol_sma)
+    bool low_move = body_size < atr * 0.3 and not na(atr)
+    high_vol and low_move
+
+// =============================================================================
+// DIVERGENCE DETECTION - MOVED FROM INDICATOR
+// =============================================================================
+
+// @function Tracks divergence signals between price and delta
+// @param high Current high
+// @param low Current low
+// @param cumulative_delta Current CVD
+// @param prev_high Previous high reference
+// @param prev_low Previous low reference
+// @param prev_high_delta Previous high delta
+// @param prev_low_delta Previous low delta
+// @returns [bearish_div, bullish_div, new_prev_high, new_prev_low, new_prev_high_delta, new_prev_low_delta]
+export detectDivergence(float high, float low, float cumulative_delta, float prev_high, float prev_low, float prev_high_delta, float prev_low_delta) =>
+    bool bearish_div = false
+    bool bullish_div = false
+    float new_prev_high = prev_high
+    float new_prev_low = prev_low
+    float new_prev_high_delta = prev_high_delta
+    float new_prev_low_delta = prev_low_delta
+    
+    // Bearish divergence: Higher high with lower delta
+    if high > ta.highest(high[1], 10) and cumulative_delta < nz(prev_high_delta, cumulative_delta)
+        bearish_div := true
+        new_prev_high := high
+        new_prev_high_delta := cumulative_delta
+    else if high > nz(prev_high, high)
+        new_prev_high := high
+        new_prev_high_delta := cumulative_delta
+    
+    // Bullish divergence: Lower low with higher delta
+    if low < ta.lowest(low[1], 10) and cumulative_delta > nz(prev_low_delta, cumulative_delta)
+        bullish_div := true
+        new_prev_low := low
+        new_prev_low_delta := cumulative_delta
+    else if low < nz(prev_low, low)
+        new_prev_low := low
+        new_prev_low_delta := cumulative_delta
+    
+    [bearish_div, bullish_div, new_prev_high, new_prev_low, new_prev_high_delta, new_prev_low_delta]
+
+// =============================================================================
+// MAP PRUNING - MOVED FROM INDICATOR
+// =============================================================================
+
+// @function Prunes outlier bins from volume maps
+// @param vol_map Main volume map
+// @param buy_map Buy volume map
+// @param sell_map Sell volume map
+// @param current_poc Current POC price
+// @param bin_sz Bin size
+// @param stdev_multiplier Standard deviation threshold
+export pruneOutliers(map<int, float> vol_map, map<int, float> buy_map, map<int, float> sell_map, float current_poc, float bin_sz, float stdev_multiplier) =>
+    if not na(current_poc)
+        float price_stdev = ta.stdev(close, 100)
+        int[] prune_keys = array.new<int>()
+        
+        for key in map.keys(vol_map)
+            float price = f_get_price_from_index(key, bin_sz)
+            if math.abs(price - current_poc) > (stdev_multiplier * price_stdev)
+                array.push(prune_keys, key)
+        
+        for key in prune_keys
+            map.remove(vol_map, key)
+            map.remove(buy_map, key)
+            map.remove(sell_map, key)
+
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
+// @function Quick check if map has sufficient data
+export has_sufficient_data(map<int, float> vol_map, simple int min_bins = 3) =>
+    array.size(map.keys(vol_map)) >= min_bins
+
+// @function Safe division helper
+export safe_divide(float numerator, float denominator, float default_val = 0.0) =>
+    denominator != 0 ? numerator / denominator : default_val

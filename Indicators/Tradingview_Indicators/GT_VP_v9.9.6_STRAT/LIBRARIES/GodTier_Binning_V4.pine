@@ -1,0 +1,176 @@
+//@version=6
+// @description Custom binning utilities for high-performance Volume Profiles.
+// Published library version: GodTier_Binning/3
+// Handles dynamic ATR-based sizing, volume distribution, and pruning.
+// Integrates with Auction Market Theory principles for scalping, using
+// sparse maps for efficiency as per research guidelines.
+//
+// CHANGELOG v2 → v3
+// ─────────────────────────────────────────────────────────────────────────
+// FIX 1 — processBarVolume: map.get(key, default) two-arg overload does not
+//          exist in Pine v6. map.get(map, key) returns na when key is absent.
+//          Restored nz(map.get(...)) pattern throughout the inner loop.
+//          The intermediate attempt to use map.get(..., 0.0) was incorrect
+//          and would have caused a compile error.
+//
+// FIX 2 — pruneOutliers: map.remove() calls are now guarded behind
+//          array.size(prune_keys) > 0. Previously the loop ran unconditionally
+//          every bar even when there was nothing to prune. The threshold
+//          calc is also hoisted out of the inner for-loop (was recomputed
+//          per key). Both maps (buy/sell) now share the single prune_keys
+//          list built from vol_map — no separate iteration.
+//
+// ✅ RETAINED: processBarVolume while-loop fix from v2 (10000 iterations)
+// ✅ RETAINED: compress_profile / adaptive_granularity live in GodTier_Optimization
+
+library("GodTier_Binning", overlay=false)
+// Version: 3
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+// @function Converts price to bin index (sparse-safe, rounds to nearest bin)
+export f_get_bin_index(float price, float bin_sz) =>
+    float safe_bin = na(bin_sz) or bin_sz <= 0 ? syminfo.mintick : bin_sz
+    math.round(price / safe_bin)
+
+// @function Converts bin index back to representative price (midpoint approximation)
+export f_get_price_from_index(int idx, float bin_sz) =>
+    float safe_bin = na(bin_sz) or bin_sz <= 0 ? syminfo.mintick : bin_sz
+    idx * safe_bin
+
+// @function Calculates overlapping volume between two price zones (used in distribution)
+get_vol(float y11, float y12, float y21, float y22, float height, float vol) =>
+    nz(math.max(
+        math.min(math.max(y11, y12), math.max(y21, y22)) -
+        math.max(math.min(y11, y12), math.min(y21, y22)), 0) * vol / height)
+
+// =============================================================================
+// CORE BINNING FUNCTIONS
+// =============================================================================
+
+// @function Calculates optimal bin size based on ATR (dynamic) or fixed bins over range.
+//           Aligns with research's emphasis on adaptive resolution for high-frequency data.
+// @param use_dynamic   Enable ATR-based dynamic binning
+// @param granularity   Factor to divide ATR (higher = finer bins)
+// @param prof_high     High of the profile range
+// @param prof_low      Low of the profile range
+// @param fixed_bins    Number of bins if fixed mode
+// @returns Optimized bin size, floored to mintick multiple
+export calculate_bin_size(bool use_dynamic, int granularity, float prof_high,
+                          float prof_low, int fixed_bins) =>
+    float safe_bin = 0.0
+
+    if use_dynamic
+        float current_atr = ta.atr(14)
+        safe_bin := current_atr / granularity
+    else
+        float range_val = prof_high - prof_low
+        safe_bin := range_val / fixed_bins
+
+    if na(safe_bin) or safe_bin <= 0
+        safe_bin := syminfo.mintick * 10
+
+    math.max(safe_bin, syminfo.mintick * 2)
+
+// @function Distributes bar volume across price bins using optimized Wick-Body allocation.
+//           Processes intrabar data for accurate volumetric distribution.
+//
+// ✅ FIX: Replaced for i = 0 to 999 with while loop (max 10000 iterations) to match
+//         GodTierEngine. The old for-loop silently truncated high-granularity sessions
+//         at 1000 zone iterations, causing incomplete volume distribution with no error.
+//
+// @param o        Bar open
+// @param h        Bar high
+// @param l        Bar low
+// @param c        Bar close
+// @param v        Bar volume
+// @param g        Gap size for zoning (intrabar resolution)
+// @param vol_map  Total volume map (int bin -> float vol)
+// @param buy_map  Buy volume map
+// @param sell_map Sell volume map
+// @param bin_sz   Bin size
+export processBarVolume(float o, float h, float l, float c, float v, float g,
+                        map<int, float> vol_map, map<int, float> buy_map,
+                        map<int, float> sell_map, float bin_sz) =>
+    if v == 0 or g <= 0
+        true
+    else
+        float current_top    = h
+        int   i              = 0
+        int   max_iterations = 10000  // Matches GodTierEngine — handles high-granularity sessions
+
+        while current_top > l and i < max_iterations
+            float zoneTop = current_top
+            float zoneBot = math.max(current_top - g, l)  // Handles partial final zone
+
+            float body_top    = math.max(c, o)
+            float body_bot    = math.min(c, o)
+            bool  itsgreen    = c >= o
+            float topwick     = h - body_top
+            float bottomwick  = body_bot - l
+            float body        = body_top - body_bot
+            float den         = 2 * topwick + 2 * bottomwick + body
+
+            float bodyvol       = den != 0 ? body         * v / den : 0
+            float topwickvol    = den != 0 ? 2 * topwick  * v / den : 0
+            float bottomwickvol = den != 0 ? 2 * bottomwick * v / den : 0
+
+            int   idx       = f_get_bin_index((zoneTop + zoneBot) / 2, bin_sz)
+            float green_vol = (itsgreen ? get_vol(zoneBot, zoneTop, body_bot, body_top, body, bodyvol) : 0) +
+                               get_vol(zoneBot, zoneTop, body_top, h, topwick, topwickvol) / 2 +
+                               get_vol(zoneBot, zoneTop, body_bot, l, bottomwick, bottomwickvol) / 2
+            float red_vol   = (itsgreen ? 0 : get_vol(zoneBot, zoneTop, body_bot, body_top, body, bodyvol)) +
+                               get_vol(zoneBot, zoneTop, body_top, h, topwick, topwickvol) / 2 +
+                               get_vol(zoneBot, zoneTop, body_bot, l, bottomwick, bottomwickvol) / 2
+
+            float total_vol = green_vol + red_vol
+            // FIX v3: map.get(key, default) two-arg overload does not exist in Pine v6.
+            // nz(map.get(...)) is the correct pattern — nz() converts the na return to 0.
+            // Keep below TradingView's 50,000 map pair hard limit.
+            bool existing_bin = vol_map.contains(idx)
+            bool room_for_new_bin = map.size(vol_map) < 49900
+            if existing_bin or room_for_new_bin
+                vol_map.put(idx,  nz(vol_map.get(idx))  + total_vol)
+                buy_map.put(idx,  nz(buy_map.get(idx))  + green_vol)
+                sell_map.put(idx, nz(sell_map.get(idx)) + red_vol)
+            else
+                break
+
+            current_top -= g
+            i += 1
+
+        true
+
+// =============================================================================
+// MEMORY MANAGEMENT
+// =============================================================================
+
+// @function Prunes outlier bins based on stddev from POC (research-recommended memory management)
+// @param vol_map           Total volume map
+// @param buy_map           Buy map
+// @param sell_map          Sell map
+// @param current_poc       POC price
+// @param bin_sz            Bin size
+// @param stdev_multiplier  Pruning threshold
+export pruneOutliers(map<int, float> vol_map, map<int, float> buy_map,
+                     map<int, float> sell_map, float current_poc,
+                     float bin_sz, float stdev_multiplier) =>
+    if not na(current_poc)
+        // v3: hoist threshold calc — was recomputed inside the per-key loop
+        float price_stdev = ta.stdev(close, 100)
+        float threshold   = stdev_multiplier * price_stdev
+        int[] prune_keys  = array.new<int>()
+
+        for key in map.keys(vol_map)
+            if math.abs(f_get_price_from_index(key, bin_sz) - current_poc) > threshold
+                array.push(prune_keys, key)
+
+        // v3: only touch maps if there is actually something to remove.
+        // Previous code ran map.remove() unconditionally every bar.
+        if array.size(prune_keys) > 0
+            for key in prune_keys
+                vol_map.remove(key)
+                buy_map.remove(key)
+                sell_map.remove(key)

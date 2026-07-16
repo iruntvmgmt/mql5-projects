@@ -1,0 +1,848 @@
+//@version=5
+// ---
+// Title: WaveTrend MAX
+// Original Concept: "WaveTrend [LazyBear]" & "cRSI [Lars von Thienen]"
+// Divergence Engine Concept: "Hurst Cycle Channel Oscillator v4.0 by IRUNTV"
+// Adaptation & Enhancement by: Gemini
+// Version: 5.16
+//
+// Change Log v5.16:
+// - FEATURE ADDITION: Added broad active-hours entry filter with NY AM/PM/RTH/custom session modes.
+// - DESIGN NOTE: Time filter blocks new entries only; open-position exits and stops remain active.
+//
+// Change Log v5.15:
+// - FEATURE ADDITION: Added internal Ultimate MA trend filter with SMA/EMA/WMA/HMA/VWMA/RMA/TEMA/T3 support.
+// - DESIGN NOTE: Ultimate MA can gate Dynamic Cross only or all entries without plotting a separate price-pane visual.
+//
+// Change Log v5.14:
+// - RISK UPDATE: Retuned defaults toward a longer-hold runner profile after risk validation.
+// - DEFAULT UPDATE: WT trend-failure exit now uses Dynamic Band Reversal with a 2-bar minimum, smaller TP1 size, and slightly wider ATR/fixed protection.
+//
+// Change Log v5.12:
+// - FEATURE ADDITION: Added CRSI-style SQZ Momentum Turn and SQZ Momentum Direction filter modes.
+// - FILTER UPDATE: CRSI-style modes gate WaveTrend entries by squeeze momentum slope/turn without requiring range room, trend, HTF, or release context.
+//
+// Change Log v5.13:
+// - FEATURE ADDITION: Added Dynamic Cross HTF Filter to suppress dynamic band crosses against the higher-timeframe EMA slope.
+// - DEFAULT UPDATE: Enabled ATR anti-chop gating for Dynamic Cross entries using a 0.85 ATR threshold.
+// - DESIGN NOTE: This gates Dynamic Cross entries only; other entry families keep their existing filters.
+//
+// Change Log v5.11:
+// - FEATURE ADDITION: Added optional Squeeze Pro-style filter for WaveTrend entries.
+// - FILTER MODES: Soft, Strong, and Trend Continuation modes gate WT signals using squeeze momentum, trend, range room, HTF alignment, and recent squeeze release.
+// - DESIGN NOTE: Squeeze logic is used as entry context only; WaveTrend remains the timing trigger.
+//
+// Change Log v5.10:
+// - FEATURE ADDITION: Added optional Auto Scale Risk Only mode.
+// - STRATEGY UPDATE: Auto mode scales stops, TP1/final TP, breakeven, chandelier width, and cooldown by timeframe + ATR.
+// - DESIGN NOTE: WaveTrend signal lengths remain manual/stable so multi-timeframe chart reads stay in sync.
+//
+// Change Log v5.9:
+// - STRATEGY UPDATE: Reworked exits into persistent trend-runner risk management.
+// - ADDED: ATR stop, chandelier trailing stop, breakeven stop, partial take profit, and WT trend-failure exits.
+// - FIXED: Entries now require a truly flat position, matching the v5.8 changelog intent.
+//
+// Change Log v5.8:
+// - STRATEGY SIMPLIFICATION: Removed the stop-and-reverse and "close on opposite signal" logic.
+// - STRATEGY UPDATE: Entries now only occur from a flat position (strategy.position_size == 0).
+// - FIXED: Added the 'useFixedCross' input to the strategy's entry conditions.
+//
+// Change Log v5.7:
+// - FEATURE ADDITION: WT1 line now changes color on breakouts/breakdowns.
+// - ADDED: Color inputs for the new breakout states.
+// - FIXED: Corrected an unusually large linewidth for the Bollinger Band basis plot.
+// ---
+strategy("WaveTrend MAX", shorttitle="WT MAX XV", overlay=false)
+
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+//                                    INPUTS
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+
+// ————— Group: WaveTrend Calculation —————
+wt_group = "WaveTrend Calculation"
+src = input.source(hlc3, title="Source", group=wt_group)
+n1 = input.int(10, "Channel Length", group=wt_group)
+n2 = input.int(21, "Average Length", group=wt_group)
+maType = input.string("EMA", "Moving Average Type", options=["SMA", "EMA", "WMA", "RMA", "HMA"], group=wt_group, tooltip="Select the type of moving average used for the core calculations.")
+
+// ————— Group: Dynamic Cycles & Bands —————
+dc_group = "Dynamic Cycles & Bands"
+cyclicMemory = input.int(20, title="Dynamic Bands Lookback", group=dc_group)
+leveling = input.int(10, title="Band Percentile", minval=1, maxval=49, group=dc_group)
+
+ // ————— Group: Fibonacci Levels —————
+fib_group = "Fibonacci Levels"
+showFibLevels = input.bool(true, title="Show Fibonacci Levels", group=fib_group)
+showBollingerFibLevels = input.bool(false, title="Show Bollinger Fib Levels", group=fib_group, inline="FIB1")
+
+// ————— Group: Bollinger Bands Settings —————
+bb_group = "Bollinger Bands Settings"
+showBB = input.bool(true, "Show Bollinger Bands", group=bb_group, inline="BB1")
+bbLen = input.int(14, "BB Length", group=bb_group, inline="BB2")
+bbMult = input.float(0.8, "BB Multiplier", group=bb_group, inline="BB2")
+bb_over_fill_color = input(color.new(color.green, 80), title="BB Overbought Zone Fill", group=bb_group)
+bb_under_fill_color = input(color.new(color.red, 80), title="BB Oversold Zone Fill", group=bb_group)
+
+// ————— Group: Divergence Engine Settings —————
+div_group = "Divergence Engine Settings"
+divPivotLookbackLeft = input.int(5, title="Pivot Lookback Left", group=div_group)
+divPivotLookbackRight = input.int(3, title="Pivot Lookback Right", group=div_group)
+maxBarsBetweenPivots = input.int(100, title="Max Bars Between Pivots", group=div_group)
+maxStoredPivots = input.int(30, title="Max Stored Pivots", minval=2, maxval=100, group=div_group)
+
+// ————— Group: Signal Filters —————
+filter_group = "Signal Filters"
+useVolumeFilter = input.bool(false, "Use Volume Filter", group=filter_group, inline="F1")
+volumeLookback = input.int(20, "", group=filter_group, inline="F1")
+useAtrFilter = input.bool(false, "Use ATR Volatility Filter", group=filter_group, inline="F2")
+atrThreshold = input.float(1.0, "", group=filter_group, inline="F2")
+
+// ————— Group: Plot & Color Settings —————
+pcs_group = "Plot & Color Settings"
+showHistogram = input.bool(false, title="Show Histogram", group=pcs_group)
+showRiskStops = input.bool(false, title="Show Strategy Stop In Data Window", group=pcs_group)
+showDivergenceLines = input.bool(false, title="Show Divergence Lines", group=pcs_group, inline="L1")
+maxDivLines = input.int(5, "Max Labels/Lines", group=pcs_group, minval=1, maxval=20, inline="L1")
+showConvergence = input.bool(false, title="Show Convergence Markers", group=pcs_group)
+showFibBands = input.bool(true, title="Show OB/OS Bands", group=pcs_group, inline="B1")
+showFixedLevels = input.bool(true, title="Show Fixed Levels", group=pcs_group, inline="B1")
+color_ob_breakout = input(color.new(color.fuchsia, 0), title="Overbought Breakout", group=pcs_group, inline="C1")
+color_os_breakdown = input(color.new(color.yellow, 0), title="Oversold Breakdown", group=pcs_group, inline="C1")
+show_RBD_plus = input(true, title="Reg Bull Marker", group=pcs_group, inline="RB")
+color_RBD_plus = input(color.new(color.green, 0), "", group=pcs_group, inline="RB")
+show_RBD_minus = input(true, title="Reg Bear Marker", group=pcs_group, inline="RBR")
+color_RBD_minus = input(color.new(color.red, 0), "", group=pcs_group, inline="RBR")
+show_HBD_plus = input(true, title="Hid Bull Marker", group=pcs_group, inline="HB")
+color_HBD_plus = input(color.new(color.lime, 0), "", group=pcs_group, inline="HB")
+show_HBD_minus = input(true, title="Hid Bear Marker", group=pcs_group, inline="HBR")
+color_HBD_minus = input(color.new(color.maroon, 0), "", group=pcs_group, inline="HBR")
+
+
+// ————— Group: Alerts —————
+alert_group = "Alerts"
+enableAlerts = input.bool(true, title="Enable All Alerts", group=alert_group)
+
+// ————— Group: Strategy Settings —————
+strat_group = "Strategy Settings"
+// --- Entry Condition Toggles ---
+useDynamicCross = input.bool(true, "Dynamic Cross (Overbought/Oversold)", group=strat_group, inline="ENTRY1")
+useSignalCross = input.bool(true, "Signal Line Cross (WT1/WT2)", group=strat_group, inline="ENTRY1")
+useFib50Cross = input.bool(false, "Fib 50% Cross", group=strat_group, inline="ENTRY2")
+useZeroLineCross = input.bool(false, "Zero Line Cross", group=strat_group, inline="ENTRY2")
+useBBReversion = input.bool(false, "Bollinger Band Mean Reversion", group=strat_group, inline="ENTRY3")
+useDivergence = input.bool(false, "Regular Divergence Entry", group=strat_group, inline="ENTRY3")
+useHiddenDivergence = input.bool(false, "Hidden Divergence Entry", group=strat_group, inline="ENTRY4")
+useBreakoutDyanmicCross = input.bool(false,"Breakout Dynamic Cross", group=strat_group, inline = "ENTRY5")
+useBBCross = input.bool(false, "Bollinger Crosses", group = strat_group, inline = "ENTRY6")
+useFixedCross = input.bool(false,"Fixed Crosses", group = strat_group, inline = "ENTRY7")
+
+// --- Trend Filter Dropdown ---
+trendFilterOption = input.string("None", "Trend Filter", options=["None", "WT Signal Trend", "WT Zero Line Trend", "WT Fib Trend", "WT vs BB Basis", "Fib 50 vs Zero"], group=strat_group)
+
+// --- Squeeze Pro Context Filter ---
+sqz_filter_group = "Squeeze Pro WT Filter"
+useSqzFilter = input.bool(false, "Use Squeeze Filter", group=sqz_filter_group, inline="SQZ1")
+sqzFilterMode = input.string("Soft", "", options=["Soft", "Strong", "Trend Continuation", "CRSI Momentum Turn", "CRSI Momentum Direction"], group=sqz_filter_group, inline="SQZ1")
+showSqzFilterTable = input.bool(true, "Show Filter Table", group=sqz_filter_group)
+sqzRequireRecentRelease = input.bool(false, "Require Recent Squeeze Release", group=sqz_filter_group, inline="SQZ2")
+sqzReleaseWindow = input.int(8, "Bars", group=sqz_filter_group, inline="SQZ2", minval=1)
+sqzBbLen = input.int(20, "BB Length", group=sqz_filter_group, inline="SQZ3", minval=1)
+sqzBbMult = input.float(2.0, "BB Mult", group=sqz_filter_group, inline="SQZ3", minval=0.1, step=0.1)
+sqzKcLen = input.int(20, "KC Length", group=sqz_filter_group, inline="SQZ4", minval=1)
+sqzKcMult = input.float(1.5, "KC Mult", group=sqz_filter_group, inline="SQZ4", minval=0.1, step=0.1)
+sqzMomLen = input.int(20, "Momentum Length", group=sqz_filter_group, inline="SQZ5", minval=1)
+sqzTrendLen = input.int(50, "Trend EMA Length", group=sqz_filter_group, inline="SQZ5", minval=1)
+sqzRiskLookback = input.int(50, "Range Lookback", group=sqz_filter_group, inline="SQZ6", minval=10)
+sqzMinRoomAtr = input.float(1.2, "Min Room ATR", group=sqz_filter_group, inline="SQZ6", minval=0.1, step=0.1)
+sqzLateLongZone = input.float(0.82, "Late Long Zone", group=sqz_filter_group, inline="SQZ7", minval=0.5, maxval=1.0, step=0.01)
+sqzLateShortZone = input.float(0.18, "Late Short Zone", group=sqz_filter_group, inline="SQZ7", minval=0.0, maxval=0.5, step=0.01)
+sqzUseHtf = input.bool(true, "Use HTF Alignment", group=sqz_filter_group, inline="SQZ8")
+sqzHtfTf = input.timeframe("60", "", group=sqz_filter_group, inline="SQZ8")
+sqzCrsiRequireZeroSide = input.bool(false, "CRSI Mode: Require Zero Side", group=sqz_filter_group, inline="SQZ9")
+sqzCrsiConfirmedOnly = input.bool(true, "Confirmed Bars Only", group=sqz_filter_group, inline="SQZ9")
+
+// --- Dynamic Cross HTF Permission Filter ---
+dyn_filter_group = "Dynamic Cross HTF Filter"
+useDynamicHtfFilter = input.bool(true, "Use HTF Filter", group=dyn_filter_group, inline="DYN1")
+dynamicHtfTf = input.timeframe("60", "", group=dyn_filter_group, inline="DYN1")
+dynamicHtfEmaLen = input.int(50, "HTF EMA Length", group=dyn_filter_group, inline="DYN2", minval=1)
+dynamicRequireHtfSlope = input.bool(true, "Require EMA Slope", group=dyn_filter_group, inline="DYN2")
+dynamicUseAtrChopFilter = input.bool(true, "Use ATR Anti-Chop", group=dyn_filter_group, inline="DYN3")
+dynamicAtrThreshold = input.float(0.85, "ATR Threshold", group=dyn_filter_group, inline="DYN3", minval=0.1, step=0.05)
+
+// --- Ultimate MA Trend Filter ---
+ultimate_ma_group = "Ultimate MA Trend Filter"
+useUltimateMaFilter = input.bool(true, "Use Ultimate MA Filter", group=ultimate_ma_group, inline="UMA1")
+ultimateMaApplyTo = input.string("Dynamic Cross Only", "", options=["Dynamic Cross Only", "All Entries"], group=ultimate_ma_group, inline="UMA1")
+ultimateMaUseCurrentTf = input.bool(true, "Use Chart TF", group=ultimate_ma_group, inline="UMA2")
+ultimateMaTf = input.timeframe("15", "", group=ultimate_ma_group, inline="UMA2")
+ultimateMaLen = input.int(20, "Length", group=ultimate_ma_group, inline="UMA3", minval=1)
+ultimateMaType = input.string("HMA", "Type", options=["SMA", "EMA", "WMA", "HMA", "VWMA", "RMA", "TEMA", "T3"], group=ultimate_ma_group, inline="UMA3")
+ultimateMaMode = input.string("Price + Slope", "Mode", options=["Price Side", "Price + Slope", "Fast vs Slow"], group=ultimate_ma_group, inline="UMA4")
+ultimateMaSlopeBars = input.int(2, "Slope Bars", group=ultimate_ma_group, inline="UMA4", minval=1, maxval=10)
+ultimateMaT3Factor = input.float(0.7, "T3 Factor", group=ultimate_ma_group, inline="UMA5", minval=0.0, step=0.1)
+ultimateMaSlowLen = input.int(50, "Slow Length", group=ultimate_ma_group, inline="UMA5", minval=1)
+
+// --- Active Hours Entry Filter ---
+time_filter_group = "Active Hours Entry Filter"
+useTimeEntryFilter = input.bool(true, "Use Time Filter", group=time_filter_group, inline="TIME1")
+timeEntryMode = input.string("NY AM + PM Trend Windows", "", options=["NY AM + PM Trend Windows", "NY AM Only", "NY PM Only", "NY RTH", "Custom"], group=time_filter_group, inline="TIME1")
+timeEntryTimezone = input.string("America/New_York", "Timezone", group=time_filter_group, inline="TIME2")
+timeEntryCustom1 = input.session("0930-1130:23456", "Custom 1", group=time_filter_group, inline="TIME3")
+timeEntryCustom2 = input.session("1330-1545:23456", "Custom 2", group=time_filter_group, inline="TIME3")
+
+// --- Auto Risk Scaling ---
+useAutoRiskScaling = input.bool(false, title="Auto Scale Risk Only", group=strat_group, inline="AUTO1")
+autoRiskPreset = input.string("Balanced", "", options=["Tight", "Balanced", "Loose"], group=strat_group, inline="AUTO1")
+showAutoRiskTable = input.bool(true, title="Show Auto Risk Values", group=strat_group, inline="AUTO2")
+
+// --- Exit Condition Toggles ---
+// Pine's profit/loss distances are expressed in ticks. On US30, 2500 ticks is typically 250 index points when mintick is 0.1.
+useStopLoss = input.bool(true, title="Use Fixed Stop", group=strat_group, inline="EXIT1")
+stopLossPoints = input.int(2200, title="Ticks", group=strat_group, inline="EXIT1", minval=1)
+
+useAtrStop = input.bool(true, title="Use ATR Stop", group=strat_group, inline="EXIT2")
+atrStopMult = input.float(2.4, title="ATR Mult", group=strat_group, inline="EXIT2", minval=0.1, step=0.1)
+
+useChandelierStop = input.bool(true, title="Use Chandelier Trail", group=strat_group, inline="EXIT3")
+chandelierLength = input.int(24, title="Length", group=strat_group, inline="EXIT3", minval=1)
+chandelierMult = input.float(3.0, title="ATR Mult", group=strat_group, inline="EXIT3", minval=0.1, step=0.1)
+
+useBreakeven = input.bool(true, title="Move Stop To Breakeven", group=strat_group, inline="EXIT4")
+breakevenTriggerPoints = input.int(1400, title="After Ticks", group=strat_group, inline="EXIT4", minval=1)
+breakevenOffsetPoints = input.int(75, title="Plus Ticks", group=strat_group, inline="EXIT4", minval=0)
+
+// --- NEW: Trade Cooldown Inputs ---
+useTradeCooldown = input.bool(true, title="Use Trade Cooldown", group=strat_group, inline="EXIT6")
+cooldownBars = input.int(5, title="Bars to Wait After Closing", group=strat_group, inline="EXIT6", minval=1)
+
+// --- NEW: Take Profit Inputs ---
+usePartialTakeProfit = input.bool(true, title="Use Partial TP", group=strat_group, inline="EXIT7")
+partialTakeProfitPoints = input.int(2000, title="TP1 Ticks", group=strat_group, inline="EXIT7", minval=1)
+partialTakeProfitQty = input.float(45.0, title="TP1 Qty %", group=strat_group, inline="EXIT7", minval=1.0, maxval=99.0, step=1.0)
+useTakeProfit = input.bool(false, title="Use Final TP", group=strat_group, inline="EXIT8")
+takeProfitPoints = input.int(6000, title="Final TP Ticks", group=strat_group, inline="EXIT8", minval=1)
+
+useWtTrendExit = input.bool(true, title="Use WT Trend Failure Exit", group=strat_group, inline="EXIT9")
+wtTrendExitMode = input.string("Dynamic Band Reversal", "", options=["WT1/WT2 Cross", "Fib Center Cross", "BB Basis Cross", "Dynamic Band Reversal"], group=strat_group, inline="EXIT9")
+minBarsBeforeTrendExit = input.int(2, title="Min Bars", group=strat_group, inline="EXIT9", minval=0)
+
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+//                                 HELPER FUNCTIONS
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+
+// Generic MA function
+f_ma(type, src, len) =>
+    switch type
+        "SMA" => ta.sma(src, len)
+        "EMA" => ta.ema(src, len)
+        "WMA" => ta.wma(src, len)
+        "RMA" => ta.rma(src, len)
+        "HMA" => ta.hma(src, len)
+        => ta.ema(src, len) // Default to EMA
+
+f_tema(float _src, int _len) =>
+    _ema1 = ta.ema(_src, _len)
+    _ema2 = ta.ema(_ema1, _len)
+    _ema3 = ta.ema(_ema2, _len)
+    3.0 * (_ema1 - _ema2) + _ema3
+
+f_t3(float _src, int _len, float _factor) =>
+    _gd1 = ta.ema(_src, _len) * (1.0 + _factor) - ta.ema(ta.ema(_src, _len), _len) * _factor
+    _gd2 = ta.ema(_gd1, _len) * (1.0 + _factor) - ta.ema(ta.ema(_gd1, _len), _len) * _factor
+    ta.ema(_gd2, _len) * (1.0 + _factor) - ta.ema(ta.ema(_gd2, _len), _len) * _factor
+
+f_ultimate_ma(string _type, float _src, int _len, float _t3Factor) =>
+    _sma = ta.sma(_src, _len)
+    _ema = ta.ema(_src, _len)
+    _wma = ta.wma(_src, _len)
+    _hma = ta.hma(_src, _len)
+    _vwma = ta.vwma(_src, _len)
+    _rma = ta.rma(_src, _len)
+    _tema = f_tema(_src, _len)
+    _t3 = f_t3(_src, _len, _t3Factor)
+    switch _type
+        "SMA"  => _sma
+        "EMA"  => _ema
+        "WMA"  => _wma
+        "HMA"  => _hma
+        "VWMA" => _vwma
+        "RMA"  => _rma
+        "TEMA" => _tema
+        "T3"   => _t3
+        => _ema
+
+f_timeframe_minutes() =>
+    timeframe.isseconds ? timeframe.multiplier / 60.0 :
+     timeframe.isminutes ? timeframe.multiplier :
+     timeframe.isdaily ? timeframe.multiplier * 1440.0 :
+     timeframe.isweekly ? timeframe.multiplier * 10080.0 :
+     timeframe.ismonthly ? timeframe.multiplier * 43200.0 :
+     15.0
+
+f_tf_bucket_mult(float tfMinutes) =>
+    tfMinutes <= 1 ? 0.75 :
+     tfMinutes <= 5 ? 0.90 :
+     tfMinutes <= 15 ? 1.00 :
+     tfMinutes <= 60 ? 1.20 :
+     1.45
+
+f_preset_mult(string preset) =>
+    preset == "Tight" ? 0.80 :
+     preset == "Loose" ? 1.25 :
+     1.00
+
+f_sqz_momentum(int len) =>
+    _rangeMid = math.avg(ta.highest(high, len), ta.lowest(low, len))
+    _base = math.avg(_rangeMid, ta.sma(close, len))
+    ta.linreg(close - _base, len, 0)
+
+f_sqz_trend_up(int len) =>
+    _ema = ta.ema(close, len)
+    close > _ema and _ema > _ema[1]
+
+f_sqz_trend_down(int len) =>
+    _ema = ta.ema(close, len)
+    close < _ema and _ema < _ema[1]
+
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+//                                 CORE CALCULATION
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+
+esa = f_ma(maType, src, n1)
+d = f_ma(maType, math.abs(src - esa), n1)
+ci = (src - esa) / (0.015 * d)
+wt1 = f_ma(maType, ci, n2)
+wt2 = ta.sma(wt1, 4)
+
+// Bollinger Bands Calculation
+bbBasis = ta.sma(wt1, bbLen)
+bbDev = bbMult * ta.stdev(wt1, bbLen)
+bbUpper = bbBasis + bbDev
+bbLower = bbBasis - bbDev
+
+// Dynamic Bands for coloring and Fibs
+ub = ta.percentile_linear_interpolation(wt1, cyclicMemory, 100 - leveling)
+db = ta.percentile_linear_interpolation(wt1, cyclicMemory, leveling)
+fib_50 = (ub + db) / 2
+
+// Custom Fibonacci Bands Calculation
+range_value = ub - db
+fib_23_6_up = fib_50 + range_value * 0.236 / 2
+fib_38_2_up = fib_50 + range_value * 0.382 / 2
+fib_50_up   = fib_50 + range_value * 0.5   / 2
+fib_61_8_up = fib_50 + range_value * 0.618 / 2
+fib_78_6_up = fib_50 + range_value * 0.786 / 2
+fib_100_up  = ub
+fib_23_6_down = fib_50 - range_value * 0.236 / 2
+fib_38_2_down = fib_50 - range_value * 0.382 / 2
+fib_50_down   = fib_50 - range_value * 0.5   / 2
+fib_61_8_down = fib_50 - range_value * 0.618 / 2
+fib_78_6_down = fib_50 - range_value * 0.786 / 2
+fib_100_down  = db
+
+// Bollinger Bands based Fibs
+bb_range_value = bbUpper - bbLower
+bb_fib_23_6_up = bbBasis + bb_range_value * 0.236 / 2
+bb_fib_38_2_up = bbBasis + bb_range_value * 0.382 / 2
+bb_fib_50_up   = bbBasis + bb_range_value * 0.5   / 2
+bb_fib_61_8_up = bbBasis + bb_range_value * 0.618 / 2
+bb_fib_78_6_up = bbBasis + bb_range_value * 0.786 / 2
+bb_fib_100_up  = bbUpper
+
+bb_fib_23_6_down = bbBasis - bb_range_value * 0.236 / 2
+bb_fib_38_2_down = bbBasis - bb_range_value * 0.382 / 2
+bb_fib_50_down   = bbBasis - bb_range_value * 0.5   / 2
+bb_fib_61_8_down = bbBasis - bb_range_value * 0.618 / 2
+bb_fib_78_6_down = bbBasis - bb_range_value * 0.786 / 2
+bb_fib_100_down  = bbLower
+
+
+/// ██████████████████████████████████████████████████████████████████████████████████████████████████
+//                                 NON-REPAINTING DIVERGENCE ENGINE V5.8
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+
+// ————— Filters —————
+volSma = ta.sma(volume, volumeLookback)
+isVolOk = not useVolumeFilter or volume > volSma
+atrVal = ta.atr(14)
+isAtrOk = not useAtrFilter or atrVal > ta.sma(atrVal, 50) * atrThreshold
+isFilterOk = isVolOk and isAtrOk
+
+// ————— State Management for Pivots —————
+var float lastPivotHighPrice = na, var float lastPivotHighOsc = na, var int lastPivotHighIndex = na
+var float lastPivotLowPrice = na, var float lastPivotLowOsc = na, var int lastPivotLowIndex = na
+
+// ————— Pivot Detection (Non-Repainting) —————
+float pivotHighPrice = ta.pivothigh(high, divPivotLookbackLeft, divPivotLookbackRight)
+float pivotLowPrice = ta.pivotlow(low, divPivotLookbackLeft, divPivotLookbackRight)
+
+// ————— Detection Logic —————
+bool regBullDetected = false, bool regBearDetected = false
+bool hidBullDetected = false, bool hidBearDetected = false
+bool bullConvDetected = false, bool bearConvDetected = false
+
+var int p1_idx = na, var int p2_idx = na, var float p1_osc = na, var float p2_osc = na
+
+// --- Check for newly confirmed LOW pivot ---
+if not na(pivotLowPrice) and isFilterOk
+    float currentPivotLowOsc = wt1
+    int currentPivotLowIndex = bar_index - divPivotLookbackRight
+    if not na(lastPivotLowPrice) and (currentPivotLowIndex - lastPivotLowIndex < maxBarsBetweenPivots)
+        if show_RBD_plus and pivotLowPrice < lastPivotLowPrice and currentPivotLowOsc > lastPivotLowOsc
+            regBullDetected := true, p1_idx := lastPivotLowIndex, p2_idx := currentPivotLowIndex, p1_osc := lastPivotLowOsc, p2_osc := currentPivotLowOsc
+        if show_HBD_plus and pivotLowPrice > lastPivotLowPrice and currentPivotLowOsc < lastPivotLowOsc
+            hidBullDetected := true, p1_idx := lastPivotLowIndex, p2_idx := currentPivotLowIndex, p1_osc := lastPivotLowOsc, p2_osc := currentPivotLowOsc
+        if showConvergence and pivotLowPrice < lastPivotLowPrice and currentPivotLowOsc < lastPivotLowOsc
+            bearConvDetected := true, p1_idx := lastPivotLowIndex, p2_idx := currentPivotLowIndex, p1_osc := lastPivotLowOsc, p2_osc := currentPivotLowOsc
+    lastPivotLowPrice := pivotLowPrice, lastPivotLowOsc := currentPivotLowOsc, lastPivotLowIndex := currentPivotLowIndex
+
+// --- Check for newly confirmed HIGH pivot ---
+if not na(pivotHighPrice) and isFilterOk
+    float currentPivotHighOsc = wt1
+    int currentPivotHighIndex = bar_index - divPivotLookbackRight
+    if not na(lastPivotHighPrice) and (currentPivotHighIndex - lastPivotHighIndex < maxBarsBetweenPivots)
+        if show_RBD_minus and pivotHighPrice > lastPivotHighPrice and currentPivotHighOsc < lastPivotHighOsc
+            regBearDetected := true, p1_idx := lastPivotHighIndex, p2_idx := currentPivotHighIndex, p1_osc := lastPivotHighOsc, p2_osc := currentPivotHighOsc
+        if show_HBD_minus and pivotHighPrice < lastPivotHighPrice and currentPivotHighOsc > lastPivotHighOsc
+            hidBearDetected := true, p1_idx := lastPivotHighIndex, p2_idx := currentPivotHighIndex, p1_osc := lastPivotHighOsc, p2_osc := currentPivotHighOsc
+        if showConvergence and pivotHighPrice > lastPivotHighPrice and currentPivotHighOsc > lastPivotHighOsc
+            bullConvDetected := true, p1_idx := lastPivotHighIndex, p2_idx := currentPivotHighIndex, p1_osc := lastPivotHighOsc, p2_osc := currentPivotHighOsc
+    lastPivotHighPrice := pivotHighPrice, lastPivotHighOsc := currentPivotHighOsc, lastPivotHighIndex := currentPivotHighIndex
+
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+//                                      STRATEGY
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+
+// --- Trend Filter Logic ---
+isBullishTrend = switch trendFilterOption
+    "WT Signal Trend"    => wt1 > wt2
+    "WT Zero Line Trend" => wt1 > 0
+    "WT Fib Trend"       => wt1 > fib_50
+    "WT vs BB Basis"     => wt1 > bbBasis
+    "Fib 50 vs Zero"     => fib_50 > 0
+    => true // Default to no filter
+
+isBearishTrend = switch trendFilterOption
+    "WT Signal Trend"    => wt1 < wt2
+    "WT Zero Line Trend" => wt1 < 0
+    "WT Fib Trend"       => wt1 < fib_50
+    "WT vs BB Basis"     => wt1 < bbBasis
+    "Fib 50 vs Zero"     => fib_50 < 0
+    => true // Default to no filter
+
+// --- Entry Logic Definitions ---
+wt_DynamicBuys = ta.crossover(wt1, db)
+wt_SignalBuys = ta.crossover(wt1, wt2)
+wt_Fib50Buy = ta.crossover(wt1, fib_50)
+wt_ZeroLineBuy = ta.crossover(wt1, 0)
+wt_BBReversionBuy = ta.crossover(wt1, bbLower)
+wt_BBCrossBuy = ta.crossover(wt1, bbBasis)
+wt_DynamicBuysBreakout = ta.crossover(wt1,ub)
+wt_FixedBuy = ta.crossover(wt1,-60)
+
+wt_DynamicSells = ta.crossunder(wt1, ub)
+wt_SignalSells = ta.crossunder(wt1, wt2)
+wt_Fib50Sell = ta.crossunder(wt1, fib_50)
+wt_ZeroLineSell = ta.crossunder(wt1, 0)
+wt_BBReversionSell = ta.crossunder(wt1, bbUpper)
+wt_BBCrossSell = ta.crossunder(wt1, bbBasis)
+wt_DynamicSellBreakout = ta.crossunder(wt1,db)
+wt_FixedSell = ta.crossunder(wt1,60)
+
+// --- Squeeze Pro Context Filter ---
+sqzBbBasis = ta.sma(close, sqzBbLen)
+sqzBbDev = sqzBbMult * ta.stdev(close, sqzBbLen)
+sqzUpperBB = sqzBbBasis + sqzBbDev
+sqzLowerBB = sqzBbBasis - sqzBbDev
+sqzKcBasis = ta.sma(close, sqzKcLen)
+sqzRangeMa = ta.sma(ta.tr(true), sqzKcLen)
+sqzUpperKC = sqzKcBasis + sqzRangeMa * sqzKcMult
+sqzLowerKC = sqzKcBasis - sqzRangeMa * sqzKcMult
+sqzOnFilter = sqzLowerBB > sqzLowerKC and sqzUpperBB < sqzUpperKC
+sqzReleaseFilter = sqzOnFilter[1] and not sqzOnFilter
+sqzBarsSinceRelease = ta.barssince(sqzReleaseFilter)
+sqzRecentRelease = not na(sqzBarsSinceRelease) and sqzBarsSinceRelease <= sqzReleaseWindow
+
+sqzMomentum = f_sqz_momentum(sqzMomLen)
+sqzMomentumUp = sqzMomentum > nz(sqzMomentum[1])
+sqzMomentumDown = sqzMomentum < nz(sqzMomentum[1])
+sqzMomentumTurnUp = sqzMomentumUp and sqzMomentum[1] <= nz(sqzMomentum[2])
+sqzMomentumTurnDown = sqzMomentumDown and sqzMomentum[1] >= nz(sqzMomentum[2])
+sqzMomentumBull = sqzMomentum >= 0
+sqzTrendUp = f_sqz_trend_up(sqzTrendLen)
+sqzTrendDown = f_sqz_trend_down(sqzTrendLen)
+
+sqzRangeHigh = ta.highest(high, sqzRiskLookback)
+sqzRangeLow = ta.lowest(low, sqzRiskLookback)
+sqzRangeSpan = math.max(sqzRangeHigh - sqzRangeLow, syminfo.mintick)
+sqzRangePosition = math.max(0.0, math.min(1.0, (close - sqzRangeLow) / sqzRangeSpan))
+sqzRoomUpAtr = atrVal > 0 ? (sqzRangeHigh - close) / atrVal : 0.0
+sqzRoomDownAtr = atrVal > 0 ? (close - sqzRangeLow) / atrVal : 0.0
+sqzLongRoomOk = sqzRoomUpAtr >= sqzMinRoomAtr and sqzRangePosition < sqzLateLongZone
+sqzShortRoomOk = sqzRoomDownAtr >= sqzMinRoomAtr and sqzRangePosition > sqzLateShortZone
+
+sqzHtfMomentum = request.security(syminfo.tickerid, sqzHtfTf, f_sqz_momentum(sqzMomLen))
+sqzHtfTrendUp = request.security(syminfo.tickerid, sqzHtfTf, f_sqz_trend_up(sqzTrendLen))
+sqzHtfTrendDown = request.security(syminfo.tickerid, sqzHtfTf, f_sqz_trend_down(sqzTrendLen))
+sqzHtfLongAligned = not sqzUseHtf or (sqzHtfMomentum >= 0 and sqzHtfTrendUp)
+sqzHtfShortAligned = not sqzUseHtf or (sqzHtfMomentum < 0 and sqzHtfTrendDown)
+
+sqzReleaseGate = not sqzRequireRecentRelease or sqzRecentRelease
+sqzLongSoft = sqzMomentumBull and sqzMomentumUp and sqzLongRoomOk and sqzReleaseGate
+sqzShortSoft = not sqzMomentumBull and not sqzMomentumUp and sqzShortRoomOk and sqzReleaseGate
+sqzLongStrong = sqzLongSoft and sqzTrendUp and sqzHtfLongAligned
+sqzShortStrong = sqzShortSoft and sqzTrendDown and sqzHtfShortAligned
+sqzLongTrendContinuation = sqzLongStrong and close > sqzBbBasis
+sqzShortTrendContinuation = sqzShortStrong and close < sqzBbBasis
+sqzCrsiSignalAllowed = not sqzCrsiConfirmedOnly or barstate.isconfirmed
+sqzCrsiLongTurn = sqzCrsiSignalAllowed and sqzMomentumTurnUp and (not sqzCrsiRequireZeroSide or sqzMomentum >= 0)
+sqzCrsiShortTurn = sqzCrsiSignalAllowed and sqzMomentumTurnDown and (not sqzCrsiRequireZeroSide or sqzMomentum <= 0)
+sqzCrsiLongDirection = sqzCrsiSignalAllowed and sqzMomentumUp and (not sqzCrsiRequireZeroSide or sqzMomentum >= 0)
+sqzCrsiShortDirection = sqzCrsiSignalAllowed and sqzMomentumDown and (not sqzCrsiRequireZeroSide or sqzMomentum <= 0)
+sqzSelectedLongOk = sqzFilterMode == "Soft" ? sqzLongSoft : sqzFilterMode == "Strong" ? sqzLongStrong : sqzFilterMode == "Trend Continuation" ? sqzLongTrendContinuation : sqzFilterMode == "CRSI Momentum Turn" ? sqzCrsiLongTurn : sqzCrsiLongDirection
+sqzSelectedShortOk = sqzFilterMode == "Soft" ? sqzShortSoft : sqzFilterMode == "Strong" ? sqzShortStrong : sqzFilterMode == "Trend Continuation" ? sqzShortTrendContinuation : sqzFilterMode == "CRSI Momentum Turn" ? sqzCrsiShortTurn : sqzCrsiShortDirection
+sqzLongFilterOk = not useSqzFilter or sqzSelectedLongOk
+sqzShortFilterOk = not useSqzFilter or sqzSelectedShortOk
+
+// --- Dynamic Cross HTF Permission Filter ---
+dynamicHtfClose = request.security(syminfo.tickerid, dynamicHtfTf, close, barmerge.gaps_off, barmerge.lookahead_off)
+dynamicHtfEma = request.security(syminfo.tickerid, dynamicHtfTf, ta.ema(close, dynamicHtfEmaLen), barmerge.gaps_off, barmerge.lookahead_off)
+dynamicHtfEmaPrev = request.security(syminfo.tickerid, dynamicHtfTf, ta.ema(close, dynamicHtfEmaLen)[1], barmerge.gaps_off, barmerge.lookahead_off)
+dynamicAtrChopOk = not dynamicUseAtrChopFilter or atrVal > ta.sma(atrVal, 50) * dynamicAtrThreshold
+dynamicHtfLongOk = not useDynamicHtfFilter or (dynamicHtfClose > dynamicHtfEma and (not dynamicRequireHtfSlope or dynamicHtfEma >= dynamicHtfEmaPrev) and dynamicAtrChopOk)
+dynamicHtfShortOk = not useDynamicHtfFilter or (dynamicHtfClose < dynamicHtfEma and (not dynamicRequireHtfSlope or dynamicHtfEma <= dynamicHtfEmaPrev) and dynamicAtrChopOk)
+
+// --- Ultimate MA Trend Filter ---
+ultimateMaResolvedTf = ultimateMaUseCurrentTf ? timeframe.period : ultimateMaTf
+ultimateMa = request.security(syminfo.tickerid, ultimateMaResolvedTf, f_ultimate_ma(ultimateMaType, close, ultimateMaLen, ultimateMaT3Factor), barmerge.gaps_off, barmerge.lookahead_off)
+ultimateMaSlow = request.security(syminfo.tickerid, ultimateMaResolvedTf, f_ultimate_ma(ultimateMaType, close, ultimateMaSlowLen, ultimateMaT3Factor), barmerge.gaps_off, barmerge.lookahead_off)
+ultimateMaRising = ultimateMa >= ultimateMa[ultimateMaSlopeBars]
+ultimateMaFalling = ultimateMa <= ultimateMa[ultimateMaSlopeBars]
+ultimateMaLongOk = not useUltimateMaFilter or (ultimateMaMode == "Fast vs Slow" ? ultimateMa > ultimateMaSlow : close > ultimateMa and (ultimateMaMode == "Price Side" or ultimateMaRising))
+ultimateMaShortOk = not useUltimateMaFilter or (ultimateMaMode == "Fast vs Slow" ? ultimateMa < ultimateMaSlow : close < ultimateMa and (ultimateMaMode == "Price Side" or ultimateMaFalling))
+ultimateMaDynamicLongOk = ultimateMaApplyTo == "Dynamic Cross Only" ? ultimateMaLongOk : true
+ultimateMaDynamicShortOk = ultimateMaApplyTo == "Dynamic Cross Only" ? ultimateMaShortOk : true
+ultimateMaAllLongOk = ultimateMaApplyTo == "All Entries" ? ultimateMaLongOk : true
+ultimateMaAllShortOk = ultimateMaApplyTo == "All Entries" ? ultimateMaShortOk : true
+
+// --- Active Hours Entry Filter ---
+nyAmSession = "0930-1130:23456"
+nyPmSession = "1330-1545:23456"
+nyRthSession = "0930-1600:23456"
+inNyAmSession = not na(time(timeframe.period, nyAmSession, timeEntryTimezone))
+inNyPmSession = not na(time(timeframe.period, nyPmSession, timeEntryTimezone))
+inNyRthSession = not na(time(timeframe.period, nyRthSession, timeEntryTimezone))
+inCustomSession1 = not na(time(timeframe.period, timeEntryCustom1, timeEntryTimezone))
+inCustomSession2 = not na(time(timeframe.period, timeEntryCustom2, timeEntryTimezone))
+timeEntryWindowOk = switch timeEntryMode
+    "NY AM Only" => inNyAmSession
+    "NY PM Only" => inNyPmSession
+    "NY RTH" => inNyRthSession
+    "Custom" => inCustomSession1 or inCustomSession2
+    => inNyAmSession or inNyPmSession
+timeEntryOk = not useTimeEntryFilter or timeEntryWindowOk
+
+// --- Clear Entry Signal Definitions ---
+longEntrySignals = 
+     (useDynamicCross and wt_DynamicBuys and dynamicHtfLongOk and ultimateMaDynamicLongOk) or
+     (useSignalCross and wt_SignalBuys) or
+     (useFib50Cross and wt_Fib50Buy) or
+     (useZeroLineCross and wt_ZeroLineBuy) or
+     (useBBReversion and wt_BBReversionBuy) or
+     (useDivergence and regBullDetected) or
+     (useHiddenDivergence and hidBullDetected) or
+     (useBreakoutDyanmicCross and wt_DynamicBuysBreakout) or
+     (useBBCross and wt_BBCrossBuy) or
+     (useFixedCross and wt_FixedBuy)
+
+shortEntrySignals = 
+     (useDynamicCross and wt_DynamicSells and dynamicHtfShortOk and ultimateMaDynamicShortOk) or
+     (useSignalCross and wt_SignalSells) or
+     (useFib50Cross and wt_Fib50Sell) or
+     (useZeroLineCross and wt_ZeroLineSell) or
+     (useBBReversion and wt_BBReversionSell) or
+     (useDivergence and regBearDetected) or
+     (useHiddenDivergence and hidBearDetected) or
+     (useBreakoutDyanmicCross and wt_DynamicSellBreakout) or
+     (useBBCross and wt_BBCrossSell) or
+     (useFixedCross and wt_FixedSell)
+
+// --- Simplified Entry Logic ---
+// Go Long ONLY if we have a signal, the trend filter agrees, and we are not already in a position.
+goLong = longEntrySignals and isBullishTrend and sqzLongFilterOk and ultimateMaAllLongOk and timeEntryOk and strategy.position_size == 0
+
+// Go Short ONLY if we have a signal, the trend filter agrees, and we are not already in a position.
+goShort = shortEntrySignals and isBearishTrend and sqzShortFilterOk and ultimateMaAllShortOk and timeEntryOk and strategy.position_size == 0
+
+tfMinutes = f_timeframe_minutes()
+tfRiskMult = f_tf_bucket_mult(tfMinutes)
+presetRiskMult = f_preset_mult(autoRiskPreset)
+autoRiskMult = tfRiskMult * presetRiskMult
+autoCooldownBars = tfMinutes <= 1 ? 12 : tfMinutes <= 5 ? 8 : tfMinutes <= 15 ? 5 : tfMinutes <= 60 ? 3 : 2
+effectiveCooldownBars = useAutoRiskScaling ? autoCooldownBars : cooldownBars
+
+// --- Cooldown Logic ---
+var int lastTradeCloseBar = na
+canTrade = not useTradeCooldown or (bar_index - lastTradeCloseBar) > effectiveCooldownBars or na(lastTradeCloseBar)
+if strategy.closedtrades > strategy.closedtrades[1]
+    lastTradeCloseBar := bar_index
+
+// --- Strategy Execution ---
+if (goLong and canTrade)
+    strategy.entry("Long", strategy.long, comment="Long Entry")
+
+if (goShort and canTrade)
+    strategy.entry("Short", strategy.short, comment="Short Entry")
+
+// --- Trend Runner Exit Management ---
+tick = syminfo.mintick
+entryPrice = strategy.position_avg_price
+
+var float tradeEntryAtr = na
+var float longChandelierTrail = na
+var float shortChandelierTrail = na
+if strategy.position_size != 0 and strategy.position_size[1] == 0
+    tradeEntryAtr := atrVal
+if strategy.position_size == 0
+    tradeEntryAtr := na
+    longChandelierTrail := na
+    shortChandelierTrail := na
+
+activeAtr = nz(tradeEntryAtr, atrVal)
+autoStopDistance = activeAtr * 2.00 * autoRiskMult
+autoBreakevenTriggerDistance = activeAtr * 1.00 * autoRiskMult
+autoBreakevenOffsetDistance = math.max(tick, activeAtr * 0.05 * autoRiskMult)
+autoPartialTakeProfitDistance = activeAtr * 1.25 * autoRiskMult
+autoTakeProfitDistance = activeAtr * 3.00 * autoRiskMult
+effectiveFixedStopDistance = useAutoRiskScaling ? autoStopDistance : stopLossPoints * tick
+effectiveBreakevenTriggerDistance = useAutoRiskScaling ? autoBreakevenTriggerDistance : breakevenTriggerPoints * tick
+effectiveBreakevenOffsetDistance = useAutoRiskScaling ? autoBreakevenOffsetDistance : breakevenOffsetPoints * tick
+effectivePartialTakeProfitDistance = useAutoRiskScaling ? autoPartialTakeProfitDistance : partialTakeProfitPoints * tick
+effectiveTakeProfitDistance = useAutoRiskScaling ? autoTakeProfitDistance : takeProfitPoints * tick
+effectiveAtrStopMult = useAutoRiskScaling ? 2.00 * autoRiskMult : atrStopMult
+effectiveChandelierMult = useAutoRiskScaling ? 2.75 * autoRiskMult : chandelierMult
+
+highestSinceEntry = ta.highest(high, chandelierLength)
+lowestSinceEntry = ta.lowest(low, chandelierLength)
+longChandelierCandidate = highestSinceEntry - activeAtr * effectiveChandelierMult
+shortChandelierCandidate = lowestSinceEntry + activeAtr * effectiveChandelierMult
+if strategy.position_size > 0
+    longChandelierTrail := strategy.position_size[1] <= 0 ? longChandelierCandidate : math.max(nz(longChandelierTrail[1], longChandelierCandidate), longChandelierCandidate)
+if strategy.position_size < 0
+    shortChandelierTrail := strategy.position_size[1] >= 0 ? shortChandelierCandidate : math.min(nz(shortChandelierTrail[1], shortChandelierCandidate), shortChandelierCandidate)
+
+longFixedStop = useStopLoss ? entryPrice - effectiveFixedStopDistance : na
+longAtrStop = useAtrStop ? entryPrice - activeAtr * effectiveAtrStopMult : na
+longChandelierStop = useChandelierStop ? longChandelierTrail : na
+longBreakevenStop = useBreakeven and close >= entryPrice + effectiveBreakevenTriggerDistance ? entryPrice + effectiveBreakevenOffsetDistance : na
+shortFixedStop = useStopLoss ? entryPrice + effectiveFixedStopDistance : na
+shortAtrStop = useAtrStop ? entryPrice + activeAtr * effectiveAtrStopMult : na
+shortChandelierStop = useChandelierStop ? shortChandelierTrail : na
+shortBreakevenStop = useBreakeven and close <= entryPrice - effectiveBreakevenTriggerDistance ? entryPrice - effectiveBreakevenOffsetDistance : na
+
+longStop = math.max(math.max(nz(longFixedStop, -1e10), nz(longAtrStop, -1e10)), math.max(nz(longChandelierStop, -1e10), nz(longBreakevenStop, -1e10)))
+shortStop = math.min(math.min(nz(shortFixedStop, 1e10), nz(shortAtrStop, 1e10)), math.min(nz(shortChandelierStop, 1e10), nz(shortBreakevenStop, 1e10)))
+longStop := longStop == -1e10 ? na : longStop
+shortStop := shortStop == 1e10 ? na : shortStop
+
+longPartialLimit = usePartialTakeProfit ? entryPrice + effectivePartialTakeProfitDistance : na
+shortPartialLimit = usePartialTakeProfit ? entryPrice - effectivePartialTakeProfitDistance : na
+longFinalLimit = useTakeProfit ? entryPrice + effectiveTakeProfitDistance : na
+shortFinalLimit = useTakeProfit ? entryPrice - effectiveTakeProfitDistance : na
+
+barsInOpenTrade = strategy.opentrades > 0 ? bar_index - strategy.opentrades.entry_bar_index(0) : na
+canUseTrendExit = useWtTrendExit and strategy.opentrades > 0 and barsInOpenTrade >= minBarsBeforeTrendExit
+longTrendFailure = switch wtTrendExitMode
+    "Fib Center Cross"       => ta.crossunder(wt1, fib_50)
+    "BB Basis Cross"         => ta.crossunder(wt1, bbBasis)
+    "Dynamic Band Reversal"  => ta.crossunder(wt1, ub)
+    => ta.crossunder(wt1, wt2)
+shortTrendFailure = switch wtTrendExitMode
+    "Fib Center Cross"       => ta.crossover(wt1, fib_50)
+    "BB Basis Cross"         => ta.crossover(wt1, bbBasis)
+    "Dynamic Band Reversal"  => ta.crossover(wt1, db)
+    => ta.crossover(wt1, wt2)
+
+if strategy.position_size > 0
+    if usePartialTakeProfit
+        strategy.exit("Long TP1", from_entry="Long", qty_percent=partialTakeProfitQty, limit=longPartialLimit, stop=longStop)
+    if not na(longStop) or useTakeProfit
+        strategy.exit("Exit Long", from_entry="Long", stop=longStop, limit=longFinalLimit)
+    if canUseTrendExit and longTrendFailure
+        strategy.close("Long", comment="WT Trend Exit")
+
+if strategy.position_size < 0
+    if usePartialTakeProfit
+        strategy.exit("Short TP1", from_entry="Short", qty_percent=partialTakeProfitQty, limit=shortPartialLimit, stop=shortStop)
+    if not na(shortStop) or useTakeProfit
+        strategy.exit("Exit Short", from_entry="Short", stop=shortStop, limit=shortFinalLimit)
+    if canUseTrendExit and shortTrendFailure
+        strategy.close("Short", comment="WT Trend Exit")
+
+// --- Debug Plots (optional) ---
+plotshape(goLong, "Go Long", shape.triangleup, location.bottom, color.green, size=size.small)
+plotshape(goShort, "Go Short", shape.triangledown, location.top, color.red, size=size.small)
+plot(showRiskStops and strategy.position_size > 0 ? longStop : na, "Long Strategy Stop", color=color.new(color.red, 0), display=display.data_window)
+plot(showRiskStops and strategy.position_size < 0 ? shortStop : na, "Short Strategy Stop", color=color.new(color.green, 0), display=display.data_window)
+
+var table autoRiskTable = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 75), border_color=color.new(color.gray, 70), border_width=1)
+if barstate.islast and showAutoRiskTable
+    table.cell(autoRiskTable, 0, 0, "Auto Risk", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(autoRiskTable, 1, 0, useAutoRiskScaling ? autoRiskPreset : "Manual", text_color=useAutoRiskScaling ? color.lime : color.silver, bgcolor=color.new(color.gray, 65))
+    table.cell(autoRiskTable, 0, 1, "TF", text_color=color.silver)
+    table.cell(autoRiskTable, 1, 1, str.tostring(tfMinutes, "#") + "m", text_color=color.white)
+    table.cell(autoRiskTable, 0, 2, "Risk Mult", text_color=color.silver)
+    table.cell(autoRiskTable, 1, 2, str.tostring(autoRiskMult, "#.##"), text_color=color.white)
+    table.cell(autoRiskTable, 0, 3, "Stop", text_color=color.silver)
+    table.cell(autoRiskTable, 1, 3, str.tostring(effectiveFixedStopDistance, "#.##"), text_color=color.white)
+    table.cell(autoRiskTable, 0, 4, "TP1", text_color=color.silver)
+    table.cell(autoRiskTable, 1, 4, str.tostring(effectivePartialTakeProfitDistance, "#.##"), text_color=color.white)
+    table.cell(autoRiskTable, 0, 5, "Cooldown", text_color=color.silver)
+    table.cell(autoRiskTable, 1, 5, str.tostring(effectiveCooldownBars) + " bars", text_color=color.white)
+else if barstate.islast and not showAutoRiskTable
+    table.clear(autoRiskTable, 0, 0, 1, 5)
+
+var table sqzFilterTable = table.new(position.bottom_right, 2, 7, bgcolor=color.new(color.black, 75), border_color=color.new(color.gray, 70), border_width=1)
+if barstate.islast and showSqzFilterTable
+    sqzAllowsText = not useSqzFilter ? "Bypass" : sqzLongFilterOk and sqzShortFilterOk ? "Both" : sqzLongFilterOk ? "Long" : sqzShortFilterOk ? "Short" : "None"
+    sqzAllowsColor = not useSqzFilter ? color.silver : sqzLongFilterOk ? color.lime : sqzShortFilterOk ? color.red : color.orange
+    sqzMomentumText = sqzMomentumTurnUp ? "Turn Up" : sqzMomentumTurnDown ? "Turn Down" : sqzMomentumBull ? sqzMomentumUp ? "Bull +" : "Bull Fade" : sqzMomentumDown ? "Bear +" : "Bear Fade"
+    sqzMomentumColor = sqzMomentumTurnUp ? color.aqua : sqzMomentumTurnDown ? color.fuchsia : sqzMomentumBull ? color.lime : color.red
+    table.cell(sqzFilterTable, 0, 0, "SQZ Filter", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(sqzFilterTable, 1, 0, useSqzFilter ? sqzFilterMode : "Off", text_color=useSqzFilter ? color.lime : color.silver, bgcolor=color.new(color.gray, 65))
+    table.cell(sqzFilterTable, 0, 1, "Momentum", text_color=color.silver)
+    table.cell(sqzFilterTable, 1, 1, sqzMomentumText, text_color=sqzMomentumColor)
+    table.cell(sqzFilterTable, 0, 2, "Trend", text_color=color.silver)
+    table.cell(sqzFilterTable, 1, 2, sqzTrendUp ? "Up" : sqzTrendDown ? "Down" : "Flat", text_color=sqzTrendUp ? color.lime : sqzTrendDown ? color.red : color.silver)
+    table.cell(sqzFilterTable, 0, 3, "Room", text_color=color.silver)
+    table.cell(sqzFilterTable, 1, 3, "L " + str.tostring(sqzRoomUpAtr, "#.0") + " / S " + str.tostring(sqzRoomDownAtr, "#.0"), text_color=sqzLongRoomOk or sqzShortRoomOk ? color.white : color.orange)
+    table.cell(sqzFilterTable, 0, 4, "HTF", text_color=color.silver)
+    table.cell(sqzFilterTable, 1, 4, not sqzUseHtf ? "Off" : sqzHtfLongAligned ? "Long" : sqzHtfShortAligned ? "Short" : "Conflict", text_color=not sqzUseHtf ? color.silver : sqzHtfLongAligned ? color.lime : sqzHtfShortAligned ? color.red : color.orange)
+    table.cell(sqzFilterTable, 0, 5, "Release", text_color=color.silver)
+    table.cell(sqzFilterTable, 1, 5, sqzOnFilter ? "Squeeze" : sqzRecentRelease ? "Recent" : "No", text_color=sqzOnFilter ? color.orange : sqzRecentRelease ? color.aqua : color.silver)
+    table.cell(sqzFilterTable, 0, 6, "Allows", text_color=color.silver)
+    table.cell(sqzFilterTable, 1, 6, sqzAllowsText, text_color=sqzAllowsColor)
+else if barstate.islast and not showSqzFilterTable
+    table.clear(sqzFilterTable, 0, 0, 1, 6)
+
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+//                                      PLOTTING
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+
+// ————— Histogram Plotting —————
+histValue = wt1 - wt2
+histColor = histValue >= 0 ? color.new(color.green, 40) : color.new(color.red, 40)
+plot(showHistogram ? histValue : na, "Momentum Histogram", histColor, style=plot.style_area, linewidth=2)
+
+
+// WT1 coloring logic including breakouts
+wt1_color = wt1 > ub ? color_ob_breakout : wt1 < db ? color_os_breakdown : wt1 > wt1[1] ? color.green : wt1 < wt1[1] ? color.red : color.gray
+wt1_plot = plot(wt1, 'WT1', color=wt1_color, linewidth=2) // Assign plot to a variable for fill
+plot(wt2, 'WT2', color=color.yellow, style=plot.style_circles, linewidth=1)
+lowBandPlot = plot(showFibBands ? db : na, 'Lower Band', color=color.aqua, linewidth=2)
+highBandPlot = plot(showFibBands ? ub : na, 'Upper Band', color=color.aqua, linewidth=2)
+plot(showFibBands ? fib_50 : na, 'Center Line', color=color.white, linewidth=2)
+fill(lowBandPlot, highBandPlot, color=color.new(color.gray, 90))
+hline(0, "Zero Line", color.orange, linestyle=hline.style_solid)
+plot(showFixedLevels ? 60 : na, "Fixed OB", color=color.new(color.red, 50))
+plot(showFixedLevels ? -60 : na, "Fixed OS", color=color.new(color.green, 50))
+plot(showFixedLevels ? 53 : na, "Fixed OB lv2", color=color.new(color.red, 50), style = plot.style_circles)
+plot(showFixedLevels ? -53 : na, "Fixed OS lv2", color=color.new(color.green, 50), style = plot.style_circles)
+
+// ————— Fibonacci Bands Plotting —————
+plot(showFibLevels ? fib_23_6_up : na, "Fib 23.6% ↑", color=color.new(color.blue, 100), linewidth=1)
+plot(showFibLevels ? fib_38_2_up : na, "Fib 38.2% ↑", color=color.new(color.blue, 100), linewidth=1)
+plot(showFibLevels ? fib_50_up   : na, "Fib 50% ↑",   color=color.new(color.white, 0), linewidth=1)
+plot(showFibLevels ? fib_61_8_up : na, "Fib 61.8% ↑", color=color.new(color.red, 0), linewidth=1)
+plot(showFibLevels ? fib_78_6_up : na, "Fib 78.6% ↑", color=color.new(color.blue, 100), linewidth=1)
+plot(showFibLevels ? fib_100_up  : na, "Fib 100% ↑",  color=color.new(color.teal,  100), linewidth=2)
+plot(showFibLevels ? fib_23_6_down : na, "Fib 23.6% ↓", color=color.new(color.purple, 100), linewidth=1)
+plot(showFibLevels ? fib_38_2_down : na, "Fib 38.2% ↓", color=color.new(color.purple, 100), linewidth=1)
+plot(showFibLevels ? fib_50_down   : na, "Fib 50% ↓",   color=color.new(color.white, 0), linewidth=1)
+plot(showFibLevels ? fib_61_8_down : na, "Fib 61.8% ↓", color=color.new(color.red, 0), linewidth=1)
+plot(showFibLevels ? fib_78_6_down : na, "Fib 78.6% ↓", color=color.new(color.purple, 100), linewidth=1)
+plot(showFibLevels ? fib_100_down  : na, "Fib 100% ↓",  color=color.new(color.fuchsia, 100), linewidth=2)
+plot(showFibLevels ? fib_50 : na, "Fib Center", color=color.new(color.white, 25), linewidth=1, style=plot.style_line)
+
+
+// ————— Bollinger Bands Plotting —————
+bbUpperPlot = plot(showBB ? bbUpper : na, "BB Upper", color=color.new(color.yellow, 70), linewidth=1)
+bbBasisPlot = plot(showBB ? bbBasis : na, "BB Basis", color=color.new(color.fuchsia, 10), linewidth=3, style =plot.style_circles)
+bbLowerPlot = plot(showBB ? bbLower : na, "BB Lower", color=color.new(color.yellow, 70), linewidth=1)
+fill(bbUpperPlot, bbLowerPlot, color=color.new(color.gray, 95), title="BB Fill")
+
+// New Fill Logic: Only fill where WT1 is outside the BB
+fill(bbUpperPlot, wt1_plot, color=showBB and wt1 > bbUpper ? bb_over_fill_color : na, title="WT1 Over BB Upper Zone")
+fill(wt1_plot, bbLowerPlot, color=showBB and wt1 < bbLower ? bb_under_fill_color : na, title="WT1 Under BB Lower Zone")
+
+
+// ————— Bollinger Bands Fibonacci Plotting —————
+plot(showBollingerFibLevels ? bb_fib_23_6_up : na, "BBFib 23.6% ↑", color.new(color.orange, 65), 1)
+plot(showBollingerFibLevels ? bb_fib_38_2_up : na, "BBFib 38.2% ↑", color.new(color.orange, 55), 1)
+plot(showBollingerFibLevels ? bb_fib_50_up   : na, "BBFib 50% ↑",   color.new(color.orange, 45), 1)
+plot(showBollingerFibLevels ? bb_fib_61_8_up : na, "BBFib 61.8% ↑", color.new(color.orange, 35), 1)
+plot(showBollingerFibLevels ? bb_fib_78_6_up : na, "BBFib 78.6% ↑", color.new(color.orange, 25), 1)
+plot(showBollingerFibLevels ? bbUpper  : na, "BBFib 100% ↑",  color.new(color.yellow,  0), 2)
+plot(showBollingerFibLevels ? bb_fib_23_6_down : na, "BBFib 23.6% ↓", color.new(color.yellow, 65), 1)
+plot(showBollingerFibLevels ? bb_fib_38_2_down : na, "BBFib 38.2% ↓", color.new(color.yellow, 55), 1)
+plot(showBollingerFibLevels ? bb_fib_50_down   : na, "BBFib 50% ↓",   color.new(color.yellow, 45), 1)
+plot(showBollingerFibLevels ? bb_fib_61_8_down : na, "BBFib 61.8% ↓", color.new(color.yellow, 35), 1)
+plot(showBollingerFibLevels ? bb_fib_78_6_down : na, "BBFib 78.6% ↓", color.new(color.yellow, 25), 1)
+plot(showBollingerFibLevels ? bbLower  : na, "BBFib 100% ↓",  color.new(color.red, 0), 2)
+plot(showBollingerFibLevels ? bbBasis : na, "BBFib Center", color.new(color.white, 25), 1, plot.style_circles)
+
+
+// ————— Signal Markers & Lines —————
+var line[] regBullLines = array.new_line(0), var label[] regBullLabels = array.new_label(0)
+var line[] regBearLines = array.new_line(0), var label[] regBearLabels = array.new_label(0)
+var line[] hidBullLines = array.new_line(0), var label[] hidBullLabels = array.new_label(0)
+var line[] hidBearLines = array.new_line(0), var label[] hidBearLabels = array.new_label(0)
+var label[] bullConvLabels = array.new_label(0), var label[] bearConvLabels = array.new_label(0)
+
+manage_line_array(array<line> line_array, line new_line) =>
+    if array.size(line_array) >= maxDivLines
+        line.delete(array.shift(line_array))
+    array.push(line_array, new_line)
+manage_label_array(array<label> label_array, label new_label) =>
+    if array.size(label_array) >= maxDivLines
+        label.delete(array.shift(label_array))
+    array.push(label_array, new_label)
+
+if regBullDetected
+    manage_label_array(regBullLabels, label.new(p2_idx, p2_osc, "R", style=label.style_label_up, size=size.tiny, color=color_RBD_plus, textcolor=color.white))
+    if showDivergenceLines
+        manage_line_array(regBullLines, line.new(p1_idx, p1_osc, p2_idx, p2_osc, color=color_RBD_plus, width=1))
+if regBearDetected
+    manage_label_array(regBearLabels, label.new(p2_idx, p2_osc, "R", style=label.style_label_down, size=size.tiny, color=color_RBD_minus, textcolor=color.white))
+    if showDivergenceLines
+        manage_line_array(regBearLines, line.new(p1_idx, p1_osc, p2_idx, p2_osc, color=color_RBD_minus, width=1))
+if hidBullDetected
+    manage_label_array(hidBullLabels, label.new(p2_idx, p2_osc, "H", style=label.style_triangleup, size=size.tiny, color=color_HBD_plus, textcolor=color.white))
+    if showDivergenceLines
+        manage_line_array(hidBullLines, line.new(p1_idx, p1_osc, p2_idx, p2_osc, color=color_HBD_plus, width=1, style=line.style_dashed))
+if hidBearDetected
+    manage_label_array(hidBearLabels, label.new(p2_idx, p2_osc, "H", style=label.style_triangledown, size=size.tiny, color=color_HBD_minus, textcolor=color.white))
+    if showDivergenceLines
+        manage_line_array(hidBearLines, line.new(p1_idx, p1_osc, p2_idx, p2_osc, color=color_HBD_minus, width=1, style=line.style_dashed))
+if bullConvDetected
+    manage_label_array(bullConvLabels, label.new(p2_idx, p2_osc, "C", style=label.style_label_up, size=size.tiny, color=color.new(color.blue, 25), textcolor=color.white))
+if bearConvDetected
+    manage_label_array(bearConvLabels, label.new(p2_idx, p2_osc, "C", style=label.style_label_down, size=size.tiny, color=color.new(color.orange, 25), textcolor=color.white))
+
+
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+//                                       ALERTS
+// ██████████████████████████████████████████████████████████████████████████████████████████████████
+
+alertcondition(enableAlerts and ta.crossover(wt1, wt2), "WT Bullish Cross", "{{ticker}}: WaveTrend Bullish Crossover")
+alertcondition(enableAlerts and ta.crossunder(wt1, wt2), "WT Bearish Cross", "{{ticker}}: WaveTrend Bearish Crossover")
+alertcondition(enableAlerts and ta.crossover(wt1, ub), "WT Enters Overbought Zone", "{{ticker}}: WaveTrend entered dynamic overbought zone")
+alertcondition(enableAlerts and ta.crossunder(wt1, db), "WT Enters Oversold Zone", "{{ticker}}: WaveTrend entered dynamic oversold zone")
+// Divergence & Convergence Alerts
+alertcondition(enableAlerts and regBullDetected, "Regular Bullish Divergence", "{{ticker}}: Regular Bullish Divergence detected")
+alertcondition(enableAlerts and regBearDetected, "Regular Bearish Divergence", "{{ticker}}: Regular Bearish Divergence detected")
+alertcondition(enableAlerts and hidBullDetected, "Hidden Bullish Divergence", "{{ticker}}: Hidden Bullish Divergence detected")
+alertcondition(enableAlerts and hidBearDetected, "Hidden Bearish Divergence", "{{ticker}}: Hidden Bearish Divergence detected")
+alertcondition(enableAlerts and bullConvDetected, "Bullish Convergence", "{{ticker}}: Bullish Convergence detected")
+alertcondition(enableAlerts and bearConvDetected, "Bearish Convergence", "{{ticker}}: Bearish Convergence detected")

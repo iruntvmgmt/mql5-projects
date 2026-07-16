@@ -1,0 +1,483 @@
+//@version=6
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Elite ATR ZigZag Library v4.0 — ATR-Adaptive Swing Engine
+// Published library version: EliteMA_ATRZigZag/4
+// ─────────────────────────────────────────────────────────────────────────
+// FIXES v2.0:
+// [1] getBreakoutSignals() — hardcoded ta.atr(14) replaced with atrLen param.
+//     Callers must now pass their configured ATR length as the last argument.
+//     This ensures swing detection and breakout thresholds use the same ATR.
+//
+// [2] getPivotContextScore() — now accepts explicit `float src` parameter
+//     instead of reading `close` implicitly. Libraries should never read
+//     global series implicitly — this eliminates hidden coupling and makes
+//     the function deterministic regardless of call context.
+//
+// [3] getStructureScore() — also accepts `float src` and passes it through
+//     to getPivotContextScore(). Callers must now pass their price source.
+// ═══════════════════════════════════════════════════════════════════════════
+
+library("EliteMA_ATRZigZag", overlay=true)
+// Version: 4
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: getZigZagLevels
+// ─────────────────────────────────────────────────────────────────────────
+// Returns the core ATR ZigZag swing structure.
+//
+// @param useRenko             bool       Use candle body extremes instead of wick
+// @param atrLen              simple int  ATR length
+// @param atrMult             float       ATR reversal multiplier
+// @param minSwingBars        simple int  Minimum bars between confirmed swings
+// @param requireCloseConfirm bool        Close must breach threshold to confirm
+//
+// @returns [
+//   resistance,         // latest confirmed swing high
+//   support,            // latest confirmed swing low
+//   swingHighEvent,     // swing high price on confirmation bar, else na
+//   swingLowEvent,      // swing low price on confirmation bar, else na
+//   barsSinceHigh,      // bars since last confirmed swing high
+//   barsSinceLow,       // bars since last confirmed swing low
+//   trendDir,           //  1 = currently in up leg, -1 = currently in down leg
+//   atrThreshold,       // current ATR reversal threshold
+//   lastSwingHighBar,   // bar index of latest confirmed swing high
+//   lastSwingLowBar     // bar index of latest confirmed swing low
+// ]
+// ═══════════════════════════════════════════════════════════════════════════
+export getZigZagLevels(
+    bool useRenko,
+    simple int atrLen,
+    float atrMult,
+    simple int minSwingBars,
+    bool requireCloseConfirm) =>
+
+    float srcHigh = useRenko ? math.max(open, close) : high
+    float srcLow  = useRenko ? math.min(open, close) : low
+
+    float atrVal       = ta.atr(atrLen)
+    float atrThreshold = atrVal * atrMult
+
+    var float resistance       = na
+    var float support          = na
+    var float legExtreme       = na
+    var int   legExtremeBar    = na
+    var int   trendDir         = 1
+    var int   lastSwingBar     = na
+    var int   lastSwingHighBar = na
+    var int   lastSwingLowBar  = na
+
+    var int   barsSinceHigh    = 100000
+    var int   barsSinceLow     = 100000
+
+    float swingHighEvent = na
+    float swingLowEvent  = na
+
+    // Bootstrap
+    if na(legExtreme)
+        trendDir      := close >= nz(close[1], close) ? 1 : -1
+        legExtreme    := trendDir == 1 ? srcHigh : srcLow
+        legExtremeBar := bar_index
+
+    barsSinceHigh := nz(barsSinceHigh[1]) + 1
+    barsSinceLow  := nz(barsSinceLow[1])  + 1
+
+    // ── Up leg: track highest until reversal down by threshold
+    if trendDir == 1
+        if srcHigh >= legExtreme
+            legExtreme    := srcHigh
+            legExtremeBar := bar_index
+
+        bool reversalDown = requireCloseConfirm ?
+             close <= (legExtreme - atrThreshold) :
+             srcLow <= (legExtreme - atrThreshold)
+
+        bool spacingOK = na(lastSwingBar) or (bar_index - lastSwingBar >= minSwingBars)
+
+        if reversalDown and spacingOK
+            resistance       := legExtreme
+            swingHighEvent   := legExtreme
+            lastSwingBar     := legExtremeBar
+            lastSwingHighBar := legExtremeBar
+            barsSinceHigh    := 0
+
+            trendDir      := -1
+            legExtreme    := srcLow
+            legExtremeBar := bar_index
+
+    // ── Down leg: track lowest until reversal up by threshold
+    else
+        if srcLow <= legExtreme
+            legExtreme    := srcLow
+            legExtremeBar := bar_index
+
+        bool reversalUp = requireCloseConfirm ?
+             close >= (legExtreme + atrThreshold) :
+             srcHigh >= (legExtreme + atrThreshold)
+
+        bool spacingOK = na(lastSwingBar) or (bar_index - lastSwingBar >= minSwingBars)
+
+        if reversalUp and spacingOK
+            support        := legExtreme
+            swingLowEvent  := legExtreme
+            lastSwingBar   := legExtremeBar
+            lastSwingLowBar := legExtremeBar
+            barsSinceLow   := 0
+
+            trendDir      := 1
+            legExtreme    := srcHigh
+            legExtremeBar := bar_index
+
+    [resistance, support, swingHighEvent, swingLowEvent,
+     barsSinceHigh, barsSinceLow, trendDir, atrThreshold,
+     lastSwingHighBar, lastSwingLowBar]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: getHHLL
+// ─────────────────────────────────────────────────────────────────────────
+// Classifies newly confirmed swings into HH / HL / LH / LL.
+// Returns the swing price on the event bar, else na.
+// ═══════════════════════════════════════════════════════════════════════════
+export getHHLL(float swingHighEvent, float swingLowEvent) =>
+    float curHigh  = ta.valuewhen(not na(swingHighEvent), swingHighEvent, 0)
+    float prevHigh = ta.valuewhen(not na(swingHighEvent), swingHighEvent, 1)
+    float curLow   = ta.valuewhen(not na(swingLowEvent),  swingLowEvent,  0)
+    float prevLow  = ta.valuewhen(not na(swingLowEvent),  swingLowEvent,  1)
+
+    float hh = not na(swingHighEvent) and not na(prevHigh) and curHigh > prevHigh ? swingHighEvent : na
+    float lh = not na(swingHighEvent) and not na(prevHigh) and curHigh < prevHigh ? swingHighEvent : na
+    float hl = not na(swingLowEvent)  and not na(prevLow)  and curLow  > prevLow  ? swingLowEvent  : na
+    float ll = not na(swingLowEvent)  and not na(prevLow)  and curLow  < prevLow  ? swingLowEvent  : na
+
+    [hh, hl, lh, ll]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: getStructureBias
+// ─────────────────────────────────────────────────────────────────────────
+// Persistent structure bias derived from latest HH/HL/LH/LL events.
+// @returns [structureBias, bullBias, bearBias]
+// ═══════════════════════════════════════════════════════════════════════════
+export getStructureBias(float hh, float hl, float lh, float ll) =>
+    var int structureBias = 0
+    var int highStructure = 0
+    var int lowStructure  = 0
+
+    if not na(hh)
+        highStructure := 1
+    else if not na(lh)
+        highStructure := -1
+
+    if not na(hl)
+        lowStructure := 1
+    else if not na(ll)
+        lowStructure := -1
+
+    if highStructure == 1 and lowStructure == 1
+        structureBias := 1
+    else if highStructure == -1 and lowStructure == -1
+        structureBias := -1
+
+    [structureBias, structureBias == 1, structureBias == -1]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: getBOSCHOCH
+// ─────────────────────────────────────────────────────────────────────────
+// BOS  = break in direction of current structure bias
+// CHoCH = break against current structure bias
+// @returns [bullBOS, bearBOS, bullCHoCH, bearCHoCH]
+// ═══════════════════════════════════════════════════════════════════════════
+export getBOSCHOCH(
+    float resistance,
+    float support,
+    int structureBias,
+    simple int confirmCandles,
+    bool useBodyBreak) =>
+
+    var int bullHold = 0
+    var int bearHold = 0
+    var int lastBias = 0
+    var bool bullChochConsumed = false
+    var bool bearChochConsumed = false
+    var float lastBullBreakLevel = na
+    var float lastBearBreakLevel = na
+
+    if structureBias != lastBias
+        bullChochConsumed := false
+        bearChochConsumed := false
+        lastBias := structureBias
+
+    float bullRef = useBodyBreak ? close : high
+    float bearRef = useBodyBreak ? close : low
+
+    bool newBullLevel = na(lastBullBreakLevel) or resistance != lastBullBreakLevel
+    bool newBearLevel = na(lastBearBreakLevel) or support != lastBearBreakLevel
+
+    bullHold := not na(resistance) and newBullLevel and bullRef > resistance ? nz(bullHold[1]) + 1 : 0
+    bearHold := not na(support)    and newBearLevel and bearRef < support    ? nz(bearHold[1]) + 1 : 0
+
+    bool bullBreak = bullHold >= confirmCandles and nz(bullHold[1]) < confirmCandles
+    bool bearBreak = bearHold >= confirmCandles and nz(bearHold[1]) < confirmCandles
+
+    if bullBreak
+        lastBullBreakLevel := resistance
+    if bearBreak
+        lastBearBreakLevel := support
+
+    bool bullBOS   = bullBreak and structureBias == 1
+    bool bearBOS   = bearBreak and structureBias == -1
+    bool bullCHoCH = bullBreak and structureBias == -1 and not bullChochConsumed
+    bool bearCHoCH = bearBreak and structureBias == 1 and not bearChochConsumed
+
+    if bullCHoCH
+        bullChochConsumed := true
+    if bearCHoCH
+        bearChochConsumed := true
+
+    [bullBOS, bearBOS, bullCHoCH, bearCHoCH]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: getLiquiditySweep
+// ─────────────────────────────────────────────────────────────────────────
+// Basic wick-through/reclaim sweep detector retained for compatibility.
+// ═══════════════════════════════════════════════════════════════════════════
+export getLiquiditySweep(float resistance, float support, float sweepThreshold) =>
+    float barRange = high - low
+
+    bool bullSweep = not na(support) and
+                     low < support and close > support and
+                     barRange > 0 and
+                     (close - low) > (barRange * sweepThreshold)
+
+    bool bearSweep = not na(resistance) and
+                     high > resistance and close < resistance and
+                     barRange > 0 and
+                     (high - close) > (barRange * sweepThreshold)
+
+    [bullSweep, bearSweep]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: getProfessionalLiquiditySweep
+// ─────────────────────────────────────────────────────────────────────────
+// Professional liquidity sweep framework:
+// 1. Sweep must penetrate a confirmed external swing level by a minimum ATR.
+// 2. Candle must reclaim/reject back through the swept level.
+// 3. Rejection must consume a minimum fraction of the candle range.
+// 4. Setup remains pending for confirmBars while waiting for displacement.
+// 5. Validated sweep fires once per level, then cools down.
+// @returns [bullSweep, bearSweep, bullRaw, bearRaw, bullPending, bearPending]
+// ═══════════════════════════════════════════════════════════════════════════
+export getProfessionalLiquiditySweep(
+    float resistance,
+    float support,
+    float sweepThreshold,
+    float minPenAtr,
+    float displacementAtr,
+    simple int confirmBars,
+    simple int cooldownBars,
+    simple int atrLen,
+    bool requireBodyReclaim) =>
+
+    float atrVal   = ta.atr(atrLen)
+    float minPen   = atrVal * minPenAtr
+    float disp     = atrVal * displacementAtr
+    float barRange = high - low
+
+    var bool  bullPending = false
+    var bool  bearPending = false
+    var float bullLevel   = na
+    var float bearLevel   = na
+    var int   bullBar     = na
+    var int   bearBar     = na
+    var float lastBullLevel = na
+    var float lastBearLevel = na
+    var int   lastBullBar   = na
+    var int   lastBearBar   = na
+
+    bool bullCooldownOk = na(lastBullBar) or bar_index - lastBullBar > cooldownBars or support != lastBullLevel
+    bool bearCooldownOk = na(lastBearBar) or bar_index - lastBearBar > cooldownBars or resistance != lastBearLevel
+
+    bool bullPenetrated = not na(support) and low < support - minPen
+    bool bearPenetrated = not na(resistance) and high > resistance + minPen
+    bool bullReclaimed  = requireBodyReclaim ? close > support : high > support and close > support
+    bool bearRejected   = requireBodyReclaim ? close < resistance : low < resistance and close < resistance
+    bool bullRejectedEnough = barRange > 0 and (close - low) / barRange >= sweepThreshold
+    bool bearRejectedEnough = barRange > 0 and (high - close) / barRange >= sweepThreshold
+
+    bool bullRaw = bullCooldownOk and bullPenetrated and bullReclaimed and bullRejectedEnough
+    bool bearRaw = bearCooldownOk and bearPenetrated and bearRejected and bearRejectedEnough
+
+    if bullRaw
+        bullPending := true
+        bullLevel   := support
+        bullBar     := bar_index
+    if bearRaw
+        bearPending := true
+        bearLevel   := resistance
+        bearBar     := bar_index
+
+    bool bullWithinWindow = bullPending and not na(bullBar) and bar_index - bullBar <= confirmBars
+    bool bearWithinWindow = bearPending and not na(bearBar) and bar_index - bearBar <= confirmBars
+    bool bullDisplacement = bullWithinWindow and close > bullLevel + disp and close > open
+    bool bearDisplacement = bearWithinWindow and close < bearLevel - disp and close < open
+
+    bool bullSweep = bullDisplacement
+    bool bearSweep = bearDisplacement
+
+    if bullSweep
+        lastBullLevel := bullLevel
+        lastBullBar   := bar_index
+        bullPending   := false
+    else if bullPending and not bullWithinWindow
+        bullPending := false
+
+    if bearSweep
+        lastBearLevel := bearLevel
+        lastBearBar   := bar_index
+        bearPending   := false
+    else if bearPending and not bearWithinWindow
+        bearPending := false
+
+    [bullSweep, bearSweep, bullRaw, bearRaw, bullPending, bearPending]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: getBreakoutSignals
+// ─────────────────────────────────────────────────────────────────────────
+// buy/sell  = simple fractal breaks (optional MA filter)
+// bullBreak / bearBreak = ATR-extended smart breakouts with momentum filter
+//
+// FIX v2.0 [1]: atrLen is now a parameter instead of hardcoded 14.
+//   Pass your configured ATR length so swing detection and breakout
+//   thresholds use the same ATR value.
+//
+// @param atrLen   simple int   ATR length — must match your swing engine ATR
+// @returns [buy, sell, bullBreakout, bearBreakout]
+// ═══════════════════════════════════════════════════════════════════════════
+export getBreakoutSignals(
+    float resistance,
+    float support,
+    float filterFastMA,
+    float filterSlowMA,
+    bool filterFB,
+    bool enableSmart,
+    bool enableMomFilter,
+    simple int momLen,
+    float atrMult,
+    simple int confirmCandles,
+    simple int atrLen) =>          // ← FIX [1]: was hardcoded ta.atr(14)
+
+    var int bullConfirm = 0
+    var int bearConfirm = 0
+
+    float atrVal   = ta.atr(atrLen)  // ← FIX [1]: uses caller's configured length
+    float momentum = ta.mom(close, momLen)
+
+    bool buyMAOK  = filterFastMA > filterSlowMA and close > filterFastMA
+    bool sellMAOK = filterFastMA < filterSlowMA and close < filterFastMA
+
+    bool buy  = not na(resistance) and ta.crossover(close, resistance)  and (not filterFB or buyMAOK)
+    bool sell = not na(support)    and ta.crossunder(close, support)    and (not filterFB or sellMAOK)
+
+    bool rawBullBreak = enableSmart and not na(resistance) and close > (resistance + atrVal * atrMult)
+    bool rawBearBreak = enableSmart and not na(support)    and close < (support    - atrVal * atrMult)
+
+    bullConfirm := rawBullBreak ? nz(bullConfirm[1]) + 1 : 0
+    bearConfirm := rawBearBreak ? nz(bearConfirm[1]) + 1 : 0
+
+    bool bullMomOK = not enableMomFilter or momentum > 0
+    bool bearMomOK = not enableMomFilter or momentum < 0
+
+    bool bullBreakout = bullConfirm >= confirmCandles and nz(bullConfirm[1]) < confirmCandles and bullMomOK
+    bool bearBreakout = bearConfirm >= confirmCandles and nz(bearConfirm[1]) < confirmCandles and bearMomOK
+
+    [buy, sell, bullBreakout, bearBreakout]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: getEquilibriumLevel
+// ─────────────────────────────────────────────────────────────────────────
+// Midpoint between latest confirmed resistance and support.
+// ═══════════════════════════════════════════════════════════════════════════
+export getEquilibriumLevel(float resistance, float support) =>
+    not na(resistance) and not na(support) ? (resistance + support) / 2.0 : na
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: getPivotContextScore
+// ─────────────────────────────────────────────────────────────────────────
+// 0–30 context score based on price location vs support/resistance.
+//
+// FIX v2.0 [2]: `src` is now an explicit parameter instead of implicitly
+//   reading `close`. Pass `close` from your main indicator.
+//
+// LONG:  +15 if src > support, +15 if src > EQ
+// SHORT: +15 if src < resistance, +15 if src < EQ
+// ═══════════════════════════════════════════════════════════════════════════
+export getPivotContextScore(float resistance, float support, float src, bool isLong) =>
+    float eq    = getEquilibriumLevel(resistance, support)
+    float score = 0.0
+
+    if isLong
+        score += not na(support)    and src > support    ? 15.0 : 0.0
+        score += not na(eq)         and src > eq         ? 15.0 : 0.0
+    else
+        score += not na(resistance) and src < resistance ? 15.0 : 0.0
+        score += not na(eq)         and src < eq         ? 15.0 : 0.0
+
+    score
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: getSwingDistanceScore
+// ─────────────────────────────────────────────────────────────────────────
+// Scores how meaningful the latest structure range is relative to ATR.
+// Filters out micro-swings on noisy lower timeframes.
+// @returns 0–30
+// ═══════════════════════════════════════════════════════════════════════════
+export getSwingDistanceScore(float resistance, float support, simple int atrLen) =>
+    float atrVal   = ta.atr(atrLen)
+    float SW_range = not na(resistance) and not na(support) ? math.abs(resistance - support) : 0.0
+    float ratio    = atrVal > 0 ? SW_range / atrVal : 0.0
+
+    float score = ratio >= 4.0 ? 30.0 :
+                  ratio >= 3.0 ? 24.0 :
+                  ratio >= 2.0 ? 18.0 :
+                  ratio >= 1.5 ? 12.0 :
+                  ratio >= 1.0 ?  6.0 : 0.0
+    score
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT: getStructureScore
+// ─────────────────────────────────────────────────────────────────────────
+// Composite structure score 0–100.
+// Components: bias alignment (35), price location (30), swing range (30+).
+//
+// FIX v2.0 [3]: `src` is now an explicit parameter, passed through to
+//   getPivotContextScore(). Pass `close` from your main indicator.
+// ═══════════════════════════════════════════════════════════════════════════
+export getStructureScore(
+    float resistance,
+    float support,
+    int structureBias,
+    bool isLong,
+    simple int atrLen,
+    float src) =>              // ← FIX [3]: explicit src instead of implicit close
+
+    float score = 0.0
+
+    bool biasAligned = isLong ? structureBias == 1 : structureBias == -1
+    score += biasAligned ? 35.0 : 0.0
+
+    score += getPivotContextScore(resistance, support, src, isLong)  // ← FIX [3]
+
+    float distScore = getSwingDistanceScore(resistance, support, atrLen)
+    score += math.min(distScore, 30.0)
+
+    math.max(0.0, math.min(100.0, score))

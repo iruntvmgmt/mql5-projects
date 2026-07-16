@@ -1,0 +1,258 @@
+//@version=6
+// @description Order Flow Intelligence module for Absorption, Imbalances, and CVD.
+// Published library version: GodTier_OrderFlow/4
+// Suite patch lineage: v1.1 — Patch L1: calculate_vwad map iteration. Patch L2: detect_iceberg map iteration + vol_map.size()
+library("GodTier_OrderFlow", true)
+// Version: 4
+
+// --- TYPE DEFINITIONS ---
+export type DeltaSignal
+    float cvd
+    bool is_absorption
+    bool is_divergence
+    color signal_color
+
+export type ImbalanceZone
+    int start_idx
+    int end_idx
+    float avg_ratio
+    bool is_bullish
+    float strength
+
+// --- CORE INTELLIGENCE ---
+
+// @function Detects Absorption (High Volume, Low Price Movement).
+// @param vol The current bar volume.
+// @param body_size The absolute price range of the bar body.
+// @param atr The Average True Range for context.
+// @param vol_multiplier Multiplier for volume threshold (default 1.5).
+// @param move_multiplier Multiplier for price movement threshold (default 0.5).
+// @returns True if absorption detected.
+export detect_absorption(float vol, float body_size, float atr, simple float vol_multiplier = 1.5, simple float move_multiplier = 0.5) =>
+    float vol_sma = ta.sma(vol, 20)
+    bool high_vol = vol > vol_sma * vol_multiplier and not na(vol_sma)
+    bool low_move = body_size < atr * move_multiplier and not na(atr)
+    high_vol and low_move
+
+// @function Analyzes the current bar's delta and simple price/delta divergence.
+// @param delta The current bar's buy-sell delta.
+// @param price_change The change in close price.
+// @returns DeltaSignal object. cvd carries the current delta for compatibility;
+//          callers should own cumulative/session CVD state explicitly.
+export analyze_delta(float delta, float price_change) =>
+    // Divergence: Price goes up, Delta goes down (or vice versa)
+    bool divergence = (price_change > 0 and delta < 0) or (price_change < 0 and delta > 0)
+    
+    DeltaSignal.new(
+         delta,
+         false, // Absorption handled separately
+         divergence, 
+         divergence ? color.orange : (delta > 0 ? color.green : color.red)
+     )
+
+// @function FIXED: Scans for Stacked Imbalances across a price range.
+// @param buy_volumes Map of buy volume per bin.
+// @param sell_volumes Map of sell volume per bin.
+// @param ratio Minimum ratio for imbalance (e.g., 3.0).
+// @returns Number of stacked imbalance zones detected.
+export find_stacked_imbalances(map<int, float> buy_vols, map<int, float> sell_vols, float ratio) =>
+    int stacked_count = 0
+    int[] keys = map.keys(buy_vols)
+    
+    // CRITICAL FIX: Was using array<int> instead of int[]
+    if array.size(keys) > 3
+        array.sort(keys)
+        
+        // Scan for 3 consecutive bullish or bearish imbalances
+        for i = 0 to array.size(keys) - 3
+            int k1 = array.get(keys, i)
+            int k2 = array.get(keys, i + 1)
+            int k3 = array.get(keys, i + 2)
+            
+            float buy1 = nz(map.get(buy_vols, k1))
+            float sell1 = nz(map.get(sell_vols, k1))
+            float buy2 = nz(map.get(buy_vols, k2))
+            float sell2 = nz(map.get(sell_vols, k2))
+            float buy3 = nz(map.get(buy_vols, k3))
+            float sell3 = nz(map.get(sell_vols, k3))
+            
+            // Bullish imbalance stack (3 consecutive buy > sell * ratio)
+            bool bull_imb1 = buy1 > sell1 * ratio and sell1 > 0
+            bool bull_imb2 = buy2 > sell2 * ratio and sell2 > 0
+            bool bull_imb3 = buy3 > sell3 * ratio and sell3 > 0
+            
+            // Bearish imbalance stack (3 consecutive sell > buy * ratio)
+            bool bear_imb1 = sell1 > buy1 * ratio and buy1 > 0
+            bool bear_imb2 = sell2 > buy2 * ratio and buy2 > 0
+            bool bear_imb3 = sell3 > buy3 * ratio and buy3 > 0
+            
+            if (bull_imb1 and bull_imb2 and bull_imb3) or (bear_imb1 and bear_imb2 and bear_imb3)
+                stacked_count += 1
+    
+    stacked_count
+
+// --- ENHANCED ORDER FLOW FEATURES ---
+
+// @function Detects detailed imbalance zones with metadata.
+// @param buy_volumes Map of buy volume per bin.
+// @param sell_volumes Map of sell volume per bin.
+// @param ratio Minimum ratio for imbalance.
+// @param min_stack Minimum consecutive bins to qualify (default 3).
+// @returns Array of ImbalanceZone objects.
+export find_imbalance_zones(map<int, float> buy_vols, map<int, float> sell_vols, float ratio, simple int min_stack = 3) =>
+    ImbalanceZone[] zones = array.new<ImbalanceZone>()
+    int[] keys = map.keys(buy_vols)
+    
+    if array.size(keys) >= min_stack
+        array.sort(keys)
+        
+        int current_start = -1
+        bool in_bull_zone = false
+        bool in_bear_zone = false
+        float zone_ratio_sum = 0.0
+        int zone_length = 0
+        
+        for i = 0 to array.size(keys) - 1
+            int k = array.get(keys, i)
+            float buy_vol = nz(map.get(buy_vols, k))
+            float sell_vol = nz(map.get(sell_vols, k))
+            
+            bool is_bull_imb = sell_vol > 0 and buy_vol > sell_vol * ratio
+            bool is_bear_imb = buy_vol > 0 and sell_vol > buy_vol * ratio
+            
+            // Start new zone
+            if (is_bull_imb and not in_bull_zone) or (is_bear_imb and not in_bear_zone)
+                // Save previous zone if it meets minimum length
+                if zone_length >= min_stack and current_start >= 0
+                    array.push(zones, ImbalanceZone.new(
+                         current_start, 
+                         array.get(keys, i - 1),
+                         zone_ratio_sum / zone_length,
+                         in_bull_zone,
+                         zone_length
+                     ))
+                
+                // Start new zone
+                current_start := k
+                in_bull_zone := is_bull_imb
+                in_bear_zone := is_bear_imb
+                zone_ratio_sum := is_bull_imb ? (buy_vol / sell_vol) : (sell_vol / buy_vol)
+                zone_length := 1
+            
+            // Continue existing zone
+            else if (is_bull_imb and in_bull_zone) or (is_bear_imb and in_bear_zone)
+                zone_ratio_sum += is_bull_imb ? (buy_vol / sell_vol) : (sell_vol / buy_vol)
+                zone_length += 1
+            
+            // Zone broken
+            else if zone_length > 0
+                if zone_length >= min_stack
+                    array.push(zones, ImbalanceZone.new(
+                         current_start, 
+                         array.get(keys, i - 1),
+                         zone_ratio_sum / zone_length,
+                         in_bull_zone,
+                         zone_length
+                     ))
+                
+                // Reset
+                current_start := -1
+                in_bull_zone := false
+                in_bear_zone := false
+                zone_ratio_sum := 0.0
+                zone_length := 0
+        
+        // Handle final zone
+        if zone_length >= min_stack and current_start >= 0
+            array.push(zones, ImbalanceZone.new(
+                 current_start, 
+                 array.get(keys, array.size(keys) - 1),
+                 zone_ratio_sum / zone_length,
+                 in_bull_zone,
+                 zone_length
+             ))
+    
+    zones
+
+// @function Calculates Order Flow Pressure (similar to market delta strength).
+// @param buy_vol Total buy volume in period.
+// @param sell_vol Total sell volume in period.
+// @returns Pressure value from -100 (max sell) to +100 (max buy).
+export calculate_flow_pressure(float buy_vol, float sell_vol) =>
+    float total = buy_vol + sell_vol
+    total > 0 ? ((buy_vol - sell_vol) / total) * 100 : 0.0
+
+// @function Detects exhaustion patterns (decreasing delta with increasing price or vice versa).
+// @param delta_values Array of recent delta values.
+// @param price_values Array of recent price values.
+// @param lookback Number of bars to analyze (default 5).
+// @returns True if exhaustion detected.
+export detect_exhaustion(array<float> delta_values, array<float> price_values, simple int lookback = 5) =>
+    bool exhaustion = false
+    
+    if array.size(delta_values) >= lookback and array.size(price_values) >= lookback
+        // Calculate trends
+        float delta_slope = 0.0
+        float price_slope = 0.0
+        
+        for i = 1 to lookback - 1
+            delta_slope += array.get(delta_values, i) - array.get(delta_values, i - 1)
+            price_slope += array.get(price_values, i) - array.get(price_values, i - 1)
+        
+        // Exhaustion: Opposite slopes (price up + delta down, or price down + delta up)
+        exhaustion := (price_slope > 0 and delta_slope < 0) or (price_slope < 0 and delta_slope > 0)
+    
+    exhaustion
+
+// @function Calculates Volume-Weighted Average Delta (VWAD).
+// @param delta_map Map of price bins to delta values.
+// @param vol_map Map of price bins to volume values.
+// @returns Weighted average delta.
+export calculate_vwad(map<int, float> delta_map, map<int, float> vol_map) =>
+    float weighted_sum = 0.0
+    float total_vol    = 0.0
+    for [k, delta] in delta_map
+        float vol     = nz(vol_map.get(k))
+        weighted_sum += delta * vol
+        total_vol    += vol
+    total_vol > 0 ? weighted_sum / total_vol : 0.0
+
+// @function Resets CVD (useful for session boundaries).
+// @returns Zero value for CVD reset.
+export reset_cvd() =>
+    0.0
+
+// @function Detects iceberg orders (repeated large volume at same price with minimal movement).
+// @param vol_map Volume distribution map.
+// @param price_bin The price bin to check.
+// @param threshold Multiple of average volume to qualify as iceberg.
+// @returns True if iceberg detected at this level.
+export detect_iceberg(map<int, float> vol_map, int price_bin, simple float threshold = 3.0) =>
+    float bin_vol   = nz(vol_map.get(price_bin))
+    float total_vol = 0.0
+    int   bin_count = vol_map.size()
+    if bin_count > 0
+        for [k, v] in vol_map
+            total_vol += v
+        bin_vol > (total_vol / bin_count) * threshold
+    else
+        false
+
+// --- UTILITY FUNCTIONS ---
+
+// @function Safe division to prevent divide-by-zero errors in ratio calculations.
+// @param numerator The top value.
+// @param denominator The bottom value.
+// @param default_value Value to return if denominator is zero.
+// @returns numerator / denominator, or default_value if denominator is zero.
+export safe_divide(float numerator, float denominator, float default_value = 0.0) =>
+    denominator != 0 ? numerator / denominator : default_value
+
+// @function Normalizes CVD to a 0-100 scale based on session range.
+// @param cvd Current cumulative volume delta.
+// @param session_high Highest CVD in session.
+// @param session_low Lowest CVD in session.
+// @returns Normalized value 0-100.
+export normalize_cvd(float cvd, float session_high, float session_low) =>
+    float cvd_range = session_high - session_low
+    cvd_range > 0 ? ((cvd - session_low) / cvd_range) * 100 : 50.0

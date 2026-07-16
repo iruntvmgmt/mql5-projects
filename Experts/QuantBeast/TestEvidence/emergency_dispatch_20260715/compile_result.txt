@@ -1,0 +1,7 @@
+Result: 0 errors, 0 warnings, 14859 ms elapsed, cpu='X64 Regular'
+
+SHA-256
+c37b6c4a7d1c16a347d4dec73377ee2db26b58da856fa1ef559faa600d7560da  QuantBeastEA.mq5
+c422fbd87b5f3f7523323f51addd6b4479ec25a56bf4695943d62ed68b285538  QuantBeastEA.ex5
+72ebe90e87bf4c851ff745c321fb8d85b758c2877da3e7969dca8ed27271367f  KillSwitch.mqh
+85ba965c1a448654700248d9b12ecce5c9e67abae0c55810d683267baa5120fe  SafetyTests.mqh

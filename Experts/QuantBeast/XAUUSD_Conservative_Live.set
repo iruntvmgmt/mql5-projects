@@ -1,0 +1,27 @@
+;+------------------------------------------------------------------+
+;|                                    XAUUSD_Conservative_Live.set  |
+;| QuantBeast EA - Conservative Live Mode Preset                    |
+;| WARNING: This preset sends real orders with conservative limits. |
+;| USE AT YOUR OWN RISK.                                            |
+;+------------------------------------------------------------------+
+InpMode=2
+InpAcknowledgeChallengeRisk=false
+InpRiskPercent=0.5
+InpMaxRiskPerTrade=1.0
+InpMinRewardRisk=1.5
+InpMaxPositions=1
+InpMaxTotalExposureLots=0.1
+InpMaxSpreadPoints=30
+InpDailyLossLimitPct=3.0
+InpWeeklyLossLimitPct=5.0
+InpMaxDrawdownPct=10.0
+InpMaxConsecLosses=3
+InpDashboardEnabled=true
+InpEnableDebugLogging=false
+InpEnableSignalJournal=true
+InpEnableOrderJournal=true
+InpEnableTradeJournal=true
+InpEnableBreakeven=true
+InpEnablePartialClose=true
+InpEnableATRTrail=true
+InpUnknownPosPolicy=1

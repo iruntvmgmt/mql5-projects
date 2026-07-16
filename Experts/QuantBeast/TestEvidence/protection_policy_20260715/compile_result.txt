@@ -1,0 +1,1 @@
+2026.07.15 13:40:10.695 Compile MQL5\Experts\QuantBeast\QuantBeastEA.mq5 - 0 errors, 0 warnings, 7949 ms elapsed, cpu='X64 Regular'

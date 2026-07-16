@@ -1,0 +1,223 @@
+//+------------------------------------------------------------------+
+//|                                  QuantBeast/TrendPullbackEngine.mqh|
+//|                          XAUUSD Quant Beast EA - Strategy 3: TP  |
+//| Project: QuantBeast                                               |
+//+------------------------------------------------------------------+
+#property copyright "QuantBeast"
+#property version   "1.00"
+#property strict
+
+#ifndef QB_TRENDPULLBACKENGINE_MQH
+#define QB_TRENDPULLBACKENGINE_MQH
+
+#include "StrategyBase.mqh"
+
+//+------------------------------------------------------------------+
+//| Trend Pullback Strategy - Enters after controlled pullback        |
+//+------------------------------------------------------------------+
+class CTrendPullbackEngine : public CStrategyBase
+{
+private:
+   double   m_minDirEfficiency;
+   int      m_minTrendPersistence;
+   bool     m_requireHTFAgreement;
+   double   m_maxPullbackDepth;    // Fib retracement of impulse
+   int      m_maxPullbackBars;
+   double   m_targetExtensionR;    // Impulse extension target
+   double   m_stopBeyondStruct;    // ATR multiple beyond structure
+
+   bool TriggerConfirmed(bool isLong, const FeatureSnapshot &features) const
+   {
+      bool candleDirection = isLong ?
+                             (features.closed_close > features.closed_open) :
+                             (features.closed_close < features.closed_open);
+      if(m_triggerMode == TRIGGER_IMMEDIATE_BREAK) return true;
+      if(m_triggerMode == TRIGGER_CANDLE_CLOSE_BREAK) return candleDirection;
+      if(m_triggerMode == TRIGGER_DISPLACEMENT)
+         return candleDirection && features.displacement >= 1.0;
+      return false;
+   }
+
+public:
+   //+------------------------------------------------------------------+
+   CTrendPullbackEngine() : CStrategyBase()
+   {
+      m_minDirEfficiency     = 0.4;
+      m_minTrendPersistence  = 5;
+      m_requireHTFAgreement  = true;
+      m_maxPullbackDepth     = 0.618;
+      m_maxPullbackBars      = 20;
+      m_targetExtensionR     = 1.618;
+      m_stopBeyondStruct     = 0.5;
+   }
+
+   //+------------------------------------------------------------------+
+   void Init(string id, string name, bool enabled, double minConfidence,
+             CSymbolAdapter &adapter, ENUM_TRIGGER_TYPE triggerMode,
+             double minDirEff, int minTrendPersist, bool requireHTF,
+             double maxPullbackDepth, int maxPullbackBars,
+             double targetExtensionR, double stopBeyondStruct)
+   {
+      CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
+      m_minDirEfficiency    = minDirEff;
+      m_minTrendPersistence = minTrendPersist;
+      m_requireHTFAgreement = requireHTF;
+      m_maxPullbackDepth    = maxPullbackDepth;
+      m_maxPullbackBars     = maxPullbackBars;
+      m_targetExtensionR    = targetExtensionR;
+      m_stopBeyondStruct    = stopBeyondStruct;
+   }
+
+   //+------------------------------------------------------------------+
+   bool IsEligible(const MarketSnapshot &market,
+                   const FeatureSnapshot &features,
+                   const RegimeState &regime)
+   {
+      if(!m_enabled) return false;
+
+      // Must have a directional trend (up or down)
+      bool trendUp   = (regime.trend == TREND_STRONG_UP || regime.trend == TREND_WEAK_UP);
+      bool trendDown = (regime.trend == TREND_STRONG_DOWN || regime.trend == TREND_WEAK_DOWN);
+      if(!trendUp && !trendDown) return false;
+
+      // Not exhausted
+      if(regime.trend == TREND_EXHAUSTED_UP || regime.trend == TREND_EXHAUSTED_DOWN)
+         return false;
+
+      // Directional efficiency minimum
+      if(features.dir_efficiency < m_minDirEfficiency)
+         return false;
+
+      // Trend persistence minimum
+      if(features.trend_persistence < m_minTrendPersistence)
+         return false;
+
+      // HTF agreement (optional)
+      if(m_requireHTFAgreement && !features.htf_aligned)
+         return false;
+
+      // Spread
+      if(market.spread_points > 35.0) return false;
+
+      // Structure should support trend (impulse or pullback)
+      if(!(regime.structure == STRUCTURE_IMPULSE || regime.structure == STRUCTURE_PULLBACK))
+         return false;
+
+      // Event normal
+      if(regime.event_state != EVENT_NORMAL) return false;
+
+      return true;
+   }
+
+   //+------------------------------------------------------------------+
+   StrategySignal EvaluateLong(const MarketSnapshot &market,
+                                const FeatureSnapshot &features,
+                                const RegimeState &regime)
+   {
+      if(!IsEligible(market, features, regime))
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "TP: not eligible");
+
+      // Must be in an uptrend
+      if(!(regime.trend == TREND_STRONG_UP || regime.trend == TREND_WEAK_UP))
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: not uptrend");
+
+      // Must be pulling back (price below recent high)
+      double recentHigh = features.swing_high;
+      if(recentHigh <= 0) recentHigh = features.current_range_high;
+      double mid = market.mid;
+
+      // Check pullback depth
+      double pullbackDepth = (recentHigh - mid) / MathMax(recentHigh - features.current_range_low, 0.0001);
+      if(pullbackDepth < 0.1 || pullbackDepth > m_maxPullbackDepth)
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: pullback depth " +
+                             DoubleToString(pullbackDepth, 2) + " outside range");
+
+      // Check we're returning to value (pullback ending)
+      if(!features.returning_to_value && pullbackDepth < 0.3)
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "TP Long: pullback not ending");
+
+      if(!TriggerConfirmed(true, features))
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "TP Long: configured trigger not confirmed");
+
+      double entry = market.ask;
+
+      // Stop beyond structural invalidation (below recent swing low or range low)
+      double structLow = features.swing_low;
+      if(structLow <= 0) structLow = features.current_range_low;
+      double stop = structLow - m_stopBeyondStruct * features.atr;
+
+      // Target: extension of prior impulse
+      double risk = MathAbs(entry - stop);
+      double target = entry + risk * m_targetExtensionR;
+
+      double rewardR;
+      if(!CheckRiskReward(ORDER_TYPE_BUY, entry, stop, target, 1.0, rewardR))
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: insufficient R:R");
+
+      double confidence = Clamp((features.dir_efficiency + (pullbackDepth / m_maxPullbackDepth)) / 2.0, 0.0, 1.0);
+      confidence = (confidence + regime.confidence) / 2.0;
+
+      if(!CheckConfidence(confidence))
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: low confidence");
+
+      return MakeSignal(ORDER_TYPE_BUY, entry, stop, target,
+                        confidence, rewardR,
+                        SETUP_TP_TREND_QUALIFIED, TRIGGER_TP_MOMENTUM_RESUME,
+                        "TP Long: depth=" + DoubleToString(pullbackDepth, 2) +
+                        " dirEff=" + DoubleToString(features.dir_efficiency, 2));
+   }
+
+   //+------------------------------------------------------------------+
+   StrategySignal EvaluateShort(const MarketSnapshot &market,
+                                 const FeatureSnapshot &features,
+                                 const RegimeState &regime)
+   {
+      if(!IsEligible(market, features, regime))
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "TP: not eligible");
+
+      if(!(regime.trend == TREND_STRONG_DOWN || regime.trend == TREND_WEAK_DOWN))
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: not downtrend");
+
+      double recentLow = features.swing_low;
+      if(recentLow <= 0) recentLow = features.current_range_low;
+      double mid = market.mid;
+
+      double pullbackDepth = (mid - recentLow) / MathMax(features.current_range_high - recentLow, 0.0001);
+      if(pullbackDepth < 0.1 || pullbackDepth > m_maxPullbackDepth)
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: pullback depth " +
+                             DoubleToString(pullbackDepth, 2) + " outside range");
+
+      if(!features.returning_to_value && pullbackDepth < 0.3)
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "TP Short: pullback not ending");
+
+      if(!TriggerConfirmed(false, features))
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "TP Short: configured trigger not confirmed");
+
+      double entry = market.bid;
+
+      double structHigh = features.swing_high;
+      if(structHigh <= 0) structHigh = features.current_range_high;
+      double stop = structHigh + m_stopBeyondStruct * features.atr;
+
+      double risk = MathAbs(entry - stop);
+      double target = entry - risk * m_targetExtensionR;
+
+      double rewardR;
+      if(!CheckRiskReward(ORDER_TYPE_SELL, entry, stop, target, 1.0, rewardR))
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: insufficient R:R");
+
+      double confidence = Clamp((features.dir_efficiency + (pullbackDepth / m_maxPullbackDepth)) / 2.0, 0.0, 1.0);
+      confidence = (confidence + regime.confidence) / 2.0;
+
+      if(!CheckConfidence(confidence))
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: low confidence");
+
+      return MakeSignal(ORDER_TYPE_SELL, entry, stop, target,
+                        confidence, rewardR,
+                        SETUP_TP_TREND_QUALIFIED, TRIGGER_TP_MOMENTUM_RESUME,
+                        "TP Short: depth=" + DoubleToString(pullbackDepth, 2) +
+                        " dirEff=" + DoubleToString(features.dir_efficiency, 2));
+   }
+};
+
+#endif // QB_TRENDPULLBACKENGINE_MQH

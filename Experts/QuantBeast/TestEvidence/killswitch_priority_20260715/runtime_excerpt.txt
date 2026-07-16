@@ -1,0 +1,4 @@
+QuantBeastEA (XAUUSD,M5) 2026.05.18 00:00:00 QuantBeast[INFO] TEST 31 PASS: Kill-switch priority floor=emergency rejection=latched connectivity=transient
+QuantBeastEA (XAUUSD,M5) 2026.05.18 00:00:00 QuantBeast[INFO] Self-tests complete: 33 passed, 0 failed
+Tester final balance 10000.00 USD
+Tester XAUUSD,M5: 5520 ticks, 276 bars generated. Test passed in 0:00:06.529.

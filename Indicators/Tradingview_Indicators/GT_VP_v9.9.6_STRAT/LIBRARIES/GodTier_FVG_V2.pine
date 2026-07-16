@@ -1,0 +1,611 @@
+//@version=6
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GodTier_FVG Library v1.2
+// Fair Value Gap + Inverse FVG Engine
+// ─────────────────────────────────────────────────────────────────────────
+// Standalone institutional-grade FVG module for the God Tier VP suite.
+// Provides full LuxAlgo split-box rendering, ATR-scaled quality scoring,
+// partial-fill state tracking, IFVG polarity flip logic, proximity magnet
+// analysis, and session-safe memory management.
+//
+// FIXES v1.2 (Audit Implementation):
+//   [1] spawn_fvg() / spawn_ifvg() — overflow eviction flipped from
+//       array.pop() to array.shift(). Because insertion uses array.unshift()
+//       (index 0 = newest, last index = oldest), array.pop() was evicting the
+//       NEWEST FVG on cap overflow. Heavy sessions were silently deleting live
+//       gaps and keeping stale ones. array.shift() now correctly evicts oldest.
+//   [2] spawn_fvg() / spawn_ifvg() — bar_dt clamped to timeframe.in_seconds()
+//       * 1000. Unclamped bar_dt on futures/crypto session-gap bars (e.g. ES
+//       Sunday→Monday, crypto weekend) spiked to 60h+, making every FVG box
+//       100× wider than intended and pushing end_t far off the visible chart.
+//   [3] scan_ifvg_mitigation() — ifvg.touch_count reset to 0 in the out_zone
+//       branch. Without the reset, touch_count stayed ≥ 1 permanently after the
+//       first exit. The `in_zone and touch_count == 0` guard never fired again,
+//       making all subsequent IFVG tests visually silent (no contested state).
+//
+// FIXES v1.1:
+//   [1] scan_ifvg_mitigation() — four dead-code issues resolved.
+//       Root cause: partial-fill reset branch (out_zone) was declared
+//       but never implemented, leaving c_bull, c_bear, base_c, and out_zone
+//       all unreferenced. Fixed by implementing the full reset block:
+//       when price exits an IFVG zone without invalidation, border reverts
+//       to dashed style and bgcolor restores to baseline transparency.
+//       This mirrors the exact reset logic in scan_mitigation() for FVGs.
+//
+// ARCHITECTURAL NOTES:
+//   [1] No var state inside exported functions. All persistent state lives
+//       in the caller as var arrays and is passed in as parameters. This
+//       avoids the singleton-state defect documented in EliteMA_OrderFlow.
+//   [2] Arrays are passed by reference in Pine v6 — mutations inside
+//       exported functions persist in the caller's var arrays. ✅
+//   [3] Types exported from this library must be referenced in the calling
+//       script as fvg_lib.FairValueGap / fvg_lib.InverseFVG.
+//   [4] All box/label objects are owned by the arrays declared in the
+//       caller. clear_session() and prune() are the sole deletion paths.
+//
+// EXPORT SUMMARY:
+//   Types    : FairValueGap, InverseFVG
+//   Detection: detect()
+//   Rendering: spawn_fvg(), spawn_ifvg()
+//   Scanning : scan_mitigation(), scan_ifvg_mitigation()
+//   Analysis : nearest_magnet(), strength_grade(), has_confluence()
+//   Lifecycle: clear_session(), prune()
+// ═══════════════════════════════════════════════════════════════════════════
+
+library("GodTier_FVG", overlay=true)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════
+
+// @type FairValueGap — LuxAlgo split-box with institutional metadata.
+//   top/bottom   : Gap price boundaries (top > bottom always).
+//   bias         : 1 = bullish gap (unfilled support below), -1 = bearish gap.
+//   strength     : gap_size / ATR at formation. 0.3 = moderate, 0.7+ = strong impulse.
+//   vol_spike    : True if volume > 1.5× 20-bar avg at formation — institutional footprint.
+//   touch_count  : Times price entered the zone without full close-through mitigation.
+//   is_partial   : True while price is currently inside the zone (contested state).
+//   topBox       : Upper half of split-box (top → midpoint).
+//   bottomBox    : Lower half of split-box (midpoint → bottom).
+export type FairValueGap
+    float top
+    float bottom
+    int   bias
+    float strength
+    bool  vol_spike
+    int   touch_count
+    bool  is_partial
+    box   topBox
+    box   bottomBox
+
+// @type InverseFVG — Mitigated FVG that flipped polarity.
+//   Inherits geometry and strength from the originating FVG.
+//   bias         : 1 = bullish support (was bear FVG), -1 = bearish resistance (was bull FVG).
+//   strength     : Inherited from originating FVG — strong origin = strong inversion.
+//   touch_count  : Tests against the IFVG zone before invalidation.
+//   topBox       : Upper dashed half.
+//   bottomBox    : Lower dashed half.
+//   dirLabel     : ▲/▼ IFVG directional label at midpoint.
+export type InverseFVG
+    float top
+    float bottom
+    int   bias
+    float strength
+    int   touch_count
+    box   topBox
+    box   bottomBox
+    label dirLabel
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERNAL HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Maps FVG strength to border width. Strong gaps render with thicker borders.
+f_border_width(float strength) =>
+    strength >= 0.70 ? 2 : 1
+
+// Maps FVG strength to bgcolor transparency. Strong gaps are more opaque.
+// vol_spike adds additional opacity punch (+5 opaque).
+f_bg_transp(float strength, bool vol_spike) =>
+    int base = strength >= 0.70 ? 78 : strength >= 0.35 ? 83 : 88
+    vol_spike ? math.max(70, base - 5) : base
+
+// Maps FVG strength to border color transparency. Strong = denser border.
+f_bdr_transp(float strength, bool vol_spike) =>
+    int base = strength >= 0.70 ? 20 : strength >= 0.35 ? 35 : 50
+    vol_spike ? math.max(10, base - 10) : base
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DETECTION
+// ═══════════════════════════════════════════════════════════════════════════
+
+// @function detect — Identifies valid FVG conditions on the current bar.
+//
+// Uses a pure 3-bar gap condition (bars 0 and 2 do not overlap) with an
+// ATR-scaled minimum size filter to eliminate micro-gaps on compressed bars.
+// Does NOT require directional confirmation on bar[1] — the gap geometry
+// alone is sufficient and avoids filtering genuine institutional gaps formed
+// on consolidation bars.
+//
+// @param atr_len    ATR lookback for gap threshold scaling (recommend 14).
+// @param threshold  Minimum gap height as ATR multiple (0.3 = 30% of ATR).
+// @returns [bull, bear, bull_strength, bear_strength, vol_spike, atr_val]
+//   bull/bear        : Detection booleans.
+//   bull/bear_strength: gap_size / ATR — 0.0 if not detected.
+//   vol_spike        : Volume > 1.5× 20-bar SMA on current bar.
+//   atr_val          : Raw ATR value (reuse to avoid redundant ATR calls).
+export detect(simple int atr_len, float threshold) =>
+    float atr_val   = ta.atr(atr_len)
+    float min_gap   = atr_val * threshold
+    bool  vol_spike = volume > ta.sma(volume, 20) * 1.5
+
+    // Bull FVG: current bar's low is strictly above bar[2]'s high
+    float bull_gap_sz = low - high[2]
+    bool  bull        = bull_gap_sz >= min_gap
+
+    // Bear FVG: current bar's high is strictly below bar[2]'s low
+    float bear_gap_sz = low[2] - high
+    bool  bear        = bear_gap_sz >= min_gap
+
+    float bull_str    = bull ? bull_gap_sz / atr_val : 0.0
+    float bear_str    = bear ? bear_gap_sz / atr_val : 0.0
+
+    [bull, bear, bull_str, bear_str, vol_spike, atr_val]
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDERING — FVG SPAWN
+// ═══════════════════════════════════════════════════════════════════════════
+
+// @function spawn_fvg — Builds a LuxAlgo split-box FVG and pushes to array.
+//
+// Split-box design: top half and bottom half rendered as separate boxes,
+// meeting at the midpoint. Produces the gradient depth illusion matching
+// EliteMA's visual spec. Border width and bg transparency are strength-encoded.
+// Vol-spike gaps receive an additional visual boost (denser border + more opaque).
+// If max_active is exceeded, the oldest (least recent) entry is evicted.
+//
+// @param arr         var FairValueGap array from caller.
+// @param bias        1 = bullish, -1 = bearish.
+// @param g_top       Gap top price.
+// @param g_bot       Gap bottom price.
+// @param strength    Precomputed strength from detect().
+// @param vol_spike   Precomputed volume flag from detect().
+// @param c_bull      Bull FVG base color (transparency applied internally).
+// @param c_bear      Bear FVG base color (transparency applied internally).
+// @param extend_bars How many bars to extend box rightward.
+// @param max_active  Hard cap — evict oldest if exceeded.
+export spawn_fvg(
+     FairValueGap[]  arr,
+     int             bias,
+     float           g_top,
+     float           g_bot,
+     float           strength,
+     bool            vol_spike,
+     color           c_bull,
+     color           c_bear,
+     int             extend_bars,
+     simple int      max_active) =>
+
+    // Evict oldest on overflow.
+    // Insertion is via array.unshift() → index 0 = newest, last index = oldest.
+    // array.shift() removes from the FRONT (oldest), not array.pop() (which was removing newest).
+    if array.size(arr) >= max_active
+        FairValueGap evict = array.shift(arr)   // FIX: was array.pop() — evicted newest, not oldest
+        evict.topBox.delete()
+        evict.bottomBox.delete()
+
+    float g_mid   = math.avg(g_top, g_bot)
+    // FIX: Clamp bar_dt to timeframe duration to prevent massive box widths on
+    // assets with session gaps (ES overnight, crypto weekends). Without the clamp,
+    // a Sunday→Monday bar on futures gives bar_dt of ~60h, extending every FVG box
+    // 100× wider than intended and pushing end_t far off-screen.
+    int   bar_dt  = math.min(time - time[1], timeframe.in_seconds() * 1000)
+    int   end_t   = time + extend_bars * bar_dt
+    int   start_t = time[2]         // gap opens at bar[2]
+
+    color base_col = bias == 1 ? c_bull : c_bear
+    int   bg_tr    = f_bg_transp(strength, vol_spike)
+    int   bdr_tr   = f_bdr_transp(strength, vol_spike)
+    int   bdr_w    = f_border_width(strength)
+    color bg_col   = color.new(base_col, bg_tr)
+    color bdr_col  = color.new(base_col, bdr_tr)
+
+    box top_box = box.new(
+         chart.point.new(start_t, na, g_top),
+         chart.point.new(end_t,   na, g_mid),
+         xloc         = xloc.bar_time,
+         border_color = bdr_col,
+         border_width = bdr_w,
+         bgcolor      = bg_col)
+
+    box bot_box = box.new(
+         chart.point.new(start_t, na, g_mid),
+         chart.point.new(end_t,   na, g_bot),
+         xloc         = xloc.bar_time,
+         border_color = bdr_col,
+         border_width = bdr_w,
+         bgcolor      = color.new(base_col, math.min(95, bg_tr + 3)))
+
+    arr.unshift(FairValueGap.new(
+         g_top, g_bot, bias, strength, vol_spike,
+         0,      // touch_count
+         false,  // is_partial
+         top_box, bot_box))
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDERING — IFVG SPAWN
+// ═══════════════════════════════════════════════════════════════════════════
+
+// @function spawn_ifvg — Builds a dashed Inverse FVG box + directional label.
+//
+// Called internally by scan_mitigation() when a FVG is fully mitigated.
+// The originating zone is deleted before this is called — the IFVG redraws
+// the same geometry with flipped polarity, dashed borders, and a directional
+// label (▲/▼ IFVG + strength grade) anchored at the midpoint.
+//
+// @param arr         var InverseFVG array from caller.
+// @param f_top       Originating FVG top.
+// @param f_bot       Originating FVG bottom.
+// @param orig_bias   Originating FVG bias (will be inverted internally).
+// @param strength    Inherited strength from originating FVG.
+// @param c_bull      Bull IFVG color (purple by convention).
+// @param c_bear      Bear IFVG color (orange by convention).
+// @param extend_bars Bar extension for the box.
+// @param max_active  Hard cap — evict oldest if exceeded.
+export spawn_ifvg(
+     InverseFVG[]   arr,
+     float          f_top,
+     float          f_bot,
+     int            orig_bias,
+     float          strength,
+     color          c_bull,
+     color          c_bear,
+     int            extend_bars,
+     simple int     max_active) =>
+
+    // FIX: array.shift() removes oldest (unshift() inserts at front → index 0 = newest).
+    // array.pop() was removing newest IFVG, not oldest.
+    if array.size(arr) >= max_active
+        InverseFVG evict = array.shift(arr)   // FIX: was array.pop()
+        evict.topBox.delete()
+        evict.bottomBox.delete()
+        evict.dirLabel.delete()
+
+    int   ifvg_bias  = orig_bias * -1
+    float g_mid      = math.avg(f_top, f_bot)
+    // FIX: Clamp bar_dt to prevent blown-out box widths on assets with session gaps.
+    int   bar_dt     = math.min(time - time[1], timeframe.in_seconds() * 1000)
+    int   end_t      = time + extend_bars * bar_dt
+
+    // Bull IFVG = was bear FVG, now acts as bullish support  → purple
+    // Bear IFVG = was bull FVG, now acts as bearish resistance → orange
+    color base_col   = ifvg_bias == 1 ? c_bull : c_bear
+    color bdr_col    = color.new(base_col, f_bdr_transp(strength, false) - 10)
+    color bg_col     = color.new(base_col, f_bg_transp(strength, false) + 5)
+    string dir_txt   = ifvg_bias == 1 ? "▲ IFVG" : "▼ IFVG"
+    string grade     = strength >= 0.70 ? " ●●●" : strength >= 0.35 ? " ●●" : " ●"
+    color  lbl_col   = ifvg_bias == 1 ? color.new(#ce93d8, 0) : color.new(#ffb74d, 0)
+
+    box top_box = box.new(
+         chart.point.new(time, na, f_top),
+         chart.point.new(end_t, na, g_mid),
+         xloc         = xloc.bar_time,
+         border_color = bdr_col,
+         border_width = f_border_width(strength),
+         border_style = line.style_dashed,
+         bgcolor      = bg_col)
+
+    box bot_box = box.new(
+         chart.point.new(time, na, g_mid),
+         chart.point.new(end_t, na, f_bot),
+         xloc         = xloc.bar_time,
+         border_color = bdr_col,
+         border_width = f_border_width(strength),
+         border_style = line.style_dashed,
+         bgcolor      = color.new(base_col, math.min(95, f_bg_transp(strength, false) + 8)))
+
+    label dir_lbl = label.new(
+         x         = time,
+         y         = g_mid,
+         xloc      = xloc.bar_time,
+         text      = dir_txt + grade,
+         style     = label.style_label_right,
+         color     = color.new(color.black, 100),
+         textcolor = lbl_col,
+         size      = size.tiny)
+
+    arr.unshift(InverseFVG.new(
+         f_top, f_bot, ifvg_bias, strength,
+         0,  // touch_count
+         top_box, bot_box, dir_lbl))
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SCANNING — MITIGATION + PARTIAL FILL
+// ═══════════════════════════════════════════════════════════════════════════
+
+// @function scan_mitigation — Scans active FVGs for mitigation and partial fills.
+//
+// Per-bar scan (reverse iteration — safe for mid-loop removal).
+// Three states handled per FVG:
+//
+//   FULL MITIGATION: close crosses fully through the gap.
+//     → Delete split-box, remove from array.
+//     → If spawn_ifvg_on is true: call spawn_ifvg() on the mitigated zone.
+//
+//   PARTIAL FILL (CONTESTED): price enters but close does not cross through.
+//     → On first entry: increment touch_count, set is_partial = true.
+//     → Boxes update to dotted border + increased transparency ("contested" state).
+//     → On bar where price fully exits back out: reset is_partial to false,
+//       boxes revert to solid border.
+//
+//   UNTOUCHED: no change.
+//
+// @param fvg_arr         var FairValueGap array.
+// @param ifvg_arr        var InverseFVG array.
+// @param spawn_ifvg_on   Toggle IFVG spawning on mitigation.
+// @param c_bull          Bull FVG base color (passed through to spawn_ifvg).
+// @param c_bear          Bear FVG base color (passed through).
+// @param c_ifvg_bull     Bull IFVG color.
+// @param c_ifvg_bear     Bear IFVG color.
+// @param extend_bars     Extension bars for spawned IFVGs.
+// @param max_active      Hard cap for IFVG array.
+// @returns [mitigated_count, ifvg_spawned_count]
+export scan_mitigation(
+     FairValueGap[]  fvg_arr,
+     InverseFVG[]    ifvg_arr,
+     bool            spawn_ifvg_on,
+     color           c_bull,
+     color           c_bear,
+     color           c_ifvg_bull,
+     color           c_ifvg_bear,
+     int             extend_bars,
+     simple int      max_active) =>
+
+    int mitigated_n = 0
+    int ifvg_n      = 0
+
+    if array.size(fvg_arr) > 0
+        for i = array.size(fvg_arr) - 1 to 0
+            FairValueGap fvg = array.get(fvg_arr, i)
+
+            // ── Full mitigation ────────────────────────────────────────────
+            // Bull FVG: price closed below the gap's bottom (sellers overpowered)
+            // Bear FVG: price closed above the gap's top (buyers overpowered)
+            bool full_mit = (close < fvg.bottom and fvg.bias ==  1) or (close > fvg.top    and fvg.bias == -1)
+
+            if full_mit
+                float saved_top = fvg.top
+                float saved_bot = fvg.bottom
+                int   saved_bias = fvg.bias
+                float saved_str  = fvg.strength
+                fvg.topBox.delete()
+                fvg.bottomBox.delete()
+                array.remove(fvg_arr, i)
+                mitigated_n += 1
+                if spawn_ifvg_on
+                    spawn_ifvg(ifvg_arr, saved_top, saved_bot, saved_bias,
+                               saved_str, c_ifvg_bull, c_ifvg_bear,
+                               extend_bars, max_active)
+                    ifvg_n += 1
+
+            else
+                // ── Partial fill detection ─────────────────────────────────
+                // Bull FVG contested: low entered the zone but close stayed above bottom
+                // Bear FVG contested: high entered the zone but close stayed below top
+                bool price_in_zone = (fvg.bias ==  1 and low  <= fvg.top and close > fvg.bottom) or
+                                     (fvg.bias == -1 and high >= fvg.bottom and close < fvg.top)
+                bool price_out_zone = (fvg.bias ==  1 and low  > fvg.top)    or
+                                      (fvg.bias == -1 and high < fvg.bottom)
+
+                if price_in_zone and not fvg.is_partial
+                    // First entry into zone — mark contested, increment touch
+                    fvg.is_partial   := true
+                    fvg.touch_count  += 1
+                    // Shift boxes to dotted contested style
+                    color base_c = fvg.bias == 1 ? c_bull : c_bear
+                    int   bg_tr  = math.min(95, f_bg_transp(fvg.strength, fvg.vol_spike) + 8)
+                    fvg.topBox.set_border_style(line.style_dotted)
+                    fvg.bottomBox.set_border_style(line.style_dotted)
+                    fvg.topBox.set_bgcolor(color.new(base_c, bg_tr))
+                    fvg.bottomBox.set_bgcolor(color.new(base_c, math.min(95, bg_tr + 3)))
+
+                else if price_out_zone and fvg.is_partial
+                    // Price fully exited zone without mitigation — reset to solid
+                    fvg.is_partial := false
+                    color base_c  = fvg.bias == 1 ? c_bull : c_bear
+                    int   bg_tr   = f_bg_transp(fvg.strength, fvg.vol_spike)
+                    int   bdr_tr  = f_bdr_transp(fvg.strength, fvg.vol_spike)
+                    fvg.topBox.set_border_style(line.style_solid)
+                    fvg.bottomBox.set_border_style(line.style_solid)
+                    fvg.topBox.set_bgcolor(color.new(base_c, bg_tr))
+                    fvg.bottomBox.set_bgcolor(color.new(base_c, math.min(95, bg_tr + 3)))
+                    fvg.topBox.set_border_color(color.new(base_c, bdr_tr))
+                    fvg.bottomBox.set_border_color(color.new(base_c, bdr_tr))
+
+    [mitigated_n, ifvg_n]
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SCANNING — IFVG INVALIDATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+// @function scan_ifvg_mitigation — Scans active IFVGs for invalidation.
+//
+// IFVG invalidation logic (mirror of FVG mitigation, flipped polarity):
+//   Bull IFVG (support): invalidated when close drops below its bottom.
+//   Bear IFVG (resistance): invalidated when close rises above its top.
+// Invalidated IFVGs are deleted and removed from the array.
+// Partial-fill state is also tracked on IFVGs (same visual dotted logic).
+//
+// @param ifvg_arr   var InverseFVG array.
+// @param c_bull     Bull IFVG base color.
+// @param c_bear     Bear IFVG base color.
+// @returns count of IFVGs invalidated this bar.
+export scan_ifvg_mitigation(InverseFVG[] ifvg_arr, color c_bull, color c_bear) =>
+    int invalidated_n = 0
+
+    if array.size(ifvg_arr) > 0
+        for j = array.size(ifvg_arr) - 1 to 0
+            InverseFVG ifvg = array.get(ifvg_arr, j)
+
+            bool invalidated = (close < ifvg.bottom and ifvg.bias ==  1) or
+                               (close > ifvg.top    and ifvg.bias == -1)
+
+            if invalidated
+                ifvg.topBox.delete()
+                ifvg.bottomBox.delete()
+                ifvg.dirLabel.delete()
+                array.remove(ifvg_arr, j)
+                invalidated_n += 1
+            else
+                // Partial fill tracking for IFVGs — mirrors scan_mitigation logic
+                bool in_zone  = (ifvg.bias ==  1 and low  <= ifvg.top    and close > ifvg.bottom) or (ifvg.bias == -1 and high >= ifvg.bottom and close < ifvg.top)
+                bool out_zone = (ifvg.bias ==  1 and low  > ifvg.top) or (ifvg.bias == -1 and high < ifvg.bottom)
+                color base_c  = ifvg.bias == 1 ? c_bull : c_bear
+
+                if in_zone and ifvg.touch_count == 0
+                    // First test — mark contested, shift to dotted border
+                    ifvg.touch_count += 1
+                    ifvg.topBox.set_border_style(line.style_dotted)
+                    ifvg.bottomBox.set_border_style(line.style_dotted)
+                    int bg_tr = math.min(95, f_bg_transp(ifvg.strength, false) + 8)
+                    ifvg.topBox.set_bgcolor(color.new(base_c, bg_tr))
+                    ifvg.bottomBox.set_bgcolor(color.new(base_c, math.min(95, bg_tr + 3)))
+
+                else if out_zone and ifvg.touch_count > 0
+                    // Price fully exited without invalidation — restore dashed style.
+                    // FIX: Reset touch_count to 0 so the next entry fires the contested
+                    // visual again. Without this reset, touch_count stays ≥ 1 forever
+                    // and the `in_zone and ifvg.touch_count == 0` guard never fires again,
+                    // meaning all subsequent touches are visually silent.
+                    ifvg.touch_count := 0   // FIX: was missing — caused single-touch-only bug
+                    // Note: IFVGs revert to dashed (not solid) — their native border style
+                    int bg_tr  = f_bg_transp(ifvg.strength, false)
+                    int bdr_tr = f_bdr_transp(ifvg.strength, false) - 10
+                    ifvg.topBox.set_border_style(line.style_dashed)
+                    ifvg.bottomBox.set_border_style(line.style_dashed)
+                    ifvg.topBox.set_bgcolor(color.new(base_c, bg_tr))
+                    ifvg.bottomBox.set_bgcolor(color.new(base_c, math.min(95, bg_tr + 3)))
+                    ifvg.topBox.set_border_color(color.new(base_c, bdr_tr))
+                    ifvg.bottomBox.set_border_color(color.new(base_c, bdr_tr))
+
+    invalidated_n
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// @function nearest_magnet — Returns the closest unfilled FVG midpoint to price.
+//
+// FVGs act as magnetic price targets — they fill ~70% of the time.
+// The midpoint (50% of the gap) is the highest-probability fill target.
+// This function surfaces the closest one relative to current close,
+// enabling confluence checks with VP key levels.
+//
+// @param arr   var FairValueGap array.
+// @returns [mid_price, bias, strength, touch_count]
+//   mid_price   : Midpoint of the nearest FVG. na if no active FVGs.
+//   bias        : 1 = bullish gap below (upside target), -1 = bearish above (downside target).
+//   strength    : Quality score of the nearest FVG.
+//   touch_count : How many times price has already tested this zone.
+export nearest_magnet(FairValueGap[] arr) =>
+    float best_mid   = na
+    int   best_bias  = 0
+    float best_str   = 0.0
+    int   best_touch = 0
+    float min_dist   = 1e10
+
+    if array.size(arr) > 0
+        for i = 0 to array.size(arr) - 1
+            FairValueGap fvg = array.get(arr, i)
+            float mid  = math.avg(fvg.top, fvg.bottom)
+            float dist = math.abs(close - mid)
+            if dist < min_dist
+                min_dist   := dist
+                best_mid   := mid
+                best_bias  := fvg.bias
+                best_str   := fvg.strength
+                best_touch := fvg.touch_count
+
+    [best_mid, best_bias, best_str, best_touch]
+
+// @function strength_grade — Converts raw strength float to label string.
+//
+// Grades:  ≥ 0.70 → "STRONG" (significant impulse, high fill probability)
+//          ≥ 0.35 → "MOD"    (moderate gap, standard behavior)
+//          <  0.35 → "WEAK"  (marginal gap, noisy on HTF)
+//
+// @param strength  Raw strength value from detect() or FairValueGap.strength.
+// @returns Grade string.
+export strength_grade(float strength) =>
+    strength >= 0.70 ? "STRONG" : strength >= 0.35 ? "MOD" : "WEAK"
+
+// @function has_confluence — Returns true if any FVG midpoint is within
+//   proximity_ticks of a supplied key level (POC, VAH, VAL, S/R line).
+//   Use this to flag FVGs that sit at institutional inflection points.
+//
+// @param arr              var FairValueGap array.
+// @param level            Key level price (POC, VAH, VAL, etc.).
+// @param proximity_ticks  Tick distance threshold.
+// @returns true if any FVG mid is within proximity_ticks of level.
+export has_confluence(FairValueGap[] arr, float level, int proximity_ticks) =>
+    bool found = false
+    if not na(level) and array.size(arr) > 0
+        float tick_size = syminfo.mintick
+        float threshold = proximity_ticks * tick_size
+        for i = 0 to array.size(arr) - 1
+            FairValueGap fvg = array.get(arr, i)
+            float mid = math.avg(fvg.top, fvg.bottom)
+            if math.abs(mid - level) <= threshold
+                found := true
+                break
+    found
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIFECYCLE — SESSION CLEAR + PRUNE
+// ═══════════════════════════════════════════════════════════════════════════
+
+// @function clear_session — Wipes both FVG and IFVG arrays and deletes all objects.
+//
+// Call in the session transition block (on newSession / zoneEnd).
+// Prevents ghost zones from bleeding across session boundaries.
+//
+// @param fvg_arr    var FairValueGap array.
+// @param ifvg_arr   var InverseFVG array.
+export clear_session(FairValueGap[] fvg_arr, InverseFVG[] ifvg_arr) =>
+    int fvg_sz = array.size(fvg_arr)
+    if fvg_sz > 0
+        for i = 0 to fvg_sz - 1
+            FairValueGap f = array.get(fvg_arr, i)
+            f.topBox.delete()
+            f.bottomBox.delete()
+        array.clear(fvg_arr)
+
+    int ifvg_sz = array.size(ifvg_arr)
+    if ifvg_sz > 0
+        for j = 0 to ifvg_sz - 1
+            InverseFVG f = array.get(ifvg_arr, j)
+            f.topBox.delete()
+            f.bottomBox.delete()
+            f.dirLabel.delete()
+        array.clear(ifvg_arr)
+
+// @function prune — Hard-cap safety net. Evicts oldest entries when arrays exceed max.
+//
+// Should be called in the barstate.islast performance block. The max_active
+// cap is enforced at spawn time too, but this provides a final safety net
+// in case of edge-case accumulation across extremely active sessions.
+//
+// @param fvg_arr    var FairValueGap array.
+// @param ifvg_arr   var InverseFVG array.
+// @param max_active Hard cap — entries beyond this are evicted oldest-first.
+export prune(FairValueGap[] fvg_arr, InverseFVG[] ifvg_arr, simple int max_active) =>
+    while array.size(fvg_arr) > max_active
+        FairValueGap oldest = array.pop(fvg_arr)
+        oldest.topBox.delete()
+        oldest.bottomBox.delete()
+    while array.size(ifvg_arr) > max_active
+        InverseFVG oldest = array.pop(ifvg_arr)
+        oldest.topBox.delete()
+        oldest.bottomBox.delete()
+        oldest.dirLabel.delete()

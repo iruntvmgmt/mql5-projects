@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "B8dh2kDTwHE=",
+  "success": true,
+  "projectFilePath": "/Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Indicators/Tradingview_Indicators/SmokeTest/SmokeTest.csproj",
+  "expectedPackageFiles": [
+    "/Users/matt/.nuget/packages/microsoft.netcore.app.ref/8.0.28/microsoft.netcore.app.ref.8.0.28.nupkg.sha512",
+    "/Users/matt/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.28/microsoft.aspnetcore.app.ref.8.0.28.nupkg.sha512",
+    "/Users/matt/.nuget/packages/microsoft.netcore.app.host.osx-x64/8.0.28/microsoft.netcore.app.host.osx-x64.8.0.28.nupkg.sha512"
+  ],
+  "logs": []
+}

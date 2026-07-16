@@ -1,0 +1,4 @@
+server_time,new_york_time,open,high,low,close,tick_volume,or_ready,or_high,or_low,squeeze_on,squeeze_release,squeeze_bars,momentum,momentum_delta,release_bias,setup_state,strategy_signal,hyp_entry,hyp_stop,hyp_target,outcome_active,outcome_event,last_outcome,last_net_r,total_outcomes,wins,losses,timed_exits,cumulative_net_r
+2026.07.13 23:40,2026.07.13 16:40,29254.1,29256.6,29243.8,29251.8,448,1,29553.3,29370.6,1,0,1,-12.26278571,5.40182143,0,0,0,0.0,0.0,0.0,0,0,none,0.0000,0,0,0,0,0.0000
+2026.07.13 23:45,2026.07.13 16:45,29251.3,29254.8,29243.1,29246.1,588,1,29553.3,29370.6,1,0,2,-9.95857143,2.30421429,0,0,0,0.0,0.0,0.0,0,0,none,0.0000,0,0,0,0,0.0000
+2026.07.13 23:50,2026.07.13 16:50,29245.8,29252.8,29236.8,29250.6,534,1,29553.3,29370.6,1,0,3,-7.98721429,1.97135714,0,0,0,0.0,0.0,0.0,0,0,none,0.0000,0,0,0,0,0.0000

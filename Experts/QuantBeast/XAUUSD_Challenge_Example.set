@@ -1,0 +1,27 @@
+;+------------------------------------------------------------------+
+;|                                    XAUUSD_Challenge_Example.set  |
+;| QuantBeast EA - Challenge Mode Example Preset                    |
+;| WARNING: AGGRESSIVE RISK. Can rapidly lose entire account.       |
+;| InpAcknowledgeChallengeRisk MUST be set to true manually.        |
+;| USE AT YOUR OWN RISK.                                            |
+;+------------------------------------------------------------------+
+InpMode=3
+InpAcknowledgeChallengeRisk=false
+InpRiskPercent=3.0
+InpMaxRiskPerTrade=3.0
+InpMinRewardRisk=1.0
+InpMaxPositions=1
+InpMaxTotalExposureLots=0.5
+InpMaxSpreadPoints=40
+InpDailyLossLimitPct=10.0
+InpWeeklyLossLimitPct=15.0
+InpMaxDrawdownPct=30.0
+InpEmergencyEquityFloor=50.0
+InpMaxConsecLosses=5
+InpDashboardEnabled=true
+InpEnableBreakeven=true
+InpEnablePartialClose=true
+InpEnableATRTrail=true
+InpChal_MaxAttempts=3
+InpChal_MaxStageDD=30.0
+InpChal_AllowPyramiding=false

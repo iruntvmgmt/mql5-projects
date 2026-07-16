@@ -1,0 +1,614 @@
+//@version=6
+// ============================================================================
+// Squeeze Momentum Pro by IRUNTV
+// ----------------------------------------------------------------------------
+// Final architecture: squeeze/momentum core + quality scoring + setup scanner
+// + one-shot entry readiness + HTF context + risk/readiness dashboard.
+// ============================================================================
+
+indicator("Squeeze Momentum Pro by IRUNTV", shorttitle="SQZ PRO IRUNTV", overlay=false, precision=4)
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+clamp(float value, float minValue, float maxValue) =>
+    math.max(minValue, math.min(maxValue, value))
+
+gradeFromScore(float score) =>
+    score >= 85 ? "A+" : score >= 75 ? "A" : score >= 65 ? "B" : score >= 50 ? "C" : "D"
+
+scoreBg(float score, float minScore, float topScore) =>
+    score >= topScore ? color.new(color.lime, 10) :
+     score >= minScore ? color.new(color.green, 20) :
+     score >= 50 ? color.new(color.orange, 20) : color.new(color.red, 20)
+
+// ============================================================================
+// INPUTS
+// ============================================================================
+
+groupProfile = "Profile"
+profile = input.string("Intraday", "Operating Profile",
+     options=["Scalp", "Intraday", "Swing", "Crypto/24h", "Futures", "Custom"],
+     group=groupProfile)
+confirmedSignalsOnly = input.bool(true, "Signals on Confirmed Bars Only", group=groupProfile)
+
+groupCore = "Core"
+src = input.source(close, "Source", group=groupCore)
+bbLen = input.int(20, "BB Length", minval=1, group=groupCore)
+bbMult = input.float(2.0, "BB Multiplier", minval=0.1, step=0.1, group=groupCore)
+kcLen = input.int(20, "KC Length", minval=1, group=groupCore)
+kcMult = input.float(1.5, "KC Multiplier", minval=0.1, step=0.1, group=groupCore)
+useTrueRange = input.bool(true, "Use True Range for KC", group=groupCore)
+bbMode = input.string("IRUNTV Balanced", "Squeeze Width Mode",
+     options=["IRUNTV Balanced", "LazyBear Normalized", "Classic Independent"],
+     group=groupCore,
+     tooltip="IRUNTV Balanced uses the average of BB and KC multipliers. LazyBear Normalized uses KC multiplier for BB width. Classic Independent uses the BB multiplier directly.")
+
+groupLength = "Length Engine"
+lengthMode = input.string("Hybrid", "Length Mode",
+     options=["Manual", "Time-Normalized", "Hybrid"],
+     group=groupLength,
+     tooltip="Manual uses the raw input lengths. Time-Normalized scales lengths to the Base Timeframe. Hybrid adds a conservative ATR regime adjustment.")
+baseTf = input.timeframe("15", "Base Timeframe", group=groupLength)
+minAdaptiveLen = input.int(5, "Minimum Adaptive Length", minval=1, maxval=100, group=groupLength)
+maxAdaptiveLen = input.int(500, "Maximum Adaptive Length", minval=20, maxval=2000, group=groupLength)
+atrRegimeLen = input.int(100, "ATR Regime Lookback", minval=20, maxval=500, group=groupLength)
+atrScaleMin = input.float(0.85, "ATR Scale Min", minval=0.25, maxval=1.0, step=0.01, group=groupLength)
+atrScaleMax = input.float(1.20, "ATR Scale Max", minval=1.0, maxval=3.0, step=0.01, group=groupLength)
+
+groupMomentum = "Momentum"
+momLen = input.int(20, "Momentum Length", minval=1, group=groupMomentum)
+smoothLen = input.int(1, "Momentum Smoothing", minval=1, group=groupMomentum)
+zeroMode = input.string("Regression Mean", "Momentum Baseline",
+     options=["Regression Mean", "Price MA"], group=groupMomentum)
+momNormLen = input.int(100, "Momentum Normalization Lookback", minval=20, group=groupMomentum)
+
+groupSecondary = "Secondary Histogram"
+showSecondaryHist = input.bool(true, "Show Secondary Histogram", group=groupSecondary)
+secondaryLengthMode = input.string("Manual", "Secondary Length Mode",
+     options=["Manual", "Time-Normalized", "Hybrid"],
+     group=groupSecondary)
+secondaryMomLen = input.int(20, "Secondary Momentum Length", minval=1, group=groupSecondary)
+secondarySmoothLen = input.int(1, "Secondary Smoothing", minval=1, group=groupSecondary)
+secondaryZeroMode = input.string("Regression Mean", "Secondary Baseline",
+     options=["Regression Mean", "Price MA"], group=groupSecondary)
+secondaryScale = input.float(1.0, "Secondary Height Scale", minval=0.1, maxval=3.0, step=0.1, group=groupSecondary)
+secondaryBullAccelColor = input.color(color.aqua, "Bull Increasing", group=groupSecondary, inline="secBull")
+secondaryBullFadeColor = input.color(color.teal, "Bull Fading", group=groupSecondary, inline="secBull")
+secondaryBearAccelColor = input.color(color.fuchsia, "Bear Increasing", group=groupSecondary, inline="secBear")
+secondaryBearFadeColor = input.color(color.purple, "Bear Fading", group=groupSecondary, inline="secBear")
+
+groupQuality = "Quality Engine"
+customMinQuality = input.int(70, "Custom Minimum Quality", minval=1, maxval=100, group=groupQuality)
+customAplusQuality = input.int(85, "Custom A+ Quality", minval=1, maxval=100, group=groupQuality)
+customIdealSqzBars = input.int(8, "Custom Ideal Squeeze Duration", minval=1, maxval=100, group=groupQuality)
+useTrendScore = input.bool(true, "Use Trend Alignment Score", group=groupQuality)
+trendLen = input.int(50, "Trend EMA Length", minval=1, group=groupQuality)
+useVolumeScore = input.bool(true, "Use Volume Confirmation Score", group=groupQuality)
+volLen = input.int(20, "Volume SMA Length", minval=1, group=groupQuality)
+volMult = input.float(1.0, "Volume Threshold x SMA", minval=0.1, step=0.1, group=groupQuality)
+useExpansionScore = input.bool(true, "Use Release Expansion Score", group=groupQuality)
+atrLen = input.int(14, "ATR Length", minval=1, group=groupQuality)
+expansionLookback = input.int(20, "Expansion Baseline Length", minval=2, group=groupQuality)
+
+groupSetup = "Setup Scanner"
+customEntryWindow = input.int(5, "Custom Entry Confirmation Window", minval=1, maxval=30, group=groupSetup)
+breakoutLen = input.int(8, "Structure Break Length", minval=2, maxval=100, group=groupSetup)
+riskLookback = input.int(50, "Range Location Lookback", minval=10, maxval=300, group=groupSetup)
+lateZone = input.float(0.82, "Late Long Zone", minval=0.5, maxval=1.0, step=0.01, group=groupSetup)
+earlyZone = input.float(0.18, "Late Short Zone", minval=0.0, maxval=0.5, step=0.01, group=groupSetup)
+minRoomAtrInput = input.float(1.2, "Custom Minimum Room to Range Edge ATR", minval=0.1, step=0.1, group=groupSetup)
+stopAtrMult = input.float(1.0, "Stop Reference ATR", minval=0.1, step=0.1, group=groupSetup)
+minRrInput = input.float(1.2, "Custom Minimum Projected R:R", minval=0.1, step=0.1, group=groupSetup)
+requireEntryBreak = input.bool(true, "Entry Requires Structure Break", group=groupSetup)
+useRiskGate = input.bool(true, "Use Risk Context in Entry Readiness", group=groupSetup)
+
+groupHtf = "HTF Context"
+useHtf = input.bool(true, "Use HTF Alignment", group=groupHtf)
+htfTf = input.timeframe("60", "HTF Timeframe", group=groupHtf)
+htfTrendLen = input.int(50, "HTF Trend EMA Length", minval=1, group=groupHtf)
+requireHtfForEntry = input.bool(false, "Require HTF Alignment for Entry Ready", group=groupHtf)
+
+groupSignals = "Signals"
+showReleaseMarks = input.bool(true, "Show Release Markers", group=groupSignals)
+showWeakReleaseMarks = input.bool(true, "Show Weak Release Warnings", group=groupSignals)
+showEntryMarks = input.bool(true, "Show Entry Ready Markers", group=groupSignals)
+showZeroCrossMarks = input.bool(false, "Show Momentum Zero Crosses", group=groupSignals)
+
+groupVisuals = "Visuals"
+showPressure = input.bool(true, "Show Compression Pressure Area", group=groupVisuals)
+showQualityLine = input.bool(false, "Show Quality Line", group=groupVisuals)
+showTable = input.bool(true, "Show Status Table", group=groupVisuals)
+bullAccelColor = input.color(color.lime, "Bull Increasing", group=groupVisuals, inline="bull")
+bullFadeColor = input.color(color.green, "Bull Fading", group=groupVisuals, inline="bull")
+bearAccelColor = input.color(color.red, "Bear Increasing", group=groupVisuals, inline="bear")
+bearFadeColor = input.color(color.maroon, "Bear Fading", group=groupVisuals, inline="bear")
+
+// ============================================================================
+// PROFILE DERIVED SETTINGS
+// ============================================================================
+
+minQuality = profile == "Scalp" ? 62 :
+     profile == "Swing" ? 78 :
+     profile == "Crypto/24h" ? 68 :
+     profile == "Futures" ? 72 :
+     profile == "Custom" ? customMinQuality : 70
+
+aplusQuality = profile == "Scalp" ? 80 :
+     profile == "Swing" ? 88 :
+     profile == "Crypto/24h" ? 84 :
+     profile == "Futures" ? 86 :
+     profile == "Custom" ? customAplusQuality : 85
+
+idealSqzBars = profile == "Scalp" ? 5 :
+     profile == "Swing" ? 12 :
+     profile == "Crypto/24h" ? 7 :
+     profile == "Futures" ? 8 :
+     profile == "Custom" ? customIdealSqzBars : 8
+
+entryWindow = profile == "Scalp" ? 3 :
+     profile == "Swing" ? 8 :
+     profile == "Crypto/24h" ? 6 :
+     profile == "Futures" ? 5 :
+     profile == "Custom" ? customEntryWindow : 5
+
+minRoomAtr = profile == "Scalp" ? 0.8 :
+     profile == "Swing" ? 1.8 :
+     profile == "Crypto/24h" ? 1.3 :
+     profile == "Futures" ? 1.2 :
+     profile == "Custom" ? minRoomAtrInput : 1.2
+
+minProjectedRr = profile == "Scalp" ? 0.9 :
+     profile == "Swing" ? 1.5 :
+     profile == "Crypto/24h" ? 1.2 :
+     profile == "Futures" ? 1.2 :
+     profile == "Custom" ? minRrInput : 1.2
+
+// ============================================================================
+// ADAPTIVE LENGTH ENGINE
+// ============================================================================
+
+chartTfSeconds = timeframe.in_seconds(timeframe.period)
+baseTfSeconds = timeframe.in_seconds(baseTf)
+tfScaleRaw = chartTfSeconds > 0 and baseTfSeconds > 0 ? baseTfSeconds / chartTfSeconds : 1.0
+tfScale = lengthMode == "Manual" ? 1.0 : tfScaleRaw
+secondaryTfScale = secondaryLengthMode == "Manual" ? 1.0 : tfScaleRaw
+
+atrRegimeNow = ta.atr(atrLen)
+atrRegimeBase = ta.sma(atrRegimeNow, atrRegimeLen)
+atrScaleRaw = atrRegimeNow > 0 and atrRegimeBase > 0 ? math.sqrt(atrRegimeBase / atrRegimeNow) : 1.0
+atrScale = lengthMode == "Hybrid" ? clamp(atrScaleRaw, atrScaleMin, atrScaleMax) : 1.0
+secondaryAtrScale = secondaryLengthMode == "Hybrid" ? clamp(atrScaleRaw, atrScaleMin, atrScaleMax) : 1.0
+coreLenScale = tfScale * atrScale
+softLenScale = math.sqrt(tfScale) * atrScale
+secondaryLenScale = secondaryTfScale * secondaryAtrScale
+
+adaptLen(int baseLength, float scale) =>
+    int(clamp(math.round(baseLength * scale), minAdaptiveLen, maxAdaptiveLen))
+
+bbLenEff = adaptLen(bbLen, coreLenScale)
+kcLenEff = adaptLen(kcLen, coreLenScale)
+momLenEff = adaptLen(momLen, coreLenScale)
+momNormLenEff = adaptLen(momNormLen, softLenScale)
+trendLenEff = adaptLen(trendLen, softLenScale)
+volLenEff = adaptLen(volLen, softLenScale)
+expansionLookbackEff = adaptLen(expansionLookback, softLenScale)
+breakoutLenEff = adaptLen(breakoutLen, softLenScale)
+riskLookbackEff = adaptLen(riskLookback, softLenScale)
+secondaryMomLenEff = adaptLen(secondaryMomLen, secondaryLenScale)
+
+// ============================================================================
+// FUNCTIONS FOR LOCAL AND HTF ENGINES
+// ============================================================================
+
+f_bb_width_mult() =>
+    bbMode == "LazyBear Normalized" ? kcMult : bbMode == "Classic Independent" ? bbMult : (bbMult + kcMult) * 0.5
+
+f_sqz_on() =>
+    _basis = ta.sma(close, bbLenEff)
+    _dev = f_bb_width_mult() * ta.stdev(close, bbLenEff)
+    _upperBB = _basis + _dev
+    _lowerBB = _basis - _dev
+    _ma = ta.sma(close, kcLenEff)
+    _range = useTrueRange ? ta.tr(true) : high - low
+    _rangema = ta.sma(_range, kcLenEff)
+    _upperKC = _ma + _rangema * kcMult
+    _lowerKC = _ma - _rangema * kcMult
+    _lowerBB > _lowerKC and _upperBB < _upperKC
+
+f_sqz_release() =>
+    _sqz = f_sqz_on()
+    _sqz[1] and not _sqz
+
+f_momentum() =>
+    _rangeMid = math.avg(ta.highest(high, momLenEff), ta.lowest(low, momLenEff))
+    _classicMean = math.avg(_rangeMid, ta.sma(close, momLenEff))
+    _simpleMean = ta.sma(close, momLenEff)
+    _base = zeroMode == "Regression Mean" ? _classicMean : _simpleMean
+    _raw = ta.linreg(close - _base, momLenEff, 0)
+    smoothLen > 1 ? ta.ema(_raw, smoothLen) : _raw
+
+f_htf_trend_up() =>
+    _ema = ta.ema(close, htfTrendLen)
+    close > _ema and _ema > _ema[1]
+
+f_htf_trend_down() =>
+    _ema = ta.ema(close, htfTrendLen)
+    close < _ema and _ema < _ema[1]
+
+// ============================================================================
+// VOLATILITY ENGINE
+// ============================================================================
+
+bbBasis = ta.sma(src, bbLenEff)
+bbDev = f_bb_width_mult() * ta.stdev(src, bbLenEff)
+upperBB = bbBasis + bbDev
+lowerBB = bbBasis - bbDev
+
+kcBasis = ta.sma(src, kcLenEff)
+rangeValue = useTrueRange ? ta.tr(true) : high - low
+rangeMa = ta.sma(rangeValue, kcLenEff)
+upperKC = kcBasis + rangeMa * kcMult
+lowerKC = kcBasis - rangeMa * kcMult
+
+bbWidth = math.max(upperBB - lowerBB, syminfo.mintick)
+kcWidth = math.max(upperKC - lowerKC, syminfo.mintick)
+compressionRatio = bbWidth / kcWidth
+compressionPressure = clamp(1.0 - compressionRatio, 0.0, 1.0)
+
+sqzOn = lowerBB > lowerKC and upperBB < upperKC
+sqzOff = lowerBB < lowerKC and upperBB > upperKC
+noSqz = not sqzOn and not sqzOff
+rawSqzRelease = sqzOn[1] and not sqzOn
+signalAllowed = not confirmedSignalsOnly or barstate.isconfirmed
+sqzRelease = rawSqzRelease and signalAllowed
+
+var int sqzBars = 0
+sqzBars := sqzOn ? nz(sqzBars[1]) + 1 : 0
+releaseSqzBars = sqzRelease ? nz(sqzBars[1]) : sqzBars
+
+var float maxSqzPressure = 0.0
+maxSqzPressure := sqzOn ? math.max(nz(maxSqzPressure[1]), compressionPressure) : 0.0
+releasePressure = sqzRelease ? nz(maxSqzPressure[1]) : sqzOn ? maxSqzPressure : compressionPressure
+
+idealSqzBarsEff = adaptLen(idealSqzBars, softLenScale)
+sqzClass = releaseSqzBars >= idealSqzBarsEff * 2 ? "EXTREME" :
+     releaseSqzBars >= idealSqzBarsEff ? "DEEP" :
+     releaseSqzBars >= math.max(3, math.round(idealSqzBarsEff * 0.5)) ? "STANDARD" :
+     releaseSqzBars > 0 ? "MICRO" : "-"
+
+// ============================================================================
+// MOMENTUM ENGINE
+// ============================================================================
+
+rangeMid = math.avg(ta.highest(high, momLenEff), ta.lowest(low, momLenEff))
+classicMean = math.avg(rangeMid, ta.sma(close, momLenEff))
+simpleMean = ta.sma(src, momLenEff)
+momBase = zeroMode == "Regression Mean" ? classicMean : simpleMean
+rawMomentum = ta.linreg(src - momBase, momLenEff, 0)
+momentum = smoothLen > 1 ? ta.ema(rawMomentum, smoothLen) : rawMomentum
+momentumUp = momentum > nz(momentum[1])
+momentumBull = momentum >= 0
+momDelta = momentum - nz(momentum[1])
+momAbsBase = ta.sma(math.abs(momentum), momNormLenEff)
+momStrength = momAbsBase > 0 ? clamp(math.abs(momentum) / momAbsBase, 0.0, 2.0) : 0.0
+momDirectional = momentumBull ? momDelta > 0 : momDelta < 0
+
+histColor = momentumBull ? momentumUp ? bullAccelColor : bullFadeColor : momentumUp ? bearFadeColor : bearAccelColor
+zeroColor = noSqz ? color.blue : sqzOn ? color.black : color.gray
+
+// ============================================================================
+// SECONDARY MOMENTUM REFERENCE
+// ============================================================================
+
+secondaryRangeMid = math.avg(ta.highest(high, secondaryMomLenEff), ta.lowest(low, secondaryMomLenEff))
+secondaryClassicMean = math.avg(secondaryRangeMid, ta.sma(close, secondaryMomLenEff))
+secondarySimpleMean = ta.sma(src, secondaryMomLenEff)
+secondaryMomBase = secondaryZeroMode == "Regression Mean" ? secondaryClassicMean : secondarySimpleMean
+secondaryRawMomentum = ta.linreg(src - secondaryMomBase, secondaryMomLenEff, 0)
+secondaryMomentumBase = secondarySmoothLen > 1 ? ta.ema(secondaryRawMomentum, secondarySmoothLen) : secondaryRawMomentum
+secondaryMomentum = secondaryMomentumBase * secondaryScale
+secondaryMomentumUp = secondaryMomentum > nz(secondaryMomentum[1])
+secondaryMomentumBull = secondaryMomentum >= 0
+secondaryHistColorRaw = secondaryMomentumBull ? secondaryMomentumUp ? secondaryBullAccelColor : secondaryBullFadeColor : secondaryMomentumUp ? secondaryBearFadeColor : secondaryBearAccelColor
+secondaryHistColor = color.new(secondaryHistColorRaw, 35)
+
+// ============================================================================
+// CONFIRMATION + SCORING ENGINE
+// ============================================================================
+
+trendAlpha = 2.0 / (trendLenEff + 1.0)
+var float trendEma = na
+trendEma := na(trendEma[1]) ? src : trendAlpha * src + (1.0 - trendAlpha) * trendEma[1]
+trendUp = close > trendEma and trendEma > nz(trendEma[1])
+trendDown = close < trendEma and trendEma < nz(trendEma[1])
+trendAligned = momentumBull ? trendUp : trendDown
+
+volAvg = ta.sma(volume, volLenEff)
+hasVolume = not na(volume) and volAvg > 0
+volumeConfirmed = hasVolume and volume >= volAvg * volMult
+
+atrValue = ta.atr(atrLen)
+atrAvg = ta.sma(atrValue, expansionLookbackEff)
+widthExpanding = bbWidth > nz(bbWidth[1])
+atrExpanding = atrAvg > 0 and atrValue > atrAvg
+releaseExpanding = widthExpanding and atrExpanding
+
+depthScore = releasePressure * 25.0
+durationScore = clamp(releaseSqzBars / idealSqzBarsEff, 0.0, 1.0) * 20.0
+momentumScore = clamp(momStrength / 1.5, 0.0, 1.0) * 20.0
+accelScore = momDirectional ? 10.0 : 0.0
+trendScore = not useTrendScore ? 10.0 : trendAligned ? 10.0 : 0.0
+volumeScore = not useVolumeScore ? 7.5 : volumeConfirmed ? 7.5 : 0.0
+expansionScore = not useExpansionScore ? 7.5 : releaseExpanding ? 7.5 : 0.0
+qualityScore = clamp(depthScore + durationScore + momentumScore + accelScore + trendScore + volumeScore + expansionScore, 0.0, 100.0)
+strongRelease = qualityScore >= minQuality
+aplusRelease = qualityScore >= aplusQuality
+
+// ============================================================================
+// HTF CONTEXT
+// ============================================================================
+
+htfMomentum = request.security(syminfo.tickerid, htfTf, f_momentum())
+htfSqzOn = request.security(syminfo.tickerid, htfTf, f_sqz_on())
+htfSqzRelease = request.security(syminfo.tickerid, htfTf, f_sqz_release())
+htfTrendUp = request.security(syminfo.tickerid, htfTf, f_htf_trend_up())
+htfTrendDown = request.security(syminfo.tickerid, htfTf, f_htf_trend_down())
+htfBull = htfMomentum >= 0
+
+// ============================================================================
+// SETUP + RISK ENGINE
+// ============================================================================
+
+rangeHigh = ta.highest(high, riskLookbackEff)
+rangeLow = ta.lowest(low, riskLookbackEff)
+rangeSpan = math.max(rangeHigh - rangeLow, syminfo.mintick)
+rangePosition = clamp((close - rangeLow) / rangeSpan, 0.0, 1.0)
+roomUpAtr = atrValue > 0 ? (rangeHigh - close) / atrValue : 0.0
+roomDownAtr = atrValue > 0 ? (close - rangeLow) / atrValue : 0.0
+longProjectedRr = stopAtrMult > 0 ? roomUpAtr / stopAtrMult : 0.0
+shortProjectedRr = stopAtrMult > 0 ? roomDownAtr / stopAtrMult : 0.0
+longRoomOk = roomUpAtr >= minRoomAtr and rangePosition < lateZone and longProjectedRr >= minProjectedRr
+shortRoomOk = roomDownAtr >= minRoomAtr and rangePosition > earlyZone and shortProjectedRr >= minProjectedRr
+
+recentHigh = ta.highest(high, breakoutLenEff)[1]
+recentLow = ta.lowest(low, breakoutLenEff)[1]
+bullStructureBreak = close > recentHigh
+bearStructureBreak = close < recentLow
+
+bullReleaseRaw = sqzRelease and momentum > 0
+bearReleaseRaw = sqzRelease and momentum < 0
+weakBullRelease = bullReleaseRaw and not strongRelease
+weakBearRelease = bearReleaseRaw and not strongRelease
+directionlessWeakRelease = sqzRelease and not bullReleaseRaw and not bearReleaseRaw
+
+htfLongAligned = not useHtf or (htfBull and (htfTrendUp or htfSqzRelease or htfSqzOn))
+htfShortAligned = not useHtf or (not htfBull and (htfTrendDown or htfSqzRelease or htfSqzOn))
+
+longExhausted = rangePosition >= lateZone or longProjectedRr < minProjectedRr
+shortExhausted = rangePosition <= earlyZone or shortProjectedRr < minProjectedRr
+
+longSetupType = longExhausted ? "EXHAUSTION" :
+     trendUp and htfLongAligned ? "TREND CONT" :
+     trendDown and momentumUp ? "REVERSAL" :
+     not htfLongAligned ? "FAKEOUT RISK" : "BULL RELEASE"
+
+shortSetupType = shortExhausted ? "EXHAUSTION" :
+     trendDown and htfShortAligned ? "TREND CONT" :
+     trendUp and not momentumUp ? "REVERSAL" :
+     not htfShortAligned ? "FAKEOUT RISK" : "BEAR RELEASE"
+
+// ============================================================================
+// ONE-SHOT ENTRY STATE MACHINE
+// ============================================================================
+
+var int pendingDir = 0
+var int pendingBars = 0
+var int pendingReleaseBar = na
+var int pendingSqzBars = 0
+var string pendingSqzClass = "-"
+var string pendingSetup = "-"
+var float pendingQuality = na
+var float pendingProjectedRr = na
+var string pendingScoreParts = "-"
+var string pendingScoreParts2 = "-"
+var bool pendingHtfAligned = false
+var bool pendingRiskOk = false
+var bool pendingEntryFired = false
+var bool pendingLateFired = false
+
+if bullReleaseRaw
+    pendingDir := 1
+    pendingBars := entryWindow
+    pendingReleaseBar := bar_index
+    pendingSqzBars := releaseSqzBars
+    pendingSqzClass := sqzClass
+    pendingSetup := longSetupType
+    pendingQuality := qualityScore
+    pendingProjectedRr := longProjectedRr
+    pendingScoreParts := "D" + str.tostring(depthScore, "#") + " T" + str.tostring(durationScore, "#") + " M" + str.tostring(momentumScore, "#")
+    pendingScoreParts2 := "A" + str.tostring(accelScore, "#") + " R" + str.tostring(trendScore, "#") + " V" + str.tostring(volumeScore, "#") + " X" + str.tostring(expansionScore, "#")
+    pendingHtfAligned := htfLongAligned
+    pendingRiskOk := longRoomOk
+    pendingEntryFired := false
+    pendingLateFired := false
+else if bearReleaseRaw
+    pendingDir := -1
+    pendingBars := entryWindow
+    pendingReleaseBar := bar_index
+    pendingSqzBars := releaseSqzBars
+    pendingSqzClass := sqzClass
+    pendingSetup := shortSetupType
+    pendingQuality := qualityScore
+    pendingProjectedRr := shortProjectedRr
+    pendingScoreParts := "D" + str.tostring(depthScore, "#") + " T" + str.tostring(durationScore, "#") + " M" + str.tostring(momentumScore, "#")
+    pendingScoreParts2 := "A" + str.tostring(accelScore, "#") + " R" + str.tostring(trendScore, "#") + " V" + str.tostring(volumeScore, "#") + " X" + str.tostring(expansionScore, "#")
+    pendingHtfAligned := htfShortAligned
+    pendingRiskOk := shortRoomOk
+    pendingEntryFired := false
+    pendingLateFired := false
+else if pendingBars > 0 and not pendingEntryFired
+    pendingBars := pendingBars - 1
+else if pendingBars <= 0 or pendingEntryFired
+    pendingDir := 0
+    pendingBars := 0
+    pendingReleaseBar := na
+    pendingSqzBars := 0
+    pendingSqzClass := "-"
+    pendingSetup := "-"
+    pendingQuality := na
+    pendingProjectedRr := na
+    pendingScoreParts := "-"
+    pendingScoreParts2 := "-"
+    pendingHtfAligned := false
+    pendingRiskOk := false
+    pendingEntryFired := false
+    pendingLateFired := false
+
+entryQuality = nz(pendingQuality, qualityScore)
+entryProjectedRr = nz(pendingProjectedRr, pendingDir == 1 ? longProjectedRr : shortProjectedRr)
+longEntryGate = pendingDir == 1 and pendingBars > 0 and (not requireEntryBreak or bullStructureBreak) and momentum > 0 and momentumUp
+shortEntryGate = pendingDir == -1 and pendingBars > 0 and (not requireEntryBreak or bearStructureBreak) and momentum < 0 and not momentumUp
+longRiskGate = not useRiskGate or pendingRiskOk
+shortRiskGate = not useRiskGate or pendingRiskOk
+longHtfGate = not requireHtfForEntry or pendingHtfAligned
+shortHtfGate = not requireHtfForEntry or pendingHtfAligned
+longEntryCandidate = signalAllowed and longEntryGate and entryQuality >= minQuality and longRiskGate and longHtfGate
+shortEntryCandidate = signalAllowed and shortEntryGate and entryQuality >= minQuality and shortRiskGate and shortHtfGate
+longEntryReady = longEntryCandidate and not pendingEntryFired
+shortEntryReady = shortEntryCandidate and not pendingEntryFired
+entryLateCandidate = pendingDir == 1 ? longExhausted : pendingDir == -1 ? shortExhausted : false
+entryLate = signalAllowed and pendingDir != 0 and entryLateCandidate and not pendingLateFired and not pendingEntryFired
+
+if longEntryReady or shortEntryReady
+    pendingEntryFired := true
+
+if entryLate
+    pendingLateFired := true
+
+entryState = longEntryReady or shortEntryReady ? "ENTRY READY" :
+     pendingDir != 0 and entryLateCandidate ? "ENTRY LATE" :
+     pendingDir != 0 ? "ARMED" : "WAIT"
+
+// ============================================================================
+// PLOTS
+// ============================================================================
+
+pressureScale = ta.highest(math.abs(momentum), math.max(momLenEff, kcLenEff))
+pressurePlot = showPressure ? compressionPressure * nz(pressureScale, 0.0) : na
+qualityPlot = showQualityLine ? ((qualityScore / 100.0) - 0.5) * nz(pressureScale, 0.0) : na
+
+plot(pressurePlot, "Compression Pressure", style=plot.style_area, color=color.new(color.orange, 86))
+plot(qualityPlot, "Quality Score", color=color.new(color.aqua, 0), linewidth=2)
+plot(showSecondaryHist ? secondaryMomentum : na, "Secondary Momentum", style=plot.style_histogram, linewidth=2, color=secondaryHistColor)
+plot(momentum, "Momentum", style=plot.style_histogram, linewidth=4, color=histColor)
+plot(0, "Squeeze State", style=plot.style_cross, linewidth=2, color=zeroColor)
+hline(0, "Zero", color=color.new(color.gray, 80))
+
+plotshape(showReleaseMarks and bullReleaseRaw and aplusRelease, "A+ Bullish Squeeze Release", shape.labelup, location.bottom,
+     color=color.new(color.lime, 0), textcolor=color.black, size=size.tiny, text="A+")
+plotshape(showReleaseMarks and bearReleaseRaw and aplusRelease, "A+ Bearish Squeeze Release", shape.labeldown, location.top,
+     color=color.new(color.red, 0), textcolor=color.white, size=size.tiny, text="A+")
+plotshape(showReleaseMarks and bullReleaseRaw and strongRelease and not aplusRelease, "Bullish Squeeze Release", shape.triangleup, location.bottom,
+     color=color.new(color.lime, 0), size=size.tiny, text="SQZ")
+plotshape(showReleaseMarks and bearReleaseRaw and strongRelease and not aplusRelease, "Bearish Squeeze Release", shape.triangledown, location.top,
+     color=color.new(color.red, 0), size=size.tiny, text="SQZ")
+plotshape(showReleaseMarks and showWeakReleaseMarks and weakBullRelease, "Weak Bullish Squeeze Release", shape.triangleup, location.bottom,
+     color=color.new(color.yellow, 0), size=size.tiny, text="SQZ?")
+plotshape(showReleaseMarks and showWeakReleaseMarks and weakBearRelease, "Weak Bearish Squeeze Release", shape.triangledown, location.top,
+     color=color.new(color.orange, 0), size=size.tiny, text="SQZ?")
+plotshape(showWeakReleaseMarks and directionlessWeakRelease, "Weak Directionless Squeeze Release", shape.xcross, location.top,
+     color=color.new(color.yellow, 0), size=size.tiny)
+plotshape(showEntryMarks and longEntryReady, "Long Entry Ready", shape.labelup, location.bottom,
+     color=color.new(color.aqua, 0), textcolor=color.black, size=size.tiny, text="GO")
+plotshape(showEntryMarks and shortEntryReady, "Short Entry Ready", shape.labeldown, location.top,
+     color=color.new(color.fuchsia, 0), textcolor=color.white, size=size.tiny, text="GO")
+plotshape(showZeroCrossMarks and ta.crossover(momentum, 0), "Bullish Momentum Cross", shape.circle, location.bottom,
+     color=color.new(color.aqua, 0), size=size.tiny)
+plotshape(showZeroCrossMarks and ta.crossunder(momentum, 0), "Bearish Momentum Cross", shape.circle, location.top,
+     color=color.new(color.fuchsia, 0), size=size.tiny)
+
+// ============================================================================
+// STATUS TABLE
+// ============================================================================
+
+var table statusTable = table.new(position.top_right, 2, 17, border_width=1)
+
+if barstate.islast and showTable
+    stateText = sqzOn ? "SQUEEZE ON" : sqzOff ? "RELEASED" : "NEUTRAL"
+    activeQuality = pendingDir != 0 and not na(pendingQuality) ? pendingQuality : qualityScore
+    setupText = pendingDir != 0 ? pendingSetup : bullReleaseRaw ? longSetupType : bearReleaseRaw ? shortSetupType : "-"
+    htfText = not useHtf ? "OFF" : htfBull ? htfSqzOn ? "BULL SQZ" : "BULL" : htfSqzOn ? "BEAR SQZ" : "BEAR"
+    riskText = pendingDir == 1 ? pendingRiskOk ? "OK" : "LATE" : pendingDir == -1 ? pendingRiskOk ? "OK" : "LATE" : "-"
+    trendText = not useTrendScore ? "OFF" : trendAligned ? "ALIGNED" : "CONFLICT"
+    volumeText = not useVolumeScore ? "OFF" : volumeConfirmed ? "CONFIRMED" : hasVolume ? "WEAK" : "N/A"
+    lengthText = "B" + str.tostring(bbLenEff) + " K" + str.tostring(kcLenEff) + " M" + str.tostring(momLenEff)
+    scaleText = lengthMode + " T" + str.tostring(tfScale, "#.00") + " A" + str.tostring(atrScale, "#.00")
+    secondaryText = secondaryLengthMode + " M" + str.tostring(secondaryMomLenEff)
+    scoreParts = pendingDir != 0 ? pendingScoreParts : "D" + str.tostring(depthScore, "#") + " T" + str.tostring(durationScore, "#") + " M" + str.tostring(momentumScore, "#")
+    scoreParts2 = pendingDir != 0 ? pendingScoreParts2 : "A" + str.tostring(accelScore, "#") + " R" + str.tostring(trendScore, "#") + " V" + str.tostring(volumeScore, "#") + " X" + str.tostring(expansionScore, "#")
+    rrText = pendingDir != 0 ? str.tostring(entryProjectedRr, "#.00") : "-"
+    ageText = pendingDir != 0 and not na(pendingReleaseBar) ? str.tostring(bar_index - pendingReleaseBar) + " / " + str.tostring(pendingBars) : "-"
+    durationText = pendingDir != 0 ? str.tostring(pendingSqzBars) + " / " + pendingSqzClass + " | " + ageText : str.tostring(releaseSqzBars) + " / " + sqzClass
+    stateBg = sqzOn ? color.new(color.black, 0) : sqzOff ? color.new(color.gray, 15) : color.new(color.blue, 20)
+    entryBg = entryState == "ENTRY READY" ? color.new(color.lime, 10) :
+         entryState == "ENTRY LATE" ? color.new(color.red, 25) :
+         entryState == "ARMED" ? color.new(color.orange, 25) : color.new(color.gray, 35)
+    trendBg = not useTrendScore ? color.new(color.gray, 35) : trendAligned ? color.new(color.green, 25) : color.new(color.red, 30)
+    riskBg = riskText == "OK" ? color.new(color.green, 25) : riskText == "LATE" ? color.new(color.red, 30) : color.new(color.gray, 35)
+
+    table.cell(statusTable, 0, 0, "Profile", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 0, profile, text_color=color.white, bgcolor=color.new(color.gray, 35))
+    table.cell(statusTable, 0, 1, "State", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 1, stateText, text_color=color.white, bgcolor=stateBg)
+    table.cell(statusTable, 0, 2, "Setup", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 2, setupText, text_color=color.white, bgcolor=color.new(color.gray, 35))
+    table.cell(statusTable, 0, 3, "Signal", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 3, entryState, text_color=color.white, bgcolor=entryBg)
+    table.cell(statusTable, 0, 4, "Quality", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 4, str.tostring(activeQuality, "#.0") + " / " + gradeFromScore(activeQuality), text_color=color.white, bgcolor=scoreBg(activeQuality, minQuality, aplusQuality))
+    table.cell(statusTable, 0, 5, "Score 1", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 5, scoreParts, text_color=color.white, bgcolor=color.new(color.gray, 35))
+    table.cell(statusTable, 0, 6, "Score 2", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 6, scoreParts2, text_color=color.white, bgcolor=color.new(color.gray, 35))
+    table.cell(statusTable, 0, 7, "Duration", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 7, durationText, text_color=color.white, bgcolor=color.new(color.gray, 35))
+    table.cell(statusTable, 0, 8, "HTF", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 8, htfText, text_color=color.white, bgcolor=useHtf ? color.new(color.blue, 25) : color.new(color.gray, 35))
+    table.cell(statusTable, 0, 9, "Risk", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 9, riskText, text_color=color.white, bgcolor=riskBg)
+    table.cell(statusTable, 0, 10, "Proj R:R", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 10, rrText, text_color=color.white, bgcolor=pendingDir != 0 and entryProjectedRr >= minProjectedRr ? color.new(color.green, 25) : color.new(color.gray, 35))
+    table.cell(statusTable, 0, 11, "Trend", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 11, trendText, text_color=color.white, bgcolor=trendBg)
+    table.cell(statusTable, 0, 12, "Volume", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 12, volumeText, text_color=color.white, bgcolor=volumeConfirmed ? color.new(color.green, 25) : color.new(color.gray, 35))
+    table.cell(statusTable, 0, 13, "Expansion", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 13, releaseExpanding ? "EXPANDING" : "QUIET", text_color=color.white, bgcolor=releaseExpanding ? color.new(color.green, 25) : color.new(color.gray, 35))
+    table.cell(statusTable, 0, 14, "Len Mode", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 14, scaleText, text_color=color.white, bgcolor=color.new(color.gray, 35))
+    table.cell(statusTable, 0, 15, "Lengths", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 15, lengthText, text_color=color.white, bgcolor=color.new(color.gray, 35))
+    table.cell(statusTable, 0, 16, "Second", text_color=color.white, bgcolor=color.new(color.gray, 65))
+    table.cell(statusTable, 1, 16, secondaryText, text_color=color.white, bgcolor=showSecondaryHist ? color.new(color.purple, 35) : color.new(color.gray, 35))
+
+if barstate.islast and not showTable
+    table.clear(statusTable, 0, 0, 1, 16)
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+alertcondition(sqzOn and not sqzOn[1] and signalAllowed, "IRUNTV Pro Squeeze Started", "Squeeze compression started on {{ticker}} {{interval}}.")
+alertcondition(bullReleaseRaw and strongRelease, "IRUNTV Pro Bullish Squeeze Release", "Bullish quality squeeze release on {{ticker}} {{interval}}.")
+alertcondition(bearReleaseRaw and strongRelease, "IRUNTV Pro Bearish Squeeze Release", "Bearish quality squeeze release on {{ticker}} {{interval}}.")
+alertcondition(bullReleaseRaw and aplusRelease, "IRUNTV Pro A+ Bullish Release", "A+ bullish squeeze release on {{ticker}} {{interval}}.")
+alertcondition(bearReleaseRaw and aplusRelease, "IRUNTV Pro A+ Bearish Release", "A+ bearish squeeze release on {{ticker}} {{interval}}.")
+alertcondition(longEntryReady, "IRUNTV Pro Long Entry Ready", "Long entry ready after squeeze release on {{ticker}} {{interval}}.")
+alertcondition(shortEntryReady, "IRUNTV Pro Short Entry Ready", "Short entry ready after squeeze release on {{ticker}} {{interval}}.")
+alertcondition(longEntryReady and pendingSetup == "TREND CONT", "IRUNTV Pro Trend Continuation Long", "Trend continuation long squeeze setup on {{ticker}} {{interval}}.")
+alertcondition(shortEntryReady and pendingSetup == "TREND CONT", "IRUNTV Pro Trend Continuation Short", "Trend continuation short squeeze setup on {{ticker}} {{interval}}.")
+alertcondition(longEntryReady and pendingSetup == "REVERSAL", "IRUNTV Pro Reversal Long", "Reversal long squeeze setup on {{ticker}} {{interval}}.")
+alertcondition(shortEntryReady and pendingSetup == "REVERSAL", "IRUNTV Pro Reversal Short", "Reversal short squeeze setup on {{ticker}} {{interval}}.")
+alertcondition(entryLate, "IRUNTV Pro Entry Late Warning", "Squeeze setup is late or has poor room on {{ticker}} {{interval}}.")

@@ -1,0 +1,14 @@
+;+------------------------------------------------------------------+
+;|                                             XAUUSD_Shadow.set    |
+;| QuantBeast EA - Shadow Mode Preset                               |
+;| Full simulation, no live orders. Use for validation.             |
+;+------------------------------------------------------------------+
+InpMode=1
+InpAcknowledgeChallengeRisk=false
+InpMaxSpreadPoints=50
+InpDashboardEnabled=true
+InpEnableDebugLogging=false
+InpEnableSignalJournal=true
+InpEnableOrderJournal=true
+InpEnableTradeJournal=true
+InpSelfTestOnInit=true

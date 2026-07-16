@@ -1,0 +1,512 @@
+//+------------------------------------------------------------------+
+//|                                                HarmonicPatterns.mq5 |
+//|                              Advanced Harmonic Pattern Detector    |
+//|                                   Ported from Pine → MQL5 (v1.00) |
+//+------------------------------------------------------------------+
+#property copyright   "Ported from TradingView Pine Script — IRUNTV"
+#property version     "1.01"
+#property description ":: Harmonic Pattern Detector ::"
+#property description "Detects Gartley, Bat, Butterfly, Crab, Shark"
+#property description "with PRZ zones and full leg drawing."
+#property description "v1.01: Clean compile, 0 warnings"
+
+#property indicator_chart_window
+#property indicator_buffers 2
+#property indicator_plots   2
+
+#property indicator_label1  "Bullish Pattern"
+#property indicator_type1   DRAW_ARROW
+#property indicator_color1  clrLime
+#property indicator_width1  3
+
+#property indicator_label2  "Bearish Pattern"
+#property indicator_type2   DRAW_ARROW
+#property indicator_color2  clrRed
+#property indicator_width2  3
+
+// ── INPUTS ───────────────────────────────────────────────────────────────────
+input group                        "═══ ZigZag Settings ═══"
+input int                          InpZZDepth     = 12;                 // ZigZag Depth
+input int                          InpZZDeviation = 5;                  // ZigZag Deviation
+input int                          InpZZBackstep  = 3;                  // ZigZag Backstep
+
+input group                        "═══ Pattern Detection ═══"
+input double                       InpTolerance   = 0.05;               // Ratio Tolerance (e.g., 0.05 = ±5%)
+input int                          InpMaxLegBars  = 200;                // Max Leg Bars
+input int                          InpMinLegBars  = 3;                  // Min Leg Bars
+
+input group                        "═══ Pattern Selection ═══"
+input bool                         InpGartley      = true;              // Detect Gartley
+input bool                         InpBat          = true;              // Detect Bat
+input bool                         InpButterfly    = true;              // Detect Butterfly
+input bool                         InpCrab         = true;              // Detect Crab
+input bool                         InpShark        = true;              // Detect Shark
+
+input group                        "═══ Visuals ═══"
+input bool                         InpShowLegs     = true;              // Show Pattern Legs
+input bool                         InpShowPRZ      = true;              // Show PRZ Zone
+input bool                         InpShowLabels   = true;              // Show Labels
+input color                        InpBullColor    = clrLime;            // Bullish Color
+input color                        InpBearColor    = clrRed;             // Bearish Color
+input int                          InpLineWidth    = 2;                  // Line Width
+input ENUM_LINE_STYLE              InpLineStyle    = STYLE_SOLID;        // Line Style
+
+// ── Buffers ─────────────────────────────────────────────────────────────────
+double g_bullBuf[];     // Bullish signal buffer
+double g_bearBuf[];     // Bearish signal buffer
+
+// ── ZigZag handle ───────────────────────────────────────────────────────────
+int g_zzHandle = INVALID_HANDLE;
+
+// ── Object prefix for cleanup ───────────────────────────────────────────────
+string g_prefix = "HP_";
+
+//+------------------------------------------------------------------+
+//| Custom indicator initialization function                         |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   // Set buffers as EMPTY_VALUE initially
+   ArrayInitialize(g_bullBuf, EMPTY_VALUE);
+   ArrayInitialize(g_bearBuf, EMPTY_VALUE);
+   
+   // Create ZigZag indicator handle
+   g_zzHandle = iCustom(_Symbol, _Period, "Examples\\ZigZag",
+                         InpZZDepth, InpZZDeviation, InpZZBackstep);
+   if(g_zzHandle == INVALID_HANDLE)
+   {
+      Print("HarmonicPatterns: Failed to create ZigZag handle. Trying built-in ZigZag...");
+      // Fallback: try the built-in ZigZag name
+      g_zzHandle = iCustom(_Symbol, _Period, "ZigZag",
+                            InpZZDepth, InpZZDeviation, InpZZBackstep);
+      if(g_zzHandle == INVALID_HANDLE)
+      {
+         Print("HarmonicPatterns: ZigZag not available. Using manual pivot detection.");
+      }
+   }
+   
+   // Clean up any leftover objects from previous run
+   CleanupObjects();
+   
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Custom indicator deinitialization function                       |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   if(g_zzHandle != INVALID_HANDLE)
+      IndicatorRelease(g_zzHandle);
+   CleanupObjects();
+}
+
+//+------------------------------------------------------------------+
+//| Clean up all pattern objects                                     |
+//+------------------------------------------------------------------+
+void CleanupObjects()
+{
+   int total = ObjectsTotal(0, 0, -1);
+   for(int i = total - 1; i >= 0; i--)
+   {
+      string name = ObjectName(0, i, 0, -1);
+      if(StringFind(name, g_prefix) == 0)
+         ObjectDelete(0, name);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Custom indicator iteration function                              |
+//+------------------------------------------------------------------+
+int OnCalculate(const int rates_total,
+                const int prev_calculated,
+                const datetime &time[],
+                const double &open[],
+                const double &high[],
+                const double &low[],
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[])
+{
+   if(rates_total < InpZZDepth + InpMaxLegBars) return(0);
+   
+   // Get ZigZag values
+   double zzBuf[];
+   ArraySetAsSeries(zzBuf, true);
+   
+   if(g_zzHandle != INVALID_HANDLE)
+   {
+      if(CopyBuffer(g_zzHandle, 0, 0, rates_total, zzBuf) <= 0)
+      {
+         // ZigZag failed, fall back to manual pivot detection
+         ArrayFree(zzBuf);
+      }
+   }
+   
+   // Find last 5 swing points (ZigZag or manual)
+   int swingCount = 0;
+   double swingPrice[5];
+   datetime swingTime[5];
+   
+   if(ArraySize(zzBuf) > 0)
+   {
+      // Use ZigZag buffer — scan from most recent bar
+      int lookback = MathMin(rates_total, InpMaxLegBars * 5 + InpZZDepth + 10);
+      double prevVal = 0;
+      
+      for(int i = 2; i < lookback && swingCount < 5; i++)
+      {
+         double val = zzBuf[i];
+         if(val != 0 && val != prevVal)
+         {
+            swingPrice[swingCount] = val;
+            swingTime[swingCount] = time[rates_total - 1 - i];
+            swingCount++;
+            prevVal = val;
+         }
+      }
+   }
+   
+   // If ZigZag failed or didn't find enough points, use manual pivots
+   if(swingCount < 5)
+   {
+      swingCount = 0;
+      ArrayResize(swingPrice, 5);
+      ArrayResize(swingTime, 5);
+      
+      FindManualSwingPoints(rates_total, time, high, low, swingPrice, swingTime, swingCount);
+   }
+   
+   if(swingCount < 5) return(rates_total);
+   
+   // Last 5 points: most recent = D (0), then C (1), B (2), A (3), X (4)
+   double X = swingPrice[4], A = swingPrice[3], B = swingPrice[2], 
+          C = swingPrice[1], D = swingPrice[0];
+   datetime tX = swingTime[4], tA = swingTime[3], tB = swingTime[2],
+            tC = swingTime[1], tD = swingTime[0];
+   
+   // Validate zigzag pattern: X→A→B→C→D alternating
+   bool isBullishPattern = (X < A && A > B && B < C && C > D);
+   bool isBearishPattern = (X > A && A < B && B > C && C < D);
+   
+   // Check bullish patterns
+   if(isBullishPattern)
+      CheckAndDrawPattern(X, A, B, C, D, tX, tA, tB, tC, tD, true, rates_total, time);
+   
+   // Check bearish patterns
+   if(isBearishPattern)
+      CheckAndDrawPattern(X, A, B, C, D, tX, tA, tB, tC, tD, false, rates_total, time);
+   
+   return(rates_total);
+}
+
+//+------------------------------------------------------------------+
+//| Manual pivot detection (fallback)                                |
+//+------------------------------------------------------------------+
+void FindManualSwingPoints(int total,
+                           const datetime &timeArr[],
+                           const double &h[],
+                           const double &l[],
+                           double &price[],
+                           datetime &t[],
+                           int &count)
+{
+   int lookback = MathMin(total - 2, InpMaxLegBars * 5 + InpZZDepth + 10);
+   
+   // Skip very recent bars to avoid repainting
+   int startSearch = InpMinLegBars;
+   
+   double highs[5];
+   double lows[5];
+   datetime tHighs[5], tLows[5];
+   int iHighs[5], iLows[5];
+   int hCount = 0, lCount = 0;
+   
+   // Collect recent pivot highs and lows
+   for(int i = startSearch; i < lookback && (hCount < 3 || lCount < 3); i++)
+   {
+      if(IsPivotHigh(h, InpZZDepth, i, total))
+      {
+         if(hCount < 5)
+         {
+            highs[hCount] = h[i];
+            tHighs[hCount] = timeArr[i];
+            iHighs[hCount] = i;
+            hCount++;
+         }
+      }
+      if(IsPivotLow(l, InpZZDepth, i, total))
+      {
+         if(lCount < 5)
+         {
+            lows[lCount] = l[i];
+            tLows[lCount] = timeArr[i];
+            iLows[lCount] = i;
+            lCount++;
+         }
+      }
+   }
+   
+   // Merge highs and lows in time order to get alternating swings
+   
+   // Add all found pivots to candidates array
+   PivCandidate candidates[];
+   
+   // Add all found pivots
+   for(int i = 0; i < hCount; i++)
+   {
+      int sz = ArraySize(candidates);
+      ArrayResize(candidates, sz + 1);
+      candidates[sz].isHigh = true;
+      candidates[sz].price = highs[i];
+      candidates[sz].time = tHighs[i];
+      candidates[sz].idx = iHighs[i];
+   }
+   for(int i = 0; i < lCount; i++)
+   {
+      int sz = ArraySize(candidates);
+      ArrayResize(candidates, sz + 1);
+      candidates[sz].isHigh = false;
+      candidates[sz].price = lows[i];
+      candidates[sz].time = tLows[i];
+      candidates[sz].idx = iLows[i];
+   }
+   
+   // Sort by index descending (most recent first)
+   SortCandidates(candidates);
+   
+   // Take alternating pivots
+   bool expectHigh = candidates[0].isHigh;
+   count = 0;
+   for(int i = 0; i < ArraySize(candidates) && count < 5; i++)
+   {
+      if(candidates[i].isHigh == expectHigh)
+      {
+         price[count] = candidates[i].price;
+         t[count] = candidates[i].time;
+         count++;
+         expectHigh = !expectHigh;
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Pivot candidate structure (manual fallback)                      |
+//+------------------------------------------------------------------+
+struct PivCandidate
+{
+   bool isHigh;
+   double price;
+   datetime time;
+   int idx;
+};
+
+//+------------------------------------------------------------------+
+//| Sort candidates by index descending (most recent first)          |
+//+------------------------------------------------------------------+
+void SortCandidates(PivCandidate &arr[])
+{
+   int n = ArraySize(arr);
+   for(int i = 0; i < n - 1; i++)
+   {
+      for(int j = 0; j < n - i - 1; j++)
+      {
+         if(arr[j].idx < arr[j+1].idx)
+         {
+            PivCandidate tmp = arr[j];
+            arr[j] = arr[j+1];
+            arr[j+1] = tmp;
+         }
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Check if bar is a pivot high                                     |
+//+------------------------------------------------------------------+
+bool IsPivotHigh(const double &h[], int lr, int idx, int total)
+{
+   if(idx - lr < 0 || idx + lr >= total) return false;
+   double v = h[idx];
+   for(int i = idx - lr; i < idx; i++)
+      if(h[i] > v) return false;
+   for(int i = idx + 1; i <= idx + lr; i++)
+      if(h[i] >= v) return false;
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| Check if bar is a pivot low                                      |
+//+------------------------------------------------------------------+
+bool IsPivotLow(const double &l[], int lr, int idx, int total)
+{
+   if(idx - lr < 0 || idx + lr >= total) return false;
+   double v = l[idx];
+   for(int i = idx - lr; i < idx; i++)
+      if(l[i] < v) return false;
+   for(int i = idx + 1; i <= idx + lr; i++)
+      if(l[i] <= v) return false;
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| Check Fibonacci ratios and draw pattern                          |
+//+------------------------------------------------------------------+
+void CheckAndDrawPattern(double X, double A, double B, double C, double D,
+                         datetime tX, datetime tA, datetime tB, datetime tC, datetime tD,
+                         bool isBullish,
+                         int rates_total,
+                         const datetime &time[])
+{
+   double XA = MathAbs(A - X);
+   double AB = MathAbs(B - A);
+   double BC = MathAbs(C - B);
+   double CD = MathAbs(D - C);
+   
+   if(XA == 0 || AB == 0 || BC == 0) return;
+   
+   double AB_XA  = AB / XA;
+   double BC_AB  = BC / AB;
+   double CD_BC  = CD / BC;
+   
+   string patternName = "";
+   color patColor = isBullish ? InpBullColor : InpBearColor;
+   
+   // ── Pattern definitions ──────────────────────────────────────────────
+   if(InpGartley && IsRatio(0.618, AB_XA) && IsRatio(0.382, BC_AB) && 
+      (IsRatio(0.786, CD_BC) || IsRatio(1.272, CD_BC)))
+   {
+      patternName = (isBullish ? "Bullish" : "Bearish") + " Gartley";
+   }
+   else if(InpBat && IsRatio(0.382, AB_XA) && IsRatio(0.382, BC_AB) && 
+           (IsRatio(0.886, CD_BC) || IsRatio(1.13, CD_BC)))
+   {
+      patternName = (isBullish ? "Bullish" : "Bearish") + " Bat";
+   }
+   else if(InpButterfly && IsRatio(0.786, AB_XA) && IsRatio(0.382, BC_AB) && 
+           (IsRatio(1.618, CD_BC) || IsRatio(2.618, CD_BC)))
+   {
+      patternName = (isBullish ? "Bullish" : "Bearish") + " Butterfly";
+   }
+   else if(InpCrab && IsRatio(0.382, AB_XA) && IsRatio(0.618, BC_AB) && 
+           (IsRatio(2.618, CD_BC) || IsRatio(3.618, CD_BC)))
+   {
+      patternName = (isBullish ? "Bullish" : "Bearish") + " Crab";
+   }
+   else if(InpShark && IsRatio(0.886, AB_XA) && IsRatio(0.382, BC_AB) && 
+           (IsRatio(1.13, CD_BC) || IsRatio(1.618, CD_BC)))
+   {
+      patternName = (isBullish ? "Bullish" : "Bearish") + " Shark";
+   }
+   
+   if(patternName == "") return;
+   
+   // ── Draw the pattern ─────────────────────────────────────────────────
+   string suffix = "_" + IntegerToString(TimeCurrent()) + "_" + 
+                   IntegerToString(MathRand());
+   
+   if(InpShowLegs)
+   {
+      // X→A leg
+      DrawTrendLine(g_prefix + "XA" + suffix, tX, X, tA, A, patColor, InpLineWidth, InpLineStyle);
+      // A→B leg
+      DrawTrendLine(g_prefix + "AB" + suffix, tA, A, tB, B, patColor, InpLineWidth, InpLineStyle);
+      // B→C leg
+      DrawTrendLine(g_prefix + "BC" + suffix, tB, B, tC, C, patColor, InpLineWidth, InpLineStyle);
+      // C→D leg
+      DrawTrendLine(g_prefix + "CD" + suffix, tC, C, tD, D, patColor, InpLineWidth, InpLineStyle);
+   }
+   
+   // ── PRZ Zone ─────────────────────────────────────────────────────────
+   if(InpShowPRZ)
+   {
+      double przTop, przBot;
+      if(isBullish)
+      {
+         przBot = D - CD * 0.382;
+         przTop = D + CD * 0.236;
+      }
+      else
+      {
+         przTop = D + CD * 0.382;
+         przBot = D - CD * 0.236;
+      }
+      
+      // Draw PRZ rectangle extending forward
+      datetime przEnd = time[rates_total - 1] + (time[rates_total - 1] - time[rates_total - 2]) * 30;
+      
+      ObjectCreate(0, g_prefix + "PRZ" + suffix, OBJ_RECTANGLE, 0, tD, przTop, przEnd, przBot);
+      ObjectSetInteger(0, g_prefix + "PRZ" + suffix, OBJPROP_COLOR, patColor);
+      ObjectSetInteger(0, g_prefix + "PRZ" + suffix, OBJPROP_STYLE, STYLE_DOT);
+      ObjectSetInteger(0, g_prefix + "PRZ" + suffix, OBJPROP_WIDTH, 1);
+      ObjectSetInteger(0, g_prefix + "PRZ" + suffix, OBJPROP_FILL, true);
+      ObjectSetInteger(0, g_prefix + "PRZ" + suffix, OBJPROP_BACK, true);
+      
+      // D-level horizontal line
+      ObjectCreate(0, g_prefix + "D_LEVEL" + suffix, OBJ_HLINE, 0, 0, D);
+      ObjectSetInteger(0, g_prefix + "D_LEVEL" + suffix, OBJPROP_COLOR, patColor);
+      ObjectSetInteger(0, g_prefix + "D_LEVEL" + suffix, OBJPROP_STYLE, STYLE_DOT);
+      ObjectSetInteger(0, g_prefix + "D_LEVEL" + suffix, OBJPROP_WIDTH, 1);
+   }
+   
+   // ── Arrow at D point ─────────────────────────────────────────────────
+   if(isBullish)
+   {
+      // Place bull arrow slightly above D
+      ObjectCreate(0, g_prefix + "ARR" + suffix, OBJ_ARROW_BUY, 0, tD, D);
+      ObjectSetInteger(0, g_prefix + "ARR" + suffix, OBJPROP_COLOR, InpBullColor);
+   }
+   else
+   {
+      // Place bear arrow slightly below D
+      ObjectCreate(0, g_prefix + "ARR" + suffix, OBJ_ARROW_SELL, 0, tD, D);
+      ObjectSetInteger(0, g_prefix + "ARR" + suffix, OBJPROP_COLOR, InpBearColor);
+   }
+   
+   // ── Label ─────────────────────────────────────────────────────────────
+   if(InpShowLabels)
+   {
+      double labelY = isBullish ? D - CD * 0.15 : D + CD * 0.15;
+      ObjectCreate(0, g_prefix + "LBL" + suffix, OBJ_TEXT, 0, tD, labelY);
+      ObjectSetString(0, g_prefix + "LBL" + suffix, OBJPROP_TEXT, patternName);
+      ObjectSetInteger(0, g_prefix + "LBL" + suffix, OBJPROP_COLOR, patColor);
+      ObjectSetInteger(0, g_prefix + "LBL" + suffix, OBJPROP_FONTSIZE, 10);
+      ObjectSetInteger(0, g_prefix + "LBL" + suffix, OBJPROP_ANCHOR, ANCHOR_CENTER);
+      ObjectSetString(0, g_prefix + "LBL" + suffix, OBJPROP_FONT, "Arial");
+   }
+   
+   // ── Log ───────────────────────────────────────────────────────────────
+   Print("HarmonicPatterns: ", patternName, 
+         " | XA=", DoubleToString(AB_XA, 4),
+         " AB=", DoubleToString(BC_AB, 4), 
+         " CD=", DoubleToString(CD_BC, 4),
+         " | D=", DoubleToString(D, _Digits));
+}
+
+//+------------------------------------------------------------------+
+//| Draw a trend line object                                         |
+//+------------------------------------------------------------------+
+void DrawTrendLine(string name, datetime t1, double p1, datetime t2, double p2,
+                   color clr, int width, ENUM_LINE_STYLE style)
+{
+   if(ObjectFind(0, name) >= 0)
+      ObjectDelete(0, name);
+   
+   ObjectCreate(0, name, OBJ_TREND, 0, t1, p1, t2, p2);
+   ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
+   ObjectSetInteger(0, name, OBJPROP_WIDTH, width);
+   ObjectSetInteger(0, name, OBJPROP_STYLE, style);
+   ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, false);
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, name, OBJPROP_BACK, true);
+}
+
+//+------------------------------------------------------------------+
+//| Tolerance check: is actual close enough to expected ratio?       |
+//+------------------------------------------------------------------+
+bool IsRatio(double expected, double actual)
+{
+   if(expected == 0) return false;
+   return MathAbs(actual / expected - 1.0) <= InpTolerance;
+}
