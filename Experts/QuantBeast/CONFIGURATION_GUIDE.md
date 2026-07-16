@@ -4,7 +4,7 @@
 **Safety default:** Shadow mode.  
 **Live-use status:** Not approved.
 
-**Latest evidence:** 2026-07-16 Shadow regression `43 passed, 0 failed`; organic true-tick CSV proof exists under `TestEvidence/organic_true_ticks_20260716/`, live-mode strategy/execution gates are covered under `TestEvidence/live_strategy_gate_20260716/`, live recovery no-passive-flatten gating is covered under `TestEvidence/live_recovery_gate_20260716/`, unknown-position no-adoption behavior is covered under `TestEvidence/unknown_position_unmanaged_20260716/`, and alert-routing behavior is covered under `TestEvidence/alert_routing_20260716/`.
+**Latest evidence:** 2026-07-16 Shadow regression `45 passed, 0 failed`; organic true-tick CSV proof exists under `TestEvidence/organic_true_ticks_20260716/`, live-mode strategy/execution gates are covered under `TestEvidence/live_strategy_gate_20260716/`, live recovery no-passive-flatten gating is covered under `TestEvidence/live_recovery_gate_20260716/`, unknown-position no-adoption behavior is covered under `TestEvidence/unknown_position_unmanaged_20260716/`, alert-routing behavior is covered under `TestEvidence/alert_routing_20260716/`, entry preflight controls are covered under `TestEvidence/entry_preflight_controls_20260716/`, and session-exit policy is covered under `TestEvidence/session_exit_policy_20260716/`.
 
 ## Loading presets
 
@@ -55,8 +55,8 @@ Operator requirements:
 | `InpRequireDataQuality` | Active during startup. |
 | `InpCheckBarSequence` | Passed into startup checks. |
 | `InpMinBarsRequired` | Passed into startup checks. |
-| `InpMaxPriceJumpPoints` | Declared but unused. |
-| `InpBarWarmup` | Declared but unused. |
+| `InpMaxPriceJumpPoints` | Active entry preflight gate; abnormal tick jumps over this threshold block entries for that tick. |
+| `InpBarWarmup` | Active entry preflight gate; entries are blocked until the primary timeframe has at least this many bars. |
 
 ## Regime engine
 
@@ -124,7 +124,7 @@ Stage targets and risk percentages, stage drawdown, attempts, profit-lock percen
 
 ## Position management
 
-Breakeven, partial close, ATR trail, and time stop are wired. Stop modifications cannot loosen risk and post-fill SL/TP protection is verified with a fail-closed exit. `InpCloseBeforeSessionEnd` and `InpCloseBeforeRollover` remain incomplete, as do swing/chandelier, news, momentum-failure, and regime-deterioration exits.
+Breakeven, partial close, ATR trail, time stop, and close-before-session/rollover policy are wired. Stop modifications cannot loosen risk and post-fill SL/TP protection is verified with a fail-closed exit. Shadow session exits close with `EXIT_SESSION_END`; live session exits use the existing bounded flatten path only when explicitly live modes and operator-enabled inputs are active. Swing/chandelier, news, momentum-failure, and regime-deterioration exits remain incomplete.
 
 ## News lockout
 

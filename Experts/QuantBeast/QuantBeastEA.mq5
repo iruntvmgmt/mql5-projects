@@ -192,6 +192,68 @@ void EmitConfiguredAlert(bool enabled, const string message)
    g_Alerts.SendIfEnabled(enabled, message);
 }
 
+bool QBSessionExitPolicyTriggered(bool closeBeforeSessionEnd,
+                                  bool closeBeforeRollover,
+                                  ENUM_SESSION_TYPE session,
+                                  int minutesToSessionEnd,
+                                  string &reason)
+{
+   if(closeBeforeRollover &&
+      (session == SESSION_ROLLOVER || session == SESSION_FRIDAY_CLOSE ||
+       (session == SESSION_NY_AFTERNOON && minutesToSessionEnd <= 1)))
+   {
+      reason = "Close before rollover/market close";
+      return true;
+   }
+
+   if(closeBeforeSessionEnd &&
+      session != SESSION_UNKNOWN && session != SESSION_WEEKEND &&
+      session != SESSION_ROLLOVER && session != SESSION_FRIDAY_CLOSE &&
+      minutesToSessionEnd >= 0 && minutesToSessionEnd <= 1)
+   {
+      reason = "Close before session end";
+      return true;
+   }
+
+   reason = "";
+   return false;
+}
+
+bool ProcessSessionExitPolicy()
+{
+   string reason = "";
+   if(!QBSessionExitPolicyTriggered(InpCloseBeforeSessionEnd,
+                                    InpCloseBeforeRollover,
+                                    g_SessionEngine.GetCurrentSession(),
+                                    g_SessionEngine.GetMinutesToSessionEnd(),
+                                    reason))
+      return false;
+
+   int longCount = 0, shortCount = 0;
+   EffectivePositionCounts(longCount, shortCount);
+   if(longCount + shortCount <= 0) return false;
+
+   if(g_EffectiveMode == QB_MODE_SHADOW)
+   {
+      ShadowCloseEvent events[];
+      g_Shadow.CloseAll(g_CurrentSnap, events, EXIT_SESSION_END);
+      ProcessShadowCloseEvents(events);
+      QBLogWarn("Shadow session-exit close: " + reason);
+      return ArraySize(events) > 0;
+   }
+
+   if(QBModeAllowsBrokerActions(g_EffectiveMode))
+   {
+      g_KillSwitch.FlattenAll(reason);
+      PersistRuntimeState();
+      EmitConfiguredAlert(InpAlertPositionClosed || InpAlertKillSwitch,
+                          "Session exit flatten requested: " + reason);
+      return true;
+   }
+
+   return false;
+}
+
 // Service persistent cancel/flatten requests from both OnTick and OnTimer.
 // Only explicitly live modes may transmit broker actions, and retries share a
 // bounded cadence so a fast tick stream cannot hammer the trade server.
@@ -908,6 +970,8 @@ void OnTick()
       g_Shadow.Update(g_CurrentSnap, g_CurrentFeat, events);
       ProcessShadowCloseEvents(events);
    }
+
+   ProcessSessionExitPolicy();
 
    // --- Step 9: Update challenge mode ---
    if(g_Challenge.IsActive())
@@ -2156,6 +2220,29 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 42 PASS: Entry preflight controls"); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 42 FAIL: Entry preflight controls " + reason); }
+   }
+
+   // Test 43: close-before-session/rollover policy triggers only near configured boundaries.
+   {
+      string reason = "";
+      bool regularNotTriggered = !QBSessionExitPolicyTriggered(true, true,
+                                                               SESSION_LONDON,
+                                                               30, reason);
+      bool sessionTriggered = QBSessionExitPolicyTriggered(true, false,
+                                                           SESSION_LONDON,
+                                                           1, reason);
+      bool rolloverTriggered = QBSessionExitPolicyTriggered(false, true,
+                                                            SESSION_NY_AFTERNOON,
+                                                            1, reason);
+      bool rolloverStateTriggered = QBSessionExitPolicyTriggered(false, true,
+                                                                 SESSION_ROLLOVER,
+                                                                 60, reason);
+
+      if(regularNotTriggered && sessionTriggered &&
+         rolloverTriggered && rolloverStateTriggered)
+      { g_SelfTestPassed++; QBLogInfo("TEST 43 PASS: Session exit policy"); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 43 FAIL: Session exit policy " + reason); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

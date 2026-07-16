@@ -40,7 +40,7 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 - `QuantBeastEA.ex5` is present and the final MetaEditor build is `0 errors, 0 warnings`.
 - The original 23-error/15-warning baseline is preserved under `TestEvidence/compile_20260715/`.
 - The Shadow lifecycle build/runtime evidence is under `TestEvidence/shadow_lifecycle_20260715/`.
-- Strategy Tester agent logs prove Shadow initialization and 43 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, and alert-routing policy. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
+- Strategy Tester agent logs prove Shadow initialization and 45 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, alert-routing policy, entry preflight controls, and session/rollover exit policy. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
 - A two-process restart probe is preserved under `TestEvidence/restart_probe_20260715/`: phase 1 passed, but a fresh tester/Wine process loaded schema `0`. This proves tester-state isolation, not live-terminal restart safety. Production persistence now explicitly flushes Terminal Global Variables.
 - Broker submission return values now require both local API success and order-class-specific server acceptance; deterministic mismatched-response injection passes under `TestEvidence/server_ack_policy_20260715/`.
 - Pending tracking now survives delete failure, missing history, and unsafe fill reconciliation; evidence is under `TestEvidence/pending_orphan_policy_20260715/`.
@@ -142,8 +142,8 @@ Broker-fault-matrix evidence: TestEvidence/broker_fault_matrix_20260715/
 Organic-pipeline evidence: TestEvidence/organic_pipeline_20260715/
 Arbitration/journal evidence: TestEvidence/arbitration_journal_20260715/
 Live-gate evidence: TestEvidence/live_strategy_gate_20260716/
-Final source SHA-256: 2b1dead892b25081d026d63b696776f201f9d2c132e5ea641f2588dcc529685a
-Final EX5 SHA-256: bed035a8f6b03fe73defde9fac0dd7e641e4b18b3b7f3e09691bb9b507dceb3b
+Final source SHA-256: 8312ffcd21e9e5a8d051315acd14398e3aba7b7488ab4a8888186957ffde34b8
+Final EX5 SHA-256: 834e063c510e940e2ff366a8deea4edda32511b06f3ec8ff2cfb4b7d361bd5a7
 ```
 
 ## Test status
@@ -152,7 +152,7 @@ Final EX5 SHA-256: bed035a8f6b03fe73defde9fac0dd7e641e4b18b3b7f3e09691bb9b507dce
 Static content audit: completed
 Focused bug audit: completed — BUG_AUDIT.md
 Compile test: passed after repair — 0 errors, 0 warnings
-Deterministic startup fixtures: runtime pass — 43 passed, 0 failed
+Deterministic startup fixtures: runtime pass — 45 passed, 0 failed
 Shadow attachment: completed per local tester agent log; MCP status remained unreliable
 Shadow lifecycle tests: all core market-position branches passed; no broker orders/deals; tester balance unchanged
 Strategy Tester baseline: not yet valid as performance evidence
@@ -508,6 +508,26 @@ Live: prohibited
 - Final source SHA-256: `220577a689c55b7ee263e0bae779752b610e0c75ca3f5ff528d2bb473a0ce30a`; final EX5 SHA-256: `fca02855e1396c768c974b3ce2650beb45f4af51f81f9d14f4ed714be8590040`.
 - Closed the immediate organic CSV blocker with a true-tick Shadow run on XAUUSD M5, 2026-06-22 to 2026-06-23, all strategies enabled, self-tests disabled: 417423 ticks, 276 bars, 880 new signal rows, accepted FBO BUY/SELL entries, risk-rejected winner, and separate order/trade journal rows.
 - Evidence: `TestEvidence/audit_final_20260716/`, `TestEvidence/organic_true_ticks_20260716/`, and `FINAL_ADVERSARIAL_AUDIT_20260716.md`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Session-end and rollover exit policy
+
+- Defect demonstrated: `InpCloseBeforeSessionEnd` and `InpCloseBeforeRollover` were declared but incomplete; the EA had no deterministic policy for acting on those controls.
+- Severity: Medium safety/configuration defect; operators could enable the controls and assume positions would be flattened near configured boundaries when they were not.
+- Fix: added `QBSessionExitPolicyTriggered()` and `ProcessSessionExitPolicy()`. Shadow positions close with `EXIT_SESSION_END`; live modes request the existing bounded flatten path only when explicitly live modes and operator-enabled inputs are active.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `45 passed, 0 failed`, including `TEST 43 PASS: Session exit policy`.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/session_exit_policy_20260716/`.
+- Source SHA-256: `8312ffcd21e9e5a8d051315acd14398e3aba7b7488ab4a8888186957ffde34b8`; ShadowPortfolio SHA-256: `964eab9205a42269b75eef4089d151070660fe7338e93b460bc569c955bfcf2e`; EX5 SHA-256: `834e063c510e940e2ff366a8deea4edda32511b06f3ec8ff2cfb4b7d361bd5a7`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Entry preflight controls for price jump and warmup
+
+- Defect demonstrated: `InpMaxPriceJumpPoints` and `InpBarWarmup` were declared but did not affect entry behavior.
+- Severity: Medium safety/configuration defect; operators could believe price-jump and startup-warmup gates were active when they were not.
+- Fix: added `QBEntryPreflightControlsAllow()` and wired it into `OnTick()` after data-quality validation. Entries are now blocked by failed data quality, insufficient primary bars versus `InpBarWarmup`, or abnormal tick jumps over `InpMaxPriceJumpPoints`.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `44 passed, 0 failed`, including `TEST 42 PASS: Entry preflight controls`.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/entry_preflight_controls_20260716/`.
+- Source SHA-256: `51fa5531bde94f6b2f47af2d0ea5c4086c10bdae3cf08727f84bbab9371413ef`; EX5 SHA-256: `ea722ed75340747dfd5487fa4ece3c37d760370ab84b8e3503c77ddba0e9dfef`.
 - No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
 
 ### 2026-07-16 — Live recovery no-passive-flatten gate

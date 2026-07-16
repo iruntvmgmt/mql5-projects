@@ -356,11 +356,12 @@ public:
       return ArraySize(events);
    }
 
-   int CloseAll(const MarketSnapshot &snap, ShadowCloseEvent &events[])
+   int CloseAll(const MarketSnapshot &snap, ShadowCloseEvent &events[],
+                ENUM_EXIT_REASON reason = EXIT_EMERGENCY_FLATTEN)
    {
       ArrayResize(events, 0);
       for(int i = m_count - 1; i >= 0; i--)
-         CloseFull(i, ExitQuote(m_contexts[i].position_type, snap), EXIT_EMERGENCY_FLATTEN, events);
+         CloseFull(i, ExitQuote(m_contexts[i].position_type, snap), reason, events);
       return ArraySize(events);
    }
 

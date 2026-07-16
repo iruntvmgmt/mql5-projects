@@ -4,15 +4,15 @@
 
 `READY FOR SHADOW MODE`
 
-QuantBeast is not complete in the live-trading sense. It is, however, repaired to the broker-free Shadow readiness gate: the final compiled EA has `0 errors, 0 warnings`; the latest deterministic Shadow regression reports `43 passed, 0 failed`; live modes are gated to FBO-only market-order-only initialization with non-flattening unknown-position recovery; unknown positions are not adopted into active management unless ownership is recovered; alert controls are wired with tester-safe suppression; and the immediate signal-journal blocker is closed by an organic true-tick Shadow run with all strategies enabled and self-tests disabled.
+QuantBeast is not complete in the live-trading sense. It is, however, repaired to the broker-free Shadow readiness gate: the final compiled EA has `0 errors, 0 warnings`; the latest deterministic Shadow regression reports `45 passed, 0 failed`; live modes are gated to FBO-only market-order-only initialization with non-flattening unknown-position recovery; unknown positions are not adopted into active management unless ownership is recovered; alert controls are wired with tester-safe suppression; entry preflight gates enforce bar warmup and abnormal price-jump blocking; session/rollover exits have deterministic policy coverage; and the immediate signal-journal blocker is closed by an organic true-tick Shadow run with all strategies enabled and self-tests disabled.
 
 Live, Conservative Live, Challenge research with broker transmission, and Challenge Live remain prohibited because this run did not authorize broker orders and therefore cannot provide real broker execution, callback, or restart evidence.
 
 ## Final build and hashes
 
 - Compiler: MetaEditor build 6002.
-- Final source SHA-256: `2b1dead892b25081d026d63b696776f201f9d2c132e5ea641f2588dcc529685a`.
-- Final EX5 SHA-256: `bed035a8f6b03fe73defde9fac0dd7e641e4b18b3b7f3e09691bb9b507dceb3b`.
+- Final source SHA-256: `8312ffcd21e9e5a8d051315acd14398e3aba7b7488ab4a8888186957ffde34b8`.
+- Final EX5 SHA-256: `834e063c510e940e2ff366a8deea4edda32511b06f3ec8ff2cfb4b7d361bd5a7`.
 - EX5 timestamp: 2026-07-16 10:08:54 EDT.
 - EX5 size: 443512 bytes.
 
@@ -28,7 +28,7 @@ Live, Conservative Live, Challenge research with broker transmission, and Challe
 Evidence: `TestEvidence/audit_final_20260716/`
 
 - Compile: `0 errors, 0 warnings`.
-- Latest deterministic gate run: `43 passed, 0 failed`.
+- Latest deterministic gate run: `45 passed, 0 failed`.
 - Test 35 proved final-decision signal writer rows for strategy rejects, arbitration loser, risk reject, and accepted BUY.
 - Test 36 proved performance metrics update while `InpEnableTradeJournal=false`.
 - Tester result: 22080 generated ticks, 1104 bars, normal completion, final balance `10000.00`.

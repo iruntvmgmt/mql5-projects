@@ -69,7 +69,7 @@ Remaining Shadow limitations:
 - Per-strategy magic constants exist, but current orders use a common owned magic range plus short strategy comments.
 - Fixed local capacity is 20 tracked positions.
 - Live operation is explicitly hedge-account-only. Netting/exchange accounts fail initialization until `DEAL_ENTRY_INOUT` reversal reconciliation is implemented and tested.
-- Close-before-session and close-before-rollover controls remain incomplete.
+- Close-before-session and close-before-rollover controls now have deterministic policy coverage, but real broker live flatten behavior remains unverified.
 - `InpMaxHoldingMinutes` and `InpMaxPendingMinutes` are not the authoritative management/expiry inputs in all paths.
 - Persistence schema v4 includes the consecutive broker-submission failure streak. Older nonzero schemas quarantine entries fail-closed; no automatic migration exists.
 

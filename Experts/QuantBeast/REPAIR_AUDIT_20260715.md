@@ -6,17 +6,17 @@
 
 The original audit correctly failed the generated project at 23 errors and 15 warnings. The repaired source now compiles to `QuantBeastEA.ex5` with **0 errors and 0 warnings**. The repair removed the confirmed compile blockers and corrected multiple critical safety, accounting, indexing, execution, recovery, and strategy-unit defects.
 
-This is not a profitability verdict. The latest Shadow Strategy Tester fixture completed with **43 startup checks passed and 0 failed**, including direction-preserving rejected signals, regime/arbitration policies, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, performance updates when file trade journaling is disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, and alert-routing behavior. Local agent logs are authoritative. The EA is not cleared for Conservative Live or Challenge modes.
+This is not a profitability verdict. The latest Shadow Strategy Tester fixture completed with **45 startup checks passed and 0 failed**, including direction-preserving rejected signals, regime/arbitration policies, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, performance updates when file trade journaling is disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, alert-routing behavior, entry preflight controls, and session/rollover exit policy. Local agent logs are authoritative. The EA is not cleared for Conservative Live or Challenge modes.
 
 ## Final evidence
 
 - Source: `QuantBeastEA.mq5`
-- Source SHA-256: `2b1dead892b25081d026d63b696776f201f9d2c132e5ea641f2588dcc529685a`
-- EX5 SHA-256: `bed035a8f6b03fe73defde9fac0dd7e641e4b18b3b7f3e09691bb9b507dceb3b`
+- Source SHA-256: `8312ffcd21e9e5a8d051315acd14398e3aba7b7488ab4a8888186957ffde34b8`
+- EX5 SHA-256: `834e063c510e940e2ff366a8deea4edda32511b06f3ec8ff2cfb4b7d361bd5a7`
 - Shadow module SHA-256: `05885359c865d3c56d738a7ededcd13a49b46b3c8d74dc07c7d040ebece560bb`
 - Compiler: MetaEditor build 6002, X64 Regular
 - Compile result: `0 errors, 0 warnings`
-- Runtime result: deterministic `43 passed, 0 failed`; organic true-tick Shadow run `417423 ticks`, `276 bars`; tester balance unchanged at `10000.00`
+- Runtime result: deterministic `45 passed, 0 failed`; organic true-tick Shadow run `417423 ticks`, `276 bars`; tester balance unchanged at `10000.00`
 - Evidence: prior folders plus `TestEvidence/broker_fault_matrix_20260715/`, `TestEvidence/organic_pipeline_20260715/`, `TestEvidence/arbitration_journal_20260715/`, `TestEvidence/audit_final_20260716/`, `TestEvidence/organic_true_ticks_20260716/`, `TestEvidence/performance_readiness_20260716/`, `TestEvidence/live_strategy_gate_20260716/`, and `FINAL_ADVERSARIAL_AUDIT_20260716.md`
 
 ## Critical repairs completed
