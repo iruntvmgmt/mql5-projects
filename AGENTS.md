@@ -14,6 +14,12 @@ used in parallel — doing so caused the 2026-07-16 hash-drift incident
 where commits from two different working copies diverged silently.
 Always verify you are in this exact directory before touching any file.
 
+The `origin` remote (forge.mql5.io/matious/mql5) was removed on
+2026-07-16. It was an unused MQL5 Algo Forge skeleton with a single
+"Initial commit" and an unrelated git history. The only active remote
+is `github` (iruntvmgmt/mql5-projects). Do not re-add `origin` or any
+other remote without explicit instruction.
+
 ## Scope
 
 This file exists to govern work on the QuantBeast project only.
