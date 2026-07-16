@@ -368,6 +368,27 @@ void MarkStrategyTrade(string strategyId)
    if(idx >= 0 && idx < QB_STRAT_COUNT) g_StrategyTradesToday[idx]++;
 }
 
+bool QBLiveStrategySetAllowed(bool boEnabled, bool fboEnabled,
+                              bool tpEnabled, bool mrEnabled,
+                              string &reason)
+{
+   if(!fboEnabled)
+   {
+      reason = "FBO must be enabled for the current live candidate scope";
+      return false;
+   }
+
+   if(boEnabled || tpEnabled || mrEnabled)
+   {
+      reason = "Live modes are currently restricted to FBO-only; "
+               "BO/TP/MR accepted-entry evidence is not complete";
+      return false;
+   }
+
+   reason = "FBO-only live candidate";
+   return true;
+}
+
 //+------------------------------------------------------------------+
 //| Expert initialization function                                     |
 //+------------------------------------------------------------------+
@@ -382,6 +403,21 @@ int OnInit()
    {
       QBLogWarn("Challenge mode requested but not acknowledged. Falling back to Shadow.");
       g_EffectiveMode = QB_MODE_SHADOW;
+   }
+
+   bool requestedLiveMode = (g_EffectiveMode == QB_MODE_CONSERVATIVE_LIVE ||
+                             g_EffectiveMode == QB_MODE_CHALLENGE_LIVE);
+   if(requestedLiveMode)
+   {
+      string liveStrategyReason = "";
+      if(!QBLiveStrategySetAllowed(InpBO_Enabled, InpFBO_Enabled,
+                                   InpTP_Enabled, InpMR_Enabled,
+                                   liveStrategyReason))
+      {
+         QBLogError("Live strategy gate blocked initialization: " +
+                    liveStrategyReason);
+         return INIT_FAILED;
+      }
    }
 
    // --- Initialize Diagnostics ---
@@ -559,8 +595,7 @@ int OnInit()
       g_StateStoreCompatible = StateStoreInit();
 
    // --- Startup Reconciliation ---
-   bool liveMode = (g_EffectiveMode == QB_MODE_CONSERVATIVE_LIVE ||
-                    g_EffectiveMode == QB_MODE_CHALLENGE_LIVE);
+   bool liveMode = requestedLiveMode;
    if(liveMode)
    {
       long marginMode = AccountInfoInteger(ACCOUNT_MARGIN_MODE);
@@ -972,7 +1007,7 @@ void EvaluateAndTrade()
 //+------------------------------------------------------------------+
 //| Execute an approved signal                                        |
 //+------------------------------------------------------------------+
-void ExecuteSignal(StrategySignal signal)
+void ExecuteSignal(StrategySignal &signal)
 {
    // Calculate position size
    string sizeReason = "";
@@ -1895,6 +1930,30 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 35 PASS: Signal journal final-decision writer"); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 35 FAIL: Signal journal final-decision writer"); }
+   }
+
+   // Test 36: disabling CSV output must not disable OnTester performance state.
+   {
+      string detail = "";
+      if(QBTestPerformanceWithoutFileJournal(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 36 PASS: Performance without file journal " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 36 FAIL: Performance without file journal " + detail); }
+   }
+
+   // Test 37: live-mode strategy set remains restricted to current evidence.
+   {
+      string reason = "";
+      bool fboOnlyAccepted = QBLiveStrategySetAllowed(false, true, false, false, reason);
+      bool allStrategiesRejected = !QBLiveStrategySetAllowed(true, true, true, true, reason);
+      bool fboDisabledRejected = !QBLiveStrategySetAllowed(false, false, false, false, reason);
+      bool boOnlyRejected = !QBLiveStrategySetAllowed(true, false, false, false, reason);
+
+      if(fboOnlyAccepted && allStrategiesRejected &&
+         fboDisabledRejected && boOnlyRejected)
+      { g_SelfTestPassed++; QBLogInfo("TEST 37 PASS: Live strategy gate FBO-only"); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 37 FAIL: Live strategy gate"); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

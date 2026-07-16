@@ -1,8 +1,8 @@
 # QuantBeast Handoff
 
-**Last updated:** 2026-07-15  
-**Current phase:** Arbitration and signal-decision journaling repaired; organic CSV and true-real-tick proof remain  
-**Current verdict:** **CONDITIONAL PASS — READY FOR SHADOW MODE RESEARCH; live trading prohibited**  
+**Last updated:** 2026-07-16  
+**Current phase:** Broker-free audit, repair, deterministic validation, and organic true-tick journal proof complete through safe phases  
+**Current verdict:** **READY FOR SHADOW MODE; live and Challenge trading prohibited**  
 **Active source version:** `QuantBeastEA.mq5` property version 1.00
 
 ## Agent startup instruction
@@ -40,7 +40,7 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 - `QuantBeastEA.ex5` is present and the final MetaEditor build is `0 errors, 0 warnings`.
 - The original 23-error/15-warning baseline is preserved under `TestEvidence/compile_20260715/`.
 - The Shadow lifecycle build/runtime evidence is under `TestEvidence/shadow_lifecycle_20260715/`.
-- Strategy Tester agent logs prove Shadow initialization and 36 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, and fail-closed Challenge policies. The tester MCP remains unreliable, so local agent logs are authoritative.
+- Strategy Tester agent logs prove Shadow initialization and 38 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, and performance updates with file journaling disabled. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
 - A two-process restart probe is preserved under `TestEvidence/restart_probe_20260715/`: phase 1 passed, but a fresh tester/Wine process loaded schema `0`. This proves tester-state isolation, not live-terminal restart safety. Production persistence now explicitly flushes Terminal Global Variables.
 - Broker submission return values now require both local API success and order-class-specific server acceptance; deterministic mismatched-response injection passes under `TestEvidence/server_ack_policy_20260715/`.
 - Pending tracking now survives delete failure, missing history, and unsafe fill reconciliation; evidence is under `TestEvidence/pending_orphan_policy_20260715/`.
@@ -48,8 +48,10 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 - Cancel/flatten requests now share a live-only, one-second tick/timer dispatcher; evidence is under `TestEvidence/emergency_dispatch_20260715/`.
 - Consecutive broker submission failures now count only actual rejected submission cycles, reset on accepted submission, persist under state schema v4, and latch entries at a configurable threshold; evidence is under `TestEvidence/broker_rejection_counter_20260715/`.
 - Protection verification now follows an accept/repair/emergency policy and never directly duplicates the centralized emergency close; injected modify/close/delete, requote, and cancel/fill outcomes pass under `TestEvidence/broker_fault_matrix_20260715/`.
-- Rejected strategy signals now preserve the evaluated BUY/SELL direction. A generated-tick fallback run organically reached FBO long and short through arbitration to central risk; true-real-tick coverage remains blocked. Evidence: `TestEvidence/organic_pipeline_20260715/`.
+- Rejected strategy signals now preserve the evaluated BUY/SELL direction. A generated-tick fallback run reached FBO long and short through arbitration to central risk. Evidence: `TestEvidence/organic_pipeline_20260715/`.
 - Arbitration now finalizes every candidate as selected or explicitly rejected; signal rows are written only at their final strategy/arbitration/risk decision stage, and journal IDs include direction. Evidence: `TestEvidence/arbitration_journal_20260715/`.
+- Organic true-tick Shadow proof with all strategies enabled and self-tests disabled produced 880 new signal rows, 3 accepted FBO Shadow entries, separate order/trade rows, and final risk-rejected winner evidence. Evidence: `TestEvidence/organic_true_ticks_20260716/`.
+- Final repaired-state adversarial audit: `FINAL_ADVERSARIAL_AUDIT_20260716.md`.
 - Current repaired-state verdict: `REPAIR_AUDIT_20260715.md`.
 
 ## Documentation source of truth
@@ -139,8 +141,8 @@ Broker-rejection-counter evidence: TestEvidence/broker_rejection_counter_2026071
 Broker-fault-matrix evidence: TestEvidence/broker_fault_matrix_20260715/
 Organic-pipeline evidence: TestEvidence/organic_pipeline_20260715/
 Arbitration/journal evidence: TestEvidence/arbitration_journal_20260715/
-Repaired source SHA-256: a771a2f6e2f3812f478885df525400f2b697f16656087ae208f08953e1588a6d
-Generated EX5 SHA-256: 0357dfb5323a25969645f59ea2ca6c95de642678e8c2c7d376337fd172469e85
+Final source SHA-256: 220577a689c55b7ee263e0bae779752b610e0c75ca3f5ff528d2bb473a0ce30a
+Final EX5 SHA-256: fca02855e1396c768c974b3ce2650beb45f4af51f81f9d14f4ed714be8590040
 ```
 
 ## Test status
@@ -149,7 +151,7 @@ Generated EX5 SHA-256: 0357dfb5323a25969645f59ea2ca6c95de642678e8c2c7d376337fd17
 Static content audit: completed
 Focused bug audit: completed — BUG_AUDIT.md
 Compile test: passed after repair — 0 errors, 0 warnings
-Deterministic startup fixtures: runtime pass — 36 passed, 0 failed
+Deterministic startup fixtures: runtime pass — 38 passed, 0 failed
 Shadow attachment: completed per local tester agent log; MCP status remained unreliable
 Shadow lifecycle tests: all core market-position branches passed; no broker orders/deals; tester balance unchanged
 Strategy Tester baseline: not yet valid as performance evidence
@@ -177,9 +179,8 @@ Live: prohibited
 ## Current blockers
 
 - Native MT5 tester MCP returns `job_id: 0`/stopped even when the local agent completes the run; use agent logs as evidence.
-- Generated-tick fallback data has reached FBO long and short through arbitration to central risk. BO/TP/MR organic candidates, an accepted Shadow lifecycle, long-run virtual accounting, and true-real-tick coverage remain unproven.
-- Arbitration decision routing is deterministic, but a completed organic post-repair run has not yet provided file-level proof of the new CSV statuses and direction-qualified IDs.
-- The post-repair CSV rerun is currently infrastructure-blocked: the MT5 MCP endpoint was unreachable, and a direct Wine `/config` launch opened the UI without starting a new tester section. The attempted terminal process was stopped and no new log/CSV was claimed.
+- BO/TP/MR organic accepted entries, long-run virtual accounting, and broad multi-window true-tick coverage remain unproven.
+- The post-repair CSV blocker is closed by `TestEvidence/organic_true_ticks_20260716/`; historical pre-repair rows and the pre-fix corrupted shared Common prefix remain preserved and must not be used as current evidence.
 - No broker runtime evidence yet exists for fill protection, actual transaction callback ordering, or real terminal/broker restart recovery; deterministic state transitions only are proven.
 
 ## Worklog
@@ -462,7 +463,7 @@ Live: prohibited
 - Tightened Tests 16–19 to require rejected shorts to retain `ORDER_TYPE_SELL`.
 - Added Test 33 for safe trend/breakout versus shock regime classification and Test 34 for arbitration ranking, duplicate rejection, and opposing-signal rejection.
 - Final compile: `0 errors, 0 warnings, 10309 ms`; Shadow regression: `36 passed, 0 failed`, `22080 ticks`, `1104 bars`, balance `10000.00`.
-- A Model 4 probe at the first advertised real-tick date (2026-06-19) initialized but produced no test ticks before shutdown; true-real-tick coverage remains blocked rather than passed.
+- At this historical milestone, a Model 4 probe at the first advertised real-tick date (2026-06-19) initialized but produced no test ticks before shutdown; true-real-tick coverage was blocked rather than passed.
 - Evidence: `TestEvidence/organic_pipeline_20260715/`.
 - Source hash: `e5e87b4431e57f4481fc7078f735ea46d7ae489335023528af721509587af52f`; EX5 hash: `24e9400a1a98edb83470d43bbc3b2316982d4875a1e059f649d4e00a1a3c7503`; readiness remains `READY FOR SHADOW MODE`.
 
@@ -476,14 +477,14 @@ Live: prohibited
 - Compile: `0 errors, 0 warnings, 10330 ms`; Shadow: `36 passed, 0 failed`, `22080 ticks`, `1104 bars`, balance `10000.00`.
 - Evidence: `TestEvidence/arbitration_journal_20260715/`.
 - Source hash: `a771a2f6e2f3812f478885df525400f2b697f16656087ae208f08953e1588a6d`; EX5 hash: `0357dfb5323a25969645f59ea2ca6c95de642678e8c2c7d376337fd172469e85`.
-- File-level CSV proof remains pending an organic post-repair run; readiness remains `READY FOR SHADOW MODE`.
+- At this historical milestone, file-level CSV proof remained pending an organic post-repair run; readiness remained `READY FOR SHADOW MODE`.
 
 ### 2026-07-15 — Arbitration/journal documentation synchronization
 
 - Synchronized `README.md`, `ARCHITECTURE.md`, `KNOWN_LIMITATIONS.md`, `BUILD_AUDIT.md`, `REPAIR_AUDIT_20260715.md`, and `TESTING_GUIDE.md` with the verified arbitration and signal-decision repair.
-- Updated the current repair-audit source/EX5 hashes, compile duration, and evidence list to the final `a771a2...` / `0357df...` build.
-- Reclassified the prior incomplete-journaling statements as historical or repaired, while retaining the honest boundary that an organic post-repair CSV inspection remains pending.
-- Corrected the stale testing-guide reference from an older 32/0 run to the current 36/0 Shadow regression.
+- Updated the then-current repair-audit source/EX5 hashes, compile duration, and evidence list to the historical `a771a2...` / `0357df...` build.
+- Reclassified the prior incomplete-journaling statements as historical or repaired, while retaining the then-honest boundary that an organic post-repair CSV inspection remained pending.
+- Corrected the stale testing-guide reference from an older 32/0 run to the then-current 36/0 Shadow regression.
 - Documentation-only change after the already verified `0 errors, 0 warnings` build; no source, EX5, preset, or tester configuration changed.
 
 ### 2026-07-15 — Post-repair organic CSV rerun attempt
@@ -493,3 +494,57 @@ Live: prohibited
 - A direct Wine `/config` fallback opened `terminal64.exe` but did not create a new tester-agent log section or signal CSV; the existing agent log timestamp remained `18:24:17`.
 - Stopped the terminal process launched by this attempt. No MT5/Wine tester process was left running.
 - Recorded the blocked boundary in `TestEvidence/arbitration_journal_20260715/EVIDENCE.md`. No source, EX5, preset, or tester configuration changed.
+
+### 2026-07-16 — Final safe-phase audit, fixes, and organic true-tick proof
+
+- Revalidated native MT5 MCP workspace, compiler, and tester capabilities before continuing.
+- Confirmed March real-tick proof was unavailable because local XAUUSD tick data begins 2026-06-19; generated fallback was not treated as true-real-tick evidence.
+- Fixed a Medium final-decision defect: signal `ACCEPTED` is now written only after final strategy/arbitration/risk/sizing/broker-preflight acceptance; later central failures are logged as `REJECTED`.
+- Fixed a High journal-integrity defect: existing CSV journals now seek to end before writing and fail closed if append positioning fails. A pre-fix proof attempt corrupted the shared Common `SignalJournal.csv` prefix; it is preserved honestly and excluded from current evidence.
+- Added deterministic Test 35 for real final-decision signal-writer rows and Test 36 for performance metric updates when file trade journaling is disabled.
+- Fixed a Medium dashboard diagnostic throttle defect and a Medium `TradeJournal` performance-update/file-journal coupling defect.
+- Final compile evidence remained `0 errors, 0 warnings`; final deterministic run reported `38 passed, 0 failed`.
+- Final source SHA-256: `220577a689c55b7ee263e0bae779752b610e0c75ca3f5ff528d2bb473a0ce30a`; final EX5 SHA-256: `fca02855e1396c768c974b3ce2650beb45f4af51f81f9d14f4ed714be8590040`.
+- Closed the immediate organic CSV blocker with a true-tick Shadow run on XAUUSD M5, 2026-06-22 to 2026-06-23, all strategies enabled, self-tests disabled: 417423 ticks, 276 bars, 880 new signal rows, accepted FBO BUY/SELL entries, risk-rejected winner, and separate order/trade journal rows.
+- Evidence: `TestEvidence/audit_final_20260716/`, `TestEvidence/organic_true_ticks_20260716/`, and `FINAL_ADVERSARIAL_AUDIT_20260716.md`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Independent strategy train baselines
+
+- Ran BO, FBO, TP, and MR independently on the same XAUUSD M5 true-tick Shadow training window (`2026.06.22` to `2026.06.26`) using the reproducible configs under `TestEvidence/performance_readiness_20260716/`.
+- All four per-strategy runs completed with normal tester footers, Model 4 true ticks, `1,736,377` ticks, `1,104` bars, `OnTester result 0`, and final balance `10000.00`.
+- BO-only: `940` rejected signal rows, `0` accepted, `0` orders/trades; BUY and SELL rejection counts were balanced at `470/470`.
+- FBO-only: `940` signal rows, `935` rejected, `5` accepted; accepted FBO BUY `3`, FBO SELL `2`; `5` Shadow orders/trades; net `-193.03`; profit factor `0.373869`.
+- TP-only: `940` rejected signal rows, `0` accepted, `0` orders/trades; BUY and SELL rejection counts were balanced at `470/470`.
+- MR-only: `940` rejected signal rows, `0` accepted, `0` orders/trades; BUY and SELL rejection counts were balanced at `470/470`.
+- Per-strategy evidence files were added under `TestEvidence/performance_readiness_20260716/` with metrics, suffix CSVs, excerpts, and accepted-signal files.
+- Interpretation: strategy-only true-tick train configs are runnable and direction-preserving, but only FBO reached accepted trade state in this window. BO/TP/MR accepted organic entries remain unproven and are not to be optimized before correctness/evidence gates expand.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Performance-readiness baseline configs and train proof
+
+- Added reproducible Shadow-mode performance-readiness configs under `TestEvidence/performance_readiness_20260716/` for XAUUSD M5 true-tick combined train/holdout and per-strategy train windows.
+- Combined train baseline (`2026.06.22` to `2026.06.26`) completed from a temporary `Profiles/Tester` launcher config and was then cleaned up.
+- Train result: Model 4 true ticks, `1,736,377` ticks, `1,104` bars, final tester footer present, test passed in `0:14:42.937`.
+- Train journal suffix: `3,760` signal rows, `3,755` rejected, `5` accepted; accepted FBO BUY `3`, FBO SELL `2`; `5` Shadow orders/trades; closed-trade net `-193.03`; profit factor `0.373869`. This is a baseline observation, not an edge claim.
+- Combined holdout first attempt (`2026.06.29` to `2026.07.03`) appended partial journal rows but was invalid/incomplete: no final tester footer was written and the signal suffix ended at `2026.06.29 21:55:00`, before the configured end.
+- After a clean terminal/tester restart, the combined holdout retry completed with a normal final footer: Model 4 true ticks, `1,464,441` ticks, `1,104` bars, test passed in `0:12:54.454`.
+- Holdout retry journal suffix: `4,520` signal rows, `4,510` rejected, `10` accepted; accepted FBO BUY `8`, FBO SELL `2`; `10` Shadow orders/trades; closed-trade net `64.66`; profit factor `1.300521`. This is a single holdout baseline observation, not an edge claim.
+- Temporary train/holdout launcher configs were removed from `MQL5/Profiles/Tester`.
+- Evidence: `TestEvidence/performance_readiness_20260716/`.
+- No source or EX5 code changed; recalculated hashes remain source `220577a689c55b7ee263e0bae779752b610e0c75ca3f5ff528d2bb473a0ce30a`, EX5 `fca02855e1396c768c974b3ce2650beb45f4af51f81f9d14f4ed714be8590040`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Independent strategy holdout baselines
+
+- Revalidated native MT5 MCP workspace and tester capability before continuing.
+- Completed the remaining per-strategy XAUUSD M5 true-tick Shadow holdout baselines (`2026.06.29` to `2026.07.03`) using the reproducible configs under `TestEvidence/performance_readiness_20260716/`.
+- BO-only holdout: `1,464,441` ticks, `1,104` bars, test passed in `0:12:32.122`; `1,130` rejected signal rows, `0` accepted, `0` orders/trades; BUY and SELL rejection counts balanced at `565/565`.
+- FBO-only holdout: `1,464,441` ticks, `1,104` bars, test passed in `0:14:07.638`; `1,120` rejected and `10` accepted signal rows; accepted FBO BUY `8`, FBO SELL `2`; `10` Shadow orders/trades; net `64.66`; profit factor `1.300521`.
+- TP-only holdout: `1,464,441` ticks, `1,104` bars, test passed in `0:14:01.034`; `1,130` rejected signal rows, `0` accepted, `0` orders/trades; BUY and SELL rejection counts balanced at `565/565`.
+- MR-only holdout: `1,464,441` ticks, `1,104` bars, test passed in `0:12:53.861`; `1,130` rejected signal rows, `0` accepted, `0` orders/trades; BUY and SELL rejection counts balanced at `565/565`.
+- Per-strategy holdout evidence files were added under `TestEvidence/performance_readiness_20260716/` with metrics, suffix CSVs, excerpts, and accepted-signal files.
+- Updated `TestEvidence/performance_readiness_20260716/EVIDENCE.md`, `README.md`, `TESTING_GUIDE.md`, `KNOWN_LIMITATIONS.md`, and `FINAL_ADVERSARIAL_AUDIT_20260716.md`.
+- Interpretation: strategy-only true-tick holdout configs are runnable and direction-preserving, but only FBO reached accepted trade state in this holdout window. BO/TP/MR accepted organic entries remain unproven.
+- No source or EX5 code changed; hashes remain source `220577a689c55b7ee263e0bae779752b610e0c75ca3f5ff528d2bb473a0ce30a`, EX5 `fca02855e1396c768c974b3ce2650beb45f4af51f81f9d14f4ed714be8590040`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.

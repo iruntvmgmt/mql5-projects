@@ -187,8 +187,9 @@ public:
    {
       if(!m_enabled) return;
 
-      if(TimeCurrent() - m_lastUpdate < m_updateIntervalSec) return;
-      m_lastUpdate = TimeCurrent();
+      // The main dashboard update owns throttling.  This method is called
+      // immediately afterwards in Diagnostic mode and must render in the same
+      // cycle instead of suppressing itself on the shared timestamp.
 
       int line = 20; // Offset for diag info below main dashboard
 

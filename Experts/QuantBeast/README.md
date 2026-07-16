@@ -6,7 +6,7 @@
 
 QuantBeast is a modular MT5 XAUUSD research EA with separate market-data, feature, regime, strategy, arbitration, risk, execution, position-management, persistence, analytics, and dashboard layers.
 
-The repaired source compiles at **0 errors and 0 warnings**. The latest broker-free Shadow fixture completed with **36 startup tests passed and 0 failed**, now including direction-preserving strategy rejections, regime/arbitration policies, a deterministic broker-fault matrix, and centralized protection-close ownership. Production persistence explicitly flushes saved globals. A fresh-process Strategy Tester probe did not retain those globals, which documents tester isolation but does not prove normal-terminal restart safety. These results prove isolated mechanics, not profitability, live restart recovery, or live safety.
+The repaired source compiles at **0 errors and 0 warnings**. The latest broker-free Shadow fixture completed with **38 startup tests passed and 0 failed**, now including direction-preserving strategy rejections, regime/arbitration policies, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, and performance updates while file trade journaling is disabled. Production persistence explicitly flushes saved globals. A fresh-process Strategy Tester probe did not retain those globals, which documents tester isolation but does not prove normal-terminal restart safety. These results prove isolated mechanics, not profitability, live restart recovery, or live safety.
 
 The aggressive small-account mission is documented in `PROJECT_MISSION_AND_AUDIT_CONTEXT.md`. It is a bounded-risk research objective, not a profit promise or authorization to bypass central safety controls.
 
@@ -25,14 +25,14 @@ Market data -> data quality -> closed-bar features -> regimes
 |---|---|
 | Compile | Pass: 0 errors, 0 warnings |
 | Closed-bar indexing and trend direction | Statically repaired |
-| Four strategy classes | Direct long, short, and direction-preserving rejection paths proven; generated-tick fallback organically reached FBO long/short through arbitration to risk, while BO/TP/MR and true-real-tick reachability remain pending |
-| Arbitration and signal decisions | Deterministic ranking, duplicate, conflict, exposure, and lower-ranked rejection paths pass; signal rows are emitted at their final strategy/arbitration/risk decision and IDs include direction. An organic post-repair CSV inspection remains pending. |
+| Four strategy classes | Direct long, short, and direction-preserving rejection paths proven; organic true-tick Shadow evidence accepted FBO BUY/SELL and produced BO/FBO/TP/MR BUY/SELL rejections; BO/TP/MR accepted entries remain pending |
+| Arbitration and signal decisions | Deterministic ranking, duplicate, conflict, exposure, and lower-ranked rejection paths pass; signal rows are emitted at their final strategy/arbitration/risk decision and IDs include direction. Organic true-tick CSV proof is under `TestEvidence/organic_true_ticks_20260716/`. |
 | Broker-aware sizing and risk | Repaired with `OrderCalcProfit`; scenario proof pending |
 | Execution/protection | Retcodes, position reconciliation, SL/TP verification, fail-closed path implemented; runtime proof pending |
 | Trade lifecycle | `OnTradeTransaction` processes owned fills/closes and analytics; runtime proof pending |
 | Persistence/recovery | Incompatible state versions fail closed; deterministic risk-state restoration passes; saves explicitly flush; fresh-process tester globals reset/isolate; normal-terminal broker-position/pending-order restart recovery remains unproven |
 | Shadow mode | Virtual market fills, stop/target, partial, breakeven, ATR trail, time stop, costs, equity, exposure, MFE/MAE, and close journaling implemented |
-| Diagnostic/Shadow runtime | Strategy Tester initialized Shadow mode; 36 tests passed, 0 failed; broker balance unchanged |
+| Diagnostic/Shadow runtime | Strategy Tester initialized Shadow mode; 38 tests passed, 0 failed; broker balance unchanged |
 | Live approval | Prohibited |
 
 ## Operating modes
@@ -40,7 +40,7 @@ Market data -> data quality -> closed-bar features -> regimes
 | Mode | Broker orders | Approval |
 |---|---:|---|
 | Diagnostic | No | Approved for attachment and startup/self-test evidence |
-| Shadow | No | Approved for mechanical and strategy research; performance is still unvalidated |
+| Shadow | No | Approved for mechanical and strategy research; performance baselines are started but not validated as an edge |
 | Conservative Live | Yes | Not approved |
 | Challenge Live | Yes after acknowledgment | Not approved; high probability of loss |
 
@@ -72,6 +72,10 @@ Market data -> data quality -> closed-bar features -> regimes
 - `TestEvidence/broker_fault_matrix_20260715/` — protection repair/emergency, server-response, cancel/fill-race, and centralized-close policy evidence
 - `TestEvidence/organic_pipeline_20260715/` — rejected-direction repair, generated-fallback FBO pipeline reachability, and blocked true-real-tick boundary probe
 - `TestEvidence/arbitration_journal_20260715/` — finalized arbitration outcomes, direction-qualified signal IDs, clean compile, and 36/0 Shadow regression evidence
+- `TestEvidence/audit_final_20260716/` — final clean compile evidence, 38/0 deterministic regression, final-decision writer proof, and performance-without-file-journal proof
+- `TestEvidence/organic_true_ticks_20260716/` — organic true-tick Shadow CSV proof with all strategies enabled and self-tests disabled
+- `TestEvidence/performance_readiness_20260716/` — reproducible Shadow performance-readiness configs, completed combined true-tick training baseline, invalid first holdout attempt, completed clean holdout retry, and independent BO/FBO/TP/MR train and holdout baselines
+- `FINAL_ADVERSARIAL_AUDIT_20260716.md` — final safe-phase adversarial audit and readiness classification
 - `HANDOFF.md` — living status and next task
 - `KNOWN_LIMITATIONS.md` — authoritative remaining-debt register
 
@@ -98,9 +102,9 @@ MQL5/
 ## Safe next sequence
 
 1. Run deterministic live-path transaction, sizing, duplicate, protection, and unknown-position scenarios without real-money exposure; run restart recovery in the normal terminal because tester globals reset/isolate here.
-2. Expand organic BO/TP/MR plus complete Shadow lifecycle coverage on true real ticks when broker history is available, and inspect the resulting post-repair signal CSV for final-decision integrity.
+2. Expand organic BO/TP/MR accepted-entry plus complete Shadow lifecycle coverage across more true-tick windows; the immediate post-repair signal CSV blocker is closed for FBO BUY/SELL.
 3. Add or explicitly reject Shadow pending-order simulation; current Shadow mode supports market intents only.
-4. Only then run realistic-cost baseline and holdout tests.
+4. Expand realistic-cost stress tests and additional untouched windows without optimizing against holdout data; treat the completed train/holdout and per-strategy train/holdout results as baseline observations only.
 5. Require prolonged demo validation before considering micro-live.
 
 ## Risk warning

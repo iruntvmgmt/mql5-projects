@@ -1,0 +1,4 @@
+0	2026.07.16 09:35:40.819	Compile	MQL5\Experts\QuantBeast\QuantBeastEA.mq5 - 0 errors, 0 warnings, 11690 ms elapsed, cpu='X64 Regular'
+528534276ce0efa35d259cd0e41a733f37e3d21a13a162a6639a0f7032b3d7ee  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/QuantBeast/QuantBeastEA.mq5
+889fadaea02d89a35abea203e14a474712d8fad6e612a5e2b41f4a3581203129  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/QuantBeast/QuantBeastEA.ex5
+656351a33a8866bd07de83cff2c5e27446fa6f9e4cb529a9d03d54f6d9a75bb8  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/QuantBeast/XAUUSD_Conservative_Live.set

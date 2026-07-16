@@ -4,6 +4,8 @@
 **Safety default:** Shadow mode.  
 **Live-use status:** Not approved.
 
+**Latest evidence:** 2026-07-16 Shadow regression `38 passed, 0 failed`; organic true-tick CSV proof exists under `TestEvidence/organic_true_ticks_20260716/`.
+
 ## Loading presets
 
 Preset files are stored beside `QuantBeastEA.mq5`. Always inspect the loaded Inputs tab after applying a preset.
@@ -78,7 +80,7 @@ Controls trend ceiling, VWAP deviation, directional wick threshold, targets, eme
 
 ## Arbitration
 
-The arbitration method, cooldown, duplicate window, opposite-signal rule, and same-direction stacking rule are active in the arbitrator. Cooldown and prior signal IDs are not persisted across restart.
+The arbitration method, cooldown, duplicate window, opposite-signal rule, and same-direction stacking rule are active in the arbitrator. Signal journal IDs include direction and final decision rows are proven in deterministic and organic true-tick evidence. Cooldown and prior signal IDs are not persisted across restart.
 
 ## Position sizing
 
@@ -140,7 +142,7 @@ Daily/weekly dates and equity, locks, high-water mark, consecutive losses, conse
 
 ## Logging and dashboard
 
-Signal, order, and trade journal inputs open their respective files. Owned final-close transactions feed completed-trade rows and rolling metrics. Runtime validation is pending. Dashboard enablement, location, font size, and color are active. `InpShowChartObjects` is unused.
+Signal, order, and trade journal inputs open their respective files. Existing CSV files append at end and fail closed if append positioning fails. Owned final-close transactions feed completed-trade rows and rolling metrics, and performance metrics update even when file trade journaling is disabled. Organic true-tick suffix evidence proves final signal decisions, separate order rows, and separate trade rows. Dashboard enablement, location, font size, and color are active. `InpShowChartObjects` is unused.
 
 ## Alerts
 
@@ -155,6 +157,6 @@ All alert inputs are currently inactive because `CAlerts` is not instantiated by
 | Preset | Intended use | Current status |
 |---|---|---|
 | `XAUUSD_Diagnostic.set` | Startup checks only | Approved; equivalent startup fixtures passed in the Shadow tester run. |
-| `XAUUSD_Shadow.set` | Broker-free research simulation | Approved for market-intent mechanical research; pending-order intents are rejected and performance remains unvalidated. |
+| `XAUUSD_Shadow.set` | Broker-free research simulation | Approved for market-intent mechanical research; pending-order intents are rejected and profitability remains unvalidated. |
 | `XAUUSD_Conservative_Live.set` | Low-risk demo/live validation | Key corrected; still not approved. |
 | `XAUUSD_Challenge_Example.set` | Explicit aggressive example | Key corrected; still not approved and Challenge validation incomplete. |

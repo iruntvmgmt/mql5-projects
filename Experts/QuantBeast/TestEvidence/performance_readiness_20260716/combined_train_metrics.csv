@@ -1,0 +1,22 @@
+signal_rows,3760
+signal_status,{'REJECTED': 3755, 'ACCEPTED': 5}
+signal_by_strategy,{'BO': 940, 'FBO': 940, 'TP': 940, 'MR': 940}
+signal_by_strategy_status,{('BO', 'REJECTED'): 940, ('FBO', 'REJECTED'): 935, ('TP', 'REJECTED'): 940, ('MR', 'REJECTED'): 940, ('FBO', 'ACCEPTED'): 5}
+signal_by_direction_status,{('BUY', 'REJECTED'): 1877, ('SELL', 'REJECTED'): 1878, ('BUY', 'ACCEPTED'): 3, ('SELL', 'ACCEPTED'): 2}
+signal_by_strategy_direction_status,{('BO', 'BUY', 'REJECTED'): 470, ('BO', 'SELL', 'REJECTED'): 470, ('FBO', 'BUY', 'REJECTED'): 467, ('FBO', 'SELL', 'REJECTED'): 468, ('TP', 'BUY', 'REJECTED'): 470, ('TP', 'SELL', 'REJECTED'): 470, ('MR', 'BUY', 'REJECTED'): 470, ('MR', 'SELL', 'REJECTED'): 470, ('FBO', 'BUY', 'ACCEPTED'): 3, ('FBO', 'SELL', 'ACCEPTED'): 2}
+accepted_by_strategy_direction,{('FBO', 'BUY'): 3, ('FBO', 'SELL'): 2}
+selected_rejected_reasons,{}
+top_rejection_reasons,[('TP: not eligible', 938), ('MR: not eligible', 882), ('FBO: not eligible', 838), ('Breakout: not eligible', 830), ('Breakout Long: HTF bias is not up', 55), ('FBO Short: no upside failed auction', 31), ('Breakout Short: no trigger', 27), ('Breakout Short: price not near lower boundary', 21), ('FBO Long: no downside failed auction', 20), ('FBO Long: reclaim depth too small', 16), ('FBO Long: insufficient R:R', 7), ('FBO Short: insufficient R:R', 7), ('FBO Short: reclaim depth too small', 5), ('Arbitration: same-direction stacking disabled', 2), ('MR Long: insufficient deviation, sd=0.88', 2), ('MR Short: insufficient deviation, sd=0.88', 2), ('MR Long: insufficient deviation, sd=0.27', 2), ('MR Short: insufficient deviation, sd=0.27', 2), ('MR Long: insufficient deviation, sd=0.66', 2), ('MR Short: insufficient deviation, sd=0.66', 2)]
+signal_ids_missing_direction,0
+order_rows,5
+order_types,{'ORDER_TYPE_BUY': 3, 'ORDER_TYPE_SELL': 2}
+trade_rows,5
+trade_directions,{'LONG': 3, 'SHORT': 2}
+trade_exit_reason_codes,{'1.43': 1, '-1.04': 1, '-0.02': 1, '-1.03': 1, '-1.09': 1}
+net_sum,-193.03
+gross_profit,115.26
+gross_loss,308.29
+profit_factor,0.373869
+wins,1
+losses,4
+closed_trade_running_max_dd,308.29

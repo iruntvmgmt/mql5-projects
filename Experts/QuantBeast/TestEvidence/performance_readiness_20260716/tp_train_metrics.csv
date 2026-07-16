@@ -1,0 +1,11 @@
+signal_rows,940
+signal_first_time,2026.06.22 06:00:00
+signal_last_time,2026.06.25 21:55:00
+signal_status,{'REJECTED': 940}
+signal_by_strategy,{'TP': 940}
+signal_by_direction_status,{('BUY', 'REJECTED'): 470, ('SELL', 'REJECTED'): 470}
+accepted_signals,0
+top_reasons,[('TP: not eligible', 938), ('TP Long: not uptrend', 1), ('TP Short: low confidence', 1)]
+signal_ids_missing_direction,0
+order_rows,0
+trade_rows,0

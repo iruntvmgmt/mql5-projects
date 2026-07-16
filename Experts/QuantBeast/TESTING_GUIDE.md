@@ -1,6 +1,6 @@
 # QuantBeast Testing Guide
 
-**Current evidence status:** Evidence is under `TestEvidence/*_20260715/`; compile is `0 errors, 0 warnings`, and the latest Shadow fixture passed 36 startup tests with no broker orders. Generated fallback data reached FBO long/short through arbitration to risk, but true-real-tick organic behavior, strategy performance, real restart recovery, and actual broker failures remain unproven.  
+**Current evidence status:** Evidence is under `TestEvidence/*_20260715/` and `TestEvidence/*_20260716/`; compile is `0 errors, 0 warnings`, and the latest Shadow fixture passed 38 startup tests with no broker orders. Organic true-tick Shadow data reached accepted FBO BUY/SELL entries and final-decision CSV proof. A combined true-tick training baseline, clean holdout retry, and independent BO/FBO/TP/MR train and holdout baselines completed under `TestEvidence/performance_readiness_20260716/`; the first holdout attempt is preserved as invalid/incomplete evidence. Only FBO reached accepted trade state in these baseline windows. Strategy edge, real restart recovery, and actual broker failures remain unproven.  
 **Rule:** A successful compile or profitable backtest alone is not completion.
 
 The audit and test program must follow `PROJECT_MISSION_AND_AUDIT_CONTEXT.md`. In particular, it must preserve independent strategy engines, examine Challenge Mode as a deterministic bounded-risk system, and avoid treating architectural sophistication as evidence of trading edge.
@@ -144,7 +144,7 @@ Recommended first configuration:
 Use at least:
 
 1. Development window
-2. Non-overlapping holdout window
+2. Non-overlapping holdout window with clean terminal/tester start, full configured date coverage, and final tester footer
 3. High-volatility window
 4. Quiet/range window
 5. Spread-stress and delayed-execution variants
@@ -200,13 +200,13 @@ Each run should record date, EA hash/version, preset, symbol specification, brok
 ## Current test debt
 
 - `Include/QuantBeast/Testing/SafetyTests.mqh` covers only series direction, closed-bar order, one session boundary, and a broker-aware sizing bound.
-- Startup fixtures have captured runtime output: 36 passed, 0 failed, including deterministic regime and arbitration ranking, duplicate, opposing, exposure, and lower-ranked rejection coverage.
-- Direct deterministic long/short/rejection reachability fixtures now exist for BO, FBO, TP, and MR, and rejected shorts retain SELL direction. Generated fallback data organically reached FBO long/short through arbitration to risk; BO/TP/MR, accepted organic lifecycles, and true-real-tick reachability are still unproven.
+- Startup fixtures have captured runtime output: 38 passed, 0 failed, including deterministic regime and arbitration ranking, duplicate, opposing, exposure, lower-ranked rejection coverage, final-decision signal writing, and performance updates with file trade journaling disabled.
+- Direct deterministic long/short/rejection reachability fixtures now exist for BO, FBO, TP, and MR, and rejected shorts retain SELL direction. Organic true-tick data reached accepted FBO BUY/SELL through final Shadow entries and completed FBO trade rows; BO/TP/MR accepted organic lifecycles are still unproven.
 - Deterministic state-version quarantine, risk restoration, pending partial-fill, deferred close/deduplication, hedge-only admission, protection repair/emergency, server-response, and cancel/fill-race tests now exist. These inject pure outcomes without broker transmission; actual callback ordering, broker faults, and normal-terminal restart recovery remain unproven.
-- The two-process tester probe is a recorded negative test-environment result, not a live-terminal restart result. Production persistence now explicitly calls `GlobalVariablesFlush()` and passed the latest 36/0 Shadow regression.
+- The two-process tester probe is a recorded negative test-environment result, not a live-terminal restart result. Production persistence now explicitly calls `GlobalVariablesFlush()` and passed the latest 38/0 Shadow regression.
 - Emergency cancel/flatten policy is live-mode-only, timer-serviced, and retry-bounded in deterministic fixtures. Consecutive broker rejection counting is wired and persisted under state schema v4, but actual broker rejection/failure/reconnect behavior remains unproven.
 - Core market-position Shadow branches are proven, including costs, multiple positions, drawdown lock, and transient-gate recovery. Organic feature/regime-generated lifecycle sequences remain unproven.
-- Final signal-decision routing through strategy, arbitration, and central risk is deterministically covered, and direction-qualified IDs are implemented. A completed organic post-repair run must still be inspected at the CSV level; historical pre-repair rows are not valid current evidence.
+- Final signal-decision routing through strategy, arbitration, and central risk is deterministically covered, and direction-qualified IDs are implemented. A completed organic post-repair true-tick run is inspected at the CSV suffix level under `TestEvidence/organic_true_ticks_20260716/`; historical pre-repair rows are not valid current evidence.
 - Shadow pending-order activation and expiry are not implemented; pending intents are rejected.
 - `OnTradeTransaction` live/broker lifecycle remains without runtime evidence. `OnTester` executed, but no strategy performance claim is valid.
 - The tester API's run identifier/status is unreliable; local agent logs proved the Shadow fixture completed.

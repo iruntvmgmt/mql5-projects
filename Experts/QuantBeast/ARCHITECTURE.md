@@ -83,7 +83,7 @@ The timer checks terminal connectivity and periodically saves limited state. It 
 | Data | NewsInterface | Partial | Manual timestamp lockout only. |
 | Regime | Four classifiers and engine | Partial | Structural inputs are populated from closed bars; classifier thresholds and switching still require runtime/scenario proof. |
 | Strategies | BO, FBO, TP, MR | Partial | Real long/short methods exist; required trigger/exit variations are incomplete. |
-| Portfolio | SignalArbitrator | Substantive | Scoring, cooldown, duplicate, conflict, exposure, and lower-ranked rejection paths are implemented and deterministically tested. Cooldown/duplicate persistence and organic file-level evidence remain incomplete. |
+| Portfolio | SignalArbitrator | Substantive | Scoring, cooldown, duplicate, conflict, exposure, and lower-ranked rejection paths are implemented and deterministically tested. Organic true-tick CSV suffix proof exists; cooldown/duplicate persistence remains incomplete. |
 | Portfolio | AllocationEngine | Stub | Constructor only. |
 | Portfolio | ExposureManager | Stub | Constructor only; some single-symbol exposure checks live in RiskEngine. |
 | Risk | PositionSizer | Substantive | Four sizing modes are represented; requires broker and formula tests. |
@@ -95,9 +95,9 @@ The timer checks terminal connectivity and periodically saves limited state. It 
 | Execution | ShadowPortfolio | Substantive | Broker-free market fills, stops, targets, partial, breakeven, ATR trail, time stop, costs, equity/exposure, MFE/MAE, flatten, and close events; pending orders unsupported. |
 | Execution | Reconciliation | Stub | Constructor only. |
 | Execution | RecoveryEngine | Stub | Constructor only. |
-| Analytics | TradeJournal | Partial | Signal/order/trade writers exist and completed tracked closes can reach `LogTrade`. Signal decisions are now written only after their final strategy/arbitration/risk outcome, rejected direction is preserved, and signal IDs include direction; an organic post-repair CSV inspection remains pending. |
+| Analytics | TradeJournal | Partial | Signal/order/trade writers exist and completed tracked closes can reach `LogTrade`. Signal decisions are now written only after their final strategy/arbitration/risk outcome, rejected direction is preserved, and signal IDs include direction; organic true-tick suffix proof is under `TestEvidence/organic_true_ticks_20260716/`. |
 | Analytics | CounterfactualTracker | Stub | Constructor only. |
-| Testing | SafetyTests | Partial | Embedded deterministic fixtures cover 36 policies/lifecycles, including rejected-signal direction, regime safety, and arbitration ranking/duplicate/conflict/exposure/lower-ranked behavior. Generated fallback data organically reached FBO long/short through arbitration to risk; BO/TP/MR, accepted organic lifecycles, true real ticks, actual broker faults, and normal-terminal restart remain unproven. |
+| Testing | SafetyTests | Partial | Embedded deterministic fixtures cover 38 policies/lifecycles, including rejected-signal direction, regime safety, arbitration ranking/duplicate/conflict/exposure/lower-ranked behavior, final-decision signal writing, and performance without file journaling. Organic true-tick data reached accepted FBO BUY/SELL; BO/TP/MR accepted lifecycles, actual broker faults, and normal-terminal restart remain unproven. |
 | UI | Dashboard | Partial | Basic dashboard exists; not every required field is displayed. |
 | UI | Alerts | Disconnected partial | Terminal/push helper exists but is not included or instantiated by the EA. |
 

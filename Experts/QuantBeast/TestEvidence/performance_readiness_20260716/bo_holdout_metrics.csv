@@ -1,0 +1,11 @@
+signal_rows,1130
+signal_first_time,2026.06.29 06:00:00
+signal_last_time,2026.07.02 21:55:00
+signal_status,{'REJECTED': 1130}
+signal_by_strategy,{'BO': 1130}
+signal_by_direction_status,{('BUY', 'REJECTED'): 565, ('SELL', 'REJECTED'): 565}
+accepted_signals,0
+top_reasons,[('Breakout: not eligible', 992), ('Breakout Long: HTF bias is not up', 45), ('Breakout Short: no trigger', 30), ('Breakout Short: HTF bias is not down', 24), ('Breakout: price not near upper boundary', 13), ('Breakout: no trigger', 11), ('Breakout Short: price not near lower boundary', 9), ('Risk: Stop too far: 1765.0 > 1000', 1), ('Risk: Stop too far: 2726.0 > 1000', 1), ('Risk: Stop too far: 2579.0 > 1000', 1), ('Risk: Stop too far: 1816.0 > 1000', 1), ('Risk: Stop too far: 1968.0 > 1000', 1), ('Risk: Stop too far: 2305.0 > 1000', 1)]
+signal_ids_missing_direction,0
+order_rows,0
+trade_rows,0

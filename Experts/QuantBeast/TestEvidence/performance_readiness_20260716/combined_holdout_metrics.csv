@@ -1,0 +1,22 @@
+signal_rows,1248
+signal_first_time,2026.06.29 06:00:00
+signal_last_time,2026.06.29 21:55:00
+signal_status,{'REJECTED': 1245, 'ACCEPTED': 3}
+signal_by_strategy,{'BO': 312, 'FBO': 312, 'TP': 312, 'MR': 312}
+signal_by_strategy_status,{('BO', 'REJECTED'): 312, ('FBO', 'REJECTED'): 309, ('TP', 'REJECTED'): 312, ('MR', 'REJECTED'): 312, ('FBO', 'ACCEPTED'): 3}
+signal_by_direction_status,{('BUY', 'REJECTED'): 622, ('SELL', 'REJECTED'): 623, ('SELL', 'ACCEPTED'): 1, ('BUY', 'ACCEPTED'): 2}
+signal_by_strategy_direction_status,{('BO', 'BUY', 'REJECTED'): 156, ('BO', 'SELL', 'REJECTED'): 156, ('FBO', 'BUY', 'REJECTED'): 154, ('FBO', 'SELL', 'REJECTED'): 155, ('TP', 'BUY', 'REJECTED'): 156, ('TP', 'SELL', 'REJECTED'): 156, ('MR', 'BUY', 'REJECTED'): 156, ('MR', 'SELL', 'REJECTED'): 156, ('FBO', 'SELL', 'ACCEPTED'): 1, ('FBO', 'BUY', 'ACCEPTED'): 2}
+accepted_by_strategy_direction,{('FBO', 'SELL'): 1, ('FBO', 'BUY'): 2}
+top_rejection_reasons,[('TP: not eligible', 312), ('MR: not eligible', 298), ('Breakout: not eligible', 286), ('FBO: not eligible', 282), ('Breakout Short: HTF bias is not down', 13), ('FBO Short: no upside failed auction', 13), ('Breakout: price not near upper boundary', 12), ('FBO Long: reclaim depth too small', 6), ('FBO Long: insufficient R:R', 3), ('FBO Long: no downside failed auction', 2), ('MR Long: insufficient deviation, sd=-0.18', 1), ('MR Short: insufficient deviation, sd=-0.18', 1), ('FBO Short: insufficient R:R', 1), ('Arbitration: same-direction stacking disabled', 1), ('Risk: Stop too far: 1280.0 > 1000', 1), ('MR Long: no rejection wick', 1), ('MR Short: insufficient deviation, sd=-1.56', 1), ('MR Long: insufficient deviation, sd=-0.86', 1), ('MR Short: insufficient deviation, sd=-0.86', 1), ('MR Long: insufficient deviation, sd=-0.76', 1)]
+signal_ids_missing_direction,0
+order_rows,3
+order_types,{'ORDER_TYPE_SELL': 1, 'ORDER_TYPE_BUY': 2}
+trade_rows,3
+trade_directions,{'SHORT': 1, 'LONG': 2}
+net_sum,-12.74
+gross_profit,87.80
+gross_loss,100.54
+profit_factor,0.873284
+wins,1
+losses,2
+closed_trade_running_max_dd,100.54

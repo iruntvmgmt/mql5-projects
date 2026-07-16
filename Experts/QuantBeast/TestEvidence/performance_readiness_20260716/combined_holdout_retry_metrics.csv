@@ -1,0 +1,22 @@
+signal_rows,4520
+signal_first_time,2026.06.29 06:00:00
+signal_last_time,2026.07.02 21:55:00
+signal_status,{'REJECTED': 4510, 'ACCEPTED': 10}
+signal_by_strategy,{'BO': 1130, 'FBO': 1130, 'TP': 1130, 'MR': 1130}
+signal_by_strategy_status,{('BO', 'REJECTED'): 1130, ('FBO', 'REJECTED'): 1120, ('TP', 'REJECTED'): 1130, ('MR', 'REJECTED'): 1130, ('FBO', 'ACCEPTED'): 10}
+signal_by_direction_status,{('BUY', 'REJECTED'): 2252, ('SELL', 'REJECTED'): 2258, ('SELL', 'ACCEPTED'): 2, ('BUY', 'ACCEPTED'): 8}
+signal_by_strategy_direction_status,{('BO', 'BUY', 'REJECTED'): 565, ('BO', 'SELL', 'REJECTED'): 565, ('FBO', 'BUY', 'REJECTED'): 557, ('FBO', 'SELL', 'REJECTED'): 563, ('TP', 'BUY', 'REJECTED'): 565, ('TP', 'SELL', 'REJECTED'): 565, ('MR', 'BUY', 'REJECTED'): 565, ('MR', 'SELL', 'REJECTED'): 565, ('FBO', 'SELL', 'ACCEPTED'): 2, ('FBO', 'BUY', 'ACCEPTED'): 8}
+accepted_by_strategy_direction,{('FBO', 'SELL'): 2, ('FBO', 'BUY'): 8}
+top_rejection_reasons,[('TP: not eligible', 1124), ('MR: not eligible', 1094), ('Breakout: not eligible', 992), ('FBO: not eligible', 970), ('FBO Short: no upside failed auction', 47), ('Breakout Long: HTF bias is not up', 45), ('FBO Long: no downside failed auction', 32), ('Breakout Short: no trigger', 30), ('FBO Long: reclaim depth too small', 25), ('Breakout Short: HTF bias is not down', 24), ('Breakout: price not near upper boundary', 13), ('FBO Short: insufficient R:R', 12), ('Breakout: no trigger', 11), ('FBO Short: reclaim depth too small', 11), ('FBO Long: insufficient R:R', 10), ('Breakout Short: price not near lower boundary', 9), ('Risk: Max consecutive losses: 5', 7), ('TP Long: not uptrend', 3), ('TP Short: configured trigger not confirmed', 2), ('FBO Short: price not reclaimed yet', 2)]
+signal_ids_missing_direction,0
+order_rows,10
+order_types,{'ORDER_TYPE_SELL': 2, 'ORDER_TYPE_BUY': 8}
+trade_rows,10
+trade_directions,{'SHORT': 2, 'LONG': 8}
+net_sum,64.66
+gross_profit,279.82
+gross_loss,215.16
+profit_factor,1.300521
+wins,3
+losses,7
+closed_trade_running_max_dd,114.62

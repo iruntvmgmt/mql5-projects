@@ -18,6 +18,7 @@
 #include "../Execution/BrokerAdapter.mqh"
 #include "../Execution/ShadowPortfolio.mqh"
 #include "../Execution/TransactionState.mqh"
+#include "../Analytics/TradeJournal.mqh"
 #include "../Regime/RegimeEngine.mqh"
 #include "../Portfolio/SignalArbitrator.mqh"
 #include "../Strategies/BreakoutEngine.mqh"
@@ -989,6 +990,35 @@ bool QBTestBrokerFaultMatrix(string &detail)
             " cancel_fill=" + string(racePolicy ? "retained" : "FAILED") +
             " close_owner=central";
    return protectionPolicy && responsePolicy && racePolicy;
+}
+
+bool QBTestPerformanceWithoutFileJournal(string &detail)
+{
+   CTradeJournal journal;
+   PositionContext ctx;
+   ZeroMemory(ctx);
+   ctx.strategy_id = "PERF_FIXTURE";
+   ctx.signal_id = 1;
+   ctx.entry_time = TimeCurrent() - 60;
+   ctx.position_type = POSITION_TYPE_BUY;
+   ctx.original_entry = 100.0;
+   ctx.original_stop = 99.0;
+   ctx.initial_target = 102.0;
+   ctx.initial_volume = 0.10;
+   ctx.entry_regime_trend = TREND_NEUTRAL;
+
+   // No Init() call: every CSV journal remains disabled and unopened.
+   journal.LogTrade(ctx, 101.0, 10.0, -1.0, 0.0,
+                    EXIT_TARGET_HIT, TREND_NEUTRAL, VOL_NORMAL);
+   PerformanceSummary perf = journal.GetPerformance();
+   bool ok = perf.total_trades == 1 && perf.winning_trades == 1 &&
+             MathAbs(perf.net_profit - 9.0) <= 1e-9 &&
+             MathAbs(perf.avg_r - 1.0) <= 1e-9;
+   detail = "trades=" + IntegerToString(perf.total_trades) +
+            " net=" + DoubleToString(perf.net_profit, 2) +
+            " avgR=" + DoubleToString(perf.avg_r, 2) +
+            " file=disabled";
+   return ok;
 }
 
 bool QBTestKillSwitchFailurePriority(string &detail)

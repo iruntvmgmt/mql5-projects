@@ -1,0 +1,13 @@
+Pre-repair-of-append boundary: SignalJournal.csv size 4850 bytes.
+Post-repair boundary: SignalJournal.csv size 6698 bytes.
+Newly appended bytes only decode to these five fixture rows:
+
+2026.03.02 00:00:00,XAUUSD,1,FIX_STRATEGY_LONG_REJECT,BUY,FIX_STRATEGY_LONG_REJECT_BUY_1772409600,0,0,REJECTED,23,Fixture: strategy rejection,0,0,0,0.0,0.0,0.00000,0.00000,0.00000,0.00,0.000
+2026.03.02 00:00:00,XAUUSD,1,FIX_STRATEGY_SHORT_REJECT,SELL,FIX_STRATEGY_SHORT_REJECT_SELL_1772409600,0,0,REJECTED,23,Fixture: strategy rejection,0,0,0,0.0,0.0,0.00000,0.00000,0.00000,0.00,0.000
+2026.03.02 00:00:00,XAUUSD,1,FIX_ARBITRATION_LOSER,BUY,FIX_ARBITRATION_LOSER_BUY_1772409600,0,0,REJECTED,22,Fixture: arbitration loser,0,0,0,0.0,0.0,0.00000,0.00000,0.00000,0.00,0.000
+2026.03.02 00:00:00,XAUUSD,1,FIX_RISK_REJECT,SELL,FIX_RISK_REJECT_SELL_1772409600,0,0,REJECTED,8,Fixture: central risk rejection,0,0,0,0.0,0.0,0.00000,0.00000,0.00000,0.00,0.000
+2026.03.02 00:00:00,XAUUSD,1,FIX_ACCEPTED,BUY,FIX_ACCEPTED_BUY_1772409600,0,0,ACCEPTED,0,Fixture: final accepted decision,0,0,0,0.0,0.0,0.00000,0.00000,0.00000,0.00,0.000
+
+This is deterministic generated-tick Shadow evidence through the production
+CTradeJournal writer. It is not organic market-candidate evidence and it is
+not true-real-tick evidence. No broker order was transmitted.

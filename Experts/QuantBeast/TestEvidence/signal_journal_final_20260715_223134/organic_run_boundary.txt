@@ -1,0 +1,10 @@
+Attempt: existing organic_pipeline_20260715 configuration, 2026-07-15 22:27:59 EDT.
+Pre-run agent log size: 133940460 bytes.
+Post-run agent log size: 133978862 bytes.
+Pre/post SignalJournal.csv size: 4850 bytes; no rows appended.
+
+The tester reported "generating based on real ticks", then stated that real
+ticks begin only at 2026.06.19 and used every-tick generation for the requested
+2026.03.02 interval. The agent was forced to stop at 22:29:12. No organic
+candidate was observed. This attempt is rejected as organic or true-real-tick
+proof; organic file-level proof remains pending local data availability.

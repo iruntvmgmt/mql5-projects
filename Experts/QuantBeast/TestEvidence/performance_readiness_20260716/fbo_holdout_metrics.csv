@@ -1,0 +1,20 @@
+signal_rows,1130
+signal_first_time,2026.06.29 06:00:00
+signal_last_time,2026.07.02 21:55:00
+signal_status,{'REJECTED': 1120, 'ACCEPTED': 10}
+signal_by_strategy,{'FBO': 1130}
+signal_by_direction_status,{('BUY', 'REJECTED'): 557, ('SELL', 'REJECTED'): 563, ('SELL', 'ACCEPTED'): 2, ('BUY', 'ACCEPTED'): 8}
+accepted_by_strategy_direction,{('FBO', 'SELL'): 2, ('FBO', 'BUY'): 8}
+top_reasons,[('FBO: not eligible', 970), ('FBO Short: no upside failed auction', 47), ('FBO Long: no downside failed auction', 32), ('FBO Long: reclaim depth too small', 25), ('FBO Short: insufficient R:R', 12), ('FBO Short: reclaim depth too small', 11), ('FBO Long: insufficient R:R', 10), ('Risk: Max consecutive losses: 5', 5), ('FBO Short: price not reclaimed yet', 2), ('FBO Short: reclaim below 4054.78', 1), ('FBO Long: reclaim above 4045.36', 1), ('Arbitration: same-direction stacking disabled', 1), ('Risk: Stop too far: 1280.0 > 1000', 1), ('FBO Long: reclaim above 4029.11', 1), ('Risk: Stop too far: 1553.0 > 1000', 1), ('FBO Long: reclaim above 4012.94', 1), ('FBO Short: reclaim below 4033.71', 1), ('FBO Long: reclaim above 4012.73', 1), ('Risk: Stop too far: 2008.0 > 1000', 1), ('FBO Long: reclaim above 4021.19', 1)]
+signal_ids_missing_direction,0
+order_rows,10
+order_types,{'ORDER_TYPE_SELL': 2, 'ORDER_TYPE_BUY': 8}
+trade_rows,10
+trade_directions,{'SHORT': 2, 'LONG': 8}
+net_sum,64.66
+gross_profit,279.82
+gross_loss,215.16
+profit_factor,1.300521
+wins,3
+losses,7
+closed_trade_running_max_dd,114.62

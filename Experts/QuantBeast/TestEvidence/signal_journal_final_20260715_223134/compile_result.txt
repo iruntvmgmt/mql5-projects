@@ -1,0 +1,5 @@
+MetaEditor build 6002, X64 Regular
+Result: 0 errors, 0 warnings, 14307 ms elapsed
+Compiled: 2026-07-15 23:59:05 EDT
+QuantBeastEA.mq5 SHA-256: 6a4f83c34b4cd27d89739e4df760347994ba7a28f9aaae41990eb4bfcc2052be
+QuantBeastEA.ex5 SHA-256: cf3bceae2ee37841487684e974e29e2c246f521c9deb62a942136e28747f5fd7

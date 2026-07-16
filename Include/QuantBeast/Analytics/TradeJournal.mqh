@@ -183,8 +183,6 @@ public:
                   ENUM_EXIT_REASON exitReason, ENUM_TREND_REGIME exitRegimeTrend,
                   ENUM_VOLATILITY_REGIME exitRegimeVol)
    {
-      if(!m_enabledTrade || m_tradeHandle == INVALID_HANDLE) return;
-
       // MT5 commission and swap deal values are signed (normally negative).
       double netPnL = grossPnL + commission + swap;
       double riskDist = MathAbs(ctx.original_entry - ctx.original_stop);
@@ -192,35 +190,38 @@ public:
       int dir = (ctx.position_type == POSITION_TYPE_BUY) ? 1 : -1;
       rMultiple *= dir;
 
-      string fields[22];
-      fields[0]  = ctx.strategy_id;
-      fields[1]  = IntegerToString(ctx.signal_id);
-      fields[2]  = FormatTime(ctx.entry_time);
-      fields[3]  = FormatTime(TimeCurrent());
-      fields[4]  = (dir > 0) ? "LONG" : "SHORT";
-      fields[5]  = DoubleToString(ctx.original_entry, 5);
-      fields[6]  = DoubleToString(exitPrice, 5);
-      fields[7]  = DoubleToString(ctx.initial_volume, 2);
-      fields[8]  = DoubleToString(ctx.original_stop, 5);
-      fields[9]  = DoubleToString(ctx.initial_target, 5);
-      fields[10] = DoubleToString(grossPnL, 2);
-      fields[11] = DoubleToString(commission, 2);
-      fields[12] = DoubleToString(swap, 2);
-      fields[13] = DoubleToString(netPnL, 2);
-      fields[14] = DoubleToString(rMultiple, 2);
-      fields[15] = DoubleToString(ctx.mfe, 5);
-      fields[16] = DoubleToString(ctx.mae, 5);
-      fields[17] = IntegerToString(exitReason);
-      fields[18] = IntegerToString(ctx.entry_regime_trend);
-      fields[19] = IntegerToString(exitRegimeTrend);
-      fields[20] = DoubleToString(ctx.entry_spread, 1);
-      fields[21] = DoubleToString(ctx.entry_slippage, 1);
+      if(m_enabledTrade && m_tradeHandle != INVALID_HANDLE)
+      {
+         string fields[22];
+         fields[0]  = ctx.strategy_id;
+         fields[1]  = IntegerToString(ctx.signal_id);
+         fields[2]  = FormatTime(ctx.entry_time);
+         fields[3]  = FormatTime(TimeCurrent());
+         fields[4]  = (dir > 0) ? "LONG" : "SHORT";
+         fields[5]  = DoubleToString(ctx.original_entry, 5);
+         fields[6]  = DoubleToString(exitPrice, 5);
+         fields[7]  = DoubleToString(ctx.initial_volume, 2);
+         fields[8]  = DoubleToString(ctx.original_stop, 5);
+         fields[9]  = DoubleToString(ctx.initial_target, 5);
+         fields[10] = DoubleToString(grossPnL, 2);
+         fields[11] = DoubleToString(commission, 2);
+         fields[12] = DoubleToString(swap, 2);
+         fields[13] = DoubleToString(netPnL, 2);
+         fields[14] = DoubleToString(rMultiple, 2);
+         fields[15] = DoubleToString(ctx.mfe, 5);
+         fields[16] = DoubleToString(ctx.mae, 5);
+         fields[17] = IntegerToString(exitReason);
+         fields[18] = IntegerToString(ctx.entry_regime_trend);
+         fields[19] = IntegerToString(exitRegimeTrend);
+         fields[20] = DoubleToString(ctx.entry_spread, 1);
+         fields[21] = DoubleToString(ctx.entry_slippage, 1);
 
-      string row = MakeCSVRow(fields, 22);
-      WriteCSVLine(m_tradeHandle, row);
-      FileFlush(m_tradeHandle);
+         string row = MakeCSVRow(fields, 22);
+         WriteCSVLine(m_tradeHandle, row);
+         FileFlush(m_tradeHandle);
+      }
 
-      // Update performance
+      // Tester/performance accounting is independent of optional file output.
       UpdatePerformance(netPnL, rMultiple);
    }
 

@@ -17,10 +17,10 @@ Each strategy derives from `CStrategyBase` and must:
 Current shared limitations:
 
 - Position callbacks are empty and never dispatched.
-- Valid signals do not carry a durable numeric signal ID.
-- Rejections created by `MakeRejected` have a zero/default direction, which can make rejected short records ambiguous.
+- Valid signals do not carry a durable numeric signal ID beyond the journal string ID.
+- Rejections preserve evaluated BUY/SELL direction and signal journal IDs include direction.
 - Strategy-level hardcoded spread limits coexist with the configurable global spread limit.
-- Direct class-level eligibility, valid-long, and valid-short behavior has deterministic coverage for all four engines. Organic feature/regime reachability, arbitration, and complete lifecycle sequences remain unproven.
+- Direct class-level eligibility, valid-long, and valid-short behavior has deterministic coverage for all four engines. Organic true-tick evidence accepted FBO BUY/SELL and produced BO/FBO/TP/MR BUY/SELL rejections; BO/TP/MR accepted lifecycle sequences remain unproven.
 
 ## Strategy 1: Session Volatility Breakout (`BO`)
 
@@ -83,7 +83,7 @@ Trade a formally measured penetration beyond a meaningful level followed by time
 
 ### Current operational status
 
-FeatureEngine now assigns directional failed-breakout, reclaim, bars-beyond, breakout-distance, reclaim-level, and sweep-extreme fields from completed bars. Direct FBO long, short, and rejection fixtures pass. Organic frequency and ordinary-wick false-positive behavior remain unvalidated.
+FeatureEngine now assigns directional failed-breakout, reclaim, bars-beyond, breakout-distance, reclaim-level, and sweep-extreme fields from completed bars. Direct FBO long, short, and rejection fixtures pass. Organic true-tick evidence produced accepted BUY/SELL Shadow entries and completed trade rows; broader frequency and ordinary-wick false-positive behavior remain unvalidated.
 
 ### Required completion
 
@@ -164,9 +164,9 @@ Trade a statistically meaningful deviation back toward equilibrium only in balan
 
 The arbitrator may score by confidence, regime confidence, R:R, spread percentile, and HTF alignment. It also applies cooldown, duplicate, direction-conflict, and stacking rules.
 
-Required completion:
+Current status and required completion:
 
-- Log arbitration rejections after the arbitrator changes candidate status.
+- Arbitration rejections are logged after final arbitration/risk status.
 - Persist accepted signal IDs and cooldown timestamps.
 - Make signal IDs stable and collision-resistant across symbols/timeframes.
 - Test all arbitration modes, ties, long/short conflicts, cooldown, duplicates, and restart behavior.

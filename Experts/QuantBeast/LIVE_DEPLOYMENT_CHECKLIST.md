@@ -3,6 +3,8 @@
 **Current decision:** **DO NOT DEPLOY LIVE**  
 This checklist is a release gate, not general advice. Every applicable item requires recorded evidence.
 
+**Latest safe readiness:** `READY FOR SHADOW MODE` as of 2026-07-16. Compile, deterministic Shadow fixtures, and organic true-tick Shadow journal proof passed; real broker execution and restart evidence are still absent.
+
 ## A. Source and build gate
 
 - [ ] Bug audit completed and all critical/high defects resolved.
@@ -108,6 +110,8 @@ This checklist is a release gate, not general advice. Every applicable item requ
 - [ ] Restart/recovery test evidence archived.
 - [ ] Conservative demo forward test completed for at least two continuous weeks.
 - [ ] No unresolved critical/high defects.
+
+Current broker-free evidence satisfies parts of the Shadow/journal gate only: `TestEvidence/organic_true_ticks_20260716/` proves signal/order/trade CSV separation and final-decision rows in Shadow. It does not satisfy live execution, demo, recovery, or performance gates.
 
 ## K. Conservative live approval
 

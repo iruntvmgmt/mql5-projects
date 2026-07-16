@@ -1,14 +1,14 @@
 # QuantBeast Known Limitations
 
-**Status date:** 2026-07-15  
+**Status date:** 2026-07-16  
 **Current readiness:** `READY FOR SHADOW MODE` for broker-free mechanical research only. Live and Challenge operation prohibited.
 
 ## Runtime and testing
 
 - The final source compiles at `0 errors, 0 warnings`, but compilation is not runtime proof.
 - The native MT5 tester API still returns the invalid/ambiguous identifier `job_id: 0` and reports `tester stopped`; local agent logs must be inspected to confirm completion.
-- A Shadow fixture completed with 36 startup tests passed and 0 failed, including rejected-direction, regime, arbitration, broker-fault, and centralized protection-close policies.
-- Generated-tick fallback data organically reached FBO long and short through feature, regime, strategy, arbitration, and central risk. BO/TP/MR organic candidates, an accepted organic Shadow lifecycle, true-real-tick coverage, performance backtest, holdout, stress, normal-terminal restart, live-path fault-injection, and demo-forward results remain unproven.
+- A Shadow fixture completed with 38 startup tests passed and 0 failed, including rejected-direction, regime, arbitration, broker-fault, centralized protection-close, final-decision signal-writer, and performance-without-file-journal policies.
+- Organic true-tick Shadow evidence reached FBO accepted BUY/SELL entries and BO/FBO/TP/MR BUY/SELL rejections through feature, regime, strategy, arbitration, and central risk. A combined true-tick training baseline completed, the first holdout attempt was invalid/incomplete, a clean holdout retry completed normally, and independent BO/FBO/TP/MR train and holdout baselines completed. Only FBO reached accepted trade state in those baseline windows. BO/TP/MR accepted organic entries, broader holdouts, stress, normal-terminal restart, live-path fault-injection, and demo-forward results remain unproven.
 - No profitability claim is supported.
 
 ## Shadow mode
@@ -30,8 +30,8 @@ Remaining Shadow limitations:
 - Virtual positions are intentionally not persisted across terminal restart.
 - Swap is recorded as zero; overnight financing is not modeled.
 - Commission is a configured per-lot estimate rather than broker-history truth.
-- Core market-position Shadow branches and direct strategy-class signal paths now have deterministic evidence. A generated-fallback run reached FBO candidates but both were risk-rejected for excessive stop distance; organic accepted lifecycle sequences and long-run accounting still need validation.
-- Strategy performance remains unvalidated. Direct class reachability and Shadow results must not be treated as evidence of an edge.
+- Core market-position Shadow branches and direct strategy-class signal paths now have deterministic evidence. Organic true-tick evidence reached accepted FBO BUY/SELL entries and completed FBO trade rows; broader accepted BO/TP/MR lifecycle sequences and long-run accounting still need validation.
+- Strategy performance remains unvalidated. The completed combined training baseline, clean holdout retry, and per-strategy train/holdout runs are observational only, not proof of edge. Direct class reachability and Shadow results must not be treated as evidence of an edge.
 
 ## Recovery and persistence
 
@@ -85,7 +85,7 @@ Remaining Shadow limitations:
 
 - Performance metrics include tracked manual exit deals by stable position identifier, but broker-side runtime validation is still absent.
 - No per-strategy/direction/session/regime report exists.
-- Final strategy/arbitration/risk decision routing is implemented and deterministically tested, rejected signals preserve BUY/SELL direction, and signal IDs include direction. File-level proof from a completed organic post-repair run is still pending. The shared historical journal intentionally retains pre-repair rows and must not be treated as current evidence or rewritten.
+- Final strategy/arbitration/risk decision routing is implemented and deterministically tested, rejected signals preserve BUY/SELL direction, and signal IDs include direction. File-level proof from a completed organic post-repair true-tick run is under `TestEvidence/organic_true_ticks_20260716/`. The shared historical journal intentionally retains pre-repair rows and a pre-fix corrupted prefix; only byte-bounded suffixes should be treated as current evidence.
 - Counterfactual tracking remains a stub.
 - Alert inputs and `UI/Alerts.mqh` remain disconnected.
 - Dashboard values have not been verified against broker state in runtime.
@@ -107,6 +107,6 @@ Active reconciliation and recovery logic currently lives in `QuantBeastEA.mq5`, 
 Before promotion beyond Diagnostic Mode:
 
 1. Run deterministic live-path sizing, stop, transaction, duplicate, restart, unknown-position, pending-order, and protection-failure scenarios.
-2. Prove BO/TP/MR and accepted-lifecycle organic feature/regime-to-strategy reachability without lookahead on true real ticks; the current FBO evidence used generated fallback ticks.
-3. Run realistic-cost tester baselines and holdouts.
+2. Prove accepted BO/TP/MR organic feature/regime-to-strategy reachability without lookahead on true real ticks; FBO accepted BUY/SELL has one-day true-tick Shadow evidence.
+3. Expand realistic-cost tester baselines, additional holdouts, and stress tests without optimizing against holdout data.
 4. Complete broker-specific demo validation before considering micro-live.

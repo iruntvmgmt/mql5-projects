@@ -1,0 +1,17 @@
+Agent log: Tester/Agent-127.0.0.1-3000/logs/20260716.log
+Fresh section start: 2026-07-16 00:05:43 EDT
+EX5 loaded: 441303 bytes
+Fixture: XAUUSD M5, 2026.05.18 through 2026.05.22, 1-minute OHLC
+Mode: Shadow; persistence, globals, journals, news, and dashboard disabled
+
+TEST 1 PASS through TEST 34 PASS
+Self-tests complete: 36 passed, 0 failed
+final balance 10000.00 USD
+OnTester result 0
+XAUUSD,M5: 22080 ticks, 1104 bars generated
+Test passed in 0:00:28.448
+thread finished
+
+The journal-specific Test 35 is intentionally skipped in this regression
+because all journals are disabled. Its production-writer result is preserved
+separately in signal_journal_final_20260715_223134.

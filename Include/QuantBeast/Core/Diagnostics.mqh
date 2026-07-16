@@ -137,6 +137,17 @@ int OpenJournalFile(string filename, string headers)
       FileFlush(handle);
    }
 
+   // FileOpen positions an existing read/write file at byte zero.  Every
+   // journal write must begin at the current end so historical evidence is
+   // append-only across terminal and tester restarts.
+   if(!FileSeek(handle, 0, SEEK_END))
+   {
+      QBLogError("Cannot seek journal file to end: " + path +
+                 " error=" + IntegerToString(GetLastError()));
+      FileClose(handle);
+      return INVALID_HANDLE;
+   }
+
    return handle;
 }
 

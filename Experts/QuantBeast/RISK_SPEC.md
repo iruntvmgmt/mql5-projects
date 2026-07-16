@@ -3,6 +3,8 @@
 **Status:** Partial implementation; not live validated.  
 **Authority:** All trades must pass centralized risk validation and centralized sizing.
 
+**Latest evidence:** 2026-07-16 deterministic Shadow regression `38 passed, 0 failed`; organic true-tick Shadow evidence includes accepted FBO BUY/SELL entries and a central-risk rejection for excessive stop distance.
+
 ## Risk flow
 
 ```text
@@ -16,7 +18,7 @@ StrategySignal
   -> close-event risk update and persistence
 ```
 
-All listed stages are connected in source. Broker-fill protection, close-event accounting, and persistence still require live-path fault-injection evidence before any live approval.
+All listed stages are connected in source. Deterministic and organic Shadow evidence proves broker-free routing, accepted FBO entries, and central-risk rejection journaling. Broker-fill protection, close-event accounting, and persistence still require live-path fault-injection evidence before any live approval.
 
 ## Position sizing modes
 
@@ -80,7 +82,7 @@ All results should be normalized to broker minimum, maximum, and step. Sizing mu
 | Margin-level block | Yes | Yes pre-trade | No scenario evidence |
 | Position limit | Yes | Yes pre-trade | No |
 | Pending-order limit | Yes | Yes pre-trade | No |
-| Aggregate lot exposure | Yes | Yes, including proposed order | No live-path scenario evidence |
+| Aggregate lot exposure | Yes | Yes, including proposed order | Deterministic and Shadow organic evidence; no live-path scenario evidence |
 | Strategy position limit | Yes | Partial after restart | No |
 | Strategy daily-trade limit | Yes | In-memory only | No restart evidence |
 | Max leverage | No | No | No |

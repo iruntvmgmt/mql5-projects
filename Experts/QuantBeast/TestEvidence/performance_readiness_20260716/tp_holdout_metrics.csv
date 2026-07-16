@@ -1,0 +1,20 @@
+signal_rows,1130
+signal_first_time,2026.06.29 06:00:00
+signal_last_time,2026.07.02 21:55:00
+signal_status,{'REJECTED': 1130}
+signal_by_strategy,{'TP': 1130}
+signal_by_direction_status,{('BUY', 'REJECTED'): 565, ('SELL', 'REJECTED'): 565}
+accepted_by_strategy_direction,{}
+top_reasons,[('TP: not eligible', 1124), ('TP Long: not uptrend', 3), ('TP Short: configured trigger not confirmed', 2), ('TP Short: low confidence', 1)]
+signal_ids_missing_direction,0
+order_rows,0
+order_types,{}
+trade_rows,0
+trade_directions,{}
+net_sum,0.00
+gross_profit,0.00
+gross_loss,0.00
+profit_factor,0.000000
+wins,0
+losses,0
+closed_trade_running_max_dd,0.00

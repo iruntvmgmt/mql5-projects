@@ -1,21 +1,33 @@
 ;+------------------------------------------------------------------+
 ;|                                    XAUUSD_Conservative_Live.set  |
 ;| QuantBeast EA - Conservative Live Mode Preset                    |
-;| WARNING: This preset sends real orders with conservative limits. |
-;| USE AT YOUR OWN RISK.                                            |
+;| NOT APPROVED FOR LIVE USE.                                       |
+;| Candidate scope: future explicitly authorized FBO-only demo test.|
+;| WARNING: InpMode=2 can transmit broker orders if loaded live.    |
 ;+------------------------------------------------------------------+
 InpMode=2
 InpAcknowledgeChallengeRisk=false
-InpRiskPercent=0.5
-InpMaxRiskPerTrade=1.0
+InpBO_Enabled=false
+InpFBO_Enabled=true
+InpTP_Enabled=false
+InpMR_Enabled=false
+InpRiskPercent=0.10
+InpMaxRiskPerTrade=0.25
 InpMinRewardRisk=1.5
 InpMaxPositions=1
-InpMaxTotalExposureLots=0.1
-InpMaxSpreadPoints=30
-InpDailyLossLimitPct=3.0
-InpWeeklyLossLimitPct=5.0
-InpMaxDrawdownPct=10.0
-InpMaxConsecLosses=3
+InpMaxPendingOrders=0
+InpMaxTotalExposureLots=0.03
+InpMaxSpreadPoints=20
+InpDailyLossLimitPct=1.0
+InpWeeklyLossLimitPct=2.0
+InpMaxDrawdownPct=3.0
+InpMaxConsecLosses=1
+InpMaxConsecutiveBrokerFailures=1
+InpUseMarketOrders=true
+InpUseStopOrders=false
+InpUseLimitOrders=false
+InpPersistState=true
+InpUseGlobalVars=true
 InpDashboardEnabled=true
 InpEnableDebugLogging=false
 InpEnableSignalJournal=true
@@ -24,4 +36,4 @@ InpEnableTradeJournal=true
 InpEnableBreakeven=true
 InpEnablePartialClose=true
 InpEnableATRTrail=true
-InpUnknownPosPolicy=1
+InpUnknownPosPolicy=2

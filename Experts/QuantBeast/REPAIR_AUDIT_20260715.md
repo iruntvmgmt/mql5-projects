@@ -6,18 +6,18 @@
 
 The original audit correctly failed the generated project at 23 errors and 15 warnings. The repaired source now compiles to `QuantBeastEA.ex5` with **0 errors and 0 warnings**. The repair removed the confirmed compile blockers and corrected multiple critical safety, accounting, indexing, execution, recovery, and strategy-unit defects.
 
-This is not a profitability verdict. A Shadow Strategy Tester fixture completed with **36 startup checks passed and 0 failed**, including direction-preserving rejected signals, regime/arbitration policies, a deterministic broker-fault matrix, and centralized protection-close ownership. Local agent logs are authoritative. The EA is not cleared for Conservative Live or Challenge modes.
+This is not a profitability verdict. The latest Shadow Strategy Tester fixture completed with **38 startup checks passed and 0 failed**, including direction-preserving rejected signals, regime/arbitration policies, a deterministic broker-fault matrix, centralized protection-close ownership, final-decision signal-writer proof, and performance updates when file trade journaling is disabled. Local agent logs are authoritative. The EA is not cleared for Conservative Live or Challenge modes.
 
 ## Final evidence
 
 - Source: `QuantBeastEA.mq5`
-- Source SHA-256: `a771a2f6e2f3812f478885df525400f2b697f16656087ae208f08953e1588a6d`
-- EX5 SHA-256: `0357dfb5323a25969645f59ea2ca6c95de642678e8c2c7d376337fd172469e85`
+- Source SHA-256: `220577a689c55b7ee263e0bae779752b610e0c75ca3f5ff528d2bb473a0ce30a`
+- EX5 SHA-256: `fca02855e1396c768c974b3ce2650beb45f4af51f81f9d14f4ed714be8590040`
 - Shadow module SHA-256: `05885359c865d3c56d738a7ededcd13a49b46b3c8d74dc07c7d040ebece560bb`
 - Compiler: MetaEditor build 6002, X64 Regular
-- Compile result: `0 errors, 0 warnings, 10330 ms`
-- Runtime result: `36 passed, 0 failed`; tester balance unchanged at `10000.00`
-- Evidence: prior folders plus `TestEvidence/broker_fault_matrix_20260715/`, `TestEvidence/organic_pipeline_20260715/`, and `TestEvidence/arbitration_journal_20260715/`
+- Compile result: `0 errors, 0 warnings`
+- Runtime result: deterministic `38 passed, 0 failed`; organic true-tick Shadow run `417423 ticks`, `276 bars`; tester balance unchanged at `10000.00`
+- Evidence: prior folders plus `TestEvidence/broker_fault_matrix_20260715/`, `TestEvidence/organic_pipeline_20260715/`, `TestEvidence/arbitration_journal_20260715/`, `TestEvidence/audit_final_20260716/`, `TestEvidence/organic_true_ticks_20260716/`, `TestEvidence/performance_readiness_20260716/`, and `FINAL_ADVERSARIAL_AUDIT_20260716.md`
 
 ## Critical repairs completed
 
@@ -97,13 +97,13 @@ This is not a profitability verdict. A Shadow Strategy Tester fixture completed 
     - Every non-selected valid candidate receives an explicit arbitration rejection reason, including lower-ranked, confluence, duplicate, opposing, and exposure paths.
     - The controller journals valid candidates only after arbitration and central risk produce the final signal decision; broker order/fill outcomes remain in the order journal.
     - Signal IDs include direction, preventing same-strategy BUY and SELL evaluations at one timestamp from sharing an identifier.
-    - Deterministic arbitration coverage and the full 36/0 Shadow regression pass; a completed organic post-repair CSV inspection remains pending.
+    - Deterministic arbitration coverage and the full 38/0 Shadow regression pass; completed organic post-repair true-tick CSV inspection is under `TestEvidence/organic_true_ticks_20260716/`.
 
 ## Remaining critical/high risks
 
 ### Runtime proof is incomplete
 
-Initialization, the core Shadow market-position lifecycle, and direct BO/FBO/TP/MR class reachability now have captured runtime proof, including costs, multiple positions, drawdown locking, transient entry gates, and direction-preserving long/short/rejection paths. Generated-tick fallback data organically reached FBO long and short through arbitration to central risk. BO/TP/MR organic candidates, accepted organic lifecycles, true-real-tick behavior, broker retcodes, protection repair, transaction ordering, restart recovery, and tester/live agreement still require runtime evidence.
+Initialization, the core Shadow market-position lifecycle, direct BO/FBO/TP/MR class reachability, and final-decision journal routing now have captured runtime proof. Organic true-tick Shadow evidence reached FBO accepted BUY/SELL entries, completed FBO trades, BO/FBO/TP/MR BUY/SELL rejections, and a central-risk rejected winner. A combined true-tick training baseline and clean holdout retry completed; the first holdout attempt is preserved as invalid/incomplete evidence. BO/TP/MR accepted organic lifecycles, broker retcodes, protection repair, transaction ordering, restart recovery, broader holdouts, and tester/live agreement still require runtime evidence.
 
 ### Shadow mode supports market lifecycles, not pending orders
 
