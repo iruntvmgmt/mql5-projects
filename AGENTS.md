@@ -1,5 +1,19 @@
 # QuantBeast Agent Instructions
 
+## Working directory
+
+This file and the entire project tree live at:
+
+```text
+~/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5
+```
+
+This is the **one true working tree**. All edits, compiles, and tests
+always happen here. A second clone of this repository must never be
+used in parallel — doing so caused the 2026-07-16 hash-drift incident
+where commits from two different working copies diverged silently.
+Always verify you are in this exact directory before touching any file.
+
 ## Scope
 
 This file exists to govern work on the QuantBeast project only.
@@ -190,6 +204,10 @@ Before ending a source-changing task, update `Experts/QuantBeast/HANDOFF.md` wit
 - Any instructions for the next agent
 
 Do not erase prior worklog entries. Add a dated entry and keep the current-state sections concise.
+
+Every HANDOFF.md worklog entry must be paired with a git commit whose
+one-line summary matches the entry title, so the hash recorded in
+HANDOFF.md and `git log` always agree.
 
 ## Session scope
 
