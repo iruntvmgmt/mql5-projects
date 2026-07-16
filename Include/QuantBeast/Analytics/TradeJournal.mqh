@@ -112,11 +112,11 @@ public:
    //+------------------------------------------------------------------+
    //| Log a strategy signal (accepted or rejected)                      |
    //+------------------------------------------------------------------+
-   void LogSignal(const StrategySignal &sig, const MarketSnapshot &snap,
+   bool LogSignal(const StrategySignal &sig, const MarketSnapshot &snap,
                   const RegimeState &regime, const FeatureSnapshot &feat,
                   string symbol, ENUM_QB_MODE mode)
    {
-      if(!m_enabledSignal || m_signalHandle == INVALID_HANDLE) return;
+      if(!m_enabledSignal || m_signalHandle == INVALID_HANDLE) return false;
 
       string fields[22];
       fields[0]  = FormatTime(sig.signal_time);
@@ -146,6 +146,7 @@ public:
       string row = MakeCSVRow(fields, 21);
       WriteCSVLine(m_signalHandle, row);
       FileFlush(m_signalHandle);
+      return true;
    }
 
    //+------------------------------------------------------------------+

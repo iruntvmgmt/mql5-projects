@@ -953,10 +953,6 @@ void EvaluateAndTrade()
                                         stratPosCount, stratTradesToday,
                                         rejectReason))
          {
-            // Signal acceptance means strategy, arbitration, and central
-            // pre-trade risk accepted it. Fill outcome is in OrderJournal.
-            g_Journal.LogSignal(best, g_CurrentSnap, g_CurrentRegime,
-                                g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
             ExecuteSignal(best);
          }
          else
@@ -976,7 +972,7 @@ void EvaluateAndTrade()
 //+------------------------------------------------------------------+
 //| Execute an approved signal                                        |
 //+------------------------------------------------------------------+
-void ExecuteSignal(const StrategySignal &signal)
+void ExecuteSignal(StrategySignal signal)
 {
    // Calculate position size
    string sizeReason = "";
@@ -987,6 +983,11 @@ void ExecuteSignal(const StrategySignal &signal)
    if(lots <= 0)
    {
       g_LastRejection = "Size: " + sizeReason;
+      signal.valid = false;
+      signal.rejection_code = REJECT_INVALID_VOLUME;
+      signal.reason = g_LastRejection;
+      g_Journal.LogSignal(signal, g_CurrentSnap, g_CurrentRegime,
+                          g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
       QBLogWarn("Position sizing failed: " + sizeReason);
       return;
    }
@@ -996,6 +997,11 @@ void ExecuteSignal(const StrategySignal &signal)
                                         EffectiveExposure(), sizedRiskReason))
    {
       g_LastRejection = "Sized risk: " + sizedRiskReason;
+      signal.valid = false;
+      signal.rejection_code = REJECT_RISK_LIMIT;
+      signal.reason = g_LastRejection;
+      g_Journal.LogSignal(signal, g_CurrentSnap, g_CurrentRegime,
+                          g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
       QBLogWarn("Sized trade rejected: " + sizedRiskReason);
       return;
    }
@@ -1010,6 +1016,11 @@ void ExecuteSignal(const StrategySignal &signal)
                                             brokerConstraintReason))
    {
       g_LastRejection = "Broker constraints: " + brokerConstraintReason;
+      signal.valid = false;
+      signal.rejection_code = REJECT_INVALID_STOP;
+      signal.reason = g_LastRejection;
+      g_Journal.LogSignal(signal, g_CurrentSnap, g_CurrentRegime,
+                          g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
       QBLogWarn(g_LastRejection);
       return;
    }
@@ -1034,9 +1045,20 @@ void ExecuteSignal(const StrategySignal &signal)
    if(!marginOK)
    {
       g_LastRejection = "Margin: " + marginReason;
+      signal.valid = false;
+      signal.rejection_code = REJECT_MARGIN_INSUFFICIENT;
+      signal.reason = g_LastRejection;
+      g_Journal.LogSignal(signal, g_CurrentSnap, g_CurrentRegime,
+                          g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
       QBLogWarn("Margin check failed: " + marginReason);
       return;
    }
+
+   // This is the final signal-decision boundary: strategy, arbitration,
+   // unsized risk, sizing, sized risk, broker legality, and margin all pass.
+   // Broker request/fill outcomes remain exclusively in OrderJournal.csv.
+   g_Journal.LogSignal(signal, g_CurrentSnap, g_CurrentRegime,
+                       g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
 
    // Execute based on mode
    if(g_EffectiveMode == QB_MODE_SHADOW)
@@ -1819,6 +1841,60 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 34 PASS: Arbitration policy " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 34 FAIL: Arbitration policy " + detail); }
+   }
+
+   // Test 35: production SignalJournal writer preserves final decisions.
+   // Tester-only so synthetic audit rows can never pollute terminal/live data.
+   if(MQLInfoInteger(MQL_TESTER) && InpEnableSignalJournal)
+   {
+      MarketSnapshot snap = g_CurrentSnap;
+      FeatureSnapshot feat = g_CurrentFeat;
+      RegimeState regime = g_CurrentRegime;
+      datetime fixtureTime = TimeCurrent();
+      bool wrote = true;
+
+      StrategySignal fixture;
+      ZeroMemory(fixture);
+      fixture.signal_time = fixtureTime;
+      fixture.strategy_id = "FIX_STRATEGY_LONG_REJECT";
+      fixture.direction = ORDER_TYPE_BUY;
+      fixture.valid = false;
+      fixture.rejection_code = REJECT_NO_SETUP;
+      fixture.reason = "Fixture: strategy rejection";
+      wrote = g_Journal.LogSignal(fixture, snap, regime, feat,
+                                  g_Adapter.Symbol(), g_EffectiveMode) && wrote;
+
+      fixture.strategy_id = "FIX_STRATEGY_SHORT_REJECT";
+      fixture.direction = ORDER_TYPE_SELL;
+      wrote = g_Journal.LogSignal(fixture, snap, regime, feat,
+                                  g_Adapter.Symbol(), g_EffectiveMode) && wrote;
+
+      fixture.strategy_id = "FIX_ARBITRATION_LOSER";
+      fixture.direction = ORDER_TYPE_BUY;
+      fixture.rejection_code = REJECT_ARBITRATION_LOST;
+      fixture.reason = "Fixture: arbitration loser";
+      wrote = g_Journal.LogSignal(fixture, snap, regime, feat,
+                                  g_Adapter.Symbol(), g_EffectiveMode) && wrote;
+
+      fixture.strategy_id = "FIX_RISK_REJECT";
+      fixture.direction = ORDER_TYPE_SELL;
+      fixture.rejection_code = REJECT_RISK_LIMIT;
+      fixture.reason = "Fixture: central risk rejection";
+      wrote = g_Journal.LogSignal(fixture, snap, regime, feat,
+                                  g_Adapter.Symbol(), g_EffectiveMode) && wrote;
+
+      fixture.strategy_id = "FIX_ACCEPTED";
+      fixture.direction = ORDER_TYPE_BUY;
+      fixture.valid = true;
+      fixture.rejection_code = REJECT_NONE;
+      fixture.reason = "Fixture: final accepted decision";
+      wrote = g_Journal.LogSignal(fixture, snap, regime, feat,
+                                  g_Adapter.Symbol(), g_EffectiveMode) && wrote;
+
+      if(wrote)
+      { g_SelfTestPassed++; QBLogInfo("TEST 35 PASS: Signal journal final-decision writer"); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 35 FAIL: Signal journal final-decision writer"); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +
