@@ -1,0 +1,3 @@
+Phase 0 start (compile + Shadow startup fixture).
+Timestamp (UTC): 2026-07-16 17:53:00
+Note: Shadow-only; no broker orders permitted.

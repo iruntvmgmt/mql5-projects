@@ -191,6 +191,21 @@ Before ending a source-changing task, update `Experts/QuantBeast/HANDOFF.md` wit
 
 Do not erase prior worklog entries. Add a dated entry and keep the current-state sections concise.
 
+## Session scope
+
+`HANDOFF.md`'s "Next task" list may contain multiple open items. Treat that
+list as sequential, not parallel: pick exactly one item per session, state
+which one and why before starting, and complete its full loop (evidence →
+compile → test → HANDOFF.md entry) before touching a different item — even
+if the other item looks unrelated or quick. If a session ends with an item
+incomplete, say so explicitly in the worklog entry rather than leaving it
+ambiguous which item is "in progress."
+
+This applies across agents and tools, not just within one session: if you
+are picking up work from a different agent/tool that hit a limit or stopped
+mid-item, resume that same item first rather than starting a new one from
+the list.
+
 ## Completion standard
 
 The project is complete only when every applicable item in `LIVE_DEPLOYMENT_CHECKLIST.md` has evidence, the build is zero-error/zero-warning, required tests pass, restart recovery is demonstrated, all live positions are protected and tracked, and `BUILD_AUDIT.md` can honestly be changed to PASS.
