@@ -40,7 +40,7 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 - `QuantBeastEA.ex5` is present and the final MetaEditor build is `0 errors, 0 warnings`.
 - The original 23-error/15-warning baseline is preserved under `TestEvidence/compile_20260715/`.
 - The Shadow lifecycle build/runtime evidence is under `TestEvidence/shadow_lifecycle_20260715/`.
-- Strategy Tester agent logs prove Shadow initialization and 42 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, live-mode strategy/execution gates, state symbol scoping, and live recovery no-passive-flatten gating, and unknown-position no-adoption behavior. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
+- Strategy Tester agent logs prove Shadow initialization and 42 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, and unknown-position no-adoption behavior. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
 - A two-process restart probe is preserved under `TestEvidence/restart_probe_20260715/`: phase 1 passed, but a fresh tester/Wine process loaded schema `0`. This proves tester-state isolation, not live-terminal restart safety. Production persistence now explicitly flushes Terminal Global Variables.
 - Broker submission return values now require both local API success and order-class-specific server acceptance; deterministic mismatched-response injection passes under `TestEvidence/server_ack_policy_20260715/`.
 - Pending tracking now survives delete failure, missing history, and unsafe fill reconciliation; evidence is under `TestEvidence/pending_orphan_policy_20260715/`.
@@ -570,6 +570,16 @@ Live: prohibited
 - Shadow regression: `40 passed, 0 failed`; `22080` generated ticks, `1104` bars; final balance `10000.00`; test passed in `0:00:21.999`.
 - Evidence: `TestEvidence/live_strategy_gate_20260716/`.
 - Source SHA-256: `5590b568ce72f9718faad863f763c74e08f1bddc5c056ac11005d866d4b11010`; EX5 SHA-256: `ca27819e558e1c1a1a6f14793d7721f9b5f7455de156971d987d5047ffcc77bf`.
+- No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
+
+### 2026-07-16 — Unknown positions left unmanaged on restart
+
+- Defect demonstrated: `CPositionManager::ReconstructFromBroker()` could add unknown-strategy positions to the active management array for `UNKNOWN_REPORT`/`UNKNOWN_QUARANTINE`, allowing later trailing, partial-close, or stop modification against an unknown strategy context.
+- Severity: High for live/restart safety; affected path is live startup reconciliation of QuantBeast-range positions whose strategy ownership cannot be recovered from comment/history.
+- Fix: added `QBUnknownPositionShouldBeManaged()` and changed reconstruction so unknown positions are reported/quarantined/ignored without active adoption. `UNKNOWN_FLATTEN` also remains unmanaged if a close is not confirmed.
+- Validation: compile `0 errors, 0 warnings`; generated-tick Shadow regression `42 passed, 0 failed`, including `TEST 40 PASS: Unknown positions unmanaged`.
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/unknown_position_unmanaged_20260716/`.
+- Source SHA-256: `12488268def53445f064bcb2c92369446dee14a396b478074aeb8d0fc4717b07`; PositionManager SHA-256: `f1eb5c8f75a5342015029488cc57f02bb312f8a8877b04fee4feee59be48eb72`; EX5 SHA-256: `277379e14b902d0bc1fcf48eb2dbaa75e76cb3f090358b7be6f5d9835b5440f9`.
 - No broker orders were transmitted; readiness remains exactly `READY FOR SHADOW MODE`.
 
 ### 2026-07-16 — Effective-symbol persistence scope repair
