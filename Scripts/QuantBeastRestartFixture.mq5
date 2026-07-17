@@ -351,17 +351,17 @@ void OnStart()
          break;
 
       case CMD_PLACE_OWNED:
-         DoPlaceMarket(FIXTURE_MAGIC_OWNED, "QB fixture owned");
+         DoPlaceMarket(FIXTURE_MAGIC_OWNED, "QB_FBO_fixture");
          DoReport();
          break;
 
       case CMD_PLACE_PENDING:
-         DoPlacePending(FIXTURE_MAGIC_PENDING, "QB fixture pending");
+         DoPlacePending(FIXTURE_MAGIC_PENDING, "QB_FBO_fixture_pending");
          DoReport();
          break;
 
       case CMD_PLACE_UNKNOWN:
-         DoPlaceMarket(FIXTURE_MAGIC_UNKNOWN, "QB fixture unknown");
+         DoPlaceMarket(FIXTURE_MAGIC_UNKNOWN, "FIXTURE_UNKNOWN");
          DoReport();
          break;
 
