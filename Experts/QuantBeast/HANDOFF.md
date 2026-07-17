@@ -877,3 +877,15 @@ Live: prohibited
 - Files changed: `TestEvidence/restart_recovery_20260716/EVIDENCE.md` (created), `KNOWN_LIMITATIONS.md` (restart bullet updated), `HANDOFF.md` (this entry).
 - Readiness remains exactly `READY FOR SHADOW MODE`; live and Challenge trading remain prohibited.
 - Safety: no broker order was transmitted by QuantBeast during this investigation.
+
+### 2026-07-16 — Live-broker-ack gate confirmed as sole blocker for ReconstructFromBroker(); Diagnostic mode does not reach reconciliation
+
+- Source: manual/operator-driven investigation outside any agent session, cross-referenced against terminal Experts log (`Logs/20260716.log`) between 20:30 and 21:16 UTC-5.
+- Finding 1: `InpAcknowledgeLiveBrokerRisk` gate fires immediately on every Conservative Live initialization attempt — `"Live broker-transmission gate blocked initialization: Live broker transmission requires explicit InpAcknowledgeLiveBrokerRisk=true"` — before any other gate (strategy set, market-only, unknown-position policy) is evaluated. This is direct terminal Experts log evidence, not inference.
+- Finding 2: Challenge mode without acknowledgement behaves differently — it logs a WARN and falls back to Shadow rather than hard-failing initialization like Live mode does. This is a documented behavioral asymmetry, not a defect, but was not explicit anywhere before this entry.
+- Finding 3: Diagnostic mode was manually attached and initialized successfully (21:16:07, XAUUSD H1) with no gate failure. This does NOT mean Diagnostic reaches `ReconstructFromBroker()` — per the 2026-07-16 Shadow-mode finding already in HANDOFF.md, Diagnostic falls into the same non-reconciling branch as Shadow. Diagnostic attaching cleanly is not progress toward restart-recovery evidence.
+- Finding 4: this session confirms (but does not yet resolve) the open question from the 2026-07-16 restart-recovery entry: `InpAcknowledgeLiveBrokerRisk` is now known to be the first blocking gate for reaching `ReconstructFromBroker()` via Conservative Live mode on Coinexx-Demo. It is not the sole gate — see Finding 5.
+- Finding 5: with `InpAcknowledgeLiveBrokerRisk=true` set, a second gate fired: `"Live execution gate blocked initialization: Live pending orders are disabled until activation, expiry, cancellation, fill-race, and restart evidence is complete"`. This confirms the Conservative Live initialization gate order as: (1) `InpAcknowledgeLiveBrokerRisk=true`, (2) market-order-only / `InpMaxPendingOrders=0`, (3) FBO-only strategy set (not yet confirmed empirically), (4) `InpUnknownPosPolicy != UNKNOWN_FLATTEN` (not yet confirmed empirically).
+- Severity: Documentation / operational clarity. No source, preset, or EX5 changed.
+- Readiness remains exactly `READY FOR SHADOW MODE`; live and Challenge trading remain prohibited.
+- Safety: no broker order was transmitted by QuantBeast during this investigation.
