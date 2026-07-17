@@ -1,0 +1,2 @@
+24acb8babcaf977fab7b265fe979fa919850d121d69254eeff013fa35d5e2041  Experts/QuantBeast/QuantBeastEA.mq5
+c9e3f9c07ba227c82770df807c7364b18ef9bf71ade4b1d204a558e44d5081b2  Experts/QuantBeast/QuantBeastEA.ex5
