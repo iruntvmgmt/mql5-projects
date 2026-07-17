@@ -185,6 +185,26 @@ Compilation acceptance requires:
 
 Do not claim compilation from an old `.ex5` or stale log. If MetaEditor is unavailable or automation is unreliable, record compilation as blocked/unknown.
 
+### Known MetaEditor compilation issue (2026-07-16)
+
+The direct `wine metaeditor64.exe /compile:"<path>"` invocation can
+silently stop working without any error, log, or `.ex5` update — the
+process exits cleanly with code 0 but does nothing. This was confirmed
+against a built-in MetaQuotes example script (not just QuantBeast
+code). The working pattern is to use `wine start /Unix` with a relative
+path from the MT5 installation directory:
+
+```bash
+cd "$WINEPREFIX/drive_c/Program Files/MetaTrader 5"
+"$WINE" start /Unix metaeditor64.exe /compile:"MQL5\\Scripts\\ScriptName.mq5" /log
+```
+
+The compile result still appears in `logs/metaeditor.log`.
+
+If compilation produces no log entry and no `.ex5` when using the
+direct invocation, switch to the `wine start /Unix` pattern before
+assuming the source has errors.
+
 ## Test contract
 
 Follow `TESTING_GUIDE.md`. Preserve evidence under `Experts/QuantBeast/TestEvidence/` when testing begins.

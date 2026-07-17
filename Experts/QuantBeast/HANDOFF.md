@@ -160,8 +160,8 @@ TP pullback-age evidence: TestEvidence/tp_pullback_age_20260716/
 MR opposite-band target evidence: TestEvidence/mr_target_band_20260716/
 FBO target-variant evidence: TestEvidence/fbo_target_variants_20260716/
 Conservative Live tester FBO attempt evidence: TestEvidence/conservative_live_tester_fbo_20260716/
-Final source SHA-256: 8b36c2f7f66f38d2fbe982cd4d9427e2c14e2d8e55658c041d1d38bcd1b9ba49
-Final EX5 SHA-256: 869da00fbd86607002ad605c5364511938e33a93a2875f91df9ee134647ec232
+Final source SHA-256: 24acb8babcaf977fab7b265fe979fa919850d121d69254eeff013fa35d5e2041
+Final EX5 SHA-256: c9e3f9c07ba227c82770df807c7364b18ef9bf71ade4b1d204a558e44d5081b2
 ```
 
 ## Test status
