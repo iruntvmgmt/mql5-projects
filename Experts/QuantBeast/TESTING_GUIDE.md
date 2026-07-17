@@ -40,6 +40,11 @@ Preserve:
 
 Do not suppress warnings without understanding them.
 
+> [!NOTE]
+> If the direct `wine metaeditor64.exe /compile:...` invocation silently
+> produces no log and no `.ex5`, see the known workaround in `AGENTS.md`
+> under "Compilation contract" (use `wine start /Unix` with a relative path).
+
 ### Stage 3: Automated unit/scenario tests
 
 The current embedded checks are insufficient. Add deterministic tests for the following groups.
