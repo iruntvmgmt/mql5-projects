@@ -250,6 +250,34 @@ are picking up work from a different agent/tool that hit a limit or stopped
 mid-item, resume that same item first rather than starting a new one from
 the list.
 
+## Documentation during active work
+
+When something worth documenting comes up mid-task (a tooling quirk, a
+stale reference, a scope-limiting finding), distinguish two cases:
+
+**Blocking** — the current task cannot produce valid evidence without
+this being resolved first (e.g. discovering the compile command is
+silently failing, discovering the task is testing the wrong code path).
+Stop, resolve or document immediately, then continue. This is rare.
+
+**Non-blocking** — worth recording, but the current task can still
+proceed and produce valid evidence without it (e.g. a doc cross-reference
+is stale, a different section could use a pointer, a tangential cleanup
+opportunity). Do NOT stop to fix it. Instead, append one line to a
+running list under a `## Session notes (pending write-up)` heading at
+the bottom of HANDOFF.md — no commit, just a plain note. Continue the
+task.
+
+At the end of the session, convert that list into one proper HANDOFF.md
+worklog entry (or a short follow-up task list) in the same pass as your
+end-of-session update — not as N separate stop-and-commit cycles during
+the session.
+
+If the pending-notes list would take real time to act on (new files,
+multi-file edits, source changes), do not act on it in this session even
+at the end — just leave it queued as a clearly stated follow-up item for
+a dedicated session.
+
 ## Completion standard
 
 The project is complete only when every applicable item in `LIVE_DEPLOYMENT_CHECKLIST.md` has evidence, the build is zero-error/zero-warning, required tests pass, restart recovery is demonstrated, all live positions are protected and tracked, and `BUILD_AUDIT.md` can honestly be changed to PASS.
