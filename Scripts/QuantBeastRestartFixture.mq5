@@ -16,7 +16,8 @@ enum ENUM_FIXTURE_CMD
    CMD_PLACE_UNKNOWN,   // 3: scenario 3 — unknown position (magic 99999999)
    CMD_WRITE_CORRUPT,   // 4: scenario 4 — write incompatible state version
    CMD_CLEANUP_ALL,     // 5: close all positions, cancel all orders, delete fixture globals
-   CMD_DELETE_CORRUPT   // 6: delete only the corrupt-state globals
+   CMD_DELETE_CORRUPT,  // 6: delete only the corrupt-state globals
+   CMD_CLEAR_KILL_STATE // 7: delete persisted QuantBeast kill-switch globals
 };
 
 input ENUM_FIXTURE_CMD InpCommand = CMD_REPORT;
@@ -338,6 +339,36 @@ void DoDeleteCorrupt()
 }
 
 //+------------------------------------------------------------------+
+//| Clear persisted QuantBeast kill-switch state                       |
+//+------------------------------------------------------------------+
+void DoClearKillState()
+{
+   Print("=== CLEAR KILL STATE ===");
+   Print("WARNING: manually clearing persisted kill-switch state");
+
+   string killGlobals[] = {
+      "QB_KillEntries", "QB_KillSymbol", "QB_KillCancel", "QB_KillFlatten",
+      "QB_KillBO", "QB_KillFBO", "QB_KillTP", "QB_KillMR", "QB_Emergency"
+   };
+
+   for(int i = 0; i < ArraySize(killGlobals); i++)
+   {
+      if(GlobalVariableCheck(killGlobals[i]))
+      {
+         double val = GlobalVariableGet(killGlobals[i]);
+         Print("WARNING: deleting kill global: ", killGlobals[i], " = ", DoubleToString(val, 0));
+         GlobalVariableDel(killGlobals[i]);
+      }
+      else
+      {
+         Print("Kill global not present: ", killGlobals[i]);
+      }
+   }
+   GlobalVariablesFlush();
+   Print("=== CLEAR KILL STATE END ===");
+}
+
+//+------------------------------------------------------------------+
 //| Script entry point                                                |
 //+------------------------------------------------------------------+
 void OnStart()
@@ -377,6 +408,11 @@ void OnStart()
 
       case CMD_DELETE_CORRUPT:
          DoDeleteCorrupt();
+         DoReport();
+         break;
+
+      case CMD_CLEAR_KILL_STATE:
+         DoClearKillState();
          DoReport();
          break;
 
