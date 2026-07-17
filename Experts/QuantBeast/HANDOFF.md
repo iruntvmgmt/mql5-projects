@@ -865,3 +865,15 @@ Live: prohibited
 - Fix: added `current_regression_20260716`, BO/TP/MR/FBO wiring evidence, and the current live-ack/demo lifecycle evidence to the summary bullets and testing debt narrative.
 - Validation: documentation-only change; no source, preset, or EX5 behavior changed. Latest validated build remains `0 errors, 0 warnings`, deterministic Shadow regression remains `51 passed, 0 failed`, and readiness remains exactly `READY FOR SHADOW MODE`.
 - Safety: no broker order was transmitted.
+### 2026-07-16 — Shadow-mode gating invalidates restart_recovery_20260716 Scenario 1 as reconciliation evidence
+
+- Finding demonstrated: the restart_recovery_20260716 Scenario 1 fixture ran with QuantBeast attached in `QB_MODE_SHADOW`. Source inspection (`QuantBeastEA.mq5`, ~line 910) confirms `ReconstructFromBroker()` only executes outside the Diagnostic/Shadow branch — Shadow mode "must never inspect, cancel, close, or adopt broker positions/orders" by design.
+- Consequence: the observed "no destructive action" on position #34615308 is Shadow-mode passivity, not evidence of correct ownership classification. The scenario did not exercise the code path it was meant to test (magic-range check, position adoption, active management eligibility).
+- Severity: Documentation/Evidence. No runtime defect exists, but the TestEvidence catalog must not credit this data toward the restart-recovery gate.
+- Same structural problem applies to Scenario 3 (unknown positions, magic 99999999) — not yet run, but blocked for the identical reason.
+- Reclassification: Scenario 1 result is INVALID/NON-EXERCISING, matching the project's existing convention for preserved-but-excluded evidence (see the 2026-07-15 post-repair CSV precedent). TestEvidence/restart_recovery_20260716/ remains intact for the record, but EVIDENCE.md explicitly states this data does not count toward `LIVE_DEPLOYMENT_CHECKLIST.md`.
+- Unresolved question (recorded, not answered): what is the minimum mode/acknowledgement configuration that reaches `ReconstructFromBroker()` on Coinexx-Demo, and does using it conflict with `AGENTS.md`'s live-mode restrictions?
+- Evidence: `MQL5/Experts/QuantBeast/TestEvidence/restart_recovery_20260716/EVIDENCE.md`.
+- Files changed: `TestEvidence/restart_recovery_20260716/EVIDENCE.md` (created), `KNOWN_LIMITATIONS.md` (restart bullet updated), `HANDOFF.md` (this entry).
+- Readiness remains exactly `READY FOR SHADOW MODE`; live and Challenge trading remain prohibited.
+- Safety: no broker order was transmitted by QuantBeast during this investigation.

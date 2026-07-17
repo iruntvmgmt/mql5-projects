@@ -1,0 +1,19 @@
+=== SCENARIO 1 PRE-RESTART STATE ===
+Timestamp: 2026-07-16 20:26:51 UTC-5
+
+Account: Coinexx-Demo (871221), hedging, demo, USD
+
+Position:
+  ticket=34615308 XAUUSD BUY 0.01
+  open_price=3985.84 SL=3000.00 TP=5000.00
+  magic=20260701 (QB BO range)
+  comment="QB fixture owned"
+  deal=31624304
+
+QuantBeast status: loaded on XAUUSD H1 (loaded at 17:44:48)
+
+Terminal log evidence (logs/20260716.log):
+  - 20:26:50.592 market buy 0.01 XAUUSD sl:3000.00 tp:5000.00
+  - 20:26:50.705 accepted market buy 0.01 XAUUSD
+  - 20:26:51.797 order #34615308 buy 0.01/0.01 XAUUSD at market done
+  - 20:26:51.798 deal #31624304 buy 0.01 XAUUSD at 3985.84 done
