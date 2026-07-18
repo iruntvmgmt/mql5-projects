@@ -205,6 +205,162 @@ If compilation produces no log entry and no `.ex5` when using the
 direct invocation, switch to the `wine start /Unix` pattern before
 assuming the source has errors.
 
+## MCP terminal fallback recipes
+
+Two MT5 MCP servers are available. Either or both may be
+misconfigured, disconnected, or return stale results. When an MCP
+tool call fails or returns untrustworthy output, use the terminal
+commands below to diagnose and recover. These are the same patterns
+that Codex sessions used successfully during QuantBeast repair work.
+
+### Server locations
+
+| Server | Transport | Address | Auth | Requires |
+|--------|-----------|---------|------|----------|
+| Native MT5 MCP | HTTP | `127.0.0.1:22346/mcp` | Bearer token | MT5 terminal running |
+| Bridge MCP | stdio | `/Users/matt/Tools/mt5-mcp/bin/Release/net8.0/mt5-mcp` | None | MT5 + MtApi5 EA attached (port 8228) |
+
+### Health checks
+
+```bash
+# Is the native MCP server listening?
+lsof -i :22346 -P -n | grep LISTEN
+
+# Is the MtApi5 bridge port open?
+lsof -i :8228 -P -n | grep LISTEN
+
+# Is MT5 running?
+pgrep -fl terminal64
+
+# Unauthenticated probe (expect 401 — proves the server is alive)
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:22346/mcp
+```
+
+### Starting MT5 when it is not running
+
+```bash
+open "/Applications/MetaTrader 5.app"
+
+# Poll until the native MCP server responds:
+for i in $(seq 1 30); do
+  code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:22346/mcp 2>/dev/null)
+  if echo "$code" | grep -q "40[013]"; then
+    echo "MCP server responding after ${i}s (HTTP $code)"; break
+  fi
+  sleep 2
+done
+```
+
+### Raw curl to the native MCP endpoint
+
+When the MCP client integration is unreliable but the server is
+listening, you can call tools directly:
+
+```bash
+# 1. Initialize a session and capture the session ID
+BEARER="UqaByo2n1nSzwFQZSOeUQqTyuj4txku2+971VxPj1V"
+INIT=$(curl -s -i -X POST http://127.0.0.1:22346/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $BEARER" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"shell","version":"1.0"}}}')
+
+SID=$(echo "$INIT" | grep -i "Mcp-Session-Id:" | tr -d '\r' | sed 's/.*Mcp-Session-Id: //')
+
+# 2. Send the initialized notification
+curl -s -o /dev/null -w "HTTP %{http_code}\n" -X POST http://127.0.0.1:22346/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $BEARER" \
+  -H "Mcp-Session-Id: $SID" \
+  -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+
+# 3. Call get_workspace_info
+curl -s -X POST http://127.0.0.1:22346/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $BEARER" \
+  -H "Mcp-Session-Id: $SID" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_workspace_info","arguments":{}}}'
+
+# 4. Call any other tool (example: list_directory)
+curl -s -X POST http://127.0.0.1:22346/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $BEARER" \
+  -H "Mcp-Session-Id: $SID" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_directory","arguments":{"path":"MQL5\\\\Experts\\\\QuantBeast"}}}'
+```
+
+**Important:** Never print, copy, or commit the bearer token. Token
+rotation requires the MT5 GUI: **Tools → Options → MCP tab →
+regenerate**. If the token in this document has been rotated, extract
+the new one from `~/Library/Application Support/Code/User/mcp.json`.
+
+### Tester evidence when MCP returns job_id: 0
+
+The native tester MCP (`tester_run_backtest`, `tester_get_status`)
+is known to return `job_id: 0` even when a test runs locally. Do not
+trust it as the sole source of truth. Instead:
+
+```bash
+# Inspect the local tester agent log:
+ls -lt "Tester/Agent-127.0.0.1-3000/logs/"
+tail -50 "Tester/Agent-127.0.0.1-3000/logs/$(date +%Y%m%d).log"
+
+# Or use Python to decode UTF-16LE and find test sections:
+python3 -c "
+import re
+path = '/Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/Tester/Agent-127.0.0.1-3000/logs/$(date +%Y%m%d).log'
+with open(path, 'rb') as f:
+    text = f.read().decode('utf-16-le', errors='replace')
+markers = [(m.start(), m.group(0)) for m in re.finditer(r'(\d+:\d+:\d+\.\d+).*testing of Experts', text)]
+print(f'Found {len(markers)} test section(s)')
+for i, (pos, marker) in enumerate(markers[-3:]):
+    print(f'--- section {i+1}: {marker.strip()} ---')
+    print(text[pos:pos+500])
+"
+```
+
+### Broker state verification (read-only)
+
+```bash
+# Check Coinexx-Demo positions/orders (read-only):
+ls -la "Bases/Coinexx-Demo/trades/871221/"
+
+# Check terminal log for recent disconnects/shutdowns:
+grep -i "shutdown\|disconnect\|MCP\|server start\|server stop" "logs/$(date +%Y%m%d).log" | tail -20
+```
+
+### Compilation fallback
+
+When `compile_mql5` (either native or bridge) produces no `.ex5` or
+no log entry, use the documented `wine start /Unix` pattern:
+
+```bash
+WINEPREFIX="/Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5"
+WINE="/Applications/MetaTrader 5.app/Contents/SharedSupport/wine/bin/wine"
+
+cd "$WINEPREFIX/drive_c/Program Files/MetaTrader 5"
+"$WINE" start /Unix metaeditor64.exe /compile:"MQL5\\Experts\\QuantBeast\\QuantBeastEA.mq5" /log
+
+# Check the result:
+tail -20 "logs/metaeditor.log"
+shasum -a 256 "MQL5/Experts/QuantBeast/QuantBeastEA.ex5"
+```
+
+### Token rotation
+
+The bearer token cannot be rotated through any MCP tool. When the
+token expires or has been exposed:
+
+1. Open the MT5 application GUI.
+2. **Tools → Options → MCP tab**.
+3. Click **Regenerate** (or **Copy** to get the new key).
+4. Update the token in **all** of these files:
+   - `~/Library/Application Support/Code/User/mcp.json`
+   - `~/.codex/config.toml` (if Codex is used)
+   - `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+   - This document's recipes above
+5. Do **not** update `assistant.ini` — that file uses an encrypted
+   form the server handles internally.
+
 ## Test contract
 
 Follow `TESTING_GUIDE.md`. Preserve evidence under `Experts/QuantBeast/TestEvidence/` when testing begins.
