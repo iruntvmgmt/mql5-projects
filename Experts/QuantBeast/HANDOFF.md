@@ -306,6 +306,16 @@ Live: prohibited
 - Documentation: `KNOWN_LIMITATIONS.md` now states that terminal push transport has been operator-verified; the module still is not instantiated by the EA.
 - No source code or compile evidence changed in this note.
 
+### 2026-07-18 — Phase 1: TEST 12 weekend-spread fix and clean compile
+
+- Defect demonstrated: `QBTestShadowTrailAndTimeStop()` passed the original `snap` (with live broker spread) to the time-stop `Update()` call. On weekends or wide-spread conditions, the bid was below the stop, so the stop loss fired before the time stop could trigger, causing `TEST 12 FAIL: Shadow trail/time time stop did not close after five minutes`.
+- Severity: Low test-fixture defect. No runtime trading path was affected; the Shadow time-stop logic itself is correct.
+- Fix: the time-stop update now uses a flat snapshot where `bid = ask` (entry price), so neither stop nor target is hit, allowing the time stop to fire deterministically.
+- Validation: compile `0 errors, 0 warnings, 22607 ms`; live terminal Shadow attachment on XAUUSD H1 with `XAUUSD_Shadow.set` produced `Self-tests complete: 51 passed, 0 failed` including `TEST 12 PASS: Shadow trail/time trailNet=1.00 time=closed`.
+- Evidence: operator-provided Experts tab output, 2026.07.18 18:13:38.
+- Source SHA-256: `24acb8babcaf977fab7b265fe979fa919850d121d69254eeff013fa35d5e2041` (unchanged); SafetyTests SHA-256 changed; EX5 SHA-256: `2fb06c38c6df67251eadbfb2751f90ee4e878c20e59d9c155eef8a06901f3659`.
+- No broker orders were transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
+
 ## Next task
 
 1. Run controlled demo/fault-adapter scenarios for actual modify/close/delete rejection, requotes, disconnect/reconnect, and fill-during-cancel callback ordering. The deterministic policies are covered; actual broker behavior is not.

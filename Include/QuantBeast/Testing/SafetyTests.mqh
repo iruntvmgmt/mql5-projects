@@ -720,7 +720,10 @@ bool QBTestShadowTrailAndTimeStop(CSymbolAdapter &adapter, string &detail)
    if(!timed.Open(signal, volume, regime, snap, 6, reason))
    { detail = "time-stop open failed: " + reason; return false; }
    datetime future = TimeCurrent() + 301;
-   if(timed.Update(snap, features, events, future) != 1 ||
+   MarketSnapshot flatSnap = snap;
+   flatSnap.bid = ask; flatSnap.ask = ask + spread;
+   flatSnap.mid = (flatSnap.bid + flatSnap.ask) * 0.5;
+   if(timed.Update(flatSnap, features, events, future) != 1 ||
       events[0].exit_reason != EXIT_TIME_STOP)
    { detail = "time stop did not close after five minutes"; return false; }
 
