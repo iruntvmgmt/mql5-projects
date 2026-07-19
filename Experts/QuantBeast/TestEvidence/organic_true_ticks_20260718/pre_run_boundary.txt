@@ -1,0 +1,5 @@
+Pre-run boundary — 2026-07-18 23:00
+agent_log: 1116818 bytes
+SignalJournal.csv: 5765442 bytes,    20071 lines
+OrderJournal.csv: 9084 bytes
+TradeJournal.csv: 14440 bytes

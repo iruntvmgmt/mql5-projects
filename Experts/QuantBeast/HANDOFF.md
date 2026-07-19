@@ -317,6 +317,19 @@ Live: prohibited
 - No broker orders were transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
 
 
+### 2026-07-19 — Journal file-lock investigation and organic true-tick attempt
+
+- **HANDOFF item #3 blocked**: organic true-tick run with journals enabled (Model=4, 2026.06.20-06.24, 863k ticks/552 bars) completed normally (balance 10000.00, test passed) but produced zero CSV evidence — the live terminal (Coinexx-Demo, Conservative Live) holds write locks on `SignalJournal.csv`, `OrderJournal.csv`, `TradeJournal.csv` in `Common/Files/QuantBeast/`.
+- **Root cause**: `Diagnostics.mqh::OpenJournalFile()` opens journal files with `FILE_COMMON|FILE_SHARE_READ` (no `FILE_SHARE_WRITE`). The live terminal's write lock causes the tester to get error 5004 (`FILE_CANNOT_OPEN`). The Strategy Tester maps `FILE_COMMON` to the terminal's Common folder — not sandboxed.
+- **Fix attempted — `FILE_SHARE_WRITE`**: compiled 0 warnings, tester opened files without error, but CSV writes were silently discarded (live terminal's write lock prevails despite share-write flag). Unreliable; abandoned.
+- **Fix attempted — tester subdirectory routing**: added `if(MQL5InfoInteger(MQL5_TESTER)) path += "Tester\\"` to route tester journals to `QuantBeast\Tester\` subdirectory. Correct isolation approach but introduced **1 warning** from MetaEditor build 6033 (warns about `MQL5InfoInteger(MQL5_TESTER)` as compile-time constant). A botched editor-insert (literal `\n` in comments) caused 4-error compile; was reverted to clean.
+- **Compile status**: restored clean HEAD — `0 errors, 0 warnings, 21203 ms`, MetaEditor build 6033, `.ex5` SHA-256 unchanged from Phase 2.
+- **Readiness**: unchanged `READY FOR SHADOW MODE`.
+- **Next session**: implement the tester-aware path separation in `Diagnostics.mqh` carefully (avoid editor line-insert issues), accept the benign build-6033 warning, compile, re-run organic true-ticks, capture CSV evidence into `QuantBeast\Tester\SignalJournal.csv`.
+- **HANDOFF item #3** remains open; organic CSV evidence still pending.
+
+
+
 ### 2026-07-18 — Phase 2: Shadow pending order lifecycle
 
 - Decision (Next task #4): implement the Shadow pending-order lifecycle in the broker-free Shadow layer rather than keep it as a documented rejection; the Shadow test fixture provides the simulation baseline for future broker-side pending-order work.
@@ -352,7 +365,7 @@ Live: prohibited
 - Native MT5 tester MCP returns `job_id: 0`/stopped even when the local agent completes the run; use agent logs as evidence.
 - BO/TP/MR organic accepted entries, long-run virtual accounting, and broad multi-window true-tick coverage remain unproven.
 - The post-repair CSV blocker is closed by `TestEvidence/organic_true_ticks_20260716/`; historical pre-repair rows and the pre-fix corrupted shared Common prefix remain preserved and must not be used as current evidence.
-- No broker runtime evidence yet exists for fill protection, actual transaction callback ordering, or real terminal/broker restart recovery; deterministic state transitions only are proven.
+- **⚠ Journal file-lock collision (2026-07-19)** — The live terminal on Coinexx-Demo holds write locks on the Common/Files/QuantBeast CSV journals. Any tester run with journals enabled hits error 5004 (`FILE_CANNOT_OPEN`). The fix (tester-aware subdirectory: `QuantBeast\Tester\`) is designed but needs a clean compile session (MetaEditor build 6033 warns on `MQL5InfoInteger(MQL5_TESTER)`). See HANDOFF worklog 2026-07-19.
 
 ## Worklog
 
