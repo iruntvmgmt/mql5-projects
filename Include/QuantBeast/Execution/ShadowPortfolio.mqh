@@ -37,6 +37,35 @@ struct ShadowCloseEvent
    ENUM_EXIT_REASON exit_reason;
 };
 
+struct ShadowPendingOrder
+{
+   string strategy_id;
+   ulong signal_id;
+   ENUM_ORDER_TYPE order_type;
+   double price;
+   double stop;
+   double target;
+   double volume;
+   datetime placed_time;
+   datetime expiry_time;
+   bool is_active;
+   bool is_filled;
+   bool is_expired;
+   bool is_cancelled;
+   ulong position_ticket;
+};
+
+struct ShadowPendingEvent
+{
+   ulong pending_id;
+   string strategy_id;
+   ENUM_ORDER_TYPE order_type;
+   double price;
+   double volume;
+   datetime time;
+   string action;
+};
+
 class CShadowPortfolio
 {
 private:
@@ -62,6 +91,10 @@ private:
    double m_trailStartR;
    bool m_enableTimeStop;
    int m_timeStopMinutes;
+
+   ShadowPendingOrder m_pendingOrders[10];
+   int m_pendingCount;
+   ulong m_nextPendingId;
 
    double ExitQuote(ENUM_POSITION_TYPE type, const MarketSnapshot &snap) const
    {
@@ -135,12 +168,103 @@ private:
       double finalGross = Profit(ctx.position_type, m_currentVolumes[idx],
                                  ctx.original_entry, exitPrice);
 
-      // Partial closes were already credited with their proportional costs.
       double finalCommission = -m_commissionPerLot * m_currentVolumes[idx];
       m_balance += finalGross + finalCommission;
       AppendCloseEvent(events, ctx, m_realizedGross[idx], exitPrice, finalGross, reason);
       RemoveAt(idx);
       return true;
+   }
+
+   bool IsPendingTriggered(const ShadowPendingOrder &order, const MarketSnapshot &snap) const
+   {
+      double tolerance = 0.5 * m_adapter.Point();
+      switch(order.order_type)
+      {
+         case ORDER_TYPE_BUY_LIMIT:
+            return snap.bid <= order.price + tolerance;
+         case ORDER_TYPE_SELL_LIMIT:
+            return snap.ask >= order.price - tolerance;
+         case ORDER_TYPE_BUY_STOP:
+            return snap.ask >= order.price - tolerance;
+         case ORDER_TYPE_SELL_STOP:
+            return snap.bid <= order.price + tolerance;
+         default:
+            return false;
+      }
+   }
+
+   bool FillPendingOrder(int pendingIdx, const MarketSnapshot &snap,
+                         const RegimeState &regime, string &reason)
+   {
+      if(pendingIdx < 0 || pendingIdx >= m_pendingCount) return false;
+      if(!m_pendingOrders[pendingIdx].is_active) return false;
+      if(m_count >= 20)
+      {
+         reason = "Shadow position capacity reached";
+         return false;
+      }
+
+      ENUM_POSITION_TYPE type;
+      switch(m_pendingOrders[pendingIdx].order_type)
+      {
+         case ORDER_TYPE_BUY_LIMIT:
+         case ORDER_TYPE_BUY_STOP:
+            type = POSITION_TYPE_BUY;
+            break;
+         case ORDER_TYPE_SELL_LIMIT:
+         case ORDER_TYPE_SELL_STOP:
+            type = POSITION_TYPE_SELL;
+            break;
+         default:
+            reason = "Unsupported pending order type";
+            return false;
+      }
+
+      double slip = m_slippagePoints * m_adapter.Point();
+      double fillPrice = (type == POSITION_TYPE_BUY) ?
+                         m_pendingOrders[pendingIdx].price + slip :
+                         m_pendingOrders[pendingIdx].price - slip;
+      fillPrice = m_adapter.NormalizePrice(fillPrice);
+
+      int idx = m_count;
+      ZeroMemory(m_contexts[idx]);
+      m_contexts[idx].strategy_id = m_pendingOrders[pendingIdx].strategy_id;
+      m_contexts[idx].signal_id = m_pendingOrders[pendingIdx].signal_id;
+      m_contexts[idx].order_ticket = m_nextId;
+      m_contexts[idx].position_ticket = m_nextId;
+      m_contexts[idx].position_identifier = m_nextId++;
+      m_contexts[idx].position_type = type;
+      m_contexts[idx].original_entry = fillPrice;
+      m_contexts[idx].original_stop = m_pendingOrders[pendingIdx].stop;
+      m_contexts[idx].current_stop = m_pendingOrders[pendingIdx].stop;
+      m_contexts[idx].initial_target = m_pendingOrders[pendingIdx].target;
+      m_contexts[idx].initial_volume = m_pendingOrders[pendingIdx].volume;
+      m_contexts[idx].original_risk = MathAbs(fillPrice - m_pendingOrders[pendingIdx].stop);
+      m_contexts[idx].entry_time = TimeCurrent();
+      m_contexts[idx].last_update = TimeCurrent();
+      m_contexts[idx].entry_regime_trend = regime.trend;
+      m_contexts[idx].entry_regime_vol = regime.volatility;
+      m_contexts[idx].entry_session = regime.session;
+      m_contexts[idx].entry_spread = snap.spread_points;
+      m_contexts[idx].entry_slippage = m_slippagePoints;
+      m_contexts[idx].mgmt_state = MGMT_FIXED_STOP;
+      m_currentVolumes[idx] = m_pendingOrders[pendingIdx].volume;
+      m_realizedGross[idx] = 0;
+      m_count++;
+
+      m_pendingOrders[pendingIdx].is_active = false;
+      m_pendingOrders[pendingIdx].is_filled = true;
+      m_pendingOrders[pendingIdx].position_ticket = m_contexts[idx].position_ticket;
+
+      reason = "Pending order filled";
+      return true;
+   }
+
+   void RemovePendingAt(int idx)
+   {
+      for(int i = idx; i < m_pendingCount - 1; i++)
+         m_pendingOrders[i] = m_pendingOrders[i + 1];
+      m_pendingCount--;
    }
 
 public:
@@ -164,6 +288,8 @@ public:
       m_trailStartR = 0;
       m_enableTimeStop = false;
       m_timeStopMinutes = 0;
+      m_pendingCount = 0;
+      m_nextPendingId = 1;
    }
 
    void Init(CSymbolAdapter &adapter, double startingBalance,
@@ -191,6 +317,8 @@ public:
       m_trailStartR = trailStartR;
       m_enableTimeStop = timeStop;
       m_timeStopMinutes = timeStopMinutes;
+      m_pendingCount = 0;
+      m_nextPendingId = 1;
    }
 
    bool Open(const StrategySignal &signal, double volume,
@@ -253,12 +381,117 @@ public:
       return true;
    }
 
+   bool OpenPending(const string strategyId, ulong signalId,
+                    ENUM_ORDER_TYPE orderType, double price,
+                    double stop, double target, double volume,
+                    datetime expiryTime, string &reason)
+   {
+      if(m_adapter == NULL)
+      {
+         reason = "Shadow portfolio not initialized";
+         return false;
+      }
+      if(m_pendingCount >= 10)
+      {
+         reason = "Shadow pending order capacity reached";
+         return false;
+      }
+      if(volume <= 0)
+      {
+         reason = "Invalid shadow volume";
+         return false;
+      }
+
+      bool isLimit = (orderType == ORDER_TYPE_BUY_LIMIT || orderType == ORDER_TYPE_SELL_LIMIT);
+      bool isStop = (orderType == ORDER_TYPE_BUY_STOP || orderType == ORDER_TYPE_SELL_STOP);
+      if(!isLimit && !isStop)
+      {
+         reason = "Unsupported pending order type";
+         return false;
+      }
+
+      bool isBuy = (orderType == ORDER_TYPE_BUY_LIMIT || orderType == ORDER_TYPE_BUY_STOP);
+      bool geometry = (isBuy && stop < price && target > price) ||
+                      (!isBuy && stop > price && target < price);
+      if(!geometry)
+      {
+         reason = "Invalid pending stop/target geometry";
+         return false;
+      }
+
+      int idx = m_pendingCount;
+      ZeroMemory(m_pendingOrders[idx]);
+      m_pendingOrders[idx].strategy_id = strategyId;
+      m_pendingOrders[idx].signal_id = signalId;
+      m_pendingOrders[idx].order_type = orderType;
+      m_pendingOrders[idx].price = m_adapter.NormalizePrice(price);
+      m_pendingOrders[idx].stop = m_adapter.NormalizePrice(stop);
+      m_pendingOrders[idx].target = m_adapter.NormalizePrice(target);
+      m_pendingOrders[idx].volume = volume;
+      m_pendingOrders[idx].placed_time = TimeCurrent();
+      m_pendingOrders[idx].expiry_time = expiryTime;
+      m_pendingOrders[idx].is_active = true;
+      m_pendingOrders[idx].is_filled = false;
+      m_pendingOrders[idx].is_expired = false;
+      m_pendingOrders[idx].is_cancelled = false;
+      m_pendingOrders[idx].position_ticket = 0;
+      m_pendingCount++;
+
+      reason = "Pending order placed";
+      return true;
+   }
+
+   bool CancelPending(ulong signalId, string &reason)
+   {
+      for(int i = 0; i < m_pendingCount; i++)
+      {
+         if(m_pendingOrders[i].signal_id == signalId && m_pendingOrders[i].is_active)
+         {
+            m_pendingOrders[i].is_active = false;
+            m_pendingOrders[i].is_cancelled = true;
+            reason = "Pending order cancelled";
+            return true;
+         }
+      }
+      reason = "Pending order not found or not active";
+      return false;
+   }
+
+   int GetPendingCount() const { return m_pendingCount; }
+   int GetActivePendingCount() const
+   {
+      int count = 0;
+      for(int i = 0; i < m_pendingCount; i++)
+         if(m_pendingOrders[i].is_active) count++;
+      return count;
+   }
+
    int Update(const MarketSnapshot &snap, const FeatureSnapshot &feat,
               ShadowCloseEvent &events[], datetime evaluationTime=0)
    {
       ArrayResize(events, 0);
       if(m_adapter == NULL) return 0;
       datetime now = (evaluationTime > 0) ? evaluationTime : TimeCurrent();
+
+      for(int i = m_pendingCount - 1; i >= 0; i--)
+      {
+         if(!m_pendingOrders[i].is_active) continue;
+
+         if(m_pendingOrders[i].expiry_time > 0 && now >= m_pendingOrders[i].expiry_time)
+         {
+            m_pendingOrders[i].is_active = false;
+            m_pendingOrders[i].is_expired = true;
+            continue;
+         }
+
+         if(IsPendingTriggered(m_pendingOrders[i], snap))
+         {
+            string fillReason = "";
+            RegimeState regime; ZeroMemory(regime);
+            if(FillPendingOrder(i, snap, regime, fillReason))
+               continue;
+         }
+      }
 
       for(int i = m_count - 1; i >= 0; i--)
       {

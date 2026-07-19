@@ -4,7 +4,7 @@
 //|  and cleanup on Coinexx-Demo. Never use on a live account.        |
 //+------------------------------------------------------------------+
 #property copyright "QuantBeast Restart Fixture"
-#property version   "1.00"
+#property version   "1.10"
 #property script_show_inputs
 
 // --- Commands ---
@@ -103,23 +103,33 @@ void DoPlaceMarket(ulong magic, string comment)
    MqlTradeRequest req = {};
    MqlTradeResult  res = {};
 
+   string sym = _Symbol;
+   double askPrice = SymbolInfoDouble(sym, SYMBOL_ASK);
+   double point = SymbolInfoDouble(sym, SYMBOL_POINT);
+   int digits = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+   double stopDist = 50.0 * point * 100;
+   double tgtDist  = 100.0 * point * 100;
+
    req.action    = TRADE_ACTION_DEAL;
-   req.symbol    = "XAUUSD";
+   req.symbol    = sym;
    req.volume    = 0.01;
    req.type      = ORDER_TYPE_BUY;
-   req.price     = SymbolInfoDouble("XAUUSD", SYMBOL_ASK);
-   req.sl        = 3000.00;
-   req.tp        = 5000.00;
-   req.deviation = 100;
+   req.price     = askPrice;
+   req.sl        = NormalizeDouble(askPrice - stopDist, digits);
+   req.tp        = NormalizeDouble(askPrice + tgtDist, digits);
+   req.deviation = 500;
    req.magic     = (int)magic;
    req.comment   = comment;
 
-   Print("Sending market BUY 0.01 XAUUSD  magic=", magic, "  comment=", comment,
-         "  ask=", DoubleToString(req.price, 2));
+   Print("Sending market BUY 0.01 ", sym, "  magic=", magic, "  comment=", comment,
+         "  ask=", DoubleToString(askPrice, digits),
+         "  sl=", DoubleToString(req.sl, digits),
+         "  tp=", DoubleToString(req.tp, digits));
 
    if(!OrderSend(req, res))
    {
-      Print("ERROR: OrderSend failed: ", GetLastError());
+      Print("ERROR: OrderSend failed: ", GetLastError(),
+            "  retcode=", res.retcode);
       return;
    }
 
@@ -143,20 +153,23 @@ void DoPlacePending(ulong magic, string comment)
    MqlTradeRequest req = {};
    MqlTradeResult  res = {};
 
-   double currentPrice = SymbolInfoDouble("XAUUSD", SYMBOL_BID);
-   double limitPrice   = NormalizeDouble(currentPrice - 50.00, 2); // ~50 USD below market
+   string sym = _Symbol;
+   double currentPrice = SymbolInfoDouble(sym, SYMBOL_BID);
+   double point = SymbolInfoDouble(sym, SYMBOL_POINT);
+   int digits = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+   double limitPrice = NormalizeDouble(currentPrice - 50.0 * point * 100, digits);
 
    req.action    = TRADE_ACTION_PENDING;
-   req.symbol    = "XAUUSD";
+   req.symbol    = sym;
    req.volume    = 0.01;
    req.type      = ORDER_TYPE_BUY_LIMIT;
    req.price     = limitPrice;
-   req.sl        = 3000.00;
-   req.tp        = 5000.00;
+   req.sl        = NormalizeDouble(limitPrice - 50.0 * point * 100, digits);
+   req.tp        = NormalizeDouble(limitPrice + 100.0 * point * 100, digits);
    req.magic     = (int)magic;
    req.comment   = comment;
 
-   Print("Sending BUY LIMIT 0.01 XAUUSD @ ", DoubleToString(limitPrice, 2),
+   Print("Sending BUY LIMIT 0.01 ", sym, " @ ", DoubleToString(limitPrice, digits),
          "  magic=", magic, "  comment=", comment);
 
    if(!OrderSend(req, res))
@@ -181,10 +194,6 @@ void DoPlacePending(ulong magic, string comment)
 //+------------------------------------------------------------------+
 void DoWriteCorrupt()
 {
-   // Write a schema version that QuantBeast will reject as incompatible
-   // QuantBeast uses QB_STATE_SCHEMA_VERSION (currently v4 per HANDOFF.md)
-   // Writing 999 here forces the "future version" rejection path
-
    GlobalVariableSet(FIXTURE_GLOBAL_PREFIX + "SCHEMA", 999);
    GlobalVariableSet(FIXTURE_GLOBAL_PREFIX + "MARKER", 1);
    GlobalVariablesFlush();
@@ -216,7 +225,7 @@ bool ClosePosition(ulong ticket)
    req.price     = (req.type == ORDER_TYPE_SELL)
                    ? SymbolInfoDouble(req.symbol, SYMBOL_BID)
                    : SymbolInfoDouble(req.symbol, SYMBOL_ASK);
-   req.deviation = 100;
+   req.deviation = 500;
    req.comment   = "QB fixture cleanup";
 
    Print("Closing position ", ticket, "  type=", EnumToString((ENUM_ORDER_TYPE)req.type));
@@ -268,7 +277,7 @@ void DoCleanupAll()
 {
    Print("=== FIXTURE CLEANUP START ===");
 
-   // Close all XAUUSD positions
+   string sym = _Symbol;
    int posTotal = PositionsTotal();
    ulong posTickets[];
    ArrayResize(posTickets, posTotal);
@@ -277,7 +286,7 @@ void DoCleanupAll()
    {
       ulong t = PositionGetTicket(i);
       if(!PositionSelectByTicket(t)) continue;
-      if(PositionGetString(POSITION_SYMBOL) != "XAUUSD") continue;
+      if(PositionGetString(POSITION_SYMBOL) != sym) continue;
       posTickets[posCount++] = t;
    }
    for(int i = 0; i < posCount; i++)
@@ -286,7 +295,6 @@ void DoCleanupAll()
       ClosePosition(posTickets[i]);
    }
 
-   // Cancel all XAUUSD pending orders
    int ordTotal = OrdersTotal();
    ulong ordTickets[];
    ArrayResize(ordTickets, ordTotal);
@@ -295,7 +303,7 @@ void DoCleanupAll()
    {
       ulong t = OrderGetTicket(i);
       if(!OrderSelect(t)) continue;
-      if(OrderGetString(ORDER_SYMBOL) != "XAUUSD") continue;
+      if(OrderGetString(ORDER_SYMBOL) != sym) continue;
       ordTickets[ordCount++] = t;
    }
    for(int i = 0; i < ordCount; i++)
@@ -304,7 +312,6 @@ void DoCleanupAll()
       CancelOrder(ordTickets[i]);
    }
 
-   // Delete fixture globals
    for(int v = GlobalVariablesTotal() - 1; v >= 0; v--)
    {
       string name = GlobalVariableName(v);
@@ -373,7 +380,8 @@ void DoClearKillState()
 //+------------------------------------------------------------------+
 void OnStart()
 {
-   Print("QuantBeastRestartFixture  v1.00  cmd=", EnumToString(InpCommand));
+   Print("QuantBeastRestartFixture  v1.10  cmd=", EnumToString(InpCommand),
+         "  symbol=", _Symbol);
 
    switch(InpCommand)
    {

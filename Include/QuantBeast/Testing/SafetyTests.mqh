@@ -466,8 +466,6 @@ bool QBTestSessionBoundaries(const SessionConfig &cfg, string &detail)
    CSessionEngine engine;
    engine.Init(cfg);
    MqlDateTime dt;
-   // Fixed Wednesday fixture: the result must not depend on the day the EA
-   // happens to be initialized (weekends must not make this test fail).
    TimeToStruct(D'2026.07.15 00:00:00', dt);
    dt.hour = cfg.londonOpenHour;
    dt.min = cfg.londonOpenMin;
@@ -644,7 +642,6 @@ bool QBTestShadowPartialThenBreakeven(CSymbolAdapter &adapter, string &detail)
    FeatureSnapshot features; ZeroMemory(features);
 
    CShadowPortfolio shadow;
-   // Deliberately trigger the partial before breakeven to test state ordering.
    shadow.Init(adapter, 10000.0, 0.0, 0.0,
                true, 1.0, 0.0, true, 50.0, 0.5,
                false, 0.0, 0.0, false, 0);
@@ -1013,9 +1010,6 @@ bool QBTestBrokerFailurePolicy(string &detail)
    bool retainPosition = QBShouldRetainBrokerAction(1, 0);
    bool retainOrder = QBShouldRetainBrokerAction(0, 1);
 
-   // Inject mismatched local/server outcomes without transmitting an order.
-   // A true CTrade boolean with a rejection retcode must never be tracked as
-   // an accepted market fill or pending order.
    bool marketAccepted = QBMarketTransmissionAccepted(true, TRADE_RETCODE_DONE);
    bool marketPartial = QBMarketTransmissionAccepted(true, TRADE_RETCODE_DONE_PARTIAL);
    bool marketApiFail = !QBMarketTransmissionAccepted(false, TRADE_RETCODE_DONE);
@@ -1100,8 +1094,6 @@ bool QBTestBrokerFaultMatrix(string &detail)
                          !QBIsRetryableSubmissionRetcode(TRADE_RETCODE_INVALID_STOPS) &&
                          !QBIsRetryableSubmissionRetcode(TRADE_RETCODE_NO_MONEY);
 
-   // A fill observed during cancellation cannot retire local tracking until
-   // the resulting position is reconciled, protected, and registered.
    bool fillDuringCancelRetained =
       !QBPendingHistoryResolved(true, ORDER_STATE_FILLED, false);
    bool protectedFillResolves =
@@ -1139,7 +1131,6 @@ bool QBTestPerformanceWithoutFileJournal(string &detail)
    ctx.initial_volume = 0.10;
    ctx.entry_regime_trend = TREND_NEUTRAL;
 
-   // No Init() call: every CSV journal remains disabled and unopened.
    journal.LogTrade(ctx, 101.0, 10.0, -1.0, 0.0,
                     EXIT_TARGET_HIT, TREND_NEUTRAL, VOL_NORMAL);
    PerformanceSummary perf = journal.GetPerformance();
@@ -1168,8 +1159,6 @@ bool QBTestKillSwitchFailurePriority(string &detail)
                               false, false, true, false);
    bool rejectionLatched = rejection.IsEntryKill() &&
                            !rejection.IsEmergency();
-   // Reconnect clears only the transient connectivity block. The hard
-   // rejection kill must remain latched.
    rejection.CheckConditions(false, false, false, false,
                               false, false, false, false);
    rejectionLatched = rejectionLatched && rejection.IsEntryKill();
@@ -1217,7 +1206,7 @@ bool QBTestChallengeRestorePolicy(string &detail)
    saved.stage_start_equity = 130.0;
    saved.stage_peak = 160.0;
    saved.attempts_this_stage = 1;
-   saved.stage_target = 1.0;   // stale/corrupt values must not win
+   saved.stage_target = 1.0;
    saved.risk_percent = 99.0;
    saved.profit_locked = 145.0;
 
@@ -1245,7 +1234,7 @@ bool QBTestChallengeSafetyFlattenPolicy(string &detail)
                    3.0, 2.5, 2.0, 1.5, 1.0,
                    30.0, 3, 50.0, false);
    profitLock.Update(100.0, 100.0);
-   profitLock.Update(120.0, 120.0); // lock floor becomes 110
+   profitLock.Update(120.0, 120.0);
    string lockReason = "";
    bool lockFlatten = profitLock.ConsumeSafetyBreach(109.0, lockReason, false) &&
                       !profitLock.IsActive() &&
@@ -1258,7 +1247,7 @@ bool QBTestChallengeSafetyFlattenPolicy(string &detail)
                  10.0, 3, 50.0, false);
    drawdown.Update(100.0, 100.0);
    drawdown.Update(120.0, 120.0);
-   drawdown.Update(107.0, 107.0, false); // >10% below stage peak
+   drawdown.Update(107.0, 107.0, false);
    string ddReason = "";
    bool ddFlatten = drawdown.ConsumeSafetyBreach(107.0, ddReason) &&
                     !drawdown.IsActive() &&
@@ -1292,6 +1281,71 @@ bool QBTestChallengeCashFlowPolicy(string &detail)
             " deposit=" + string(contaminated && flatten ? "fail-closed" : "FAILED");
    return types && contaminated && flatten && !challenge.IsActive() &&
           challenge.GetState().risk_percent == 0.0;
+}
+
+bool QBTestShadowPendingOrderLifecycle(CSymbolAdapter &adapter, string &detail)
+{
+   double bid = SymbolInfoDouble(adapter.Symbol(), SYMBOL_BID);
+   double ask = SymbolInfoDouble(adapter.Symbol(), SYMBOL_ASK);
+   if(bid <= 0 || ask <= bid) { detail = "quote unavailable"; return false; }
+   double spread = ask - bid;
+   double distance = MathMax(100.0, adapter.StopLevel() + 20.0) * adapter.Point();
+   double volume = adapter.NormalizeVolume(adapter.MinLot());
+   MarketSnapshot snap; ZeroMemory(snap);
+   snap.time = TimeCurrent(); snap.bid = bid; snap.ask = ask;
+   snap.mid = (bid + ask) * 0.5; snap.spread_points = spread / adapter.Point();
+   RegimeState regime; ZeroMemory(regime);
+   FeatureSnapshot features; ZeroMemory(features);
+   ShadowCloseEvent events[];
+   string reason = "";
+
+   CShadowPortfolio shadow;
+   shadow.Init(adapter, 10000.0, 0.0, 0.0,
+               false, 0.0, 0.0, false, 0.0, 0.0,
+               false, 0.0, 0.0, false, 0);
+
+   double limitPrice = bid - 2.0 * distance;
+   if(!shadow.OpenPending("SELFTEST", 100, ORDER_TYPE_BUY_LIMIT,
+                          limitPrice, limitPrice - distance, limitPrice + 2.0 * distance,
+                          volume, 0, reason))
+   { detail = "pending place failed: " + reason; return false; }
+
+   if(shadow.GetPendingCount() != 1 || shadow.GetActivePendingCount() != 1)
+   { detail = "pending count mismatch"; return false; }
+
+   MarketSnapshot trigger = snap;
+   trigger.bid = limitPrice - 0.5 * distance;
+   trigger.ask = trigger.bid + spread;
+   if(shadow.Update(trigger, features, events) != 0 ||
+      shadow.GetPositionCount() != 1 ||
+      shadow.GetActivePendingCount() != 0)
+   { detail = "pending did not fill into position"; return false; }
+
+   MarketSnapshot stopSnap = trigger;
+   stopSnap.bid = limitPrice - distance - 0.5 * distance;
+   stopSnap.ask = stopSnap.bid + spread;
+   if(shadow.Update(stopSnap, features, events) != 1 ||
+      events[0].exit_reason != EXIT_STOP_LOSS ||
+      events[0].net_pnl >= 0)
+   { detail = "pending-filled position stop failed"; return false; }
+
+   CShadowPortfolio shadow2;
+   shadow2.Init(adapter, 10000.0, 0.0, 0.0,
+                false, 0.0, 0.0, false, 0.0, 0.0,
+                false, 0.0, 0.0, false, 0);
+   if(!shadow2.OpenPending("SELFTEST", 101, ORDER_TYPE_SELL_LIMIT,
+                           ask + 2.0 * distance,
+                           ask + 3.0 * distance,
+                           ask + 2.0 * distance - 2.0 * distance,
+                           volume, 0, reason))
+   { detail = "sell limit place failed: " + reason; return false; }
+   if(!shadow2.CancelPending(101, reason))
+   { detail = "cancel failed: " + reason; return false; }
+   if(shadow2.GetActivePendingCount() != 0 || shadow2.GetPositionCount() != 0)
+   { detail = "cancel did not clear pending"; return false; }
+
+   detail = "placed=filled stop=loss cancel=cancelled";
+   return true;
 }
 
 #endif // QB_SAFETYTESTS_MQH
