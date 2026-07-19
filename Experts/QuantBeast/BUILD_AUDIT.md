@@ -211,7 +211,7 @@ At least 22 inputs are declared but unused. The conservative and challenge prese
 
 ## Known limitations
 
-The authoritative register is `KNOWN_LIMITATIONS.md`. Major limitations include manual news only, tick-volume VWAP proxy, no COMEX confirmation, manual DST, no Shadow pending-order simulation, incomplete live transaction/recovery proof, unverified real alert delivery, counterfactual analytics, incomplete branch fixtures, and unverified broker portability.
+The authoritative register is `KNOWN_LIMITATIONS.md`. Major limitations include manual news only, tick-volume VWAP proxy, no COMEX confirmation, manual DST, Shadow pending-order lifecycle implemented with deterministic test evidence (live/broker pending recovery unproven), incomplete live transaction/recovery proof, unverified real alert delivery, counterfactual analytics, incomplete branch fixtures, and unverified broker portability.
 
 ## Unverified claims
 

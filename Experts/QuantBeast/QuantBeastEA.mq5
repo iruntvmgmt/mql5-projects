@@ -2414,6 +2414,15 @@ void RunSelfTests()
       { g_SelfTestFailed++; QBLogError("TEST 48 FAIL: Arbitration restore policy " + detail); }
    }
 
+   // Test 49: Shadow pending order lifecycle (place, fill, stop, cancel).
+   {
+      string detail = "";
+      if(QBTestShadowPendingOrderLifecycle(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 49 PASS: Shadow pending order lifecycle " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 49 FAIL: Shadow pending order lifecycle " + detail); }
+   }
+
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +
              IntegerToString(g_SelfTestFailed) + " failed");
 }

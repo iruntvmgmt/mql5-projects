@@ -1,0 +1,7 @@
+CS	0	22:09:55.958	Tester	final balance 10000.00 USD
+CS	0	22:09:55.958	Tester	OnTester result 0
+CS	0	22:09:55.977	Tester	XAUUSD,M5: 22080 ticks, 1104 bars generated. Environment synchronized in 0:00:00.074. Test passed in 0:00:48.974 (including ticks preprocessing 0:00:00.005).
+CS	0	22:09:55.977	Tester	XAUUSD,M5: total time from login to stop testing 0:00:49.048 (including 0:00:00.074 for history data synchronization)
+CS	0	22:09:55.977	Tester	2 Mb memory used including 37 Mb of history data, 64 Mb of tick data
+CS	0	22:09:55.977	Tester	log file "C:\Program Files\MetaTrader 5\Tester\Agent-127.0.0.1-3000\logs\20260718.log" written
+CS	0	22:09:55.980	Tester	test Experts\QuantBeast\QuantBeastEA.ex5 on XAUUSD,M5 thread finished

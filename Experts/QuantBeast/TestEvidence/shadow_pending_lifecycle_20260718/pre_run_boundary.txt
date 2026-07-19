@@ -1,0 +1,7 @@
+Pre-run boundary — 2026-07-18 22:06
+Tester agent log before run:
+-rw-r--r--  1 matt  staff   22342494 Jul 16 15:36 20260716.log
+
+Source/EX5 hashes pre-run:
+7d7b30a309eb71daf2aab2892a4d65494214c128229093a15b8d400dee2db87e  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/QuantBeast/QuantBeastEA.mq5
+7ebb90d42ac4fc1e5ed4dfc4e0abbefe83c9d8b82afefbfa1e8975186c9b6b56  /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/QuantBeast/QuantBeastEA.ex5

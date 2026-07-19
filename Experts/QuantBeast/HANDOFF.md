@@ -31,7 +31,7 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 ## Current verified state
 
 - Main EA source is present.
-- `Include/QuantBeast/Execution/ShadowPortfolio.mqh` implements the broker-free virtual market-position lifecycle.
+- `Include/QuantBeast/Execution/ShadowPortfolio.mqh` implements the broker-free virtual market-position lifecycle and pending-order lifecycle (place, fill/cancel, stop).
 - Four strategy classes contain long and short source logic.
 - Four `.set` presets are present.
 - All nine originally required Markdown documents are present.
@@ -40,7 +40,7 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 - `QuantBeastEA.ex5` is present and the final MetaEditor build is `0 errors, 0 warnings`.
 - The original 23-error/15-warning baseline is preserved under `TestEvidence/compile_20260715/`.
 - The Shadow lifecycle build/runtime evidence is under `TestEvidence/shadow_lifecycle_20260715/`.
-- Strategy Tester agent logs prove Shadow initialization and 51 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, restored arbitration duplicate/cooldown persistence, live broker-transmission acknowledgement gating, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, alert-routing policy, entry preflight controls, session/rollover exit policy, self-test detail logging control, chart-object toggle policy, fill/reconciliation alert-category routing, and strategy-counter same-day restore policy. The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
+- Strategy Tester agent logs prove Shadow initialization and 52 passed/0 failed tests, including direction-preserving strategy rejections, regime/arbitration policy, restored arbitration duplicate/cooldown persistence, live broker-transmission acknowledgement gating, protection repair/emergency, server-response, cancel/fill-race, kill-switch, fail-closed Challenge policies, final-decision signal writer behavior, performance updates with file journaling disabled, live-mode strategy/execution gates, state symbol scoping, live recovery no-passive-flatten gating, unknown-position no-adoption behavior, alert-routing policy, entry preflight controls, session/rollover exit policy, self-test detail logging control, chart-object toggle policy, fill/reconciliation alert-category routing, strategy-counter same-day restore policy, and Shadow pending-order lifecycle (place, fill, stop, cancel). The tester MCP still returns `job_id: 0`; local agent logs and file timestamps are authoritative.
 - BO now applies its strategy-specific `InpBO_CompressionPct` input against the current ATR percentile rank in addition to the shared minimum compression-bar duration; evidence is under `TestEvidence/bo_compression_pct_20260716/`.
 - A two-process restart probe is preserved under `TestEvidence/restart_probe_20260715/`: phase 1 passed, but a fresh tester/Wine process loaded schema `0`. This proves tester-state isolation, not live-terminal restart safety. Production persistence now explicitly flushes Terminal Global Variables.
 - Broker submission return values now require both local API success and order-class-specific server acceptance; deterministic mismatched-response injection passes under `TestEvidence/server_ack_policy_20260715/`.
@@ -77,7 +77,7 @@ MQL5/Experts/QuantBeast/PROJECT_MISSION_AND_AUDIT_CONTEXT.md
 
 The authoritative, complete focused findings are in `BUG_AUDIT.md`. Highest-risk confirmed findings include:
 
-1. Shadow pending-order activation/expiry is unsupported; pending intents are rejected.
+1. Shadow pending-order lifecycle (place, fill/cancel, stop) is now implemented with deterministic test coverage under `TestEvidence/shadow_pending_lifecycle_20260718/`; full lifetime/expiry modeling, organic market-fill behavior, and live/broker pending-order recovery remain unproven.
 2. Core Shadow market-position branches have deterministic runtime evidence; strategy-generated lifecycle sequences remain unproven.
 3. Pending broker orders are cancelled fail-closed on restart rather than restored.
 4. Recovered positions cannot always restore signal/regime/MFE/MAE/exact management state.
@@ -316,12 +316,27 @@ Live: prohibited
 - Source SHA-256: `24acb8babcaf977fab7b265fe979fa919850d121d69254eeff013fa35d5e2041` (unchanged); SafetyTests SHA-256 changed; EX5 SHA-256: `2fb06c38c6df67251eadbfb2751f90ee4e878c20e59d9c155eef8a06901f3659`.
 - No broker orders were transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
 
+
+### 2026-07-18 — Phase 2: Shadow pending order lifecycle
+
+- Decision (Next task #4): implement the Shadow pending-order lifecycle in the broker-free Shadow layer rather than keep it as a documented rejection; the Shadow test fixture provides the simulation baseline for future broker-side pending-order work.
+- Implementation (committed as `52442ce`): `ShadowPortfolio.mqh` added `OpenPending()` (buy/sell limit), `CancelPending()`, `GetPendingCount()`, `GetActivePendingCount()`, and fill-on-trigger logic in `Update()`.
+- Test: `SafetyTests.mqh` added `QBTestShadowPendingOrderLifecycle()` (TEST 49) covering BUY_LIMIT place→fill→stop-loss, and SELL_LIMIT place→cancel.
+- Wiring: committed the previously-uncommitted TEST 49 invocation block in `QuantBeastEA.mq5` `RunSelfTests()`.
+- Compile: `0 errors, 0 warnings, 10845 ms`, timestamp `2026.07.18 22:01:16.192`, MetaEditor build 6033.
+- Shadow regression: `52 passed, 0 failed` (was 51); TEST 49 `placed=filled stop=loss cancel=cancelled`; `22080` generated ticks, `1104` bars; final balance `10000.00`; `OnTester result 0`; `Test passed in 0:00:48.974`.
+- Evidence: `TestEvidence/shadow_pending_lifecycle_20260718/`.
+- Hashes: main source `7d7b30a309eb71daf2aab2892a4d65494214c128229093a15b8d400dee2db87e`; EX5 `7ebb90d42ac4fc1e5ed4dfc4e0abbefe83c9d8b82afefbfa1e8975186c9b6b56`; ShadowPortfolio.mqh `795420a16fc22b4748c9f851d89df05e852053d0e383842178ce2adf16f2bdd7`; SafetyTests.mqh `bc89f2708b74ee53adcd5ada30a148ebf42a0fed978a5598d5570ce8f9fa4323`.
+- Boundary: deterministic Shadow-only proof; no broker pending-order behavior, organic market-fill behavior, or live/broker pending-order recovery is proven.
+- No broker orders were transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
+
+
 ## Next task
 
 1. Run controlled demo/fault-adapter scenarios for actual modify/close/delete rejection, requotes, disconnect/reconnect, and fill-during-cancel callback ordering. The deterministic policies are covered; actual broker behavior is not.
 2. Run an actual normal-terminal restart fixture with owned positions, pending orders, unknown positions, and incompatible/corrupt state. Do not reuse Strategy Tester global persistence as a substitute and do not optimize profitability yet.
 3. Repeat organic BO/FBO/TP/MR and full Shadow lifecycle coverage on true real ticks when history is available; inspect post-repair CSV status/ID rows.
-4. Decide whether to implement Shadow pending orders or keep the explicit rejection as a documented design limit; production live modes are currently market-order-only until pending-order broker evidence exists.
+4. Implement broker-side live pending-order lifecycle and recovery (Shadow layer completed 2026-07-18 with deterministic test evidence; see `TestEvidence/shadow_pending_lifecycle_20260718/`). Production live modes remain market-order-only until pending-order broker evidence exists; the Shadow pending-order test fixture provides the simulation baseline.
 
 ## Do not touch during the next task
 
@@ -402,7 +417,7 @@ Live: prohibited
 - Added `Execution/ShadowPortfolio.mqh` with broker-free bid/ask market entry, configured slippage/commission, stop/target, partial, breakeven, ATR trail, time stop, virtual equity/exposure, MFE/MAE, forced flatten, and close events.
 - Isolated Diagnostic/Shadow startup from broker reconciliation and broker-mutating kill actions; persistence remains live-mode-only.
 - Routed Shadow equity, balance, exposure, position counts, risk updates, dashboard values, and completed-trade journals through the virtual portfolio.
-- Shadow pending intents are rejected explicitly; no incomplete stop/limit simulation is implied.
+- Shadow pending-order lifecycle (place, fill/cancel, stop) now has deterministic test coverage; pending intents are no longer flatly rejected. Full lifetime/expiry modeling remains unsupported.
 - Added deterministic startup Test 9 for synthetic market entry to target close.
 - Final compile: `0 errors, 0 warnings`.
 - Strategy Tester evidence: `17 passed, 0 failed`; lifecycle, costs, multiple positions, drawdown locking, and transient gates passed; tester balance remained `10000.00`; no broker order/deal lines.

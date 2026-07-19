@@ -1,0 +1,40 @@
+CS	0	22:09:54.827	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:49:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 376.0 pts > configured maximum
+CS	0	22:09:54.839	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:50:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 321.0 pts > configured maximum
+CS	0	22:09:54.849	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:51:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 273.0 pts > configured maximum
+CS	0	22:09:54.855	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:52:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 1025.0 pts > configured maximum
+CS	0	22:09:54.864	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:53:20   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 352.0 pts > configured maximum
+CS	0	22:09:54.866	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:53:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 422.0 pts > configured maximum
+CS	0	22:09:54.871	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:54:20   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 277.0 pts > configured maximum
+CS	0	22:09:54.873	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:54:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 632.0 pts > configured maximum
+CS	0	22:09:54.880	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:55:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 254.0 pts > configured maximum
+CS	0	22:09:54.886	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:56:20   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 215.0 pts > configured maximum
+CS	0	22:09:54.893	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:56:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 329.0 pts > configured maximum
+CS	0	22:09:54.904	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:57:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 378.0 pts > configured maximum
+CS	0	22:09:54.916	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:58:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 347.0 pts > configured maximum
+CS	0	22:09:54.924	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:58:59   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 228.0 pts > configured maximum
+CS	0	22:09:54.931	QuantBeastEA (XAUUSD,M5)	2026.05.21 21:59:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 313.0 pts > configured maximum
+CS	0	22:09:54.938	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:00:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 268.0 pts > configured maximum
+CS	0	22:09:54.946	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:01:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 397.0 pts > configured maximum
+CS	0	22:09:54.962	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:03:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 239.0 pts > configured maximum
+CS	0	22:09:54.976	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:05:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 290.0 pts > configured maximum
+CS	0	22:09:54.987	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:06:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 459.0 pts > configured maximum
+CS	0	22:09:54.996	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:07:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 292.0 pts > configured maximum
+CS	0	22:09:55.005	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:08:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 402.0 pts > configured maximum
+CS	0	22:09:55.027	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:10:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 334.0 pts > configured maximum
+CS	0	22:09:55.056	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:14:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 206.0 pts > configured maximum
+CS	0	22:09:55.078	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:17:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 253.0 pts > configured maximum
+CS	0	22:09:55.125	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:23:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 232.0 pts > configured maximum
+CS	0	22:09:55.173	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:29:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 243.0 pts > configured maximum
+CS	0	22:09:55.180	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:30:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 217.0 pts > configured maximum
+CS	0	22:09:55.335	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:48:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 213.0 pts > configured maximum
+CS	0	22:09:55.375	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:53:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 284.0 pts > configured maximum
+CS	0	22:09:55.384	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:54:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 412.0 pts > configured maximum
+CS	0	22:09:55.391	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:55:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 292.0 pts > configured maximum
+CS	0	22:09:55.402	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:56:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 649.0 pts > configured maximum
+CS	0	22:09:55.410	QuantBeastEA (XAUUSD,M5)	2026.05.21 22:57:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 244.0 pts > configured maximum
+CS	0	22:09:55.476	QuantBeastEA (XAUUSD,M5)	2026.05.21 23:05:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 219.0 pts > configured maximum
+CS	0	22:09:55.495	QuantBeastEA (XAUUSD,M5)	2026.05.21 23:07:40   ⚠ QuantBeast[WARN] Entry preflight blocked: Price jump: 305.0 pts > configured maximum
+CS	0	22:09:55.958	Tester	final balance 10000.00 USD
+CS	0	22:09:55.958	Tester	OnTester result 0
+CS	0	22:09:55.977	Tester	XAUUSD,M5: 22080 ticks, 1104 bars generated. Environment synchronized in 0:00:00.074. Test passed in 0:00:48.974 (including ticks preprocessing 0:00:00.005).
+CS	0	22:09:55.980	Tester	test Experts\QuantBeast\QuantBeastEA.ex5 on XAUUSD,M5 thread finished

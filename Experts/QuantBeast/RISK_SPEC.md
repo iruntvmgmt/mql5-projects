@@ -66,7 +66,7 @@ All results should be normalized to broker minimum, maximum, and step. Sizing mu
 - KillSwitch entry, symbol, strategy, cancel, flatten, and emergency states are connected to the main control paths; live runtime proof is pending.
 - Per-strategy daily-trade accounting is persisted and restored only for the same broker day; normal-terminal restart evidence is still required before live reliance.
 - Daily/weekly period rollover and persisted start-equity semantics have deterministic state restoration coverage but not a real multi-session restart test.
-- Maximum holding is enforced by position management; pending lifetime is not authoritative because Shadow pending intents are rejected and live pending recovery is fail-closed cancellation.
+- Maximum holding is enforced by position management; pending lifetime is not authoritative because Shadow pending-order lifecycle (place, fill/cancel, stop) is now implemented with deterministic test coverage while live pending recovery is fail-closed cancellation. Full expiry/organic-fill models remain unproven.
 - Maximum leverage is not enforced as an independent configured cap.
 - Pending partial-fill and deferred/deduplicated close transitions are deterministic-tested. Actual broker callback ordering, protection-repair, and retry sequences are not yet proven at runtime.
 
