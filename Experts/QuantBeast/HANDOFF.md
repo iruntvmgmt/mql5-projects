@@ -361,11 +361,24 @@ Live: prohibited
 - Readiness remains exactly `READY FOR SHADOW MODE`; no broker orders transmitted.
 
 
+
+### 2026-07-19 — Organic true-tick CSV evidence captured (HANDOFF item #3)
+
+- **Organic true-tick backtest**: Model=4 (real ticks), XAUUSD M5, 2026.06.20-06.24 (5-day window), all 4 strategies enabled, self-tests disabled, journals enabled.
+- **Result**: `863499 ticks, 552 bars, Test passed in 0:28:51.422, final balance 10000.00, OnTester result 0`.
+- **CSV journal growth**: SignalJournal +1840 rows, OrderJournal +7 rows, TradeJournal +7 rows. The live terminal's file lock was released (MT5 refreshed earlier), so journals wrote to the main Common/Files path successfully despite the stale-.ex5 issue.
+- **Signal summary**: FBO 7 ACCEPTED (5 BUY, 2 SELL) + 453 REJECTED; BO 459 REJECTED; TP 460 REJECTED; MR 460 REJECTED. Only FBO reached accepted state — matches the prior 2026-07-16 single-day finding on a broader 5-day window.
+- **Trade outcomes**: 7 FBO trades with full PnL/R-multiple journaling. Both BUY and SELL directions preserved. Signal IDs include direction. Accepted rows appear only after final decision.
+- **Evidence**: `TestEvidence/organic_true_ticks_20260718/` (EVIDENCE.md, new_signal_rows.csv, new_order_rows.csv, new_trade_rows.csv, tester config, pre-run boundary).
+- **Finding**: BO/TP/MR organic accepted entries remain unproven — the strategies are too selective for this 5-day XAUUSD window. Broader multi-window coverage or parameter review may be needed.
+- No broker orders transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
+
+
 ## Next task
 
 1. Run controlled demo/fault-adapter scenarios for actual modify/close/delete rejection, requotes, disconnect/reconnect, and fill-during-cancel callback ordering. The deterministic policies are covered; actual broker behavior is not.
 2. Run an actual normal-terminal restart fixture with owned positions, pending orders, unknown positions, and incompatible/corrupt state. Do not reuse Strategy Tester global persistence as a substitute and do not optimize profitability yet.
-3. Repeat organic BO/FBO/TP/MR and full Shadow lifecycle coverage on true real ticks when history is available; inspect post-repair CSV status/ID rows.
+3. Organic true-tick CSV evidence captured 2026-07-19 (see `TestEvidence/organic_true_ticks_20260718/`): 7 FBO accepted entries across a 5-day window, BO/TP/MR rejected only. REMAINING: BO/TP/MR organic accepted entries remain unproven (strategies too selective for this window); broader multi-window coverage or strategy-parameter review may be needed.
 4. Implement broker-side live pending-order lifecycle and recovery (Shadow layer completed 2026-07-18 with deterministic test evidence; see `TestEvidence/shadow_pending_lifecycle_20260718/`). Production live modes remain market-order-only until pending-order broker evidence exists; the Shadow pending-order test fixture provides the simulation baseline.
 
 ## Do not touch during the next task
