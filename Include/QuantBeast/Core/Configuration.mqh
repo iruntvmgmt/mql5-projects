@@ -265,6 +265,7 @@ input group "══════════ Logging ═════════�
 input bool   InpEnableSignalJournal   = true;    // Enable Signal Journal
 input bool   InpEnableOrderJournal    = true;    // Enable Order Journal
 input bool   InpEnableTradeJournal    = true;    // Enable Trade Journal
+input bool   InpJournalTesterPrefix  = false;   // Route journals to Tester\ subdirectory (set true in Strategy Tester)
 input bool   InpEnableDebugLogging    = false;   // Enable Debug Logging
 
 //+------------------------------------------------------------------+

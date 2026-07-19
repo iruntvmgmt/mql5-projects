@@ -135,9 +135,12 @@ void WriteCSVLine(int handle, string line)
 //+------------------------------------------------------------------+
 //| Open a CSV journal file in common folder                          |
 //+------------------------------------------------------------------+
-int OpenJournalFile(string filename, string headers)
+int OpenJournalFile(string filename, string headers, bool isTester=false)
 {
-   string path = QB_LOG_DIR + filename;
+   string path = QB_LOG_DIR;
+   if(isTester)
+      path += "Tester\\";
+   path += filename;
 
    // Check if file exists to decide whether to write headers
    bool exists = FileIsExist(path, FILE_COMMON);

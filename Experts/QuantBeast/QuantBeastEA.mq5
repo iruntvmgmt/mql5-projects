@@ -792,7 +792,7 @@ int OnInit()
                  InpEnableTimeStop, InpTimeStopMinutes);
 
    // --- Initialize Journal ---
-   g_Journal.Init(InpEnableSignalJournal, InpEnableOrderJournal, InpEnableTradeJournal);
+   g_Journal.Init(InpEnableSignalJournal, InpEnableOrderJournal, InpEnableTradeJournal, InpJournalTesterPrefix);
 
    // --- Initialize Dashboard ---
    g_Dashboard.Init(InpDashboardEnabled, InpDashboardX, InpDashboardY,

@@ -72,7 +72,7 @@ public:
    }
 
    //+------------------------------------------------------------------+
-   bool Init(bool enableSignal, bool enableOrder, bool enableTrade)
+   bool Init(bool enableSignal, bool enableOrder, bool enableTrade, bool isTester=false)
    {
       m_enabledSignal = enableSignal;
       m_enabledOrder  = enableOrder;
@@ -84,7 +84,7 @@ public:
          m_signalHandle = OpenJournalFile(QB_SIGNAL_LOG,
             "Timestamp,Symbol,Mode,Strategy,Direction,SignalID,SetupCode,TriggerCode," +
             "Accepted,RejectionCode,RejectionReason,RegimeTrend,RegimeVol,Session," +
-            "Spread,ATR_Points,Entry,Stop,Target,ExpectedR,Confidence");
+            "Spread,ATR_Points,Entry,Stop,Target,ExpectedR,Confidence", isTester);
          if(m_signalHandle == INVALID_HANDLE) success = false;
       }
 
@@ -92,7 +92,7 @@ public:
       {
          m_orderHandle = OpenJournalFile(QB_ORDER_LOG,
             "RequestTime,OrderType,RequestedPrice,RequestedVolume,Stop,Target," +
-            "BrokerRetcode,FillPrice,SlippagePts,Retries,FinalState,Comment");
+            "BrokerRetcode,FillPrice,SlippagePts,Retries,FinalState,Comment", isTester);
          if(m_orderHandle == INVALID_HANDLE) success = false;
       }
 
@@ -101,7 +101,7 @@ public:
          m_tradeHandle = OpenJournalFile(QB_TRADE_LOG,
             "Strategy,SignalID,EntryTime,ExitTime,Direction,Entry,Exit,Volume," +
             "Stop,Target,GrossPnL,Commission,Swap,NetPnL,RMultiple,MFE,MAE," +
-            "ExitReason,EntryRegime,ExitRegime,EntrySpread,Slippage");
+            "ExitReason,EntryRegime,ExitRegime,EntrySpread,Slippage", isTester);
          if(m_tradeHandle == INVALID_HANDLE) success = false;
       }
 

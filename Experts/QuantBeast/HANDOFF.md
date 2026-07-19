@@ -344,6 +344,23 @@ Live: prohibited
 - No broker orders were transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
 
 
+
+### 2026-07-19 — Journal file-lock fix implemented (tester-aware path separation)
+
+- **Root cause (from prior investigation)**: `Diagnostics.mqh::OpenJournalFile()` opens journal CSVs with `FILE_COMMON|FILE_SHARE_READ` (no `FILE_SHARE_WRITE`). The live terminal on Coinexx-Demo holds write locks on `Common/Files/QuantBeast/SignalJournal.csv` etc. The Strategy Tester maps `FILE_COMMON` to the same Common folder (not sandboxed), so the tester gets error 5004 (`FILE_CANNOT_OPEN`).
+- **Failed approaches**: (1) `FILE_SHARE_WRITE` flag — compiled 0 warnings but writes silently discarded. (2) `MQL5InfoInteger(MQL5_TESTER)` runtime check — MetaEditor build 6033 evaluates this as a compile-time constant (returns 0 at runtime; confirmed by error log showing `QuantBeast\SignalJournal.csv` path without `Tester\` prefix). (3) `AccountInfoInteger(ACCOUNT_LOGIN)` — 2 compile errors (function unavailable during init).
+- **Working fix (4 files, compiles 0 errors, 0 warnings)**: Added a new EA input `InpJournalTesterPrefix` (default `false`) in `Configuration.mqh`. `QuantBeastEA.mq5` passes it to `CTradeJournal::Init()`, which passes it to `OpenJournalFile()`. When `true`, journal paths route to `QuantBeast\Tester\<filename>` — a separate subdirectory that avoids the live terminal's file locks entirely.
+  - `Include/QuantBeast/Core/Configuration.mqh`: +1 line (new input)
+  - `Include/QuantBeast/Core/Diagnostics.mqh`: `OpenJournalFile()` gains `bool isTester=false` param; adds `Tester\` prefix when true
+  - `Include/QuantBeast/Analytics/TradeJournal.mqh`: `Init()` gains `bool isTester=false` param; passes to all 3 `OpenJournalFile` calls
+  - `Experts/QuantBeast/QuantBeastEA.mq5`: `g_Journal.Init(...)` call passes `InpJournalTesterPrefix`
+- **Compile**: `0 errors, 0 warnings, 53386 ms`, MetaEditor build 6033, timestamp `2026.07.19 15:51:54`, EX5 `500706` bytes.
+- **Organic true-tick run (2026.06.20-06.24, Model=4)**: completed (`863499 ticks, 552 bars, Test passed in 0:28:51, balance 10000.00`) but **the tester loaded a stale cached .ex5** — the `InpJournalTesterPrefix` input did NOT appear in the tester's logged input list, so journals still went to the locked main path. No CSV evidence captured.
+- **Operational blocker**: The MT5 terminal (PID running since before the 15:51:54 compile) caches the .ex5 in memory. The tester agent loaded the stale cached version. **The terminal must be restarted** to pick up the new .ex5, then re-run the organic true-tick backtest with `InpJournalTesterPrefix=true` in the config.
+- **Also**: the `QuantBeast\Tester\` subdirectory must be pre-created (MQL5 `FileOpen` with `FILE_COMMON` does not auto-create subdirectories). It has been pre-created at `Common/Files/QuantBeast/Tester/`.
+- Readiness remains exactly `READY FOR SHADOW MODE`; no broker orders transmitted.
+
+
 ## Next task
 
 1. Run controlled demo/fault-adapter scenarios for actual modify/close/delete rejection, requotes, disconnect/reconnect, and fill-during-cancel callback ordering. The deterministic policies are covered; actual broker behavior is not.
@@ -365,7 +382,7 @@ Live: prohibited
 - Native MT5 tester MCP returns `job_id: 0`/stopped even when the local agent completes the run; use agent logs as evidence.
 - BO/TP/MR organic accepted entries, long-run virtual accounting, and broad multi-window true-tick coverage remain unproven.
 - The post-repair CSV blocker is closed by `TestEvidence/organic_true_ticks_20260716/`; historical pre-repair rows and the pre-fix corrupted shared Common prefix remain preserved and must not be used as current evidence.
-- **⚠ Journal file-lock collision (2026-07-19)** — The live terminal on Coinexx-Demo holds write locks on the Common/Files/QuantBeast CSV journals. Any tester run with journals enabled hits error 5004 (`FILE_CANNOT_OPEN`). The fix (tester-aware subdirectory: `QuantBeast\Tester\`) is designed but needs a clean compile session (MetaEditor build 6033 warns on `MQL5InfoInteger(MQL5_TESTER)`). See HANDOFF worklog 2026-07-19.
+- **⚠ Journal file-lock collision (2026-07-19)** — The live terminal on Coinexx-Demo holds write locks on the Common/Files/QuantBeast CSV journals. Any tester run with journals enabled hits error 5004 (`FILE_CANNOT_OPEN`). **FIX IMPLEMENTED** (4-file change, compiles 0/0): new `InpJournalTesterPrefix` input routes tester journals to `QuantBeast\Tester\` subdirectory. **Operational blocker remains**: the MT5 terminal caches the old .ex5; it must be restarted to pick up the new build, then re-run the organic true-tick backtest with `InpJournalTesterPrefix=true`. See HANDOFF worklog 2026-07-19.
 
 ## Worklog
 
