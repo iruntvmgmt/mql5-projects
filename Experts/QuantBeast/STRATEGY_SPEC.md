@@ -20,7 +20,7 @@ Current shared limitations:
 - Valid signals do not carry a durable numeric signal ID beyond the journal string ID.
 - Rejections preserve evaluated BUY/SELL direction and signal journal IDs include direction.
 - Strategy-level hardcoded spread limits coexist with the configurable global spread limit.
-- Direct class-level eligibility, valid-long, and valid-short behavior has deterministic coverage for all four engines. Organic true-tick evidence accepted FBO BUY/SELL and produced BO/FBO/TP/MR BUY/SELL rejections; BO/TP/MR accepted lifecycle sequences remain unproven.
+- Direct class-level eligibility, valid-long, and valid-short behavior has deterministic coverage for all four engines. Organic true-tick evidence accepted FBO BUY/SELL and produced BO/FBO/TP/MR BUY/SELL rejections; BO/TP/MR accepted lifecycle sequences remain unproven across 6 distinct organic windows tested as of 2026-07-19 (see `TestEvidence/organic_multiwindow_20260719/EVIDENCE.md`), with 88-100% of BO/TP/MR rejections attributable to the eligibility gate itself rather than window selection.
 
 ## Strategy 1: Session Volatility Breakout (`BO`)
 

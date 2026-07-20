@@ -1,6 +1,6 @@
 # QuantBeast Handoff
 
-**Last updated:** 2026-07-16  
+**Last updated:** 2026-07-19  
 **Current phase:** Broker-free audit, repair, deterministic validation, and organic true-tick journal proof complete through safe phases  
 **Current verdict:** **READY FOR SHADOW MODE; live and Challenge trading prohibited**  
 **Active source version:** `QuantBeastEA.mq5` property version 1.00
@@ -374,11 +374,24 @@ Live: prohibited
 - No broker orders transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
 
 
+### 2026-07-19 — Multi-window organic coverage for BO/TP/MR (HANDOFF item #3, closed as evidence-complete)
+
+- Session scope: item #3's remainder from the prior entry (BO/TP/MR organic accepted entries unproven). Per AGENTS.md session scope, this was the one item worked this session; items #1, #2, #4 were not touched.
+- Re-examined existing isolated per-strategy evidence (`performance_readiness_20260716`) first: TP and MR are blocked ~99%+ by the generic "not eligible" gate in both their train and holdout windows. BO is blocked ~88% by "not eligible", but the remaining ~12% pass eligibility and trigger, with a handful reaching the risk stage and being rejected `Risk: Stop too far: <1000-5081> > 1000` against `InpMaxStopPoints=1000` -- a real, previously-uncharacterized finding specific to the isolated BO-only test.
+- Selected three new windows from actual XAUUSD D1 history (`get_chart_history`, 2026-01-01 to 2026-07-17), chosen for regimes visibly distinct from the already-tested 2026-06-15/2026-07-03 span: 2026.02.16-02.20 (compression-then-breakout, targeting BO), 2026.04.20-04.24 (choppy/balanced, targeting MR), 2026.03.30-04.07 (impulse-pullback-resumption, targeting TP).
+- Ran all three as combined (all 4 strategies enabled) organic true-tick backtests: XAUUSD M5, Model=4, Shadow mode, `InpJournalTesterPrefix=true`. All three completed normally (`OnTester result 0`, balance unchanged at 10000.00, normal tester footer); native tester MCP again returned `job_id: 0`, confirmed via local Tester Agent log instead per AGENTS.md.
+- Result: BO/TP/MR reached 0 accepted signals in all three new windows (97-100% "not eligible" in every case); only FBO reached ACCEPTED/Shadow-trade state (1 accepted signal and 2-9 Shadow trades per window). OrderJournal confirms 24 total orders across the three windows, all `QB_FBO_SHADOW`, zero BO/TP/MR.
+- Correction made during this session: initially misattributed the repeated Experts-log `Signal rejected by risk engine: Stop too far` warnings in these combined runs to BO, assuming the isolated-test finding recurred. Checking `QuantBeastEA.mq5:1254-1256` and the SignalJournal CSV shows the risk-stage rejection is journaled against whichever strategy arbitration selected as `best` that cycle -- in these combined runs that was inconsistently FBO (window A, 4 rows) or BO (window B, 2 rows), and window C's sampled rows showed none despite roughly 15 Experts-log warnings. This indicates the SignalJournal under-counts this reason relative to the live warn log (likely duplicate/cooldown suppression at the journal-write level not shared by `QBLogWarn`) -- flagged as a journal-fidelity gap, not a new strategy-attribution finding. The isolated BO-only test remains the clean evidence for BO's own stop-distance problem.
+- Finding: across all 6 distinct organic windows tested to date (2 isolated BO/TP/MR windows + 2 mid-June/July combined windows + these 3 new combined windows), BO/TP/MR have never reached ACCEPTED in a combined run. The blocker is overwhelmingly the eligibility gate itself, not window selection; further blind window broadening is unlikely to change this by itself. Per this item's "do not touch" scope, no eligibility/regime parameters were changed. Whether the eligibility gates are miscalibrated or correctly modeling rare conditions is unresolved and needs a dedicated strategy-parameter review task.
+- Evidence: `TestEvidence/organic_multiwindow_20260719/EVIDENCE.md` (includes the three tester configs, accepted-row excerpts, and full reasoning).
+- No source, parameter, or preset changes were made. Source SHA-256 `7ac32f8db9c8b16d2fe797ad890f6403ae7877ca38a7fdef24b0c5c5ab797ec9` (unchanged); EX5 SHA-256 `cb91e10507047433646c6927a17c7bf242ab7e6f2d50910f89c77333f359d2c9` (unchanged).
+- No broker orders were transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
+
 ## Next task
 
 1. Run controlled demo/fault-adapter scenarios for actual modify/close/delete rejection, requotes, disconnect/reconnect, and fill-during-cancel callback ordering. The deterministic policies are covered; actual broker behavior is not.
 2. Run an actual normal-terminal restart fixture with owned positions, pending orders, unknown positions, and incompatible/corrupt state. Do not reuse Strategy Tester global persistence as a substitute and do not optimize profitability yet.
-3. Organic true-tick CSV evidence captured 2026-07-19 (see `TestEvidence/organic_true_ticks_20260718/`): 7 FBO accepted entries across a 5-day window, BO/TP/MR rejected only. REMAINING: BO/TP/MR organic accepted entries remain unproven (strategies too selective for this window); broader multi-window coverage or strategy-parameter review may be needed.
+3. CLOSED as evidence-complete 2026-07-19 (see `TestEvidence/organic_multiwindow_20260719/`): 6 distinct organic windows now tested (2 isolated single-strategy + 4 combined, spanning Feb-Jul 2026 in visibly different regimes); BO/TP/MR have never reached ACCEPTED. Remaining work here is a dedicated strategy-parameter/eligibility-gate review, not more window coverage -- track as a new, separate task if pursued, since AGENTS.md forbids combining evidence-gathering with parameter changes in one session.
 4. Implement broker-side live pending-order lifecycle and recovery (Shadow layer completed 2026-07-18 with deterministic test evidence; see `TestEvidence/shadow_pending_lifecycle_20260718/`). Production live modes remain market-order-only until pending-order broker evidence exists; the Shadow pending-order test fixture provides the simulation baseline.
 
 ## Do not touch during the next task
@@ -395,7 +408,9 @@ Live: prohibited
 - Native MT5 tester MCP returns `job_id: 0`/stopped even when the local agent completes the run; use agent logs as evidence.
 - BO/TP/MR organic accepted entries, long-run virtual accounting, and broad multi-window true-tick coverage remain unproven.
 - The post-repair CSV blocker is closed by `TestEvidence/organic_true_ticks_20260716/`; historical pre-repair rows and the pre-fix corrupted shared Common prefix remain preserved and must not be used as current evidence.
-- **⚠ Journal file-lock collision (2026-07-19)** — The live terminal on Coinexx-Demo holds write locks on the Common/Files/QuantBeast CSV journals. Any tester run with journals enabled hits error 5004 (`FILE_CANNOT_OPEN`). **FIX IMPLEMENTED** (4-file change, compiles 0/0): new `InpJournalTesterPrefix` input routes tester journals to `QuantBeast\Tester\` subdirectory. **Operational blocker remains**: the MT5 terminal caches the old .ex5; it must be restarted to pick up the new build, then re-run the organic true-tick backtest with `InpJournalTesterPrefix=true`. See HANDOFF worklog 2026-07-19.
+- Journal file-lock collision (2026-07-19): fixed and confirmed working across four subsequent tester runs (`organic_true_ticks_20260718` plus the three `organic_multiwindow_20260719` windows) using `InpJournalTesterPrefix=true`, routing to `Common/Files/QuantBeast/Tester/`. No further action needed; closed.
+- BO/TP/MR eligibility-gate calibration (unresolved, 2026-07-19): 6 distinct organic windows (isolated + combined) all show BO/TP/MR blocked 88-100% by the generic "not eligible" gate, never reaching ACCEPTED. Whether this reflects genuinely rare qualifying conditions or a miscalibrated eligibility gate is unresolved; needs a dedicated strategy-parameter review task (out of scope for evidence-only sessions per AGENTS.md change discipline). See `TestEvidence/organic_multiwindow_20260719/EVIDENCE.md`.
+- BO risk-stage stop-distance rejection (isolated-test finding, 2026-07-16/19): in the isolated BO-only test, BO's structural+ATR stop calculation for XAUUSD occasionally exceeds `InpMaxStopPoints=1000` by 1-5x, blocking otherwise-eligible-and-triggered BO signals at the risk stage. Combined-run attribution of the same "Stop too far" reason is unreliable (see 2026-07-19 worklog entry) -- only the isolated test is clean evidence for this.
 
 ## Worklog
 

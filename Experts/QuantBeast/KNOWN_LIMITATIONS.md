@@ -1,6 +1,6 @@
 # QuantBeast Known Limitations
 
-**Status date:** 2026-07-16  
+**Status date:** 2026-07-19  
 **Current readiness:** `READY FOR SHADOW MODE` for broker-free mechanical research only. Live and Challenge operation prohibited.
 
 ## Runtime and testing
@@ -8,7 +8,7 @@
 - The final source compiles at `0 errors, 0 warnings`, but compilation is not runtime proof.
 - The native MT5 tester API still returns the invalid/ambiguous identifier `job_id: 0` and reports `tester stopped`; local agent logs must be inspected to confirm completion.
 - A Shadow fixture completed with 52 startup tests passed and 0 failed, including rejected-direction, regime, all arbitration enum modes, broker-fault, centralized protection-close, final-decision signal-writer, performance-without-file-journal, live-mode gate, live broker-transmission acknowledgement gate, recovery, alert, preflight, session-exit, self-test detail-control, chart-object toggle, fill/reconciliation alert-category, strategy-counter restore, arbitration persistence, and Shadow pending-order lifecycle policies. Latest boundary/regression proof is under `TestEvidence/current_regression_20260716/`, with follow-on wiring proof under `TestEvidence/bo_compression_pct_20260716/`, `TestEvidence/tp_pullback_age_20260716/`, `TestEvidence/mr_target_band_20260716/`, `TestEvidence/fbo_target_variants_20260716/`, and `TestEvidence/shadow_pending_lifecycle_20260718/`.
-- Organic true-tick Shadow evidence reached FBO accepted BUY/SELL entries and BO/FBO/TP/MR BUY/SELL rejections through feature, regime, strategy, arbitration, and central risk. A combined true-tick training baseline completed, the first holdout attempt was invalid/incomplete, a clean holdout retry completed normally, and independent BO/FBO/TP/MR train and holdout baselines completed. Only FBO reached accepted trade state in those baseline windows. BO/TP/MR accepted organic entries, broader holdouts, stress, normal-terminal restart, live-path fault-injection, and demo-forward results remain unproven.
+- Organic true-tick Shadow evidence reached FBO accepted BUY/SELL entries and BO/FBO/TP/MR BUY/SELL rejections through feature, regime, strategy, arbitration, and central risk. A combined true-tick training baseline completed, the first holdout attempt was invalid/incomplete, a clean holdout retry completed normally, and independent BO/FBO/TP/MR train and holdout baselines completed. Only FBO reached accepted trade state in those baseline windows. As of 2026-07-19, 6 distinct organic windows (2 isolated single-strategy, 4 combined, spanning Feb-Jul 2026 in visibly different volatility/trend regimes) have now been tested and BO/TP/MR have never reached ACCEPTED; 88-100% of their rejections are the generic eligibility-gate failure in every window, indicating this is unlikely to be a window-selection artifact. See `TestEvidence/organic_multiwindow_20260719/EVIDENCE.md`. Whether the eligibility gates are miscalibrated or correctly modeling genuinely rare conditions is unresolved and requires a dedicated strategy-parameter review, not further window coverage. Broader holdouts, stress, normal-terminal restart, live-path fault-injection, and demo-forward results remain unproven.
 - Conservative Live and acknowledged Challenge Live are currently gated to FBO-only, market-order-only initialization with pending orders disabled. This is intentional safety debt: BO, TP, MR, and pending orders remain research-only for broker transmission until accepted-entry, lifecycle, pending-order, and restart evidence exists.
 - No profitability claim is supported.
 
@@ -106,6 +106,6 @@ Active reconciliation and recovery logic currently lives in `QuantBeastEA.mq5`, 
 Before promotion beyond Diagnostic Mode:
 
 1. Run deterministic live-path sizing, stop, transaction, duplicate, restart, unknown-position, pending-order, and protection-failure scenarios.
-2. Prove accepted BO/TP/MR organic feature/regime-to-strategy reachability without lookahead on true real ticks; FBO accepted BUY/SELL has one-day true-tick Shadow evidence.
+2. Prove accepted BO/TP/MR organic feature/regime-to-strategy reachability without lookahead on true real ticks; FBO accepted BUY/SELL has multi-window true-tick Shadow evidence. BO/TP/MR remain unreached across 6 distinct windows as of 2026-07-19; closing this blocker now requires a dedicated eligibility-gate/parameter review rather than additional window coverage.
 3. Expand realistic-cost tester baselines, additional holdouts, and stress tests without optimizing against holdout data.
 4. Complete broker-specific demo validation before considering micro-live.
