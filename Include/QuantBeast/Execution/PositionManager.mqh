@@ -27,6 +27,27 @@ bool QBUnknownPositionShouldBeManaged(ENUM_UNKNOWN_POS_POLICY unknownPolicy)
    return false;
 }
 
+bool QBIsKnownStrategyId(const string strategyId)
+{
+   return strategyId == STRATEGY_ID_BREAKOUT ||
+          strategyId == STRATEGY_ID_FAILED_BREAKOUT ||
+          strategyId == STRATEGY_ID_TREND_PULLBACK ||
+          strategyId == STRATEGY_ID_MEAN_REVERSION;
+}
+
+// Single source of truth for recovering a strategy id from a QB_<id>[_...]
+// order/deal comment. Used by both restart reconstruction and live-fill
+// transaction handling so the two paths never disagree on the same comment.
+string QBStrategyIdFromComment(const string comment)
+{
+   string prefix = QB_COMMENT_PREFIX + "_";
+   if(StringFind(comment, prefix) != 0) return "UNKNOWN";
+   string strategyId = StringSubstr(comment, StringLen(prefix));
+   int suffix = StringFind(strategyId, "_");
+   if(suffix > 0) strategyId = StringSubstr(strategyId, 0, suffix);
+   return QBIsKnownStrategyId(strategyId) ? strategyId : "UNKNOWN";
+}
+
 //+------------------------------------------------------------------+
 //| Position Manager - manages open positions independently           |
 //+------------------------------------------------------------------+
@@ -54,22 +75,9 @@ private:
    bool   m_enableTimeStop;
    int    m_timeStopMinutes;
 
-   bool IsKnownStrategyId(const string strategyId) const
-   {
-      return strategyId == STRATEGY_ID_BREAKOUT ||
-             strategyId == STRATEGY_ID_FAILED_BREAKOUT ||
-             strategyId == STRATEGY_ID_TREND_PULLBACK ||
-             strategyId == STRATEGY_ID_MEAN_REVERSION;
-   }
-
    string StrategyFromComment(const string comment) const
    {
-      string prefix = QB_COMMENT_PREFIX + "_";
-      if(StringFind(comment, prefix) != 0) return "UNKNOWN";
-      string strategyId = StringSubstr(comment, StringLen(prefix));
-      int suffix = StringFind(strategyId, "_");
-      if(suffix > 0) strategyId = StringSubstr(strategyId, 0, suffix);
-      return IsKnownStrategyId(strategyId) ? strategyId : "UNKNOWN";
+      return QBStrategyIdFromComment(comment);
    }
 
    // Recover immutable entry metadata from broker history. This prevents a

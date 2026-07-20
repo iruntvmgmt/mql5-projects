@@ -16,6 +16,7 @@
 #include "../Risk/ChallengeMode.mqh"
 #include "../Risk/KillSwitch.mqh"
 #include "../Execution/BrokerAdapter.mqh"
+#include "../Execution/PositionManager.mqh"
 #include "../Execution/ShadowPortfolio.mqh"
 #include "../Execution/TransactionState.mqh"
 #include "../Analytics/TradeJournal.mqh"
@@ -1345,6 +1346,30 @@ bool QBTestShadowPendingOrderLifecycle(CSymbolAdapter &adapter, string &detail)
    { detail = "cancel did not clear pending"; return false; }
 
    detail = "placed=filled stop=loss cancel=cancelled";
+   return true;
+}
+
+// Regression for the 2026-07-20 live-fill vs restart comment-parsing
+// inconsistency: QBStrategyIdFromComment() must be the single source of
+// truth both paths use, and must truncate at a second underscore so a
+// fixture-style comment (or any future annotated comment) still resolves
+// to the real strategy id rather than an unrecognized string.
+bool QBTestStrategyIdFromComment(string &detail)
+{
+   if(QBStrategyIdFromComment("QB_FBO") != "FBO")
+   { detail = "plain comment failed"; return false; }
+   if(QBStrategyIdFromComment("QB_FBO_fixture") != "FBO")
+   { detail = "suffixed comment failed"; return false; }
+   if(QBStrategyIdFromComment("QB_BO_fixture_owned") != "BO")
+   { detail = "multi-suffix comment failed"; return false; }
+   if(QBStrategyIdFromComment("QB fixture owned") != "UNKNOWN")
+   { detail = "missing-prefix comment wrongly accepted"; return false; }
+   if(QBStrategyIdFromComment("FIXTURE_UNKNOWN") != "UNKNOWN")
+   { detail = "no-prefix comment wrongly accepted"; return false; }
+   if(QBStrategyIdFromComment("QB_NOTASTRATEGY") != "UNKNOWN")
+   { detail = "unknown strategy id wrongly accepted"; return false; }
+
+   detail = "plain=FBO suffixed=FBO multi=BO noPrefix=UNKNOWN unknownId=UNKNOWN";
    return true;
 }
 

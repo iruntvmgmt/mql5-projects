@@ -1602,8 +1602,7 @@ void CheckOrderStatus()
                                                g_ActiveOrder.stop_loss,
                                                g_ActiveOrder.take_profit))
          {
-            string strategyId = StringSubstr(g_ActiveOrder.comment,
-                                              StringLen(QB_COMMENT_PREFIX) + 1);
+            string strategyId = QBStrategyIdFromComment(g_ActiveOrder.comment);
             if(g_PosManager.RegisterPosition(positionTicket, g_ActiveOrder.order_ticket,
                                              strategyId, g_ActiveOrder.request_id,
                                              PositionGetDouble(POSITION_PRICE_OPEN),
@@ -1732,14 +1731,13 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
       {
          expectedSL = g_ActiveOrder.stop_loss;
          expectedTP = g_ActiveOrder.take_profit;
-         strategyId = StringSubstr(g_ActiveOrder.comment, StringLen(QB_COMMENT_PREFIX) + 1);
+         strategyId = QBStrategyIdFromComment(g_ActiveOrder.comment);
          signalId = g_ActiveOrder.request_id;
       }
       else
       {
          string dealComment = HistoryDealGetString(trans.deal, DEAL_COMMENT);
-         if(StringFind(dealComment, QB_COMMENT_PREFIX + "_") == 0)
-            strategyId = StringSubstr(dealComment, StringLen(QB_COMMENT_PREFIX) + 1);
+         strategyId = QBStrategyIdFromComment(dealComment);
       }
 
       if(!g_Broker.EnsurePositionProtection(positionTicket, expectedSL, expectedTP))
@@ -2421,6 +2419,16 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 49 PASS: Shadow pending order lifecycle " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 49 FAIL: Shadow pending order lifecycle " + detail); }
+   }
+
+   // Test 50: strategy-id comment parsing is a single source of truth
+   // shared by live-fill handling and restart reconstruction.
+   {
+      string detail = "";
+      if(QBTestStrategyIdFromComment(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 50 PASS: Strategy id comment parsing " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 50 FAIL: Strategy id comment parsing " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +
