@@ -108,5 +108,5 @@ Before promotion beyond Diagnostic Mode:
 
 1. Run deterministic live-path sizing, stop, transaction, duplicate, restart, unknown-position, pending-order, and protection-failure scenarios.
 2. Prove accepted BO/TP/MR organic feature/regime-to-strategy reachability without lookahead on true real ticks; FBO accepted BUY/SELL has multi-window true-tick Shadow evidence. BO/TP/MR remain unreached across 6 distinct windows as of 2026-07-19; closing this blocker now requires a dedicated eligibility-gate/parameter review rather than additional window coverage.
-3. Expand realistic-cost tester baselines, additional holdouts, and stress tests without optimizing against holdout data.
+3. Expand realistic-cost tester baselines, additional holdouts, and stress tests without optimizing against holdout data. PARTIALLY CLOSED 2026-07-20: a fresh holdout week and high-volatility/quiet-market stress windows completed cleanly with no anomalies (`TestEvidence/stress_holdout_20260720/EVIDENCE.md`). Slippage-specific stress evidence still requires a live/demo-forward test, not backtesting.
 4. Complete broker-specific demo validation before considering micro-live.

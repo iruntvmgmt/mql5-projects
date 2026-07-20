@@ -107,8 +107,8 @@ Current live-mode code gate: Conservative Live and acknowledged Challenge Live i
 
 - [ ] Diagnostic mode sends zero orders.
 - [ ] Shadow mode sends zero orders and completes theoretical trade lifecycles.
-- [ ] Development and non-overlapping holdout backtests completed.
-- [ ] High-volatility, quiet-market, spread, slippage, and gap stress tests completed.
+- [x] Development and non-overlapping holdout backtests completed. A fresh, previously-untouched holdout week (2026.05.04-05.08) completed cleanly, 17 FBO trades, no anomalies (`TestEvidence/stress_holdout_20260720/`).
+- [ ] High-volatility, quiet-market, spread, slippage, and gap stress tests completed. High-volatility/gap: proven 2026-07-20 against a genuine extreme real-tick event (2026.01.26-01.30); the price-jump preflight gate correctly blocked entries throughout the crash (`TestEvidence/stress_holdout_20260720/`). Quiet-market: proven against 2026.04.06-04.10, no anomalies. Spread stress is inherently covered by real-tick Model=4 backtesting rather than isolated synthetically. REMAINING: slippage stress specifically needs a live/demo-forward test, not backtesting -- box stays unchecked until that exists.
 - [ ] Restart/recovery test evidence archived.
 - [ ] Conservative demo forward test completed for at least two continuous weeks.
 - [ ] No unresolved critical/high defects.

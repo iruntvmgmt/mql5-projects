@@ -464,6 +464,16 @@ Live: prohibited
 - Fixture script SHA-256: `4d7d04969ae10f18801438b6271c0375b0fbc2a6b36201c460f5f3f893c1e04c`. QuantBeastEA's own source/EX5 were not modified.
 - Real account risk state was captured, modified for the test, and explicitly restored and re-verified afterward; final state matches the original exactly. No broker orders transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
 
+### 2026-07-20 -- Stress and holdout backtests (high-volatility, quiet, fresh holdout)
+
+- Session scope: closing the last of three "long tail" items identified while summarizing overall project blockers. Pure Strategy Tester backtesting, no source changes, no live broker risk.
+- `LIVE_DEPLOYMENT_CHECKLIST.md` section J required high-volatility, quiet-market, and non-overlapping holdout backtests; none had been run. Selected 3 windows from the D1 volatility survey already gathered for `organic_multiwindow_20260719`, none reused from any prior test: 2026.01.26-01.30 (a genuine extreme event -- XAUUSD ran to 5597 then crashed to 4682 within the week), 2026.04.06-04.10 (relatively quiet/tight-range week), 2026.05.04-05.08 (a fully fresh, previously-untouched calendar week).
+- All three completed cleanly: high-vol (1 FBO trade, +95.46; hundreds of entries correctly blocked by the price-jump preflight gate during the Jan 29-30 crash, jumps up to 1093 points), quiet (5 FBO trades, -149.20, no anomalies), holdout (17 FBO trades, +206.07, busiest window, no locks triggered despite volume). Only FBO reached accepted trade state in all three, consistent with every prior organic evidence run. No kill-switch/lock activations in any window. These PnL figures are not a profitability claim -- single windows, small samples, Shadow-mode cost modeling only.
+- Finding: the Jan 26-30 window is the first time this project organically exercised the price-jump preflight gate against a genuine large real-tick gap event rather than a synthetic one. It fired correctly and repeatedly throughout the crash, and no signal was accepted while price moved abnormally -- real positive evidence for the gap/stress-handling requirement in `TESTING_GUIDE.md` Stage 6.
+- Scope: spread-stress and slippage-stress were not isolated as separate synthetic tests (real-tick Model=4 backtesting inherently includes real historical spread variation; slippage-stress needs a live/demo-forward test, not backtesting).
+- Evidence: `TestEvidence/stress_holdout_20260720/EVIDENCE.md`.
+- No source or configuration changed; source/EX5 hashes unchanged from the prior session. No broker orders transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
+
 ## Next task
 
 The 2026-07-19/20 sessions closed or partially closed all four items that
