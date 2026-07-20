@@ -453,6 +453,17 @@ Live: prohibited
 - Hashes: source `23e16ebb560c022cd42ea56cf97ed3fbf1a58825cf81ac068aab22957f7a12be`; EX5 `f4107718ee637356cf4c2131daedd6da80e27bf317e9c41f49df264dffa29642`; `PositionManager.mqh` `db7ae511f7b3e0a68416c0408a481323da6c01fd6501aa098c0d4633ac3cc2e0`; fixture script `331e873999c327934ce5e75a78b8f35fcec3d1614af80625eaaddc56768b1dba`.
 - No strategy logic, risk parameters, or execution behavior changed beyond this one verification call and its escalation. No unauthorized broker action was taken (the closed position was the fixture itself, an intentional part of this test). Readiness remains exactly `READY FOR SHADOW MODE`.
 
+### 2026-07-20 -- Daily/weekly/HWM risk-state real-restart evidence
+
+- Session scope: closing another item from the "long tail of unclosed evidence." Pure evidence-gathering, no source changes; only the test-fixture script was extended (2 new commands).
+- Daily/weekly loss-limit baselines, HWM, and consec-loss count are persisted and deterministically unit-tested, but had never been proven against a real terminal restart -- only Strategy Tester's two-process probe, already known unreliable (`restart_probe_20260715`).
+- Captured the real baseline first (`dailyStart=997.71 weeklyStart=997.71 HWM=1022.40`), then used two new fixture commands: `CMD_WRITE_RISK_STATE` (writes distinguishable test values to the real scoped GV keys, dates set to now so same-day/same-week comparison accepts them) and `CMD_RESTORE_RISK_STATE` (writes back real captured values, refusing to run if inputs are left at their 0.0 default). Deliberately did NOT extend `CMD_CLEANUP_ALL` to touch these keys -- unlike disposable fixture positions, HWM/dailyStart carry real accumulated meaning across the account's life, so a blanket delete would have silently reset genuine multi-day tracking.
+- Result: after injection + real restart, `Risk tracking: dailyStart=555.55 weeklyStart=666.66 HWM=8888.88` -- proves real-restart survival for daily/weekly start equity and HWM (not just current equity, which was ~997 throughout). After restore + a final confirming restart, exact original baseline reappeared: `dailyStart=997.71 weeklyStart=997.71 HWM=1022.40`.
+- Scope: dailyLock/weeklyLock/drawdownLock and consecLosses share the identical `InitDailyTracking()` load path just proven but weren't independently re-verified (no direct log line / needs an organic signal to observe). Challenge-stage persistence needs separate Challenge Live authorization, not attempted. Arbitration cooldown/duplicate-window persistence not attempted this session.
+- Evidence: `TestEvidence/risk_state_restart_20260720/EVIDENCE.md`.
+- Fixture script SHA-256: `4d7d04969ae10f18801438b6271c0375b0fbc2a6b36201c460f5f3f893c1e04c`. QuantBeastEA's own source/EX5 were not modified.
+- Real account risk state was captured, modified for the test, and explicitly restored and re-verified afterward; final state matches the original exactly. No broker orders transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
+
 ## Next task
 
 The 2026-07-19/20 sessions closed or partially closed all four items that

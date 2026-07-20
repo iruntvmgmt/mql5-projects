@@ -17,11 +17,16 @@ enum ENUM_FIXTURE_CMD
    CMD_WRITE_CORRUPT,   // 4: scenario 4 — write incompatible state version
    CMD_CLEANUP_ALL,     // 5: close all positions, cancel all orders, delete fixture globals
    CMD_DELETE_CORRUPT,  // 6: delete only the corrupt-state globals
-   CMD_CLEAR_KILL_STATE, // 7: delete persisted QuantBeast kill-switch globals
-   CMD_PLACE_OWNED_NO_SL // 8: owned position with no protective stop (protection-verification test)
+   CMD_CLEAR_KILL_STATE,   // 7: delete persisted QuantBeast kill-switch globals
+   CMD_PLACE_OWNED_NO_SL,  // 8: owned position with no protective stop (protection-verification test)
+   CMD_WRITE_RISK_STATE,   // 9: write distinguishable daily/weekly/HWM/consec-loss state
+   CMD_RESTORE_RISK_STATE  // 10: write back real daily/weekly/HWM values after CMD_WRITE_RISK_STATE
 };
 
 input ENUM_FIXTURE_CMD InpCommand = CMD_REPORT;
+input double InpRestoreDailyStart  = 0.0; // Only used by CMD_RESTORE_RISK_STATE
+input double InpRestoreWeeklyStart = 0.0; // Only used by CMD_RESTORE_RISK_STATE
+input double InpRestoreHWM         = 0.0; // Only used by CMD_RESTORE_RISK_STATE
 
 // --- Magic numbers ---
 #define FIXTURE_MAGIC_OWNED    20260701   // Inside QB range (BO strategy)
@@ -211,6 +216,66 @@ void DoWriteCorrupt()
 }
 
 //+------------------------------------------------------------------+
+//| Write distinguishable daily/weekly/HWM/consec-loss risk state so  |
+//| a real restart can prove it is actually restored (RiskEngine::    |
+//| InitDailyTracking prints "Risk tracking: dailyStart=... weekly    |
+//| Start=... HWM=..." unconditionally at OnInit, giving a directly   |
+//| observable numeric check). Dates are set to "now" so RiskEngine's |
+//| same-day/same-week comparison treats the seeded values as valid   |
+//| rather than resetting them to current equity.                     |
+//+------------------------------------------------------------------+
+void DoWriteRiskState()
+{
+   string scope = "_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "_" + _Symbol;
+   datetime now = TimeCurrent();
+
+   GlobalVariableSet("QB_DailyStartEquity" + scope, 555.55);
+   GlobalVariableSet("QB_DailyDate" + scope, (double)now);
+   GlobalVariableSet("QB_WeeklyStartEquity" + scope, 666.66);
+   GlobalVariableSet("QB_WeeklyDate" + scope, (double)now);
+   GlobalVariableSet("QB_HighWaterMark" + scope, 8888.88);
+   GlobalVariableSet("QB_DailyLock" + scope, 1.0);
+   GlobalVariableSet("QB_ConsecLosses" + scope, 4.0);
+   GlobalVariablesFlush();
+
+   Print("Wrote distinguishable risk state: dailyStart=555.55 weeklyStart=666.66 HWM=8888.88 ",
+         "dailyLock=true consecLosses=4 (dates set to now=", TimeToString(now), ")");
+}
+
+//+------------------------------------------------------------------+
+//| Write back real captured daily/weekly/HWM values after            |
+//| DoWriteRiskState()'s test injection, clearing the test-only lock  |
+//| and consec-loss count. Values come from InpRestoreDailyStart/      |
+//| InpRestoreWeeklyStart/InpRestoreHWM -- the operator must supply    |
+//| the real values observed before running CMD_WRITE_RISK_STATE.     |
+//+------------------------------------------------------------------+
+void DoRestoreRiskState(double dailyStart, double weeklyStart, double hwm)
+{
+   if(dailyStart <= 0 || weeklyStart <= 0 || hwm <= 0)
+   {
+      Print("ERROR: InpRestoreDailyStart/InpRestoreWeeklyStart/InpRestoreHWM must all be > 0; ",
+            "supply the real pre-test values. No globals were changed.");
+      return;
+   }
+
+   string scope = "_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "_" + _Symbol;
+   datetime now = TimeCurrent();
+
+   GlobalVariableSet("QB_DailyStartEquity" + scope, dailyStart);
+   GlobalVariableSet("QB_DailyDate" + scope, (double)now);
+   GlobalVariableSet("QB_WeeklyStartEquity" + scope, weeklyStart);
+   GlobalVariableSet("QB_WeeklyDate" + scope, (double)now);
+   GlobalVariableSet("QB_HighWaterMark" + scope, hwm);
+   GlobalVariableSet("QB_DailyLock" + scope, 0.0);
+   GlobalVariableSet("QB_ConsecLosses" + scope, 0.0);
+   GlobalVariablesFlush();
+
+   Print("Restored real risk state: dailyStart=", DoubleToString(dailyStart, 2),
+         " weeklyStart=", DoubleToString(weeklyStart, 2),
+         " HWM=", DoubleToString(hwm, 2), " dailyLock=false consecLosses=0");
+}
+
+//+------------------------------------------------------------------+
 //| Close a position by ticket                                        |
 //+------------------------------------------------------------------+
 bool ClosePosition(ulong ticket)
@@ -327,6 +392,14 @@ void DoCleanupAll()
       Print("Cleanup: deleting real state-version global ", realStateVerKey);
       GlobalVariableDel(realStateVerKey);
    }
+
+   // Deliberately NOT touching QB_DailyStartEquity/QB_HighWaterMark/etc. here:
+   // unlike the state-version key (which the EA freely re-seeds from scratch
+   // whenever missing), these carry real accumulated meaning (e.g. a
+   // historical high-water mark) that legitimate operation depends on.
+   // DoWriteRiskState()'s test injection must be undone with
+   // DoRestoreRiskState(), which writes back captured real values, not a
+   // blanket delete.
 
    for(int v = GlobalVariablesTotal() - 1; v >= 0; v--)
    {
@@ -458,6 +531,14 @@ void OnStart()
       case CMD_PLACE_OWNED_NO_SL:
          DoPlaceMarket(FIXTURE_MAGIC_OWNED, "QB_FBO_fixture", false);
          DoReport();
+         break;
+
+      case CMD_WRITE_RISK_STATE:
+         DoWriteRiskState();
+         break;
+
+      case CMD_RESTORE_RISK_STATE:
+         DoRestoreRiskState(InpRestoreDailyStart, InpRestoreWeeklyStart, InpRestoreHWM);
          break;
 
       default:

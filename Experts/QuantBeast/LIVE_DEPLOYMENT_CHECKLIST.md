@@ -92,7 +92,7 @@ Current live-mode code gate: Conservative Live and acknowledged Challenge Live i
 - [x] All reconstructed positions are checked for protection. Proven 2026-07-20: `ReconstructFromBroker()` now calls `EnsurePositionProtection()` (the same contract live fills use) for every recovered position, escalating to `ActivateProtectionEmergency()` on failure. A deliberately-unprotected fixture position was correctly detected and closed on a real terminal restart (`TestEvidence/protection_verification_reconstruction_20260720/`).
 - [x] Persisted/broker mismatch blocks entries and is reported. Proven 2026-07-20: a corrupted state-version Global Variable correctly triggered fail-closed quarantine and entry kill on real restart (`TestEvidence/restart_recovery_20260719/`).
 - [ ] Unknown-position policy works for ignore/report/quarantine; explicit flatten remains blocked in live startup until separately authorized and proven. `UNKNOWN_REPORT` proven 2026-07-20 against a real restart (correctly logged, left unmanaged, no destructive action; `TestEvidence/restart_recovery_20260719/`). `UNKNOWN_IGNORE` and `UNKNOWN_QUARANTINE` remain unit-tested only.
-- [ ] Daily/weekly locks, HWM, challenge stage, cooldowns, and signal IDs survive restart.
+- [ ] Daily/weekly locks, HWM, challenge stage, cooldowns, and signal IDs survive restart. Daily/weekly start equity and HWM proven 2026-07-20 against a real terminal restart (`TestEvidence/risk_state_restart_20260720/`). Lock booleans and consec-loss count share the same load path but weren't independently re-verified; challenge stage needs separate Challenge Live authorization; arbitration cooldowns and signal IDs remain unproven against a real restart.
 
 ## I. Journaling, UI, and alert gate
 
