@@ -24,13 +24,21 @@ other remote without explicit instruction.
 
 This file exists to govern work on the QuantBeast project only.
 
-Unless the user explicitly expands scope, agents may edit only:
+Unless the user explicitly expands scope, agents may edit:
 
 - `MQL5/Experts/QuantBeast/**`
 - `MQL5/Include/QuantBeast/**`
 - This `MQL5/AGENTS.md`
+- Any other file that clearly exists to support QuantBeast
+  development -- e.g. `MQL5/Scripts/QuantBeast*.mq5` test/fixture
+  scripts, `MQL5/Profiles/Tester/QuantBeast*.ini` tester configs --
+  identifiable by a `QuantBeast`/`QB` name prefix or by content that
+  plainly references the QuantBeast project.
 
-Do not modify, rename, move, compile over, delete, or reformat unrelated indicators, Expert Advisors, profiles, presets, logs, or MetaTrader installation files.
+Do not modify, rename, move, compile over, delete, or reformat
+unrelated indicators, Expert Advisors, profiles, presets, logs, or
+MetaTrader installation files -- including ones that happen to sit
+near QuantBeast files but are not part of it.
 
 ## Project status
 

@@ -1,6 +1,6 @@
 # QuantBeast Handoff
 
-**Last updated:** 2026-07-19  
+**Last updated:** 2026-07-20  
 **Current phase:** Broker-free audit, repair, deterministic validation, and organic true-tick journal proof complete through safe phases  
 **Current verdict:** **READY FOR SHADOW MODE; live and Challenge trading prohibited**  
 **Active source version:** `QuantBeastEA.mq5` property version 1.00
@@ -387,10 +387,27 @@ Live: prohibited
 - No source, parameter, or preset changes were made. Source SHA-256 `7ac32f8db9c8b16d2fe797ad890f6403ae7877ca38a7fdef24b0c5c5ab797ec9` (unchanged); EX5 SHA-256 `cb91e10507047433646c6927a17c7bf242ab7e6f2d50910f89c77333f359d2c9` (unchanged).
 - No broker orders were transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
 
+### 2026-07-20 -- Real normal-terminal restart recovery proven for all 4 scenarios (HANDOFF item #2)
+
+- Session scope: item #2 (restart/recovery fixture with owned position, pending order, unknown position, corrupt state), the next sequential item after item #3's closure. Items #1 and #4 were not touched.
+- Ran QuantBeastEA live in `QB_MODE_CONSERVATIVE_LIVE` on Coinexx-Demo (account 871221) with `InpAcknowledgeLiveBrokerRisk=true` and the FBO-only/market-only preset, attached and reattached manually by the operator per each scenario (EA remove/reattach = fresh `OnInit()`, functionally the restart event per TESTING_GUIDE Stage 7). This supersedes `restart_recovery_20260716`, which was invalidated because it ran in Shadow mode and never reached `ReconstructFromBroker()`.
+- At session start found one leftover open fixture position (`QB_FBO_fixture`, ticket 34627175, +$25) from prior test debt -- confirmed via 3 days of terminal logs showing no QuantBeast attachment, closed with explicit operator authorization before starting.
+- Fixture mechanics: the available MCP trading tools have no `magic` parameter, and `ReconstructFromBroker()` requires an in-range magic to classify anything. Used a pre-existing but previously-unwired test asset, `MQL5/Scripts/QuantBeastRestartFixture.mq5` (git history `41d56ba`/`d0ad085`/`ee43b29`), with an operator-approved scope exception since it lives outside `Experts/QuantBeast/**`.
+- Found and fixed two latent defects in that fixture script itself (not in QuantBeastEA's own source): `CMD_PLACE_UNKNOWN` used an out-of-range magic (99999999) that `ReconstructFromBroker()`'s magic-range check simply skips entirely, so it could never have exercised `InpUnknownPosPolicy`; fixed to use an in-range magic with a non-`QB_`-prefixed comment instead. `CMD_WRITE_CORRUPT` wrote a fixture-only global (`QB_FIX_SCHEMA`) instead of the real scoped state-version key (`QB_StateVer_<login>_<symbol>`), so it never actually touched `IsSupportedStateVersion()`'s input; fixed to write the real key. Compile: `0 errors, 0 warnings`.
+- All 4 scenarios PASS with real Expert-log evidence:
+  1. Owned position: `Reconstructed position: ticket=34679484 strategy=FBO entry=4008.27 originalSL=3958.01` -- strategy, entry, and original stop all correctly recovered. First successful end-to-end proof of this path in project history.
+  2. Pending order: `Startup pending reconciliation: found=1 cancelled=1 remaining=0` -- confirms documented fail-closed cancellation (not restoration, which is intentional/not yet implemented).
+  3. Unknown position: correctly classified via in-range-magic + unparseable-comment, `Unknown position left unmanaged by configured policy`, no destructive action, matching configured `UNKNOWN_REPORT` policy.
+  4. Corrupt state: `Persisted state version mismatch (found v999, expected v4)... Entries remain quarantined` -- confirms fail-closed quarantine against a real persisted Global Variable (previously only unit-tested in-process).
+- Cleanup: all fixture positions/orders closed/cancelled, real corrupt state-version global and fixture markers deleted. Final broker state: 0 positions, 0 orders. No other EA's or manual broker state was touched.
+- Evidence: `TestEvidence/restart_recovery_20260719/EVIDENCE.md`.
+- QuantBeastEA's own source/EX5 were not modified (hashes unchanged from the 2026-07-19 item #3 session). Only the fixture script (`MQL5/Scripts/QuantBeastRestartFixture.mq5`, outside the EA's own source tree) changed.
+- No unauthorized broker action was taken. Readiness remains exactly `READY FOR SHADOW MODE`; this closes a major recovery-gate evidence blocker (`LIVE_DEPLOYMENT_CHECKLIST.md` section H) but does not by itself change overall readiness classification.
+
 ## Next task
 
 1. Run controlled demo/fault-adapter scenarios for actual modify/close/delete rejection, requotes, disconnect/reconnect, and fill-during-cancel callback ordering. The deterministic policies are covered; actual broker behavior is not.
-2. Run an actual normal-terminal restart fixture with owned positions, pending orders, unknown positions, and incompatible/corrupt state. Do not reuse Strategy Tester global persistence as a substitute and do not optimize profitability yet.
+2. CLOSED 2026-07-20 (see `TestEvidence/restart_recovery_20260719/`): all 4 scenarios (owned position, pending order, unknown position, corrupt state) now have real normal-terminal restart evidence in Conservative Live mode. Remaining recovery gaps (durable signal ID, partial-exit detail, full position-management context across restart) are documented in KNOWN_LIMITATIONS.md, not blocking further work.
 3. CLOSED as evidence-complete 2026-07-19 (see `TestEvidence/organic_multiwindow_20260719/`): 6 distinct organic windows now tested (2 isolated single-strategy + 4 combined, spanning Feb-Jul 2026 in visibly different regimes); BO/TP/MR have never reached ACCEPTED. Remaining work here is a dedicated strategy-parameter/eligibility-gate review, not more window coverage -- track as a new, separate task if pursued, since AGENTS.md forbids combining evidence-gathering with parameter changes in one session.
 4. Implement broker-side live pending-order lifecycle and recovery (Shadow layer completed 2026-07-18 with deterministic test evidence; see `TestEvidence/shadow_pending_lifecycle_20260718/`). Production live modes remain market-order-only until pending-order broker evidence exists; the Shadow pending-order test fixture provides the simulation baseline.
 

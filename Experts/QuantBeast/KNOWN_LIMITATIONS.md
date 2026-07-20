@@ -1,6 +1,6 @@
 # QuantBeast Known Limitations
 
-**Status date:** 2026-07-19  
+**Status date:** 2026-07-20  
 **Current readiness:** `READY FOR SHADOW MODE` for broker-free mechanical research only. Live and Challenge operation prohibited.
 
 ## Runtime and testing
@@ -40,13 +40,13 @@ Remaining Shadow limitations:
 - Signal ID, original regime, MFE/MAE, exact partial count, and management state may not be fully recoverable.
 - Owned pending orders are cancelled fail-closed at startup; they are not restored.
 - Incompatible nonzero state versions are quarantined fail-closed: entries are latched off and stale state is not overwritten or loaded. There is no automatic migration workflow; operator review/reset is required.
-- The version-policy and risk-state restore contracts have deterministic tests, but a real terminal/VPS restart with broker positions or pending orders has not been executed as evidence. An attempt was made on 2026-07-16 using a live terminal restart fixture, but the EA loaded in `QB_MODE_SHADOW` which by design never reaches `ReconstructFromBroker()`; the limitation still stands unchanged. See `TestEvidence/restart_recovery_20260716/EVIDENCE.md` for the preserved-but-excluded data.
+- CLOSED 2026-07-20: the version-policy and risk-state restore contracts had deterministic tests only until this date. A real terminal restart with an owned position, a pending order, an unknown position, and a corrupted state version was executed in `QB_MODE_CONSERVATIVE_LIVE` (the 2026-07-16 attempt was invalidated because it ran in `QB_MODE_SHADOW`, which never reaches `ReconstructFromBroker()`). All 4 scenarios passed: owned-position strategy/entry/stop recovery, fail-closed pending-order cancellation, unknown-position non-adoption, and fail-closed state-version quarantine. See `TestEvidence/restart_recovery_20260719/EVIDENCE.md`. Remaining gaps: durable signal ID beyond the journal string, exact partial-exit/scale-in count, and full position-management context (trailing state, management-branch history) still do not survive restart -- only original entry/stop/target and strategy ownership do.
 - Persistence currently uses Terminal Global Variables only; `InpUseGlobalVars=false` disables it. Production saves now call `GlobalVariablesFlush()` explicitly, and state keys are scoped by account login plus effective adapter symbol rather than chart symbol.
 - A two-process Strategy Tester probe lost all probe globals after the tester/Wine process tree was replaced. Strategy Tester agent globals are isolated/reset in this environment, so this cannot validate or invalidate persistence in the normal live terminal.
 - Strategy daily counts are persisted and restored only for the same broker day. Arbitration cooldown and duplicate memory are persisted as bounded timestamp/hash state and restore only while fresh. Full position-management context, virtual positions, and live broker restart reconciliation remain unproven.
 - Manual/MCP demo broker orders were opened and closed successfully, but QuantBeast EA-autonomous demo execution is still unproven. Live modes now require explicit `InpAcknowledgeLiveBrokerRisk=true` in addition to the existing live gates, with current fail-closed tester evidence under `TestEvidence/conservative_live_tester_fbo_20260716/` and demo lifecycle evidence under `TestEvidence/demo_broker_lifecycle_20260716/`.
 - A broker-free Conservative Live Strategy Tester attempt could not reach order-routing because the native tester did not apply/expose `InpAcknowledgeLiveBrokerRisk=true` through inline, `.set`, or plain `[TesterInputs]` overrides. The EA failed closed at initialization, which is correct safety behavior, but EA-autonomous Conservative Live tester execution remains unproven.
-- Unknown ownership applies `InpUnknownPosPolicy`; runtime behavior still needs scenario proof.
+- Unknown ownership applies `InpUnknownPosPolicy`; runtime behavior proven 2026-07-20 for `UNKNOWN_REPORT` against a real restart (see `TestEvidence/restart_recovery_20260719/EVIDENCE.md`). `UNKNOWN_QUARANTINE`'s additional `KillEntries()` call remains unit-tested only, not yet proven against a real restart.
 
 ## Strategy semantics still incomplete
 

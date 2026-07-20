@@ -194,12 +194,19 @@ void DoPlacePending(ulong magic, string comment)
 //+------------------------------------------------------------------+
 void DoWriteCorrupt()
 {
-   GlobalVariableSet(FIXTURE_GLOBAL_PREFIX + "SCHEMA", 999);
+   // The real state-version key QuantBeast reads is scoped by account login
+   // and effective symbol (StateStore.mqh GV_ScopedName / GV_STATE_VERSION =
+   // "QB_StateVer"), NOT the "QB_FIX_" fixture-tracking prefix. Writing only
+   // to "QB_FIX_SCHEMA" (the prior implementation) never touched the real
+   // key, so IsSupportedStateVersion() would never actually reject it.
+   string realKey = "QB_StateVer_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) +
+                    "_" + _Symbol;
+   GlobalVariableSet(realKey, 999);
    GlobalVariableSet(FIXTURE_GLOBAL_PREFIX + "MARKER", 1);
    GlobalVariablesFlush();
 
-   Print("Wrote corrupt state: schema=999 (incompatible with current v4)");
-   Print("Fixture globals set: ", FIXTURE_GLOBAL_PREFIX, "SCHEMA=999  MARKER=1");
+   Print("Wrote corrupt state: ", realKey, "=999 (incompatible with current v4)");
+   Print("Fixture marker set: ", FIXTURE_GLOBAL_PREFIX, "MARKER=1");
 }
 
 //+------------------------------------------------------------------+
@@ -312,6 +319,14 @@ void DoCleanupAll()
       CancelOrder(ordTickets[i]);
    }
 
+   string realStateVerKey = "QB_StateVer_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) +
+                             "_" + sym;
+   if(GlobalVariableCheck(realStateVerKey))
+   {
+      Print("Cleanup: deleting real state-version global ", realStateVerKey);
+      GlobalVariableDel(realStateVerKey);
+   }
+
    for(int v = GlobalVariablesTotal() - 1; v >= 0; v--)
    {
       string name = GlobalVariableName(v);
@@ -332,6 +347,13 @@ void DoCleanupAll()
 void DoDeleteCorrupt()
 {
    Print("=== DELETE CORRUPT GLOBALS ===");
+   string realStateVerKey = "QB_StateVer_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) +
+                             "_" + _Symbol;
+   if(GlobalVariableCheck(realStateVerKey))
+   {
+      Print("Deleting real state-version global ", realStateVerKey);
+      GlobalVariableDel(realStateVerKey);
+   }
    for(int v = GlobalVariablesTotal() - 1; v >= 0; v--)
    {
       string name = GlobalVariableName(v);
@@ -400,7 +422,15 @@ void OnStart()
          break;
 
       case CMD_PLACE_UNKNOWN:
-         DoPlaceMarket(FIXTURE_MAGIC_UNKNOWN, "FIXTURE_UNKNOWN");
+         // ReconstructFromBroker() only classifies a position as unknown
+         // ownership when its magic IS inside the QB range but its comment
+         // does not parse to a known strategy id (PositionManager.mqh:421-424,
+         // StrategyFromComment at line 65). A magic outside the QB range
+         // (the prior FIXTURE_MAGIC_UNKNOWN=99999999) is skipped by the
+         // magic-range check entirely and never reaches that classification,
+         // so it cannot exercise InpUnknownPosPolicy at all. Use an in-range
+         // magic with a non-"QB_"-prefixed comment instead.
+         DoPlaceMarket(FIXTURE_MAGIC_OWNED, "FIXTURE_UNKNOWN");
          DoReport();
          break;
 

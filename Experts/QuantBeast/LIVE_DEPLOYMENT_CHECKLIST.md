@@ -3,7 +3,7 @@
 **Current decision:** **DO NOT DEPLOY LIVE**  
 This checklist is a release gate, not general advice. Every applicable item requires recorded evidence.
 
-**Latest safe readiness:** `READY FOR SHADOW MODE` as of 2026-07-16. Compile, deterministic Shadow fixtures, organic true-tick Shadow journal proof, and manual/MCP demo broker open-close lifecycle passed; QuantBeast EA-autonomous demo execution and restart evidence are still absent.
+**Latest safe readiness:** `READY FOR SHADOW MODE` as of 2026-07-20. Compile, deterministic Shadow fixtures, organic true-tick Shadow journal proof, manual/MCP demo broker open-close lifecycle, and real Conservative Live restart-recovery evidence (owned position, pending order, unknown position, corrupt state -- see `TestEvidence/restart_recovery_20260719/`) all passed. Broader organic BO/TP/MR acceptance, fault-injection, and prolonged demo-forward evidence remain absent.
 
 Current live-mode code gate: Conservative Live and acknowledged Challenge Live initialize only when `InpAcknowledgeLiveBrokerRisk=true`, the enabled strategy set is FBO-only, and execution is market-order-only with pending orders disabled. Live startup also rejects `UNKNOWN_FLATTEN`; use `UNKNOWN_QUARANTINE` until explicit operator-approved flatten handling is implemented and proven. BO, TP, MR, and pending orders must remain disabled for any future explicitly authorized demo/live execution until accepted-entry, lifecycle, pending-order, and restart evidence exists.
 
@@ -86,12 +86,12 @@ Current live-mode code gate: Conservative Live and acknowledged Challenge Live i
 
 ## H. Recovery gate
 
-- [ ] Open EA positions reconstruct after restart.
-- [ ] Pending EA orders reconstruct after restart.
-- [ ] Strategy owner, signal ID, original risk, partial state, and scale-in state restore.
+- [x] Open EA positions reconstruct after restart. Proven 2026-07-20 against a real Conservative Live terminal restart: strategy, entry, and original stop correctly recovered (`TestEvidence/restart_recovery_20260719/`).
+- [ ] Pending EA orders reconstruct after restart. Not applicable by design: proven 2026-07-20 that owned pending orders are found and cancelled fail-closed at startup, not reconstructed (`TestEvidence/restart_recovery_20260719/`). True pending-order restoration remains unimplemented.
+- [ ] Strategy owner, signal ID, original risk, partial state, and scale-in state restore. Partially proven 2026-07-20: strategy owner and original stop/target restore correctly. Durable signal ID beyond the journal string, exact partial-exit count, and scale-in state still do not survive restart.
 - [ ] All reconstructed positions are checked for protection.
-- [ ] Persisted/broker mismatch blocks entries and is reported.
-- [ ] Unknown-position policy works for ignore/report/quarantine; explicit flatten remains blocked in live startup until separately authorized and proven.
+- [x] Persisted/broker mismatch blocks entries and is reported. Proven 2026-07-20: a corrupted state-version Global Variable correctly triggered fail-closed quarantine and entry kill on real restart (`TestEvidence/restart_recovery_20260719/`).
+- [ ] Unknown-position policy works for ignore/report/quarantine; explicit flatten remains blocked in live startup until separately authorized and proven. `UNKNOWN_REPORT` proven 2026-07-20 against a real restart (correctly logged, left unmanaged, no destructive action; `TestEvidence/restart_recovery_20260719/`). `UNKNOWN_IGNORE` and `UNKNOWN_QUARANTINE` remain unit-tested only.
 - [ ] Daily/weekly locks, HWM, challenge stage, cooldowns, and signal IDs survive restart.
 
 ## I. Journaling, UI, and alert gate
