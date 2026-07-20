@@ -1373,4 +1373,39 @@ bool QBTestStrategyIdFromComment(string &detail)
    return true;
 }
 
+// Regression for the 2026-07-20 pending-order restart reconstruction
+// feature: QBBuildPendingExecutionRecord() must map every broker-recoverable
+// field correctly, use the order ticket as a stable request_id substitute,
+// preserve the true ORDER_TIME_SETUP as request_time (not "now"), and the
+// resulting comment must still resolve through QBStrategyIdFromComment() the
+// same way it would at live-fill or restart time.
+bool QBTestPendingExecutionRecordBuild(string &detail)
+{
+   ulong ticket = 999888777;
+   datetime setup = D'2026.07.20 00:00:00';
+   ExecutionRecord rec = QBBuildPendingExecutionRecord(ticket, ORDER_TYPE_BUY_LIMIT,
+                                                        4000.00, 3950.00, 4100.00,
+                                                        "QB_FBO_fixture_pending", setup);
+
+   if(rec.order_ticket != ticket || rec.request_id != ticket)
+   { detail = "ticket/request_id mismatch"; return false; }
+   if(rec.order_type != ORDER_TYPE_BUY_LIMIT)
+   { detail = "order_type mismatch"; return false; }
+   if(MathAbs(rec.requested_price - 4000.00) > QB_EPSILON ||
+      MathAbs(rec.stop_loss - 3950.00) > QB_EPSILON ||
+      MathAbs(rec.take_profit - 4100.00) > QB_EPSILON)
+   { detail = "price/sl/tp mismatch"; return false; }
+   if(rec.comment != "QB_FBO_fixture_pending")
+   { detail = "comment mismatch"; return false; }
+   if(rec.request_time != setup)
+   { detail = "request_time not set from order setup time"; return false; }
+   if(rec.state != QB_ORDER_STATE_SUBMITTED)
+   { detail = "state mismatch"; return false; }
+   if(QBStrategyIdFromComment(rec.comment) != "FBO")
+   { detail = "reconstructed record's comment does not resolve to expected strategy"; return false; }
+
+   detail = "ticket=matched type=matched prices=matched time=setup strategy=FBO";
+   return true;
+}
+
 #endif // QB_SAFETYTESTS_MQH

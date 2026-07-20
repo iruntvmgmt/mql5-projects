@@ -568,6 +568,39 @@ bool QBEntryPreflightControlsAllow(bool dataQualityOK, int barCount,
 }
 
 //+------------------------------------------------------------------+
+//| Reconstruct a still-pending owned order from live broker state at |
+//| startup. Everything needed is recovered directly from the order   |
+//| itself; returns false with a reason if the comment does not       |
+//| resolve to a known strategy (caller must fail closed in that      |
+//| case, matching the existing cancel-on-unknown behavior).          |
+//+------------------------------------------------------------------+
+bool ReconstructPendingOrder(ulong ticket, ExecutionRecord &rec, string &reason)
+{
+   if(!OrderSelect(ticket))
+   {
+      reason = "order not selectable: ticket=" + IntegerToString(ticket);
+      return false;
+   }
+
+   ENUM_ORDER_TYPE orderType = (ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE);
+   double price   = OrderGetDouble(ORDER_PRICE_OPEN);
+   double sl      = OrderGetDouble(ORDER_SL);
+   double tp      = OrderGetDouble(ORDER_TP);
+   string comment = OrderGetString(ORDER_COMMENT);
+   datetime setupTime = (datetime)OrderGetInteger(ORDER_TIME_SETUP);
+
+   string strategyId = QBStrategyIdFromComment(comment);
+   if(strategyId == "UNKNOWN")
+   {
+      reason = "comment does not resolve to a known strategy: \"" + comment + "\"";
+      return false;
+   }
+
+   rec = QBBuildPendingExecutionRecord(ticket, orderType, price, sl, tp, comment, setupTime);
+   return true;
+}
+
+//+------------------------------------------------------------------+
 //| Expert initialization function                                     |
 //+------------------------------------------------------------------+
 int OnInit()
@@ -880,18 +913,62 @@ int OnInit()
          }
       }
 
-      // Pending order state is not yet persisted. Fail closed on restart by
-      // cancelling owned pending orders instead of allowing orphan triggers.
-      int startupPending = g_Broker.CountPendingOrders();
-      if(startupPending > 0)
+      // Pending orders are reconstructed directly from live broker state
+      // (no persisted schema needed, mirroring ReconstructFromBroker() for
+      // positions). The in-memory model (g_ActiveOrder/g_OrderPending) can
+      // only track exactly one pending order at a time, so anything other
+      // than 0 or 1 owned pending orders found is treated as ambiguous and
+      // fails closed rather than guessed at.
+      ulong singlePendingTicket = 0;
+      int startupPending = g_Broker.FindSingleOwnedPendingOrder(singlePendingTicket);
+      if(startupPending == 1)
       {
+         string reconstructReason = "";
+         ExecutionRecord pendingRec;
+         if(ReconstructPendingOrder(singlePendingTicket, pendingRec, reconstructReason))
+         {
+            g_ActiveOrder = pendingRec;
+            g_OrderPending = true;
+            g_ActiveOrderTradeCounted = false;
+            QBLogInfo("Reconstructed pending order: ticket=" + IntegerToString(singlePendingTicket) +
+                      " strategy=" + QBStrategyIdFromComment(pendingRec.comment) +
+                      " type=" + EnumToString(pendingRec.order_type) +
+                      " price=" + DoubleToString(pendingRec.requested_price, g_Adapter.Digits()));
+         }
+         else
+         {
+            QBLogWarn("Startup pending order not reconstructable (" + reconstructReason +
+                      "); cancelling fail-closed: ticket=" + IntegerToString(singlePendingTicket));
+            bool cancelled = g_Broker.DeleteOrder(singlePendingTicket);
+            if(!cancelled)
+               ActivateProtectionEmergency("Unable to cancel unreconstructable startup pending order");
+         }
+      }
+      else if(startupPending > 1)
+      {
+         QBLogError("Startup pending reconciliation found " + IntegerToString(startupPending) +
+                    " owned pending orders; the in-memory model supports only one. Cancelling all fail-closed.");
          int cancelled = g_Broker.CancelAllPending();
          int remaining = g_Broker.CountPendingOrders();
-         QBLogWarn("Startup pending reconciliation: found=" + IntegerToString(startupPending) +
-                   " cancelled=" + IntegerToString(cancelled) +
-                   " remaining=" + IntegerToString(remaining));
          if(remaining > 0)
+         {
+            // Could not even secure a clean state by cancelling -- this is a
+            // genuine emergency, matching the prior unreconcilable-pending
+            // failure path.
             ActivateProtectionEmergency("Unable to reconcile/cancel startup pending orders");
+         }
+         else
+         {
+            // Successfully cleaned up to zero pending orders; the anomaly
+            // itself (more than the model supports) still needs operator
+            // review before new entries resume, but there is nothing left
+            // to protect or flatten, so this is an entry-kill, not a full
+            // protection emergency (which would also force-close unrelated
+            // open positions). Mirrors the unknown-position-quarantine
+            // precedent (KillEntries, not ActivateProtectionEmergency).
+            g_KillSwitch.KillEntries("More than one owned pending order found at startup; cancelled all (" +
+                                     IntegerToString(cancelled) + ") fail-closed");
+         }
       }
 
       // Reconstruct positions from broker and apply the configured policy to
@@ -2429,6 +2506,15 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 50 PASS: Strategy id comment parsing " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 50 FAIL: Strategy id comment parsing " + detail); }
+   }
+
+   // Test 51: pending-order restart reconstruction field mapping.
+   {
+      string detail = "";
+      if(QBTestPendingExecutionRecordBuild(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 51 PASS: Pending order reconstruction mapping " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 51 FAIL: Pending order reconstruction mapping " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

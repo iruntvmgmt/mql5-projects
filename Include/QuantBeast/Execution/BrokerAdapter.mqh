@@ -39,6 +39,33 @@ bool QBPendingFillTransition(bool orderSelectable, ENUM_ORDER_STATE state,
    return QBIsWorkingPendingOrder(orderSelectable, state, remainingVolume);
 }
 
+// Pure field mapping for reconstructing a pending order's in-memory
+// ExecutionRecord from broker order fields at restart. request_id is set to
+// the order ticket as a stable substitute: the original locally-generated
+// request_id (GetMicrosecondCount() in PlaceStopOrder) is never transmitted
+// to the broker and cannot be recovered, the same accepted gap that already
+// exists for PositionContext.signal_id on the position-recovery side.
+// request_time uses the order's true ORDER_TIME_SETUP rather than "now" so
+// repeated restarts cannot silently extend the order's effective
+// InpOrderExpirySeconds budget.
+ExecutionRecord QBBuildPendingExecutionRecord(ulong ticket, ENUM_ORDER_TYPE orderType,
+                                              double price, double sl, double tp,
+                                              string comment, datetime setupTime)
+{
+   ExecutionRecord rec;
+   ZeroMemory(rec);
+   rec.request_id       = ticket;
+   rec.order_ticket      = ticket;
+   rec.order_type        = orderType;
+   rec.requested_price   = price;
+   rec.stop_loss         = sl;
+   rec.take_profit       = tp;
+   rec.comment           = comment;
+   rec.request_time      = setupTime;
+   rec.state             = QB_ORDER_STATE_SUBMITTED;
+   return rec;
+}
+
 bool QBIsStopAtLeastAsProtective(ENUM_POSITION_TYPE positionType,
                                  double actualSL, double expectedSL,
                                  double tolerance)
@@ -715,6 +742,35 @@ public:
                count++;
          }
       }
+      return count;
+   }
+
+   //+------------------------------------------------------------------+
+   //| Find the single owned pending order, if exactly one exists.       |
+   //| Returns the total count found (0, 1, or >1); foundTicket is only  |
+   //| set when the count is exactly 1. The in-memory model              |
+   //| (g_ActiveOrder/g_OrderPending) tracks only one pending order at a |
+   //| time, so a count other than 0 or 1 must be treated as ambiguous   |
+   //| by the caller rather than guessed at.                             |
+   //+------------------------------------------------------------------+
+   int FindSingleOwnedPendingOrder(ulong &foundTicket)
+   {
+      int count = 0;
+      ulong lastTicket = 0;
+      for(int i = OrdersTotal() - 1; i >= 0; i--)
+      {
+         ulong ticket = OrderGetTicket(i);
+         if(ticket > 0)
+         {
+            ulong magic = OrderGetInteger(ORDER_MAGIC);
+            if(magic >= m_magicBase && magic < m_magicBase + 1000)
+            {
+               count++;
+               lastTicket = ticket;
+            }
+         }
+      }
+      foundTicket = (count == 1) ? lastTicket : 0;
       return count;
    }
 

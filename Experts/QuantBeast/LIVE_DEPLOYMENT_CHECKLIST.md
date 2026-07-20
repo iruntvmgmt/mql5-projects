@@ -87,7 +87,7 @@ Current live-mode code gate: Conservative Live and acknowledged Challenge Live i
 ## H. Recovery gate
 
 - [x] Open EA positions reconstruct after restart. Proven 2026-07-20 against a real Conservative Live terminal restart: strategy, entry, and original stop correctly recovered (`TestEvidence/restart_recovery_20260719/`).
-- [ ] Pending EA orders reconstruct after restart. Not applicable by design: proven 2026-07-20 that owned pending orders are found and cancelled fail-closed at startup, not reconstructed (`TestEvidence/restart_recovery_20260719/`). True pending-order restoration remains unimplemented.
+- [x] Pending EA orders reconstruct after restart. Proven 2026-07-20: owned pending orders are now reconstructed from live broker state (strategy, type, price, sl, tp, true setup time) when exactly one is found with a resolvable comment; cancellation fail-closed is preserved only for unresolvable-comment/ambiguous (>1) cases (`TestEvidence/pending_order_reconstruction_20260720/`).
 - [ ] Strategy owner, signal ID, original risk, partial state, and scale-in state restore. Partially proven 2026-07-20: strategy owner and original stop/target restore correctly. Durable signal ID beyond the journal string, exact partial-exit count, and scale-in state still do not survive restart.
 - [ ] All reconstructed positions are checked for protection.
 - [x] Persisted/broker mismatch blocks entries and is reported. Proven 2026-07-20: a corrupted state-version Global Variable correctly triggered fail-closed quarantine and entry kill on real restart (`TestEvidence/restart_recovery_20260719/`).
@@ -120,7 +120,7 @@ Current broker-free evidence satisfies parts of the Shadow/journal gate only: `T
 - [ ] Written approval records EA version/hash, broker, symbol, account, preset, and maximum loss.
 - [ ] `InpAcknowledgeLiveBrokerRisk=true` set deliberately for this specific demo/live validation window.
 - [ ] Enabled strategies are exactly FBO-only unless BO/TP/MR accepted-entry and lifecycle evidence has been added and this checklist is revised.
-- [ ] Execution is market-order-only with stop/limit pending orders disabled and `InpMaxPendingOrders=0` unless pending-order lifecycle/restart evidence has been added and this checklist is revised.
+- [ ] Execution is market-order-only with stop/limit pending orders disabled and `InpMaxPendingOrders=0` unless pending-order lifecycle/restart evidence has been added and this checklist is revised. Restart-recovery evidence now exists (2026-07-20, `TestEvidence/pending_order_reconstruction_20260720/`); live activation, cancellation, and fill-during-cancel-race evidence for ordinary pending-order trading are still needed before this gate can be revised.
 - [ ] Risk is minimum legal lot or independently verified low fixed risk.
 - [ ] One position maximum; pyramiding off.
 - [ ] Strict spread, daily loss, weekly loss, drawdown, and equity floor enabled.
