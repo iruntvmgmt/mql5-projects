@@ -443,10 +443,19 @@ Live: prohibited
 
 ## Next task
 
-1. PARTIALLY CLOSED 2026-07-20 (see `TestEvidence/fault_adapter_20260720/`): requotes and modify/close/delete rejection are structurally blocked on this broker (zero stop/freeze levels, market execution, client-side MCP validation) -- deterministic unit coverage remains the only valid evidence for these. Disconnect/reconnect was attempted and revealed an architectural gap (connectivity is only checked in OnTick, not OnTimer) rather than producing a clean pass/fail. REMAINING: fill-during-cancel callback ordering not yet attempted. The comment-parsing defect this session found was fixed separately the same day (see `TestEvidence/comment_parsing_fix_20260720/`).
-2. CLOSED 2026-07-20 (see `TestEvidence/restart_recovery_20260719/`): all 4 scenarios (owned position, pending order, unknown position, corrupt state) now have real normal-terminal restart evidence in Conservative Live mode. Remaining recovery gaps (durable signal ID, partial-exit detail, full position-management context across restart) are documented in KNOWN_LIMITATIONS.md, not blocking further work.
-3. CLOSED as evidence-complete 2026-07-19 (see `TestEvidence/organic_multiwindow_20260719/`): 6 distinct organic windows now tested (2 isolated single-strategy + 4 combined, spanning Feb-Jul 2026 in visibly different regimes); BO/TP/MR have never reached ACCEPTED. Remaining work here is a dedicated strategy-parameter/eligibility-gate review, not more window coverage -- track as a new, separate task if pursued, since AGENTS.md forbids combining evidence-gathering with parameter changes in one session.
-4. PARTIALLY CLOSED 2026-07-20 (see `TestEvidence/pending_order_reconstruction_20260720/`): restart reconstruction for owned pending orders is now implemented and proven against a real terminal restart, and the same evidence organically also proved the expiry-deletion path. REMAINING: live activation, cancellation, and fill-during-cancel-race evidence for ordinary (non-restart) pending-order trading is still needed; `QBLiveExecutionSetAllowed()` still hard-blocks pending orders in live mode and should only be relaxed once that remaining evidence exists, as a separate, deliberate decision with its own review.
+The 2026-07-19/20 sessions closed or partially closed all four items that
+were previously on this list (see the dated worklog entries and their
+linked `TestEvidence/` folders for full detail: `organic_multiwindow_20260719`,
+`restart_recovery_20260719`, `fault_adapter_20260720`,
+`comment_parsing_fix_20260720`, `pending_order_reconstruction_20260720`).
+This is a refreshed, prioritized list reflecting what those sessions
+actually surfaced. Pick exactly one per session per AGENTS.md's session
+scope rule.
+
+1. **BO/TP/MR eligibility-gate/parameter review.** 6 distinct organic windows (2 isolated + 4 combined, spanning Feb-Jul 2026) all show BO/TP/MR blocked 88-100% by the generic "not eligible" gate; the blocker is the gate itself, not window selection (`TestEvidence/organic_multiwindow_20260719/`). This is a genuine strategy-parameter/regime-calibration review, not more evidence-gathering -- requires explicit user sign-off before touching any parameters, since it's a different kind of change than everything done so far this week.
+2. **Live pending-order activation/cancellation/fill-race evidence.** Restart reconstruction is now implemented and proven (`TestEvidence/pending_order_reconstruction_20260720/`), but ordinary (non-restart) pending-order lifecycle evidence still requires `QBLiveExecutionSetAllowed()`'s pending-order block to be temporarily relaxed for a scoped, authorized live test on Coinexx-Demo -- analogous to the 2026-07-16 Conservative Live FBO-only authorization, but a materially different and broader scope (pending orders, not just market orders). **Do not start this without first getting explicit, scoped operator authorization for the specific relaxation**, the same way Conservative Live itself was authorized.
+3. **Broader stress/holdout/demo-forward testing** per `LIVE_DEPLOYMENT_CHECKLIST.md` section J (high-volatility/quiet/spread-stress backtests, a continuous 2-week demo-forward run). Large, multi-day scope; not started.
+4. **Fault-adapter fill-during-cancel race** (the one sub-scenario of the original item #1 never attempted). Likely impractical on this broker given its market-execution permissiveness (see `TestEvidence/fault_adapter_20260720/`); worth a brief feasibility check before committing real session time to it.
 
 ## Do not touch during the next task
 
