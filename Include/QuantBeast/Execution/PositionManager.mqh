@@ -415,10 +415,11 @@ public:
    //| Reconstruct positions on startup                                  |
    //+------------------------------------------------------------------+
    int ReconstructFromBroker(ulong magicBase, ENUM_UNKNOWN_POS_POLICY unknownPolicy,
-                             int &unknownCount)
+                             int &unknownCount, int &unprotectedCount)
    {
       m_positionCount = 0;
       unknownCount = 0;
+      unprotectedCount = 0;
 
       for(int i = PositionsTotal() - 1; i >= 0; i--)
       {
@@ -480,6 +481,22 @@ public:
                                IntegerToString(ticket));
                      continue;
                   }
+               }
+
+               // A recovered position must have an actual protective stop,
+               // the same guarantee EnsurePositionProtection() enforces on
+               // every live fill (OnTradeTransaction). Passing the
+               // position's own current SL/TP as both actual and expected
+               // means this never attempts a repair modification here (they
+               // trivially match if non-zero) -- it purely verifies a
+               // protective stop exists at all, failing closed if it is
+               // missing (e.g. removed manually while the EA was down).
+               if(!m_broker.EnsurePositionProtection(ticket, ctx.current_stop, ctx.initial_target))
+               {
+                  unprotectedCount++;
+                  QBLogError("Reconstructed position has no verified protective stop: ticket=" +
+                             IntegerToString(ticket) + " strategy=" + ctx.strategy_id +
+                             " sl=" + DoubleToString(ctx.current_stop, m_adapter.Digits()));
                }
 
                if(m_positionCount < POSITION_TRACK_CAPACITY)

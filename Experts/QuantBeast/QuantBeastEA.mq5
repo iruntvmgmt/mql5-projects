@@ -974,12 +974,17 @@ int OnInit()
       // Reconstruct positions from broker and apply the configured policy to
       // positions whose strategy ownership cannot be recovered from history.
       int unknownPositions = 0;
+      int unprotectedPositions = 0;
       int reconstructed = g_PosManager.ReconstructFromBroker(QB_MAGIC_BASE,
                                                               InpUnknownPosPolicy,
-                                                              unknownPositions);
+                                                              unknownPositions,
+                                                              unprotectedPositions);
       QBLogInfo("Startup reconciliation: " + IntegerToString(reconstructed) + " positions reconstructed");
       if(unknownPositions > 0 && InpUnknownPosPolicy == UNKNOWN_QUARANTINE)
          g_KillSwitch.KillEntries("Unknown position ownership detected at startup");
+      if(unprotectedPositions > 0)
+         ActivateProtectionEmergency("Reconstructed position(s) found with no verified protective stop: " +
+                                     IntegerToString(unprotectedPositions));
 
       g_StartupReconciled = true;
       PersistRuntimeState();

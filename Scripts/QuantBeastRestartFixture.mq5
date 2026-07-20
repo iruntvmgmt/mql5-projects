@@ -17,7 +17,8 @@ enum ENUM_FIXTURE_CMD
    CMD_WRITE_CORRUPT,   // 4: scenario 4 — write incompatible state version
    CMD_CLEANUP_ALL,     // 5: close all positions, cancel all orders, delete fixture globals
    CMD_DELETE_CORRUPT,  // 6: delete only the corrupt-state globals
-   CMD_CLEAR_KILL_STATE // 7: delete persisted QuantBeast kill-switch globals
+   CMD_CLEAR_KILL_STATE, // 7: delete persisted QuantBeast kill-switch globals
+   CMD_PLACE_OWNED_NO_SL // 8: owned position with no protective stop (protection-verification test)
 };
 
 input ENUM_FIXTURE_CMD InpCommand = CMD_REPORT;
@@ -98,7 +99,7 @@ void DoReport()
 //+------------------------------------------------------------------+
 //| Place a market order                                              |
 //+------------------------------------------------------------------+
-void DoPlaceMarket(ulong magic, string comment)
+void DoPlaceMarket(ulong magic, string comment, bool includeStop = true)
 {
    MqlTradeRequest req = {};
    MqlTradeResult  res = {};
@@ -115,7 +116,7 @@ void DoPlaceMarket(ulong magic, string comment)
    req.volume    = 0.01;
    req.type      = ORDER_TYPE_BUY;
    req.price     = askPrice;
-   req.sl        = NormalizeDouble(askPrice - stopDist, digits);
+   req.sl        = includeStop ? NormalizeDouble(askPrice - stopDist, digits) : 0.0;
    req.tp        = NormalizeDouble(askPrice + tgtDist, digits);
    req.deviation = 500;
    req.magic     = (int)magic;
@@ -451,6 +452,11 @@ void OnStart()
 
       case CMD_CLEAR_KILL_STATE:
          DoClearKillState();
+         DoReport();
+         break;
+
+      case CMD_PLACE_OWNED_NO_SL:
+         DoPlaceMarket(FIXTURE_MAGIC_OWNED, "QB_FBO_fixture", false);
          DoReport();
          break;
 
