@@ -22,6 +22,8 @@
 #include "../Analytics/TradeJournal.mqh"
 #include "../Regime/RegimeEngine.mqh"
 #include "../Portfolio/SignalArbitrator.mqh"
+#include "../Portfolio/AllocationEngine.mqh"
+#include "../Analytics/CounterfactualTracker.mqh"
 #include "../Strategies/BreakoutEngine.mqh"
 #include "../Strategies/FailedBreakoutEngine.mqh"
 #include "../Strategies/TrendPullbackEngine.mqh"
@@ -267,12 +269,12 @@ bool QBTestBreakoutReachability(CSymbolAdapter &adapter, string &detail)
 {
    CBreakoutEngine strategy;
    strategy.Init("BO_TEST", "BO test", true, 0.0, adapter,
-                 TRIGGER_CANDLE_CLOSE_BREAK, 15.0, 5, 2.0, 1.0, 1.5, true);
+                 TRIGGER_CANDLE_CLOSE_BREAK, 5, 2.0, 1.0, 1.5, true);
    MarketSnapshot market; double d;
    QBMakeSyntheticMarket(adapter, market, d);
    RegimeState regime; QBMakeNormalRegime(regime);
    FeatureSnapshot f; ZeroMemory(f);
-   f.atr = d; f.compression_bars = 8; f.htf_aligned = true;
+   f.atr = d; f.preceding_compression_bars = 8; f.htf_aligned = true;
    f.atr_percentile_rank = 10.0;
 
    f.htf_slope = 1.0;
@@ -287,19 +289,15 @@ bool QBTestBreakoutReachability(CSymbolAdapter &adapter, string &detail)
    f.closed_close = market.bid + 0.5 * d;
    StrategySignal shortSig = strategy.EvaluateShort(market, f, regime);
 
-   f.compression_bars = 0;
+   f.preceding_compression_bars = 0;
    StrategySignal rejected = strategy.EvaluateShort(market, f, regime);
-   f.compression_bars = 8;
-   f.atr_percentile_rank = 40.0;
-   StrategySignal pctRejected = strategy.EvaluateShort(market, f, regime);
+   f.preceding_compression_bars = 8;
    detail = "L=" + (longSig.valid ? "valid" : longSig.reason) +
             " S=" + (shortSig.valid ? "valid" : shortSig.reason) +
-            " gate=" + (!rejected.valid ? "rejected" : "FAILED") +
-            " pct=" + (!pctRejected.valid ? "rejected" : "FAILED");
+            " gate=" + (!rejected.valid ? "rejected" : "FAILED");
    return longSig.valid && longSig.direction == ORDER_TYPE_BUY &&
           shortSig.valid && shortSig.direction == ORDER_TYPE_SELL &&
-          !rejected.valid && rejected.direction == ORDER_TYPE_SELL &&
-          !pctRejected.valid && pctRejected.direction == ORDER_TYPE_SELL;
+          !rejected.valid && rejected.direction == ORDER_TYPE_SELL;
 }
 
 bool QBTestFailedBreakoutReachability(CSymbolAdapter &adapter, string &detail)
@@ -373,6 +371,7 @@ bool QBTestTrendPullbackReachability(CSymbolAdapter &adapter, string &detail)
    f.swing_low = market.mid - 4.0 * d;
    f.swing_low_bars = 6;
    f.current_range_high = f.swing_high; f.current_range_low = f.swing_low;
+   f.closed_open = market.mid - 0.2 * d; f.closed_close = market.mid + 0.2 * d; // up candle
    StrategySignal longSig = strategy.EvaluateLong(market, f, regime);
 
    regime.trend = TREND_STRONG_DOWN;
@@ -381,6 +380,7 @@ bool QBTestTrendPullbackReachability(CSymbolAdapter &adapter, string &detail)
    f.swing_high = market.mid + 4.0 * d;
    f.swing_high_bars = 6;
    f.current_range_low = f.swing_low; f.current_range_high = f.swing_high;
+   f.closed_open = market.mid + 0.2 * d; f.closed_close = market.mid - 0.2 * d; // down candle
    StrategySignal shortSig = strategy.EvaluateShort(market, f, regime);
 
    f.swing_low_bars = 25;
@@ -403,7 +403,7 @@ bool QBTestMeanReversionReachability(CSymbolAdapter &adapter, string &detail)
 {
    CMeanReversionEngine strategy;
    strategy.Init("MR_TEST", "MR test", true, 0.0, adapter,
-                 TRIGGER_CANDLE_CLOSE_BREAK, 0.25, 1.5, 0.3, 1.0, 1.5, 1.0);
+                 TRIGGER_CANDLE_CLOSE_BREAK, 0.25, 1.5, 0.3, 1.0, 1.0);
    MarketSnapshot market; double d;
    QBMakeSyntheticMarket(adapter, market, d);
    RegimeState regime; QBMakeNormalRegime(regime);
@@ -416,7 +416,11 @@ bool QBTestMeanReversionReachability(CSymbolAdapter &adapter, string &detail)
    f.vwap = market.ask + 2.0 * d; f.range_midpoint = market.ask + d;
    f.vwap_sd = d;
    StrategySignal longSig = strategy.EvaluateLong(market, f, regime);
-   bool longBandTarget = longSig.valid && longSig.proposed_target > f.vwap;
+   // Corrected mean-reversion target: return to the VWAP mean (above entry,
+   // at/near VWAP) rather than the opposite SD band beyond VWAP.
+   bool longMeanTarget = longSig.valid &&
+                         longSig.proposed_target > longSig.proposed_entry &&
+                         longSig.proposed_target <= f.vwap + adapter.Point();
 
    f.sd_dist = 2.0; f.rejection_wick_upper = 0.6;
    f.closed_open = market.bid + 0.2 * d; f.closed_close = market.bid;
@@ -424,18 +428,20 @@ bool QBTestMeanReversionReachability(CSymbolAdapter &adapter, string &detail)
    f.vwap = market.bid - 2.0 * d; f.range_midpoint = market.bid - d;
    f.vwap_sd = d;
    StrategySignal shortSig = strategy.EvaluateShort(market, f, regime);
-   bool shortBandTarget = shortSig.valid && shortSig.proposed_target < f.vwap;
+   bool shortMeanTarget = shortSig.valid &&
+                          shortSig.proposed_target < shortSig.proposed_entry &&
+                          shortSig.proposed_target >= f.vwap - adapter.Point();
 
    regime.structure = STRUCTURE_ACCEPTED_BREAKOUT;
    StrategySignal rejected = strategy.EvaluateShort(market, f, regime);
    detail = "L=" + (longSig.valid ? "valid" : longSig.reason) +
             " S=" + (shortSig.valid ? "valid" : shortSig.reason) +
-            " bandL=" + (longBandTarget ? "ok" : "FAILED") +
-            " bandS=" + (shortBandTarget ? "ok" : "FAILED") +
+            " meanL=" + (longMeanTarget ? "ok" : "FAILED") +
+            " meanS=" + (shortMeanTarget ? "ok" : "FAILED") +
             " gate=" + (!rejected.valid ? "rejected" : "FAILED");
    return longSig.valid && longSig.direction == ORDER_TYPE_BUY &&
           shortSig.valid && shortSig.direction == ORDER_TYPE_SELL &&
-          longBandTarget && shortBandTarget &&
+          longMeanTarget && shortMeanTarget &&
           !rejected.valid && rejected.direction == ORDER_TYPE_SELL;
 }
 
@@ -1406,6 +1412,323 @@ bool QBTestPendingExecutionRecordBuild(string &detail)
 
    detail = "ticket=matched type=matched prices=matched time=setup strategy=FBO";
    return true;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 52: new entry trigger modes — probe-confirm and rejection,  |
+//| plus fail-closed on a mode the strategy does not support.        |
+//+------------------------------------------------------------------+
+bool QBTestTriggerModes(CSymbolAdapter &adapter, string &detail)
+{
+   MarketSnapshot market; double d;
+   QBMakeSyntheticMarket(adapter, market, d);
+   RegimeState regime; QBMakeNormalRegime(regime);
+
+   // BO PROBE_CONFIRM: strong body closing near the high beyond the range high.
+   FeatureSnapshot f; ZeroMemory(f);
+   f.atr = d; f.preceding_compression_bars = 8; f.htf_aligned = true; f.htf_slope = 1.0;
+   f.current_range_low = market.ask - 4.0 * d;
+   f.current_range_high = market.ask - d;
+   f.closed_open = market.ask - 1.5 * d;
+   f.closed_close = market.ask - 0.4 * d;   // beyond range high, strong up bar
+   f.closed_high = market.ask - 0.4 * d;    // close == high (tiny upper wick)
+   f.closed_low = market.ask - 1.6 * d;
+   f.displacement = 1.2;
+
+   CBreakoutEngine boProbe;
+   boProbe.Init("BO_PC", "BO probe", true, 0.0, adapter, TRIGGER_PROBE_CONFIRM,
+                5, 2.0, 1.0, 1.5, true, LEVEL_SRC_RANGE);
+   bool probeTriggers = boProbe.EvaluateLong(market, f, regime).valid;
+
+   f.displacement = 0.5;                    // weak body -> probe must fail
+   bool probeWeakRejected = !boProbe.EvaluateLong(market, f, regime).valid;
+
+   // BO REJECTION is unsupported for a breakout -> fail-closed (no trigger).
+   f.displacement = 1.2;
+   CBreakoutEngine boRej;
+   boRej.Init("BO_RJ", "BO rej", true, 0.0, adapter, TRIGGER_REJECTION,
+              5, 2.0, 1.0, 1.5, true, LEVEL_SRC_RANGE);
+   bool rejFailClosed = !boRej.EvaluateLong(market, f, regime).valid;
+
+   // MR REJECTION: fires with a directional lower rejection wick present.
+   FeatureSnapshot m; ZeroMemory(m);
+   m.atr = d; m.slope_norm = 0.0; m.rejection_wick = 0.6;
+   m.sd_dist = -2.0; m.rejection_wick_lower = 0.6;
+   m.closed_open = market.ask - 0.2 * d; m.closed_close = market.ask; // up candle
+   m.current_range_low = market.ask - 2.0 * d;
+   m.vwap = market.ask + 2.0 * d; m.range_midpoint = market.ask + d; m.vwap_sd = d;
+   CMeanReversionEngine mrRej;
+   mrRej.Init("MR_RJ", "MR rej", true, 0.0, adapter, TRIGGER_REJECTION,
+              0.25, 1.5, 0.3, 1.0, 1.0);
+   bool mrRejTriggers = mrRej.EvaluateLong(market, m, regime).valid;
+
+   detail = "probe=" + (probeTriggers ? "ok" : "FAIL") +
+            " probeWeak=" + (probeWeakRejected ? "ok" : "FAIL") +
+            " rejFailClosed=" + (rejFailClosed ? "ok" : "FAIL") +
+            " mrRej=" + (mrRejTriggers ? "ok" : "FAIL");
+   return probeTriggers && probeWeakRejected && rejFailClosed && mrRejTriggers;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 53: level-source selection — a breakout keyed to the        |
+//| previous-day high triggers where a range-keyed one would not.    |
+//+------------------------------------------------------------------+
+bool QBTestLevelSource(CSymbolAdapter &adapter, string &detail)
+{
+   MarketSnapshot market; double d;
+   QBMakeSyntheticMarket(adapter, market, d);
+   RegimeState regime; QBMakeNormalRegime(regime);
+
+   FeatureSnapshot f; ZeroMemory(f);
+   f.atr = d; f.preceding_compression_bars = 8; f.htf_aligned = true; f.htf_slope = 1.0;
+   f.closed_open = market.ask - 1.0 * d;
+   f.closed_close = market.ask - 0.3 * d;
+   f.current_range_low = market.ask - 4.0 * d;
+   f.current_range_high = market.ask + 0.5 * d;  // close is below range high
+   f.prev_day_high = market.ask - 0.6 * d;       // close is above prev-day high
+   f.prev_day_low = market.ask - 5.0 * d;
+
+   CBreakoutEngine boRange;
+   boRange.Init("BO_R", "BO range", true, 0.0, adapter, TRIGGER_CANDLE_CLOSE_BREAK,
+                5, 2.0, 1.0, 1.5, true, LEVEL_SRC_RANGE);
+   bool rangeNoTrigger = !boRange.EvaluateLong(market, f, regime).valid;
+
+   CBreakoutEngine boPrev;
+   boPrev.Init("BO_P", "BO prevday", true, 0.0, adapter, TRIGGER_CANDLE_CLOSE_BREAK,
+               5, 2.0, 1.0, 1.5, true, LEVEL_SRC_PREV_DAY);
+   bool prevTriggers = boPrev.EvaluateLong(market, f, regime).valid;
+
+   detail = "rangeNoTrigger=" + (rangeNoTrigger ? "ok" : "FAIL") +
+            " prevTriggers=" + (prevTriggers ? "ok" : "FAIL");
+   return rangeNoTrigger && prevTriggers;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 54: stop/target mode dispatch — an alternative stop/target  |
+//| mode produces a different, correct placement than the default.   |
+//+------------------------------------------------------------------+
+bool QBTestStopTargetModes(CSymbolAdapter &adapter, string &detail)
+{
+   MarketSnapshot market; double d;
+   QBMakeSyntheticMarket(adapter, market, d);
+   RegimeState regime; QBMakeNormalRegime(regime);
+
+   FeatureSnapshot f; ZeroMemory(f);
+   f.atr = d; f.preceding_compression_bars = 8; f.htf_aligned = true; f.htf_slope = 1.0;
+   f.current_range_low = market.ask - 4.0 * d;
+   f.current_range_high = market.ask - d;
+   f.closed_open = market.ask - 1.5 * d;
+   f.closed_close = market.ask - 0.4 * d;   // beyond range high
+   f.vwap = market.ask + 3.0 * d;           // above entry, for VWAP-target test
+
+   // Default BO long: stop = rangeHigh - 1*atr = ask-2d.
+   CBreakoutEngine boDef;
+   boDef.Init("BO_D", "BO def", true, 0.0, adapter, TRIGGER_CANDLE_CLOSE_BREAK,
+              5, 2.0, 1.0, 1.5, true, LEVEL_SRC_RANGE, STOP_MODE_DEFAULT, TARGET_MODE_DEFAULT);
+   StrategySignal sDef = boDef.EvaluateLong(market, f, regime);
+
+   // ATR stop mode: stop = entry - 1*atr = ask-d (differs from default).
+   CBreakoutEngine boAtr;
+   boAtr.Init("BO_A", "BO atr", true, 0.0, adapter, TRIGGER_CANDLE_CLOSE_BREAK,
+              5, 2.0, 1.0, 1.5, true, LEVEL_SRC_RANGE, STOP_MODE_ATR, TARGET_MODE_DEFAULT);
+   StrategySignal sAtr = boAtr.EvaluateLong(market, f, regime);
+   bool atrDiffers = sAtr.valid && sDef.valid &&
+                     MathAbs(sAtr.proposed_stop - sDef.proposed_stop) > 2 * adapter.Point();
+   double expectAtr = adapter.NormalizePrice(sAtr.proposed_entry - 1.0 * d);
+   bool atrCorrect = MathAbs(sAtr.proposed_stop - expectAtr) <= 2 * adapter.Point();
+
+   // VWAP target mode: target == VWAP.
+   CBreakoutEngine boVwap;
+   boVwap.Init("BO_V", "BO vwap", true, 0.0, adapter, TRIGGER_CANDLE_CLOSE_BREAK,
+               5, 2.0, 1.0, 1.5, true, LEVEL_SRC_RANGE, STOP_MODE_DEFAULT, TARGET_MODE_VWAP);
+   StrategySignal sVwap = boVwap.EvaluateLong(market, f, regime);
+   bool vwapTargetOK = sVwap.valid &&
+                       MathAbs(sVwap.proposed_target - adapter.NormalizePrice(f.vwap)) <= 2 * adapter.Point();
+
+   detail = "defValid=" + (sDef.valid ? "ok" : "FAIL") +
+            " atrDiffers=" + (atrDiffers ? "ok" : "FAIL") +
+            " atrCorrect=" + (atrCorrect ? "ok" : "FAIL") +
+            " vwapTarget=" + (vwapTargetOK ? "ok" : "FAIL");
+   return sDef.valid && atrDiffers && atrCorrect && vwapTargetOK;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 55: additive exit types — a regime-deterioration shock      |
+//| closes an open shadow position; a normal bar leaves it open.     |
+//+------------------------------------------------------------------+
+bool QBTestExtendedExits(CSymbolAdapter &adapter, string &detail)
+{
+   double bid = SymbolInfoDouble(adapter.Symbol(), SYMBOL_BID);
+   if(bid <= 0) bid = 2500.0;
+   bid = adapter.NormalizePrice(bid);
+   double ask = adapter.NormalizePrice(bid + 10.0 * adapter.Point());
+
+   CShadowPortfolio shadow;
+   shadow.Init(adapter, 10000.0, 0.0, 0.0,
+               false, 0.0, 0.0, false, 0.0, 0.0,
+               false, 0.0, 0.0, false, 0);
+   shadow.SetExtendedExits(false, 0, 0.0, true, 3.0);  // regime-deterioration exit on
+
+   double distance = MathMax(100.0, adapter.StopLevel() + 20.0) * adapter.Point();
+   MarketSnapshot snap; ZeroMemory(snap);
+   snap.time = TimeCurrent(); snap.bid = bid; snap.ask = ask;
+   snap.mid = (bid + ask) * 0.5; snap.spread_points = (ask - bid) / adapter.Point();
+   snap.is_fresh = true; snap.is_tradeable = true;
+
+   StrategySignal signal; ZeroMemory(signal);
+   signal.valid = true; signal.strategy_id = "SELFTEST"; signal.direction = ORDER_TYPE_BUY;
+   signal.signal_time = TimeCurrent(); signal.proposed_entry = ask;
+   signal.proposed_stop = adapter.NormalizePrice(ask - distance);
+   signal.proposed_target = adapter.NormalizePrice(ask + distance * 3.0);
+   RegimeState regime; ZeroMemory(regime);
+   double volume = adapter.NormalizeVolume(adapter.MinLot());
+   string reason = "";
+   if(!shadow.Open(signal, volume, regime, snap, 1, reason))
+   { detail = "open failed: " + reason; return false; }
+
+   // Normal bar (no shock), price between stop and target -> stays open.
+   FeatureSnapshot fq; ZeroMemory(fq);
+   fq.atr = distance; fq.abnormal_candle = false; fq.atr_ratio = 1.0;
+   ShadowCloseEvent ev1[];
+   int c1 = shadow.Update(snap, fq, ev1);
+   bool stayedOpen = (c1 == 0 && shadow.GetPositionCount() == 1);
+
+   // Shock candle -> regime-deterioration exit closes the position.
+   fq.abnormal_candle = true;
+   ShadowCloseEvent ev2[];
+   int c2 = shadow.Update(snap, fq, ev2);
+   bool regimeClosed = (c2 == 1 && ArraySize(ev2) == 1 &&
+                        ev2[0].exit_reason == EXIT_REGIME_DETERIORATE &&
+                        shadow.GetPositionCount() == 0);
+
+   detail = "stayedOpen=" + (stayedOpen ? "ok" : "FAIL") +
+            " regimeExit=" + (regimeClosed ? "ok" : "FAIL");
+   return stayedOpen && regimeClosed;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 56: challenge-mode pyramiding gate — only active + configured|
+//| + winning + protected additions are permitted.                   |
+//+------------------------------------------------------------------+
+bool QBTestChallengePyramiding(string &detail)
+{
+   // Pyramiding OFF: never allowed, even for a winning protected position.
+   CChallengeMode chalOff;
+   chalOff.Init(true, true, 130, 200, 350, 600, 1000,
+                3.0, 2.5, 2.0, 1.5, 1.0, 30.0, 3, 50.0, false);
+   bool offBlocks = !chalOff.IsPyramidingAllowed(true, true);
+
+   // Pyramiding ON: allowed only for winning + protected.
+   CChallengeMode chalOn;
+   chalOn.Init(true, true, 130, 200, 350, 600, 1000,
+               3.0, 2.5, 2.0, 1.5, 1.0, 30.0, 3, 50.0, true);
+   bool onWinProt   = chalOn.IsPyramidingAllowed(true, true);
+   bool onLosing    = !chalOn.IsPyramidingAllowed(false, true);
+   bool onUnprot    = !chalOn.IsPyramidingAllowed(true, false);
+
+   // Inactive challenge (not acknowledged) never allows pyramiding.
+   CChallengeMode chalInactive;
+   chalInactive.Init(false, false, 130, 200, 350, 600, 1000,
+                     3.0, 2.5, 2.0, 1.5, 1.0, 30.0, 3, 50.0, true);
+   bool inactiveBlocks = !chalInactive.IsPyramidingAllowed(true, true);
+
+   detail = "offBlocks=" + (offBlocks ? "ok" : "FAIL") +
+            " onWinProt=" + (onWinProt ? "ok" : "FAIL") +
+            " onLosing=" + (onLosing ? "ok" : "FAIL") +
+            " onUnprot=" + (onUnprot ? "ok" : "FAIL") +
+            " inactive=" + (inactiveBlocks ? "ok" : "FAIL");
+   return offBlocks && onWinProt && onLosing && onUnprot && inactiveBlocks;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 57: allocation engine — equal weight is a no-op (1.0 each), |
+//| confidence weighting reallocates while conserving the budget.    |
+//+------------------------------------------------------------------+
+bool QBTestAllocationEngine(string &detail)
+{
+   // Equal mode: every strategy weight is exactly 1.0 (baseline preserved).
+   CAllocationEngine eq;
+   eq.Init(ALLOC_EQUAL);
+   eq.RecordSignal("BO", 0.9);
+   eq.RecordSignal("MR", 0.5);
+   bool equalOne = MathAbs(eq.GetWeight("BO") - 1.0) < 1e-9 &&
+                   MathAbs(eq.GetWeight("MR") - 1.0) < 1e-9;
+
+   // Confidence mode: the higher-confidence strategy gets weight > 1, the
+   // lower gets < 1, and the mean of the two weights stays 1.0 (budget conserved).
+   CAllocationEngine cf;
+   cf.Init(ALLOC_CONFIDENCE);
+   cf.RecordSignal("BO", 0.9);
+   cf.RecordSignal("MR", 0.3);
+   double wBO = cf.GetWeight("BO");
+   double wMR = cf.GetWeight("MR");
+   bool confHigherBO = (wBO > wMR) && (wBO > 1.0) && (wMR < 1.0);
+   bool conserved = MathAbs((wBO + wMR) / 2.0 - 1.0) < 0.02;
+
+   detail = "equalOne=" + (equalOne ? "ok" : "FAIL") +
+            " confHigherBO=" + (confHigherBO ? "ok" : "FAIL") +
+            " conserved=" + (conserved ? "ok" : "FAIL") +
+            " wBO=" + DoubleToString(wBO, 2) + " wMR=" + DoubleToString(wMR, 2);
+   return equalOne && confHigherBO && conserved;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 58: CounterfactualTracker buffers only rejected signals that|
+//| carry a computable hypothetical trade, is a no-op when disabled, |
+//| and is side-effect-free (no file I/O until Close).               |
+//+------------------------------------------------------------------+
+bool QBTestCounterfactualTracker(string &detail)
+{
+   MarketSnapshot  snap;      // zero-initialized context is sufficient;
+   RegimeState     regime;    // LogRejection gates purely on the signal fields.
+   FeatureSnapshot feat;
+   ZeroMemory(snap);
+   ZeroMemory(regime);
+   ZeroMemory(feat);
+
+   // Build a rejected signal that nonetheless has full geometry.
+   StrategySignal rej;
+   rej.valid           = false;
+   rej.strategy_id     = "BO";
+   rej.direction       = ORDER_TYPE_BUY;
+   rej.signal_time     = D'2026.04.21 10:00:00';
+   rej.proposed_entry  = 2000.0;
+   rej.proposed_stop   = 1995.0;
+   rej.proposed_target = 2010.0;
+   rej.expected_reward_r = 2.0;
+   rej.confidence      = 0.7;
+   rej.rejection_code  = REJECT_ARBITRATION_LOST;
+   rej.reason          = "arb-loss";
+
+   // Enabled tracker buffers the rejected+geometry signal.
+   CCounterfactualTracker t;
+   t.Init(true, true);
+   t.LogRejection(rej, snap, regime, feat, "XAUUSD");
+   bool buffered = (t.RowCount() == 1);
+
+   // A VALID signal (not rejected) must be ignored.
+   StrategySignal valid = rej;
+   valid.valid = true;
+   t.LogRejection(valid, snap, regime, feat, "XAUUSD");
+   bool ignoresValid = (t.RowCount() == 1);
+
+   // A rejected signal with no computable geometry must be ignored.
+   StrategySignal noGeo = rej;
+   noGeo.proposed_stop = 0.0;
+   t.LogRejection(noGeo, snap, regime, feat, "XAUUSD");
+   bool ignoresNoGeo = (t.RowCount() == 1);
+
+   // A disabled tracker is a pure no-op.
+   CCounterfactualTracker off;
+   off.Init(false, true);
+   off.LogRejection(rej, snap, regime, feat, "XAUUSD");
+   bool disabledNoop = (off.RowCount() == 0);
+
+   detail = "buffered=" + (buffered ? "ok" : "FAIL") +
+            " ignoresValid=" + (ignoresValid ? "ok" : "FAIL") +
+            " ignoresNoGeo=" + (ignoresNoGeo ? "ok" : "FAIL") +
+            " disabledNoop=" + (disabledNoop ? "ok" : "FAIL");
+   return buffered && ignoresValid && ignoresNoGeo && disabledNoop;
 }
 
 #endif // QB_SAFETYTESTS_MQH

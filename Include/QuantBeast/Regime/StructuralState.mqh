@@ -47,8 +47,14 @@ public:
          return STRUCTURE_FAILED_BREAKOUT;
       }
 
-      // Impulse (strong directional with displacement)
-      if(MathAbs(feat.slope_norm) > 0.75 && feat.dir_efficiency > 0.55 && feat.displacement > 1.0)
+      // Impulse (directional push with displacement). Slope gate set to WEAK
+      // trend magnitude (0.3, matching TrendState's WEAK band and PULLBACK's
+      // own slope gate) rather than STRONG (0.6): TrendPullbackEngine accepts
+      // WEAK trends, but every trending bar observed was WEAK (|slope_norm| in
+      // ~0.15-0.6), so requiring STRONG magnitude here made TP's structure
+      // gate impossible to satisfy. Quality is still enforced by
+      // dir_efficiency>0.4 and displacement>1.0.
+      if(MathAbs(feat.slope_norm) > 0.3 && feat.dir_efficiency > 0.4 && feat.displacement > 1.0)
       {
          score = 0.85;
          return STRUCTURE_IMPULSE;

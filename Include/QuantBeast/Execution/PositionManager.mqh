@@ -74,6 +74,10 @@ private:
    double m_atrTrailStartR;
    bool   m_enableTimeStop;
    int    m_timeStopMinutes;
+   bool   m_enableMomentumExit;
+   int    m_momentumMinutes;
+   double m_momentumMinR;
+   bool   m_enableRegimeExit;
 
    string StrategyFromComment(const string comment) const
    {
@@ -135,6 +139,10 @@ public:
       m_atrTrailStartR      = 1.0;
       m_enableTimeStop      = false;
       m_timeStopMinutes     = 240;
+      m_enableMomentumExit  = false;
+      m_momentumMinutes     = 0;
+      m_momentumMinR        = 0.0;
+      m_enableRegimeExit    = false;
    }
 
    //+------------------------------------------------------------------+
@@ -158,6 +166,19 @@ public:
       m_atrTrailStartR       = atrStartR;
       m_enableTimeStop       = timeStop;
       m_timeStopMinutes      = timeStopMin;
+   }
+
+   //+------------------------------------------------------------------+
+   //| Configure the additive momentum-failure and regime-deterioration  |
+   //| exits on the live path (both off by default).                     |
+   //+------------------------------------------------------------------+
+   void SetExtendedExits(bool momentumExit, int momentumMinutes, double momentumMinR,
+                         bool regimeExit)
+   {
+      m_enableMomentumExit = momentumExit;
+      m_momentumMinutes    = momentumMinutes;
+      m_momentumMinR       = momentumMinR;
+      m_enableRegimeExit   = regimeExit;
    }
 
    //+------------------------------------------------------------------+
@@ -354,7 +375,34 @@ public:
          }
       }
 
-      // 4. Time stop
+      // 4. Momentum-failure exit: open past the window with insufficient
+      //    progress (current R below the configured minimum).
+      if(m_enableMomentumExit && m_momentumMinutes > 0 &&
+         TimeCurrent() - m_positions[idx].entry_time >= m_momentumMinutes * 60 &&
+         currentR < m_momentumMinR)
+      {
+         QBLogInfo("Momentum-failure exit for position " + IntegerToString(ticket) +
+                   " at R=" + DoubleToString(currentR, 2));
+         m_broker.ClosePosition(ticket);
+         return;
+      }
+
+      // 5. Regime-deterioration exit: dangerous volatility, or the trend has
+      //    flipped hard against the open position.
+      if(m_enableRegimeExit)
+      {
+         bool dangerousVol = (regime.volatility == VOL_SHOCK || regime.volatility == VOL_EXTREME);
+         bool trendAgainst = (direction == 1 && regime.trend == TREND_STRONG_DOWN) ||
+                             (direction == -1 && regime.trend == TREND_STRONG_UP);
+         if(dangerousVol || trendAgainst)
+         {
+            QBLogInfo("Regime-deterioration exit for position " + IntegerToString(ticket));
+            m_broker.ClosePosition(ticket);
+            return;
+         }
+      }
+
+      // 6. Time stop
       if(m_enableTimeStop && m_timeStopMinutes > 0)
       {
          if(TimeCurrent() - m_positions[idx].entry_time > m_timeStopMinutes * 60)

@@ -25,18 +25,8 @@ private:
    int      m_maxPullbackBars;
    double   m_targetExtensionR;    // Impulse extension target
    double   m_stopBeyondStruct;    // ATR multiple beyond structure
-
-   bool TriggerConfirmed(bool isLong, const FeatureSnapshot &features) const
-   {
-      bool candleDirection = isLong ?
-                             (features.closed_close > features.closed_open) :
-                             (features.closed_close < features.closed_open);
-      if(m_triggerMode == TRIGGER_IMMEDIATE_BREAK) return true;
-      if(m_triggerMode == TRIGGER_CANDLE_CLOSE_BREAK) return candleDirection;
-      if(m_triggerMode == TRIGGER_DISPLACEMENT)
-         return candleDirection && features.displacement >= 1.0;
-      return false;
-   }
+   ENUM_STOP_MODE   m_stopMode;
+   ENUM_TARGET_MODE m_targetMode;
 
 public:
    //+------------------------------------------------------------------+
@@ -49,6 +39,8 @@ public:
       m_maxPullbackBars      = 20;
       m_targetExtensionR     = 1.618;
       m_stopBeyondStruct     = 0.5;
+      m_stopMode             = STOP_MODE_DEFAULT;
+      m_targetMode           = TARGET_MODE_DEFAULT;
    }
 
    //+------------------------------------------------------------------+
@@ -56,7 +48,9 @@ public:
              CSymbolAdapter &adapter, ENUM_TRIGGER_TYPE triggerMode,
              double minDirEff, int minTrendPersist, bool requireHTF,
              double maxPullbackDepth, int maxPullbackBars,
-             double targetExtensionR, double stopBeyondStruct)
+             double targetExtensionR, double stopBeyondStruct,
+             ENUM_STOP_MODE stopMode = STOP_MODE_DEFAULT,
+             ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT)
    {
       CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
       m_minDirEfficiency    = minDirEff;
@@ -66,6 +60,8 @@ public:
       m_maxPullbackBars     = maxPullbackBars;
       m_targetExtensionR    = targetExtensionR;
       m_stopBeyondStruct    = stopBeyondStruct;
+      m_stopMode            = stopMode;
+      m_targetMode          = targetMode;
    }
 
    //+------------------------------------------------------------------+
@@ -143,19 +139,26 @@ public:
       if(!features.returning_to_value && pullbackDepth < 0.3)
          return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "TP Long: pullback not ending");
 
-      if(!TriggerConfirmed(true, features))
+      if(!ConfirmCandleTrigger(true, features))
          return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "TP Long: configured trigger not confirmed");
 
       double entry = market.ask;
 
-      // Stop beyond structural invalidation (below recent swing low or range low)
+      // Stop beyond structural invalidation (below recent swing low or range
+      // low), floored at a minimum ATR distance so a structure sitting near
+      // entry cannot produce a pathologically tight stop and inflated R.
       double structLow = features.swing_low;
       if(structLow <= 0) structLow = features.current_range_low;
-      double stop = structLow - m_stopBeyondStruct * features.atr;
+      double defaultStop = structLow - m_stopBeyondStruct * features.atr;
+      double minStopDist = 0.5 * features.atr;
+      if(features.atr > 0 && entry - defaultStop < minStopDist)
+         defaultStop = entry - minStopDist;
+      double stop = ComputeStop(m_stopMode, true, entry, defaultStop, features, m_stopBeyondStruct);
 
       // Target: extension of prior impulse
       double risk = MathAbs(entry - stop);
-      double target = entry + risk * m_targetExtensionR;
+      double defaultTarget = entry + risk * m_targetExtensionR;
+      double target = ComputeTarget(m_targetMode, true, entry, stop, defaultTarget, features, m_targetExtensionR);
 
       double rewardR;
       if(!CheckRiskReward(ORDER_TYPE_BUY, entry, stop, target, 1.0, rewardR))
@@ -205,17 +208,22 @@ public:
       if(!features.returning_to_value && pullbackDepth < 0.3)
          return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "TP Short: pullback not ending");
 
-      if(!TriggerConfirmed(false, features))
+      if(!ConfirmCandleTrigger(false, features))
          return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "TP Short: configured trigger not confirmed");
 
       double entry = market.bid;
 
       double structHigh = features.swing_high;
       if(structHigh <= 0) structHigh = features.current_range_high;
-      double stop = structHigh + m_stopBeyondStruct * features.atr;
+      double defaultStop = structHigh + m_stopBeyondStruct * features.atr;
+      double minStopDist = 0.5 * features.atr;
+      if(features.atr > 0 && defaultStop - entry < minStopDist)
+         defaultStop = entry + minStopDist;
+      double stop = ComputeStop(m_stopMode, false, entry, defaultStop, features, m_stopBeyondStruct);
 
       double risk = MathAbs(entry - stop);
-      double target = entry - risk * m_targetExtensionR;
+      double defaultTarget = entry - risk * m_targetExtensionR;
+      double target = ComputeTarget(m_targetMode, false, entry, stop, defaultTarget, features, m_targetExtensionR);
 
       double rewardR;
       if(!CheckRiskReward(ORDER_TYPE_SELL, entry, stop, target, 1.0, rewardR))

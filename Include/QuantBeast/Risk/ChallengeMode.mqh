@@ -260,6 +260,16 @@ public:
          reason = "Challenge is inactive, failed, or complete";
          return false;
       }
+      // Per-stage attempt lockout: once the configured retries for this stage
+      // are exhausted, no further entries until the stage advances (which
+      // resets attempts_this_stage to 0).
+      if(m_state.max_attempts > 0 && m_state.attempts_this_stage >= m_state.max_attempts)
+      {
+         reason = "Challenge max attempts for stage exhausted (" +
+                  IntegerToString(m_state.attempts_this_stage) + "/" +
+                  IntegerToString(m_state.max_attempts) + ")";
+         return false;
+      }
       if(m_state.profit_locked > 0 && equity < m_state.profit_locked)
       {
          reason = "Challenge profit-lock floor breached";
@@ -267,6 +277,19 @@ public:
       }
       return true;
    }
+
+   //+------------------------------------------------------------------+
+   //| Pyramiding gate: only when challenge mode is active, pyramiding   |
+   //| is configured on, and the candidate add is to a winning, already |
+   //| protected position (breakeven or better).                        |
+   //+------------------------------------------------------------------+
+   bool IsPyramidingAllowed(bool positionIsWinning, bool positionIsProtected) const
+   {
+      if(!m_active || !m_allowPyramiding) return false;
+      return positionIsWinning && positionIsProtected;
+   }
+
+   bool AllowsPyramiding() const { return m_active && m_allowPyramiding; }
 
    // A Challenge floor must protect existing exposure, not merely block the
    // next entry. The caller routes a true result through the central flatten

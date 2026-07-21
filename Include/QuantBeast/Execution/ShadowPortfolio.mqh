@@ -91,6 +91,11 @@ private:
    double m_trailStartR;
    bool m_enableTimeStop;
    int m_timeStopMinutes;
+   bool m_enableMomentumExit;
+   int m_momentumMinutes;
+   double m_momentumMinR;
+   bool m_enableRegimeExit;
+   double m_shockMult;
 
    ShadowPendingOrder m_pendingOrders[10];
    int m_pendingCount;
@@ -288,8 +293,27 @@ public:
       m_trailStartR = 0;
       m_enableTimeStop = false;
       m_timeStopMinutes = 0;
+      m_enableMomentumExit = false;
+      m_momentumMinutes = 0;
+      m_momentumMinR = 0.0;
+      m_enableRegimeExit = false;
+      m_shockMult = 3.0;
       m_pendingCount = 0;
       m_nextPendingId = 1;
+   }
+
+   //+------------------------------------------------------------------+
+   //| Configure the additive momentum-failure and regime-deterioration  |
+   //| exits (both off by default, so baseline behavior is unchanged).   |
+   //+------------------------------------------------------------------+
+   void SetExtendedExits(bool momentumExit, int momentumMinutes, double momentumMinR,
+                         bool regimeExit, double shockMult)
+   {
+      m_enableMomentumExit = momentumExit;
+      m_momentumMinutes = momentumMinutes;
+      m_momentumMinR = momentumMinR;
+      m_enableRegimeExit = regimeExit;
+      if(shockMult > 0) m_shockMult = shockMult;
    }
 
    void Init(CSymbolAdapter &adapter, double startingBalance,
@@ -570,6 +594,30 @@ public:
                ctx.current_stop = m_adapter.NormalizePrice(candidate);
                ctx.mgmt_state = MGMT_ATR_TRAIL;
             }
+         }
+
+         // Momentum-failure exit: open past the window with insufficient
+         // progress (current R below the configured minimum).
+         if(m_enableMomentumExit && m_momentumMinutes > 0 &&
+            now - ctx.entry_time >= m_momentumMinutes * 60 && ctx.current_r < m_momentumMinR)
+         {
+            m_contexts[i] = ctx;
+            m_currentVolumes[i] = currentVolume;
+            m_realizedGross[i] = realizedGross;
+            CloseFull(i, quote, EXIT_FAILED_MOMENTUM, events);
+            continue;
+         }
+
+         // Regime-deterioration exit: a shock candle or volatility spike while
+         // the position is open (feat-derived proxy in the broker-free path).
+         if(m_enableRegimeExit &&
+            (feat.abnormal_candle || (m_shockMult > 0 && feat.atr_ratio > m_shockMult)))
+         {
+            m_contexts[i] = ctx;
+            m_currentVolumes[i] = currentVolume;
+            m_realizedGross[i] = realizedGross;
+            CloseFull(i, quote, EXIT_REGIME_DETERIORATE, events);
+            continue;
          }
 
          if(m_enableTimeStop && m_timeStopMinutes > 0 &&

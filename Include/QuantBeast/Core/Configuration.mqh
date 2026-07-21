@@ -91,7 +91,6 @@ input double InpShockVolMultiplier   = 3.0;     // Vol Shock Multiplier vs Avera
 //+------------------------------------------------------------------+
 input group "══════════ Breakout Strategy ══════════"
 input bool   InpBO_Enabled           = true;    // Enable Breakout Strategy
-input double InpBO_CompressionPct    = 15.0;    // Compression Percentile for Setup (< this = compressed)
 input int    InpBO_MinCompressionBars = 5;      // Minimum Compression Duration (bars)
 input ENUM_TRIGGER_TYPE InpBO_TriggerMode = TRIGGER_CANDLE_CLOSE_BREAK; // Trigger Mode
 input double InpBO_MinDisplacement   = 2.0;     // Min Displacement (ATR multiples) for displacement trigger
@@ -99,6 +98,9 @@ input double InpBO_StopATRMultiplier = 1.5;     // Stop ATR Multiplier
 input double InpBO_TargetR           = 1.5;     // Target R Multiple
 input double InpBO_MinConfidence     = 0.6;     // Minimum Signal Confidence
 input bool   InpBO_RequireHTFBias    = true;    // Require HTF Directional Bias
+input ENUM_LEVEL_SOURCE InpBO_LevelSource = LEVEL_SRC_RANGE; // Breakout Level Source: Range|PrevDay|Session|OpeningRange|Swing
+input ENUM_STOP_MODE   InpBO_StopMode   = STOP_MODE_DEFAULT;   // BO Stop Mode: Default|ATR|Swing|Structural|Sweep
+input ENUM_TARGET_MODE InpBO_TargetMode = TARGET_MODE_DEFAULT; // BO Target Mode: Default|FixedR|VWAP|RangeMid|OppBoundary
 
 //+------------------------------------------------------------------+
 //| === GROUP: Failed Breakout Strategy ===                           |
@@ -113,6 +115,8 @@ input double InpFBO_StopBeyondSweep  = 1.0;     // Stop Beyond Sweep Extreme (AT
 input double InpFBO_TargetMidR       = 1.0;     // Target: Range Midpoint (R multiple)
 input double InpFBO_TargetVWAPR      = 1.5;     // Target: VWAP (R multiple)
 input double InpFBO_MinConfidence    = 0.55;    // Minimum Signal Confidence
+input ENUM_STOP_MODE   InpFBO_StopMode   = STOP_MODE_DEFAULT;   // FBO Stop Mode: Default|ATR|Swing|Structural|Sweep
+input ENUM_TARGET_MODE InpFBO_TargetMode = TARGET_MODE_DEFAULT; // FBO Target Mode: Default|FixedR|VWAP|RangeMid|OppBoundary
 
 //+------------------------------------------------------------------+
 //| === GROUP: Trend Pullback Strategy ===                            |
@@ -128,6 +132,8 @@ input double InpTP_TargetExtensionR   = 1.618;  // Target: Impulse Extension (R 
 input double InpTP_StopBeyondStruct   = 0.5;    // Stop Beyond Structure (ATR multiple)
 input ENUM_TRIGGER_TYPE InpTP_TriggerMode = TRIGGER_CANDLE_CLOSE_BREAK; // Trigger Mode
 input double InpTP_MinConfidence      = 0.55;   // Minimum Signal Confidence
+input ENUM_STOP_MODE   InpTP_StopMode   = STOP_MODE_DEFAULT;   // TP Stop Mode: Default|ATR|Swing|Structural|Sweep
+input ENUM_TARGET_MODE InpTP_TargetMode = TARGET_MODE_DEFAULT; // TP Target Mode: Default|FixedR|VWAP|RangeMid|OppBoundary
 
 //+------------------------------------------------------------------+
 //| === GROUP: Mean Reversion Strategy ===                            |
@@ -139,15 +145,17 @@ input double InpMR_MaxTrendStrength   = 0.25;   // Max Trend Strength for Eligib
 input double InpMR_MinDeviationSD     = 1.5;    // Minimum Deviation from VWAP (SD)
 input double InpMR_MinRejectionWick   = 0.3;    // Minimum Rejection Wick (ATR multiple)
 input double InpMR_TargetVWAPR        = 1.0;    // Target: Return to VWAP (R)
-input double InpMR_TargetSDBandR      = 1.5;    // Target: Opposite SD Band (R)
 input double InpMR_EmergencyStopR     = 1.0;    // Emergency Stop (R from entry)
 input double InpMR_MinConfidence      = 0.5;    // Minimum Signal Confidence
+input ENUM_STOP_MODE   InpMR_StopMode   = STOP_MODE_DEFAULT;   // MR Stop Mode: Default|ATR|Swing|Structural|Sweep
+input ENUM_TARGET_MODE InpMR_TargetMode = TARGET_MODE_DEFAULT; // MR Target Mode: Default|FixedR|VWAP|RangeMid|OppBoundary
 
 //+------------------------------------------------------------------+
 //| === GROUP: Signal Arbitration ===                                 |
 //+------------------------------------------------------------------+
 input group "══════════ Signal Arbitration ══════════"
 input ENUM_ARBITRATION_METHOD InpArbitrationMethod = ARBITRATION_HIGHEST_SCORE; // Arbitration Method
+input ENUM_ALLOCATION_MODE InpAllocationMode = ALLOC_EQUAL; // Risk Allocation Mode: Equal|Confidence|Performance
 input int  InpCooldownSeconds          = 300;   // Signal Cooldown (seconds): Min time between signals
 input int  InpDuplicateWindowSeconds   = 600;   // Duplicate Prevention Window (seconds)
 input bool InpAllowOppositeSignals     = false; // Allow Simultaneous Long and Short
@@ -239,6 +247,10 @@ input double InpATRTrailMultiplier    = 2.0;     // ATR Trail Multiplier
 input double InpATRTrailStartR        = 1.0;     // ATR Trail Start (R multiple)
 input bool   InpEnableTimeStop        = false;   // Enable Time Stop
 input int    InpTimeStopMinutes       = 240;     // Time Stop (minutes)
+input bool   InpEnableMomentumExit    = false;   // Enable Momentum-Failure Exit
+input int    InpMomentumExitMinutes   = 60;      // Momentum-Failure Window (minutes)
+input double InpMomentumExitMinR      = 0.0;     // Momentum-Failure Min R (exit if below after window)
+input bool   InpEnableRegimeExit      = false;   // Enable Regime-Deterioration Exit
 input bool   InpCloseBeforeSessionEnd = false;   // Close Before Session End
 input bool   InpCloseBeforeRollover   = false;   // Close Before Rollover
 
@@ -263,6 +275,7 @@ input bool   InpUseGlobalVars         = true;    // Use Terminal Global Variable
 //+------------------------------------------------------------------+
 input group "══════════ Logging ══════════"
 input bool   InpEnableSignalJournal   = true;    // Enable Signal Journal
+input bool   InpEnableCounterfactual  = false;   // Enable Counterfactual Journal (rejected-signal hypotheticals)
 input bool   InpEnableOrderJournal    = true;    // Enable Order Journal
 input bool   InpEnableTradeJournal    = true;    // Enable Trade Journal
 input bool   InpJournalTesterPrefix  = false;   // Route journals to Tester\ subdirectory (set true in Strategy Tester)

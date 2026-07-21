@@ -36,6 +36,7 @@
 #include <QuantBeast/Strategies/TrendPullbackEngine.mqh>
 #include <QuantBeast/Strategies/MeanReversionEngine.mqh>
 #include <QuantBeast/Portfolio/SignalArbitrator.mqh>
+#include <QuantBeast/Portfolio/AllocationEngine.mqh>
 #include <QuantBeast/Risk/PositionSizer.mqh>
 #include <QuantBeast/Risk/RiskEngine.mqh>
 #include <QuantBeast/Risk/ChallengeMode.mqh>
@@ -45,6 +46,7 @@
 #include <QuantBeast/Execution/TransactionState.mqh>
 #include <QuantBeast/Execution/ShadowPortfolio.mqh>
 #include <QuantBeast/Analytics/TradeJournal.mqh>
+#include <QuantBeast/Analytics/CounterfactualTracker.mqh>
 #include <QuantBeast/UI/Dashboard.mqh>
 #include <QuantBeast/UI/Alerts.mqh>
 #include <QuantBeast/Testing/SafetyTests.mqh>
@@ -72,6 +74,7 @@ CStrategyBase*         g_Strategies[QB_STRAT_COUNT];
 
 // Portfolio & Risk
 CSignalArbitrator     g_Arbitrator;
+CAllocationEngine     g_Allocator;
 CPositionSizer        g_Sizer;
 CRiskEngine           g_RiskEngine;
 CChallengeMode        g_Challenge;
@@ -84,6 +87,7 @@ CShadowPortfolio      g_Shadow;
 
 // Analytics & UI
 CTradeJournal         g_Journal;
+CCounterfactualTracker g_Counterfactual;
 CDashboard            g_Dashboard;
 CAlerts               g_Alerts;
 
@@ -750,24 +754,28 @@ int OnInit()
    // --- Initialize Strategies ---
    g_StrategyBO.Init(STRATEGY_ID_BREAKOUT, "Breakout", InpBO_Enabled, InpBO_MinConfidence,
                      g_Adapter, InpBO_TriggerMode,
-                     InpBO_CompressionPct, InpBO_MinCompressionBars, InpBO_MinDisplacement,
-                     InpBO_StopATRMultiplier, InpBO_TargetR, InpBO_RequireHTFBias);
+                     InpBO_MinCompressionBars, InpBO_MinDisplacement,
+                     InpBO_StopATRMultiplier, InpBO_TargetR, InpBO_RequireHTFBias,
+                     InpBO_LevelSource, InpBO_StopMode, InpBO_TargetMode);
 
    g_StrategyFBO.Init(STRATEGY_ID_FAILED_BREAKOUT, "Failed Breakout", InpFBO_Enabled,
                       InpFBO_MinConfidence, g_Adapter, InpFBO_TriggerMode,
                       InpFBO_MinPenetration, InpFBO_MaxBarsBeyond, InpFBO_ReclaimThreshold,
-                      InpFBO_StopBeyondSweep, InpFBO_TargetMidR, InpFBO_TargetVWAPR);
+                      InpFBO_StopBeyondSweep, InpFBO_TargetMidR, InpFBO_TargetVWAPR,
+                      InpFBO_StopMode, InpFBO_TargetMode);
 
    g_StrategyTP.Init(STRATEGY_ID_TREND_PULLBACK, "Trend Pullback", InpTP_Enabled,
                      InpTP_MinConfidence, g_Adapter, InpTP_TriggerMode,
                      InpTP_MinDirEfficiency, InpTP_MinTrendPersistence, InpTP_RequireHTFAgreement,
                      InpTP_MaxPullbackDepth, InpTP_MaxPullbackBars,
-                     InpTP_TargetExtensionR, InpTP_StopBeyondStruct);
+                     InpTP_TargetExtensionR, InpTP_StopBeyondStruct,
+                     InpTP_StopMode, InpTP_TargetMode);
 
    g_StrategyMR.Init(STRATEGY_ID_MEAN_REVERSION, "Mean Reversion", InpMR_Enabled,
                      InpMR_MinConfidence, g_Adapter, InpMR_TriggerMode,
                      InpMR_MaxTrendStrength, InpMR_MinDeviationSD, InpMR_MinRejectionWick,
-                     InpMR_TargetVWAPR, InpMR_TargetSDBandR, InpMR_EmergencyStopR);
+                     InpMR_TargetVWAPR, InpMR_EmergencyStopR,
+                     InpMR_StopMode, InpMR_TargetMode);
 
    g_Strategies[QB_STRAT_IDX_BO]  = &g_StrategyBO;
    g_Strategies[QB_STRAT_IDX_FBO] = &g_StrategyFBO;
@@ -778,6 +786,7 @@ int OnInit()
    g_Arbitrator.Init(InpArbitrationMethod, InpCooldownSeconds,
                      InpDuplicateWindowSeconds, InpAllowOppositeSignals,
                      InpAllowSameDirectionStack);
+   g_Allocator.Init(InpAllocationMode);
 
    // --- Initialize Position Sizer ---
    g_Sizer.Init(g_Adapter, InpLotMode, InpFixedLots, InpFixedRiskCurrency,
@@ -816,6 +825,8 @@ int OnInit()
                      InpEnablePartialClose, InpPartialClosePct, InpPartialCloseTriggerR,
                      InpEnableATRTrail, InpATRTrailMultiplier, InpATRTrailStartR,
                      InpEnableTimeStop, InpTimeStopMinutes);
+   g_PosManager.SetExtendedExits(InpEnableMomentumExit, InpMomentumExitMinutes,
+                                 InpMomentumExitMinR, InpEnableRegimeExit);
 
    g_Shadow.Init(g_Adapter, AccountInfoDouble(ACCOUNT_BALANCE),
                  InpCommissionEstimate, InpSlippageAllowancePts,
@@ -823,9 +834,12 @@ int OnInit()
                  InpEnablePartialClose, InpPartialClosePct, InpPartialCloseTriggerR,
                  InpEnableATRTrail, InpATRTrailMultiplier, InpATRTrailStartR,
                  InpEnableTimeStop, InpTimeStopMinutes);
+   g_Shadow.SetExtendedExits(InpEnableMomentumExit, InpMomentumExitMinutes, InpMomentumExitMinR,
+                             InpEnableRegimeExit, InpShockVolMultiplier);
 
    // --- Initialize Journal ---
    g_Journal.Init(InpEnableSignalJournal, InpEnableOrderJournal, InpEnableTradeJournal, InpJournalTesterPrefix);
+   g_Counterfactual.Init(InpEnableCounterfactual, InpJournalTesterPrefix);
 
    // --- Initialize Dashboard ---
    g_Dashboard.Init(InpDashboardEnabled, InpDashboardX, InpDashboardY,
@@ -1044,6 +1058,7 @@ void OnDeinit(const int reason)
 
    // Close journals
    g_Journal.CloseAll();
+   g_Counterfactual.Close();
 
    // Clear dashboard
    g_Dashboard.Clear();
@@ -1262,6 +1277,8 @@ void EvaluateAndTrade()
       {
          g_Journal.LogSignal(sigLong, g_CurrentSnap, g_CurrentRegime, g_CurrentFeat,
                              g_Adapter.Symbol(), g_EffectiveMode);
+         g_Counterfactual.LogRejection(sigLong, g_CurrentSnap, g_CurrentRegime,
+                                       g_CurrentFeat, g_Adapter.Symbol());
 
          if(!sigLong.valid && sigLong.rejection_code != REJECT_NONE)
             g_LastRejection = sigLong.strategy_id + ": " + sigLong.reason;
@@ -1277,6 +1294,8 @@ void EvaluateAndTrade()
       {
          g_Journal.LogSignal(sigShort, g_CurrentSnap, g_CurrentRegime, g_CurrentFeat,
                              g_Adapter.Symbol(), g_EffectiveMode);
+         g_Counterfactual.LogRejection(sigShort, g_CurrentSnap, g_CurrentRegime,
+                                       g_CurrentFeat, g_Adapter.Symbol());
 
          if(!sigShort.valid && sigShort.rejection_code != REJECT_NONE)
             g_LastRejection = sigShort.strategy_id + ": " + sigShort.reason;
@@ -1301,6 +1320,10 @@ void EvaluateAndTrade()
          if(candidates[i].valid) continue;
          g_Journal.LogSignal(candidates[i], g_CurrentSnap, g_CurrentRegime,
                              g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
+         // Arbitration losers retain their full geometry -- these are the
+         // meaningful counterfactuals (a real setup that was skipped).
+         g_Counterfactual.LogRejection(candidates[i], g_CurrentSnap, g_CurrentRegime,
+                                       g_CurrentFeat, g_Adapter.Symbol());
          g_LastRejection = candidates[i].strategy_id + ": " + candidates[i].reason;
       }
 
@@ -1333,6 +1356,9 @@ void EvaluateAndTrade()
             best.reason = "Risk: " + rejectReason;
             g_Journal.LogSignal(best, g_CurrentSnap, g_CurrentRegime,
                                 g_CurrentFeat, g_Adapter.Symbol(), g_EffectiveMode);
+            // Risk-rejected winner retains its geometry -- a prime counterfactual.
+            g_Counterfactual.LogRejection(best, g_CurrentSnap, g_CurrentRegime,
+                                          g_CurrentFeat, g_Adapter.Symbol());
             QBLogWarn("Signal rejected by risk engine: " + rejectReason);
             EmitConfiguredAlert(InpAlertSignalRejected,
                                 "Signal rejected by risk engine: " + rejectReason);
@@ -1346,11 +1372,18 @@ void EvaluateAndTrade()
 //+------------------------------------------------------------------+
 void ExecuteSignal(StrategySignal &signal)
 {
-   // Calculate position size
+   // Calculate position size. Apply this strategy's allocation weight to the
+   // risk budget (ALLOC_EQUAL returns 1.0 for every strategy, so the default
+   // is a no-op); restore the base risk percent afterward.
    string sizeReason = "";
    double equity = EffectiveEquity();
+   double baseRiskPct = g_Sizer.GetRiskPercent();
+   double allocWeight = g_Allocator.GetWeight(signal.strategy_id);
+   if(allocWeight != 1.0) g_Sizer.SetRiskPercent(baseRiskPct * allocWeight);
    double lots = g_Sizer.CalculateLots(signal.proposed_entry, signal.proposed_stop,
                                          equity, g_CurrentFeat.atr_points, sizeReason);
+   if(allocWeight != 1.0) g_Sizer.SetRiskPercent(baseRiskPct);
+   g_Allocator.RecordSignal(signal.strategy_id, signal.confidence);
 
    if(lots <= 0)
    {
@@ -1444,8 +1477,57 @@ void ExecuteSignal(StrategySignal &signal)
    {
       if(!InpUseMarketOrders)
       {
-         g_LastRejection = "Shadow pending-order lifecycle is not implemented";
-         QBLogWarn(g_LastRejection);
+         // Shadow pending-order lifecycle: place a virtual stop/limit order
+         // that the ShadowPortfolio.Update() loop activates, fills, expires,
+         // or cancels. Classified stop vs limit by entry relative to price,
+         // gated by the same stop/limit permission inputs as the live path.
+         double ask = g_CurrentSnap.ask, bid = g_CurrentSnap.bid;
+         bool isStopClass = (signal.direction == ORDER_TYPE_BUY) ?
+                            signal.proposed_entry > ask : signal.proposed_entry < bid;
+         if((isStopClass && !InpUseStopOrders) || (!isStopClass && !InpUseLimitOrders))
+         {
+            g_LastRejection = isStopClass ? "Stop orders disabled" : "Limit orders disabled";
+            QBLogWarn(g_LastRejection);
+            return;
+         }
+         ENUM_ORDER_TYPE pendingType;
+         if(signal.direction == ORDER_TYPE_BUY)
+            pendingType = isStopClass ? ORDER_TYPE_BUY_STOP : ORDER_TYPE_BUY_LIMIT;
+         else
+            pendingType = isStopClass ? ORDER_TYPE_SELL_STOP : ORDER_TYPE_SELL_LIMIT;
+         datetime pendExpiry = (InpOrderExpirySeconds > 0) ?
+                               TimeCurrent() + InpOrderExpirySeconds : 0;
+         ulong pendId = GetMicrosecondCount();
+         string pendReason = "";
+         if(!g_Shadow.OpenPending(signal.strategy_id, pendId, pendingType,
+                                  signal.proposed_entry, signal.proposed_stop,
+                                  signal.proposed_target, lots, pendExpiry, pendReason))
+         {
+            g_LastRejection = "Shadow pending: " + pendReason;
+            QBLogWarn(g_LastRejection);
+            return;
+         }
+         ExecutionRecord pendRec;
+         ZeroMemory(pendRec);
+         pendRec.request_id = pendId;
+         pendRec.order_type = pendingType;
+         pendRec.requested_volume = lots;
+         pendRec.requested_price = signal.proposed_entry;
+         pendRec.stop_loss = signal.proposed_stop;
+         pendRec.take_profit = signal.proposed_target;
+         pendRec.request_time = TimeCurrent();
+         pendRec.state = QB_ORDER_STATE_SUBMITTED;
+         pendRec.comment = comment + "_SHADOW_PENDING";
+         g_Journal.LogOrder(pendRec);
+         MarkStrategyTrade(signal.strategy_id);
+         g_Arbitrator.CommitAccepted(signal);
+         PersistRuntimeState();
+         g_Dashboard.DrawSignalLevels(signal, g_Adapter.Digits());
+         EmitConfiguredAlert(InpAlertSignalAccepted,
+                             "Shadow pending placed: " + signal.strategy_id);
+         QBLogInfo("SHADOW PENDING: " + signal.strategy_id + " " +
+                   EnumToString(pendingType) + " lots=" + DoubleToString(lots, 2) +
+                   " price=" + DoubleToString(signal.proposed_entry, g_Adapter.Digits()));
          return;
       }
 
@@ -2520,6 +2602,68 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 51 PASS: Pending order reconstruction mapping " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 51 FAIL: Pending order reconstruction mapping " + detail); }
+   }
+
+   // Test 52: new entry trigger modes (probe-confirm, rejection, fail-closed).
+   {
+      string detail = "";
+      if(QBTestTriggerModes(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 52 PASS: Entry trigger modes " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 52 FAIL: Entry trigger modes " + detail); }
+   }
+
+   // Test 53: breakout level-source selection.
+   {
+      string detail = "";
+      if(QBTestLevelSource(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 53 PASS: Level-source selection " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 53 FAIL: Level-source selection " + detail); }
+   }
+
+   // Test 54: stop/target mode dispatch.
+   {
+      string detail = "";
+      if(QBTestStopTargetModes(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 54 PASS: Stop/target mode dispatch " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 54 FAIL: Stop/target mode dispatch " + detail); }
+   }
+
+   // Test 55: additive momentum-failure / regime-deterioration exits.
+   {
+      string detail = "";
+      if(QBTestExtendedExits(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 55 PASS: Extended exit types " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 55 FAIL: Extended exit types " + detail); }
+   }
+
+   // Test 56: challenge-mode pyramiding gate.
+   {
+      string detail = "";
+      if(QBTestChallengePyramiding(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 56 PASS: Challenge pyramiding gate " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 56 FAIL: Challenge pyramiding gate " + detail); }
+   }
+
+   // Test 57: allocation engine weighting + budget conservation.
+   {
+      string detail = "";
+      if(QBTestAllocationEngine(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 57 PASS: Allocation engine " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 57 FAIL: Allocation engine " + detail); }
+   }
+
+   {
+      string detail = "";
+      if(QBTestCounterfactualTracker(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 58 PASS: Counterfactual tracker " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 58 FAIL: Counterfactual tracker " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

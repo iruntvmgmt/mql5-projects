@@ -238,18 +238,23 @@ private:
          m_current.atr_percentile_rank = (atrCount > 0 ? 100.0 * belowOrEqual / atrCount : 100.0);
          m_current.is_compressing = (m_current.atr <= atrPercentile);
 
-         // Compression bars count
-         if(m_current.is_compressing)
+         // Preceding compression run: count consecutive compressed bars ending
+         // at the bar just before the trigger bar (series index 2). Computed
+         // independent of whether the current/trigger bar is still compressed,
+         // so breakout logic can confirm compression PRECEDED an expansion bar.
+         int precBars = 0;
+         for(int i = 0; i < MathMin(20, barCount); i++)
          {
-            int compBars = 0;
-            for(int i = 0; i < MathMin(20, barCount); i++)
-            {
-               double atr_i = GetATR(m_atrHandlePrimary, i + 2);
-               if(atr_i <= atrPercentile) compBars++;
-               else break;
-            }
-            m_current.compression_bars = compBars;
+            double atr_i = GetATR(m_atrHandlePrimary, i + 2);
+            if(atr_i <= atrPercentile) precBars++;
+            else break;
          }
+         m_current.preceding_compression_bars = precBars;
+
+         // Compression bars count (only meaningful while the current bar is
+         // itself compressed; retained for the volatility classifier).
+         if(m_current.is_compressing)
+            m_current.compression_bars = precBars;
       }
 
       // Expansion detection
@@ -325,10 +330,17 @@ private:
       // Regression slope
       m_current.trend_slope = RegressionSlopeSeries(close, 0, m_trendLookback);
 
-      // Normalized slope
+      // Normalized slope: per-bar regression slope expressed in ATR units.
+      // (Previously multiplied by m_trendLookback too, which double-counted
+      // the window length -- trend_slope is already a per-bar rate, so
+      // multiplying by the window length and dividing by a single-bar ATR
+      // produced a total-window-displacement/single-bar-ATR ratio an order
+      // of magnitude larger than every consumer's calibration assumes:
+      // TrendState's 0.15/0.3/0.6, StructuralState's 0.2/0.3/0.75, and MR's
+      // 0.25 all expect a roughly [-1, 1] per-bar-normalized value.)
       double atrVal = m_current.atr;
       if(atrVal > 0)
-         m_current.slope_norm = m_current.trend_slope * m_trendLookback / atrVal;
+         m_current.slope_norm = m_current.trend_slope / atrVal;
 
       // Directional efficiency
       m_current.dir_efficiency = DirectionalEfficiency(close, 0, m_trendLookback);

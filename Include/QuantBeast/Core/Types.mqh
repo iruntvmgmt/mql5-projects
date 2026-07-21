@@ -46,7 +46,8 @@ struct FeatureSnapshot
    double atr_percentile_rank; // Current ATR rank inside compression lookback, 0=lowest ATR, 100=highest ATR
    double range_percentile;  // Current range vs lookback percentile
    double bb_bandwidth;      // Bollinger bandwidth
-   int    compression_bars;  // Bars spent in compression
+   int    compression_bars;  // Bars spent in compression (only when current bar is compressed)
+   int    preceding_compression_bars; // Compression run ending just before the trigger bar, independent of current-bar state
    bool   is_compressing;    // Compression detected
    bool   is_expanding;      // Expansion detected
    double vol_of_vol;        // Volatility of volatility

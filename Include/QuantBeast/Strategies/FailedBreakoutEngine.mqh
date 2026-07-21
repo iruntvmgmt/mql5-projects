@@ -24,6 +24,8 @@ private:
    double   m_stopBeyondSweep;      // ATR multiple beyond sweep extreme
    double   m_targetMidR;           // Target to range midpoint R
    double   m_targetVWAPR;          // Target to VWAP R
+   ENUM_STOP_MODE   m_stopMode;
+   ENUM_TARGET_MODE m_targetMode;
 
 public:
    //+------------------------------------------------------------------+
@@ -35,13 +37,17 @@ public:
       m_stopBeyondSweep   = 1.0;
       m_targetMidR        = 1.0;
       m_targetVWAPR       = 1.5;
+      m_stopMode          = STOP_MODE_DEFAULT;
+      m_targetMode        = TARGET_MODE_DEFAULT;
    }
 
    //+------------------------------------------------------------------+
    void Init(string id, string name, bool enabled, double minConfidence,
              CSymbolAdapter &adapter, ENUM_TRIGGER_TYPE triggerMode,
              double minPenetration, int maxBarsBeyond, double reclaimThreshold,
-             double stopBeyondSweep, double targetMidR, double targetVWAPR)
+             double stopBeyondSweep, double targetMidR, double targetVWAPR,
+             ENUM_STOP_MODE stopMode = STOP_MODE_DEFAULT,
+             ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT)
    {
       CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
       m_minPenetration   = minPenetration;
@@ -50,6 +56,8 @@ public:
       m_stopBeyondSweep  = stopBeyondSweep;
       m_targetMidR       = targetMidR;
       m_targetVWAPR      = targetVWAPR;
+      m_stopMode         = stopMode;
+      m_targetMode       = targetMode;
    }
 
    //+------------------------------------------------------------------+
@@ -114,11 +122,19 @@ public:
          features.closed_close - level < m_reclaimThreshold * features.atr)
          return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "FBO Long: reclaim depth too small");
 
+      // Optional trigger confirmation layered on the reclaim: the default
+      // (immediate/candle-close) keeps the proven reclaim-only behavior;
+      // stronger modes add a confirming-candle requirement.
+      if((m_triggerMode == TRIGGER_DISPLACEMENT || m_triggerMode == TRIGGER_PROBE_CONFIRM ||
+          m_triggerMode == TRIGGER_BREAK_RETEST) && !ConfirmCandleTrigger(true, features))
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "FBO Long: trigger mode not confirmed");
+
       // Entry at current mid
       double entry = market.ask;
 
-      // Stop beyond the sweep low
-      double stop = features.sweep_extreme - m_stopBeyondSweep * features.atr;
+      // Stop beyond the sweep low (selectable stop mode; default = sweep-based).
+      double defaultStop = features.sweep_extreme - m_stopBeyondSweep * features.atr;
+      double stop = ComputeStop(m_stopMode, true, entry, defaultStop, features, m_stopBeyondSweep);
 
       // Target: range midpoint or VWAP. If either level is unavailable or on
       // the wrong side of entry, fall back to that target's configured R.
@@ -129,7 +145,8 @@ public:
       double targetMid  = features.range_midpoint;
       if(targetMid <= entry)
          targetMid = entry + risk * m_targetMidR;
-      double target = MathMax(targetVWAP, targetMid); // Higher of the two
+      double defaultTarget = MathMax(targetVWAP, targetMid); // Higher of the two
+      double target = ComputeTarget(m_targetMode, true, entry, stop, defaultTarget, features, m_targetVWAPR);
 
       double rewardR;
       if(!CheckRiskReward(ORDER_TYPE_BUY, entry, stop, target, 1.0, rewardR))
@@ -180,8 +197,14 @@ public:
          level - features.closed_close < m_reclaimThreshold * features.atr)
          return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "FBO Short: reclaim depth too small");
 
+      // Optional trigger confirmation layered on the reclaim (see EvaluateLong).
+      if((m_triggerMode == TRIGGER_DISPLACEMENT || m_triggerMode == TRIGGER_PROBE_CONFIRM ||
+          m_triggerMode == TRIGGER_BREAK_RETEST) && !ConfirmCandleTrigger(false, features))
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "FBO Short: trigger mode not confirmed");
+
       double entry = market.bid;
-      double stop = features.sweep_extreme + m_stopBeyondSweep * features.atr;
+      double defaultStop = features.sweep_extreme + m_stopBeyondSweep * features.atr;
+      double stop = ComputeStop(m_stopMode, false, entry, defaultStop, features, m_stopBeyondSweep);
       double risk = MathAbs(entry - stop);
 
       double targetVWAP = features.vwap;
@@ -190,7 +213,8 @@ public:
       double targetMid  = features.range_midpoint;
       if(targetMid <= 0 || targetMid >= entry)
          targetMid = entry - risk * m_targetMidR;
-      double target = MathMin(targetVWAP, targetMid);
+      double defaultTarget = MathMin(targetVWAP, targetMid);
+      double target = ComputeTarget(m_targetMode, false, entry, stop, defaultTarget, features, m_targetVWAPR);
 
       double rewardR;
       if(!CheckRiskReward(ORDER_TYPE_SELL, entry, stop, target, 1.0, rewardR))

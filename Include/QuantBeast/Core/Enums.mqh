@@ -148,11 +148,58 @@ enum ENUM_MODE_LOTS
 //+------------------------------------------------------------------+
 enum ENUM_TRIGGER_TYPE
 {
-   TRIGGER_IMMEDIATE_BREAK    = 0,
-   TRIGGER_CANDLE_CLOSE_BREAK = 1,
-   TRIGGER_DISPLACEMENT       = 2,
-   TRIGGER_BREAK_RETEST       = 3,
-   TRIGGER_PROBE_CONFIRM      = 4
+   TRIGGER_IMMEDIATE_BREAK    = 0,  // Any bar in the trade direction (no wait)
+   TRIGGER_CANDLE_CLOSE_BREAK = 1,  // Confirmed directional close beyond level
+   TRIGGER_DISPLACEMENT       = 2,  // Directional close with >=1 ATR body
+   TRIGGER_BREAK_RETEST       = 3,  // Broke a level, wicked back to retest, held
+   TRIGGER_PROBE_CONFIRM      = 4,  // Strong body closing near the extreme beyond level
+   TRIGGER_REJECTION          = 5   // Entry on a directional rejection wick (TP/MR)
+};
+
+//+------------------------------------------------------------------+
+//| Level Source (which objective level a strategy references)        |
+//+------------------------------------------------------------------+
+enum ENUM_LEVEL_SOURCE
+{
+   LEVEL_SRC_RANGE         = 0,  // Prior confirmed range high/low (default)
+   LEVEL_SRC_PREV_DAY      = 1,  // Previous-day high/low
+   LEVEL_SRC_SESSION       = 2,  // Current session high/low
+   LEVEL_SRC_OPENING_RANGE = 3,  // Opening-range high/low
+   LEVEL_SRC_SWING         = 4   // Most recent confirmed swing high/low
+};
+
+//+------------------------------------------------------------------+
+//| Allocation mode — how the risk budget is split across strategies  |
+//+------------------------------------------------------------------+
+enum ENUM_ALLOCATION_MODE
+{
+   ALLOC_EQUAL       = 0,  // Equal weight (1.0x each) -- no behavior change
+   ALLOC_CONFIDENCE  = 1,  // Weight by rolling average signal confidence
+   ALLOC_PERFORMANCE = 2   // Weight by rolling average realized R
+};
+
+//+------------------------------------------------------------------+
+//| Stop placement mode (STOP_MODE_DEFAULT keeps each engine's own)   |
+//+------------------------------------------------------------------+
+enum ENUM_STOP_MODE
+{
+   STOP_MODE_DEFAULT    = 0,  // Engine's native stop (unchanged behavior)
+   STOP_MODE_ATR        = 1,  // Fixed ATR multiple from entry
+   STOP_MODE_SWING      = 2,  // Beyond most recent swing +/- ATR buffer
+   STOP_MODE_STRUCTURAL = 3,  // Beyond the prior range boundary +/- ATR buffer
+   STOP_MODE_SWEEP      = 4   // Beyond the sweep extreme +/- ATR buffer
+};
+
+//+------------------------------------------------------------------+
+//| Target selection mode (TARGET_MODE_DEFAULT keeps each engine's)   |
+//+------------------------------------------------------------------+
+enum ENUM_TARGET_MODE
+{
+   TARGET_MODE_DEFAULT      = 0,  // Engine's native target (unchanged behavior)
+   TARGET_MODE_FIXED_R      = 1,  // Fixed R multiple of the stop distance
+   TARGET_MODE_VWAP         = 2,  // Session VWAP (fair value)
+   TARGET_MODE_RANGE_MID    = 3,  // Range midpoint
+   TARGET_MODE_OPP_BOUNDARY = 4   // Opposite range boundary
 };
 
 //+------------------------------------------------------------------+

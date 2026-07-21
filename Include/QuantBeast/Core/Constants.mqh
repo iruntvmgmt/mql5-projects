@@ -67,6 +67,7 @@
 #define QB_TRADE_LOG           "TradeJournal.csv"
 #define QB_STATE_FILE          "QB_State.bin"
 #define QB_PERF_LOG            "Performance.csv"
+#define QB_COUNTERFACTUAL_LOG  "CounterfactualJournal.csv"
 
 //+------------------------------------------------------------------+
 //| Price/Volume Constants                                            |

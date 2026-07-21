@@ -22,20 +22,9 @@ private:
    double   m_minDeviationSD;      // Min VWAP deviation in SD
    double   m_minRejectionWick;    // Min rejection wick (ATR multiple)
    double   m_targetVWAPR;         // R target for VWAP return
-   double   m_targetSDBandR;       // R target for opposite SD band
    double   m_emergencyStopR;      // Emergency stop in R
-
-   bool TriggerConfirmed(bool isLong, const FeatureSnapshot &features) const
-   {
-      bool candleDirection = isLong ?
-                             (features.closed_close > features.closed_open) :
-                             (features.closed_close < features.closed_open);
-      if(m_triggerMode == TRIGGER_IMMEDIATE_BREAK) return true;
-      if(m_triggerMode == TRIGGER_CANDLE_CLOSE_BREAK) return candleDirection;
-      if(m_triggerMode == TRIGGER_DISPLACEMENT)
-         return candleDirection && features.displacement >= 1.0;
-      return false;
-   }
+   ENUM_STOP_MODE   m_stopMode;
+   ENUM_TARGET_MODE m_targetMode;
 
 public:
    //+------------------------------------------------------------------+
@@ -45,8 +34,9 @@ public:
       m_minDeviationSD     = 1.5;
       m_minRejectionWick   = 0.3;
       m_targetVWAPR        = 1.0;
-      m_targetSDBandR      = 1.5;
       m_emergencyStopR     = 1.0;
+      m_stopMode           = STOP_MODE_DEFAULT;
+      m_targetMode         = TARGET_MODE_DEFAULT;
    }
 
    //+------------------------------------------------------------------+
@@ -54,15 +44,18 @@ public:
              CSymbolAdapter &adapter, ENUM_TRIGGER_TYPE triggerMode,
              double maxTrendStrength, double minDeviationSD,
              double minRejectionWick, double targetVWAPR,
-             double targetSDBandR, double emergencyStopR)
+             double emergencyStopR,
+             ENUM_STOP_MODE stopMode = STOP_MODE_DEFAULT,
+             ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT)
    {
       CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
       m_maxTrendStrength  = maxTrendStrength;
       m_minDeviationSD    = minDeviationSD;
       m_minRejectionWick  = minRejectionWick;
       m_targetVWAPR       = targetVWAPR;
-      m_targetSDBandR     = targetSDBandR;
       m_emergencyStopR    = emergencyStopR;
+      m_stopMode          = stopMode;
+      m_targetMode        = targetMode;
    }
 
    //+------------------------------------------------------------------+
@@ -122,7 +115,7 @@ public:
       if(features.rejection_wick_lower < m_minRejectionWick)
          return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "MR Long: no rejection wick");
 
-      if(!TriggerConfirmed(true, features))
+      if(!ConfirmCandleTrigger(true, features))
          return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "MR Long: configured trigger not confirmed");
 
       // Check we're not in a strong downtrend
@@ -132,23 +125,30 @@ public:
       // Entry at current mid
       double entry = market.ask;
 
-      // Stop: below recent low plus emergency buffer
+      // Stop below the recent low plus emergency buffer, floored at a minimum
+      // ATR distance so a range low sitting near entry cannot produce a
+      // pathologically tight stop and an inflated reward:risk.
       double stopLevel = features.current_range_low;
-      double risk = MathAbs(entry - stopLevel);
-      double stop = entry - risk * m_emergencyStopR;
-      if(stop > stopLevel) stop = stopLevel; // Don't place stop above the low
+      double defaultStop = entry - MathAbs(entry - stopLevel) * m_emergencyStopR;
+      if(defaultStop > stopLevel) defaultStop = stopLevel; // Don't place stop above the low
+      double minStopDist = 0.5 * features.atr;
+      if(features.atr > 0 && entry - defaultStop < minStopDist)
+         defaultStop = entry - minStopDist;
+      double stop = ComputeStop(m_stopMode, true, entry, defaultStop, features, m_emergencyStopR);
+      double risk = MathAbs(entry - stop);
 
-      // Target: opposite VWAP standard-deviation band when available.
-      // Fall back to VWAP, then range midpoint, then fixed R.
-      double target = features.vwap;
-      if(features.vwap > 0 && features.vwap_sd > 0)
-         target = features.vwap + m_targetSDBandR * features.vwap_sd;
-      if(target <= 0 || target <= entry)
+      // Target: return to the VWAP mean (fair value) -- the classic
+      // mean-reversion objective. (Previously targeted the OPPOSITE SD band,
+      // a full-range overshoot that produced unrealistic R multiples and made
+      // InpMR_TargetVWAPR unreachable; the opposite-SD-band target input was
+      // removed.) Fall back to range midpoint, then fixed R.
+      double defaultTarget = features.vwap;
+      if(defaultTarget <= 0 || defaultTarget <= entry)
       {
-         // Fallback: use range midpoint
-         target = features.range_midpoint;
-         if(target <= entry) target = entry + risk * m_targetVWAPR;
+         defaultTarget = features.range_midpoint;
+         if(defaultTarget <= entry) defaultTarget = entry + risk * m_targetVWAPR;
       }
+      double target = ComputeTarget(m_targetMode, true, entry, stop, defaultTarget, features, m_targetVWAPR);
 
       double rewardR;
       if(!CheckRiskReward(ORDER_TYPE_BUY, entry, stop, target, 0.8, rewardR))
@@ -167,7 +167,7 @@ public:
                         SETUP_MR_DEVIATION_EXTREME, TRIGGER_MR_RETURN_START,
                         "MR Long: dev=" + DoubleToString(deviation, 2) +
                         "sd, wick=" + DoubleToString(features.rejection_wick_lower, 2) +
-                        ", targetBandR=" + DoubleToString(m_targetSDBandR, 2));
+                        ", targetVWAP=" + DoubleToString(target, m_adapter.Digits()));
    }
 
    //+------------------------------------------------------------------+
@@ -187,7 +187,7 @@ public:
       if(features.rejection_wick_upper < m_minRejectionWick)
          return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "MR Short: no rejection wick");
 
-      if(!TriggerConfirmed(false, features))
+      if(!ConfirmCandleTrigger(false, features))
          return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "MR Short: configured trigger not confirmed");
 
       if(regime.trend == TREND_STRONG_UP)
@@ -195,19 +195,26 @@ public:
 
       double entry = market.bid;
 
+      // Stop above the recent high plus emergency buffer, floored at a minimum
+      // ATR distance (see EvaluateLong).
       double stopLevel = features.current_range_high;
-      double risk = MathAbs(stopLevel - entry);
-      double stop = entry + risk * m_emergencyStopR;
-      if(stop < stopLevel) stop = stopLevel;
+      double defaultStop = entry + MathAbs(stopLevel - entry) * m_emergencyStopR;
+      if(defaultStop < stopLevel) defaultStop = stopLevel;
+      double minStopDist = 0.5 * features.atr;
+      if(features.atr > 0 && defaultStop - entry < minStopDist)
+         defaultStop = entry + minStopDist;
+      double stop = ComputeStop(m_stopMode, false, entry, defaultStop, features, m_emergencyStopR);
+      double risk = MathAbs(stop - entry);
 
-      double target = features.vwap;
-      if(features.vwap > 0 && features.vwap_sd > 0)
-         target = features.vwap - m_targetSDBandR * features.vwap_sd;
-      if(target <= 0 || target >= entry)
+      // Target: return to the VWAP mean (fair value); fall back to range
+      // midpoint, then fixed R.
+      double defaultTarget = features.vwap;
+      if(defaultTarget <= 0 || defaultTarget >= entry)
       {
-         target = features.range_midpoint;
-         if(target >= entry) target = entry - risk * m_targetVWAPR;
+         defaultTarget = features.range_midpoint;
+         if(defaultTarget >= entry) defaultTarget = entry - risk * m_targetVWAPR;
       }
+      double target = ComputeTarget(m_targetMode, false, entry, stop, defaultTarget, features, m_targetVWAPR);
 
       double rewardR;
       if(!CheckRiskReward(ORDER_TYPE_SELL, entry, stop, target, 0.8, rewardR))
@@ -225,7 +232,7 @@ public:
                         SETUP_MR_DEVIATION_EXTREME, TRIGGER_MR_RETURN_START,
                         "MR Short: dev=" + DoubleToString(deviation, 2) +
                         "sd, wick=" + DoubleToString(features.rejection_wick_upper, 2) +
-                        ", targetBandR=" + DoubleToString(m_targetSDBandR, 2));
+                        ", targetVWAP=" + DoubleToString(target, m_adapter.Digits()));
    }
 };
 
