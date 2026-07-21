@@ -15,6 +15,7 @@
 #include "../Core/Diagnostics.mqh"
 #include "../Core/MathUtils.mqh"
 #include "../Data/MarketData.mqh"
+#include "../Portfolio/ExposureManager.mqh"
 #include "PositionSizer.mqh"
 
 //+------------------------------------------------------------------+
@@ -44,6 +45,7 @@ private:
    int      m_maxPositions;
    int      m_maxPendingOrders;
    double   m_maxTotalExposureLots;
+   CExposureManager m_exposure;     // Owns the aggregate-exposure limit policy
 
    // Strategy-level limits
    int      m_maxPerStrategy;       // Max concurrent per strategy
@@ -85,6 +87,7 @@ public:
       m_maxTotalExposureLots = 2.0;
       m_maxPerStrategy     = 2;
       m_maxDailyPerStrategy = 10;
+      m_exposure.Init(m_maxTotalExposureLots);
 
       ResetState();
    }
@@ -115,6 +118,7 @@ public:
       m_maxPositions        = maxPos;
       m_maxPendingOrders    = maxPending;
       m_maxTotalExposureLots = maxExposure;
+      m_exposure.Init(maxExposure);
       m_maxPerStrategy      = maxPerStrat;
       m_maxDailyPerStrategy = maxDailyPerStrat;
    }
@@ -307,8 +311,8 @@ public:
          return false;
       }
 
-      // Max total exposure
-      if(totalExposure >= m_maxTotalExposureLots)
+      // Max total exposure (limit policy owned by CExposureManager)
+      if(m_exposure.AtCapacity(totalExposure))
       {
          rejectReason = "Max exposure: " + DoubleToString(totalExposure, 2) + " lots";
          return false;
@@ -400,7 +404,7 @@ public:
          return false;
       }
 
-      if(totalExposure + lots > m_maxTotalExposureLots + QB_EPSILON)
+      if(m_exposure.WouldExceed(totalExposure, lots))
       {
          rejectReason = "Order would exceed total exposure: " +
                         DoubleToString(totalExposure + lots, 2) + " lots";

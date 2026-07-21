@@ -65,9 +65,25 @@ ATR period, trend lookback/slope threshold, compression settings, expansion bars
 
 ## Strategy inputs
 
+All four engines share three additive, default-preserving mode selectors. Each
+defaults to the value that reproduces the previously-hardcoded behavior, so an
+unchanged preset is unaffected:
+
+- `Inp*_LevelSource` (Breakout) — where the reference level comes from: recent
+  range (default), previous day, session, opening range, or confirmed swing.
+- `Inp*_StopMode` — stop anchoring: strategy default, ATR, swing, structural, or
+  sweep. `STOP_MODE_DEFAULT` returns the engine's original stop.
+- `Inp*_TargetMode` — target derivation: strategy default, fixed-R, VWAP, range
+  midpoint, or opposite boundary. `TARGET_MODE_DEFAULT` returns the original
+  target.
+
+Trigger modes (`Inp*_TriggerMode`) now additionally support break-retest,
+probe-confirm, displacement, and rejection confirmation; unsupported values fail
+closed (reject) rather than silently falling back.
+
 ### Breakout (`InpBO_*`)
 
-Controls enablement, compression, trigger enum, displacement, ATR stop, target R, confidence, and HTF bias. Candle-close/displacement modes use the completed primary bar and prior range. `InpBO_CompressionPct` now gates BO eligibility against the feature engine's current ATR percentile rank, while the shared compression-bar feature still supplies the minimum-duration requirement.
+Controls enablement, compression duration, trigger enum, displacement, ATR stop, target R, confidence, and HTF bias. Candle-close/displacement modes use the completed primary bar and prior range. BO eligibility requires `InpBO_MinCompressionBars` consecutive compressed bars *preceding* the breakout bar (measured by the feature engine's preceding-compression run, independent of the trigger bar's own volatility); the former current-bar ATR-percentile gate and its `InpBO_CompressionPct` input were removed because they were mutually exclusive with an actual breakout. The stop is anchored to the broken level (range boundary ± ATR), not the far side of the whole range.
 
 ### Failed breakout (`InpFBO_*`)
 
@@ -79,7 +95,7 @@ Controls directional efficiency, persistence, HTF agreement, pullback depth/dura
 
 ### Mean reversion (`InpMR_*`)
 
-Controls trend ceiling, VWAP deviation, directional wick threshold, targets, emergency stop, and confidence. Deviation now uses a weighted standard deviation around VWAP and trigger mode is active. When VWAP standard deviation is available, `InpMR_TargetSDBandR` targets the opposite VWAP standard-deviation band; otherwise MR falls back to VWAP, range midpoint, then fixed-R behavior.
+Controls trend ceiling, VWAP deviation, directional wick threshold, target, emergency stop, and confidence. Deviation uses a weighted standard deviation around VWAP and trigger mode is active. The target is the VWAP mean (fair value) -- the classic mean-reversion objective -- falling back to range midpoint then `InpMR_TargetVWAPR` fixed-R when VWAP is unavailable. The stop is floored at a minimum ATR distance so a range boundary near entry cannot produce a pathologically tight stop. (The former opposite-SD-band target and its `InpMR_TargetSDBandR` input were removed.)
 
 ## Arbitration
 
@@ -108,7 +124,7 @@ Current implementation updates and persists same-day per-strategy daily counts, 
 
 ## Challenge mode
 
-Stage targets and risk percentages, stage drawdown, attempts, profit-lock percentage, and pyramiding preference are configurable. Not all are enforced end to end. Challenge mode must remain disabled until its dedicated scenario suite passes.
+Stage targets and risk percentages, stage drawdown, attempts, profit-lock percentage, and pyramiding preference are configurable. Per-stage attempt lockout (`max_attempts`) and the winners-only/protected pyramiding gate are now enforced and deterministically tested (TEST 56). Leverage caps and profit-lock floor enforcement remain partial. Challenge mode must remain disabled until its dedicated scenario suite passes and live-broker transmission is operator-authorized.
 
 ## Execution
 
@@ -125,7 +141,27 @@ Stage targets and risk percentages, stage drawdown, attempts, profit-lock percen
 
 ## Position management
 
-Breakeven, partial close, ATR trail, time stop, and close-before-session/rollover policy are wired. Stop modifications cannot loosen risk and post-fill SL/TP protection is verified with a fail-closed exit. Shadow session exits close with `EXIT_SESSION_END`; live session exits use the existing bounded flatten path only when explicitly live modes and operator-enabled inputs are active. Swing/chandelier, news, momentum-failure, and regime-deterioration exits remain incomplete.
+Breakeven, partial close, ATR trail, time stop, and close-before-session/rollover policy are wired. Stop modifications cannot loosen risk and post-fill SL/TP protection is verified with a fail-closed exit. Shadow session exits close with `EXIT_SESSION_END`; live session exits use the existing bounded flatten path only when explicitly live modes and operator-enabled inputs are active. Momentum-failure (`EXIT_FAILED_MOMENTUM`) and regime-deterioration (`EXIT_REGIME_DETERIORATE`) exits are now wired in both the Shadow and live position paths, gated by `InpEnableMomentumExit` / `InpEnableRegimeExit` (default off) with `InpMomentumExitMinutes` / `InpMomentumExitMinR` thresholds; deterministic coverage is TEST 55. Swing/chandelier and news exits remain incomplete.
+
+## Risk allocation
+
+`InpAllocationMode` selects how the per-trade risk budget is split across
+strategies: `ALLOC_EQUAL` (default — every strategy weight is exactly 1.0, i.e.
+no change from base sizing), `ALLOC_CONFIDENCE` (weight by recent signal
+confidence), or `ALLOC_PERFORMANCE` (weight by rolling realized R). Weights are
+budget-conserving (mean 1.0) and clamped to [0.25, 4.0]. Deterministic coverage
+is TEST 57.
+
+## Counterfactual journal
+
+`InpEnableCounterfactual` (default off) enables buffering the hypothetical
+entry/stop/target of *rejected* signals that still reached a computable setup, to
+`CounterfactualJournal.csv` (written once at deinit; side-effect-free with respect
+to trading). Buffer/ignore/no-op logic is deterministically tested (TEST 58).
+Note: this flag currently cannot be turned on via the Strategy Tester `.ini`
+`[TesterInputs]` (a MetaTrader input-application quirk — see
+`TestEvidence/phase4_allocation_counterfactual_20260721/EVIDENCE.md`); it applies
+normally when set on a live/demo chart.
 
 ## News lockout
 

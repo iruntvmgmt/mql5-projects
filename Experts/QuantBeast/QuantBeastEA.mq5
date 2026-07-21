@@ -43,6 +43,7 @@
 #include <QuantBeast/Risk/KillSwitch.mqh>
 #include <QuantBeast/Execution/BrokerAdapter.mqh>
 #include <QuantBeast/Execution/PositionManager.mqh>
+#include <QuantBeast/Execution/RecoveryEngine.mqh>
 #include <QuantBeast/Execution/TransactionState.mqh>
 #include <QuantBeast/Execution/ShadowPortfolio.mqh>
 #include <QuantBeast/Analytics/TradeJournal.mqh>
@@ -83,6 +84,7 @@ CKillSwitch           g_KillSwitch;
 // Execution
 CBrokerAdapter        g_Broker;
 CPositionManager      g_PosManager;
+CRecoveryEngine       g_Recovery;
 CShadowPortfolio      g_Shadow;
 
 // Analytics & UI
@@ -987,18 +989,19 @@ int OnInit()
 
       // Reconstruct positions from broker and apply the configured policy to
       // positions whose strategy ownership cannot be recovered from history.
-      int unknownPositions = 0;
-      int unprotectedPositions = 0;
-      int reconstructed = g_PosManager.ReconstructFromBroker(QB_MAGIC_BASE,
-                                                              InpUnknownPosPolicy,
-                                                              unknownPositions,
-                                                              unprotectedPositions);
-      QBLogInfo("Startup reconciliation: " + IntegerToString(reconstructed) + " positions reconstructed");
-      if(unknownPositions > 0 && InpUnknownPosPolicy == UNKNOWN_QUARANTINE)
+      // CRecoveryEngine owns the orchestration (drive reconstruction + classify);
+      // this caller applies the resulting verdict to its global entry/protection
+      // state. Behavior is identical to the former inline sequence.
+      ReconciliationResult reconRes;
+      ReconciliationVerdict verdict = g_Recovery.RecoverPositions(g_PosManager, QB_MAGIC_BASE,
+                                                                  InpUnknownPosPolicy, reconRes);
+      QBLogInfo("Startup reconciliation: " + IntegerToString(reconRes.reconstructed) +
+                " positions reconstructed [" + verdict.reason + "]");
+      if(verdict.need_quarantine)
          g_KillSwitch.KillEntries("Unknown position ownership detected at startup");
-      if(unprotectedPositions > 0)
+      if(verdict.need_emergency)
          ActivateProtectionEmergency("Reconstructed position(s) found with no verified protective stop: " +
-                                     IntegerToString(unprotectedPositions));
+                                     IntegerToString(reconRes.unprotected));
 
       g_StartupReconciled = true;
       PersistRuntimeState();
@@ -2664,6 +2667,22 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 58 PASS: Counterfactual tracker " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 58 FAIL: Counterfactual tracker " + detail); }
+   }
+
+   {
+      string detail = "";
+      if(QBTestExposureManager(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 59 PASS: Exposure manager " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 59 FAIL: Exposure manager " + detail); }
+   }
+
+   {
+      string detail = "";
+      if(QBTestReconciliationVerdict(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 60 PASS: Reconciliation verdict " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 60 FAIL: Reconciliation verdict " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

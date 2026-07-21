@@ -24,6 +24,7 @@
 #include "../Portfolio/SignalArbitrator.mqh"
 #include "../Portfolio/AllocationEngine.mqh"
 #include "../Analytics/CounterfactualTracker.mqh"
+#include "../Execution/RecoveryEngine.mqh"
 #include "../Strategies/BreakoutEngine.mqh"
 #include "../Strategies/FailedBreakoutEngine.mqh"
 #include "../Strategies/TrendPullbackEngine.mqh"
@@ -1729,6 +1730,73 @@ bool QBTestCounterfactualTracker(string &detail)
             " ignoresNoGeo=" + (ignoresNoGeo ? "ok" : "FAIL") +
             " disabledNoop=" + (disabledNoop ? "ok" : "FAIL");
    return buffered && ignoresValid && ignoresNoGeo && disabledNoop;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 59: CExposureManager owns the aggregate-exposure limit policy|
+//| -- the pre-sizing capacity gate and the post-sizing projection --|
+//| identically to the checks it replaced in CRiskEngine.            |
+//+------------------------------------------------------------------+
+bool QBTestExposureManager(string &detail)
+{
+   CExposureManager ex;
+   ex.Init(2.0);   // cap = 2.0 lots (matches default InpMaxTotalExposureLots)
+
+   // Pre-sizing gate: at/over the cap blocks; under the cap does not.
+   bool capGate = ex.AtCapacity(2.0) && ex.AtCapacity(2.5) && !ex.AtCapacity(1.9);
+
+   // Post-sizing projection: current + add must not breach the cap.
+   bool projUnder = !ex.WouldExceed(1.5, 0.5);   // 2.0 == cap, allowed
+   bool projOver  =  ex.WouldExceed(1.5, 0.6);    // 2.1 > cap, blocked
+   bool projEdge  = !ex.WouldExceed(0.0, 2.0);    // exactly the cap, allowed
+
+   // Headroom accounting, floored at zero.
+   bool remOk = MathAbs(ex.Remaining(1.5) - 0.5) < 1e-9 &&
+                MathAbs(ex.Remaining(3.0) - 0.0) < 1e-9;
+
+   detail = "capGate=" + (capGate ? "ok" : "FAIL") +
+            " projUnder=" + (projUnder ? "ok" : "FAIL") +
+            " projOver=" + (projOver ? "ok" : "FAIL") +
+            " projEdge=" + (projEdge ? "ok" : "FAIL") +
+            " remOk=" + (remOk ? "ok" : "FAIL");
+   return capGate && projUnder && projOver && projEdge && remOk;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 60: CReconciliation turns reconstruction counts + the        |
+//| unknown-position policy into the startup recovery verdict, exactly|
+//| as the former inline OnInit logic did. This is the decision core  |
+//| CRecoveryEngine delegates to.                                     |
+//+------------------------------------------------------------------+
+bool QBTestReconciliationVerdict(string &detail)
+{
+   ReconciliationResult clean;   clean.reconstructed=2; clean.unknown=0; clean.unprotected=0;
+   ReconciliationResult unkQ;    unkQ.reconstructed=1;  unkQ.unknown=1;  unkQ.unprotected=0;
+   ReconciliationResult unkI;    unkI.reconstructed=1;  unkI.unknown=1;  unkI.unprotected=0;
+   ReconciliationResult unprot;  unprot.reconstructed=1; unprot.unknown=0; unprot.unprotected=1;
+   ReconciliationResult both;    both.reconstructed=0;  both.unknown=1;  both.unprotected=1;
+
+   ReconciliationVerdict vClean = CReconciliation::Classify(clean,  UNKNOWN_QUARANTINE);
+   ReconciliationVerdict vUnkQ  = CReconciliation::Classify(unkQ,   UNKNOWN_QUARANTINE);
+   ReconciliationVerdict vUnkI  = CReconciliation::Classify(unkI,   UNKNOWN_IGNORE);
+   ReconciliationVerdict vUnpr  = CReconciliation::Classify(unprot, UNKNOWN_QUARANTINE);
+   ReconciliationVerdict vBoth  = CReconciliation::Classify(both,   UNKNOWN_QUARANTINE);
+
+   bool cleanOk = !vClean.need_quarantine && !vClean.need_emergency;
+   // unknown under QUARANTINE -> quarantine; under IGNORE -> no quarantine.
+   bool unkQok  =  vUnkQ.need_quarantine && !vUnkQ.need_emergency;
+   bool unkIok  = !vUnkI.need_quarantine && !vUnkI.need_emergency;
+   // unprotected always forces emergency, independent of ownership policy.
+   bool unprOk  = !vUnpr.need_quarantine &&  vUnpr.need_emergency;
+   // both conditions fire independently.
+   bool bothOk  =  vBoth.need_quarantine &&  vBoth.need_emergency;
+
+   detail = "clean=" + (cleanOk ? "ok" : "FAIL") +
+            " unkQuarantine=" + (unkQok ? "ok" : "FAIL") +
+            " unkIgnore=" + (unkIok ? "ok" : "FAIL") +
+            " unprotected=" + (unprOk ? "ok" : "FAIL") +
+            " both=" + (bothOk ? "ok" : "FAIL");
+   return cleanOk && unkQok && unkIok && unprOk && bothOk;
 }
 
 #endif // QB_SAFETYTESTS_MQH

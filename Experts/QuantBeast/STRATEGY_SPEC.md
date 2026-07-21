@@ -3,6 +3,19 @@
 **Status:** Current-code specification plus completion requirements.  
 **Trading approval:** None of the strategies is approved for live use.
 
+**Build-out note (2026-07-21):** the shared entry-mode / level-source /
+stop-mode / target-mode framework called for in the per-strategy "Required
+completion" lists below is now implemented additively across all four engines
+(break-retest / probe-confirm / displacement / rejection triggers via
+`ConfirmCandleTrigger` / `ConfirmLevelTrigger`; `SelectLevel`; `ComputeStop`;
+`ComputeTarget`), each defaulting to the previously-hardcoded behavior and
+selected by `Inp*_LevelSource` / `Inp*_StopMode` / `Inp*_TargetMode`;
+momentum-failure and regime-deterioration exits are wired (default off).
+Deterministic reachability/mode coverage is TEST 52-55. The remaining items in
+each list below — chiefly expanded deterministic *feature-path* fixtures (e.g.
+ordinary-wick false-positive rejection) and per-mode organic validation — are
+still open.
+
 ## Shared contract
 
 Each strategy derives from `CStrategyBase` and must:
