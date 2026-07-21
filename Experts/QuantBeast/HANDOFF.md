@@ -475,6 +475,7 @@ Live: prohibited
 - No source or configuration changed; source/EX5 hashes unchanged from the prior session. No broker orders transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
 
 ### 2026-07-20 -- BO/TP/MR eligibility-gate root cause found and fixed: slope_norm scale bug
+**Commit:** `cb989fe` (bundled — see commit message for the full entry list)
 
 - User-authorized "BO/TP/MR parameter review" (Next-task item #1), scoped to strategy signal generation only, no risk/execution/safety code.
 - Read all four regime classifiers, `FeatureEngine.mqh`, and each strategy's `IsEligible()`. Initial code-reading hypothesis (VolatilityState's VOL_EXPANSION over-firing because `compression_bars` defaults to 0) was tested directly against real production code via temporary instrumentation (added, evidence-gathered, then fully reverted -- confirmed by source hash matching pre-instrumentation state) rather than trusted on inspection alone, and was **refuted**: VOL_EXPANSION was only 7.7% of bars in the measured window, not dominant.
@@ -485,6 +486,7 @@ Live: prohibited
 - Evidence: `TestEvidence/slope_norm_scale_fix_20260720/EVIDENCE.md`.
 
 ### 2026-07-20 -- TP eligibility investigation part 2: StructuralState IMPULSE threshold fixed, insufficient alone
+**Commit:** `cb989fe` (bundled — see commit message for the full entry list)
 
 - Continuation of the same authorized task. Re-measured TP's `dir_efficiency` bottleneck *conditioned on already being in a TrendState-qualified trend* (the earlier unconditional 0.233 average was misleading): conditioned average is 0.4764, above TP's 0.4 floor, 67.5% pass rate. **`dir_efficiency` is not TP's bottleneck.**
 - Real bottleneck: TP also requires `regime.structure ∈ {IMPULSE, PULLBACK}`, and across 246 trending bars this was a hard **zero**. Broke down why: PULLBACK's rarity is by-design correct (its `returning_to_value` sub-condition describes a narrow "near VWAP" instant, incompatible with sustained trending -- only 1.6% pass, left untouched). IMPULSE was genuinely miscalibrated: its thresholds (`|slope_norm|>0.75`, `dir_efficiency>0.55`) were stricter than `TrendState`'s own STRONG bar (0.6) and TP's own floor (0.4) -- a bar TrendState calls STRONG could never also qualify as IMPULSE.
@@ -495,6 +497,7 @@ Live: prohibited
 - Evidence: `TestEvidence/impulse_threshold_fix_20260720/EVIDENCE.md`.
 
 ### 2026-07-20 -- Strategy-logic review: six fixes; BO reaches ACCEPTED for the first time
+**Commit:** `cb989fe` (bundled — see commit message for the full entry list)
 
 - User-directed code review of all four strategy engines for bugs/stubs/gaps, then "fix them all." Seven findings; six fixed, one (stateless strategies) deliberately left as an intentional architectural choice. Strategy signal generation / feature computation only -- no risk/execution/safety code.
 - Fixes: (1) MR targeted the opposite SD band instead of the VWAP mean -- inverted classic mean-reversion, produced 8R targets; now targets the mean. (2) `compression_bars` was zeroed on the very breakout bar BO trades; added `preceding_compression_bars` feature that counts the compression run preceding the trigger bar independent of current-bar state. (3) Dropped BO's current-bar ATR-percentile gate, which was mutually exclusive with an actual breakout. (4) BO stop anchored to the broken level instead of the far side of the whole range (was the chronic "Stop too far" cause). (5) MR/TP strategy-level 0.5*ATR minimum-stop floor. (6) `TRIGGER_IMMEDIATE_BREAK` no longer fires unconditionally in TP/MR (requires candle direction). (7) Geometry self-guard in `StrategyBase::MakeSignal` so no engine can emit inverted stop/target geometry.
@@ -504,6 +507,7 @@ Live: prohibited
 - Evidence: `TestEvidence/strategy_logic_fixes_20260720/EVIDENCE.md`.
 
 ### 2026-07-20 -- Strategy fixes: multi-window generalization
+**Commit:** `cb989fe` (bundled — see commit message for the full entry list)
 
 - Ran the fixed build journaled over three distinct organic windows to confirm the strategy-logic fixes are not overfit to Apr 20-24. Results (accepted): Apr20-24 BO 2/MR 5/FBO 9/TP 0; Mar30-Apr07 BO 0(114 eligible)/MR 3/FBO 2/TP 0; Feb16-20 BO 0(76 eligible)/MR 2/FBO 12/TP 0. Pre-fix all three had only FBO firing.
 - **MR generalizes (closed)** -- fires in all three windows, was 0 everywhere pre-fix. **BO fix verified** -- now clears eligibility in every window and completes breakout trades when a breakout occurs (2 in Apr20-24); low completion count is inherent to breakouts, and Feb's breakout day (Feb 20) fell just outside the tested data. **TP still universally blocked** -- 0 past-eligibility in ALL windows; never passes its structure gate anywhere. Next actionable TP code gap: whether StructuralState IMPULSE should key off WEAK-trend magnitude instead of STRONG so TP can reach eligibility.
@@ -511,6 +515,7 @@ Live: prohibited
 - Evidence: `TestEvidence/strategy_fixes_multiwindow_20260720/EVIDENCE.md`.
 
 ### 2026-07-20 -- TP eligibility unblocked: IMPULSE keyed to WEAK-trend magnitude
+**Commit:** `cb989fe` (bundled — see commit message for the full entry list)
 
 - User-approved fix for TP's universal eligibility block: TP accepts WEAK trends but IMPULSE required STRONG magnitude (`|slope_norm|>0.6`), which no trending bar ever reached. Lowered `StructuralState` IMPULSE slope gate 0.6->0.3 (WEAK band), keeping `dir_efficiency>0.4` and `displacement>1.0` as quality filters.
 - Verified: compile 0/0, self-tests 55/0 (count 55 vs prior 54 is unnumbered sub-check assertions, benign, zero failures). Journaled Mar30-Apr07 run: **TP past-eligibility 0 -> 2** -- the universal structure-gate block is broken; TP now reaches its gate for the first time. The 2 bars that passed were rejected by legitimate setup logic (negative pullback depth; wrong direction), not a gate defect -- correct selectivity. `displacement>1.0` was NOT the remaining blocker (those bars passed the IMPULSE gate including displacement). TP acceptance now depends on genuine pullback setups aligning.
@@ -519,6 +524,7 @@ Live: prohibited
 - Evidence: `TestEvidence/tp_impulse_weak_threshold_20260720/EVIDENCE.md`.
 
 ### 2026-07-20 -- Config cleanup: removed the two inert inputs
+**Commit:** `cb989fe` (bundled — see commit message for the full entry list)
 
 - Closed the config-cleanup follow-up flagged by the strategy-logic review. Fully removed `InpBO_CompressionPct` and `InpMR_TargetSDBandR` (both rendered inert when their only uses -- BO's current-bar ATR gate and MR's opposite-SD-band target -- were removed): input declarations in `Configuration.mqh`, the `Init()` params + members + constructor defaults in `BreakoutEngine.mqh`/`MeanReversionEngine.mqh`, the two EA call sites in `QuantBeastEA.mq5`, and the two test call sites in `SafetyTests.mqh`. Updated `CONFIGURATION_GUIDE.md`'s BO/MR descriptions to match current behavior.
 - Canonical `.set` presets never referenced these keys (they list only overridden inputs); the shared `InpCompressionPct` (feature engine / volatility classifier) is a different input and was untouched. Stale keys remain only in historical dated tester `.ini` run-artifacts (harmless).
@@ -526,6 +532,7 @@ Live: prohibited
 - ex5 SHA-256 `2bc5ad273a7bb327ac2d82195be39fd5a0ef0191380704abcc806afd71af43db`. No broker orders. Readiness remains `READY FOR SHADOW MODE`.
 
 ### 2026-07-20 -- Full build-out Phase 1: strategy entry-mode + level-source variations
+**Commit:** `cb989fe` (bundled — see commit message for the full entry list)
 
 - First phase of the approved full-EA build-out (plan: `expressive-hatching-eclipse.md`), using the consolidated verification cadence (one compile + one self-test run + one journaled baseline-preservation backtest per phase).
 - Added 6 entry trigger modes (immediate/candle-close/displacement/break-retest/probe-confirm/rejection) via shared `StrategyBase` helpers `ConfirmCandleTrigger`/`ConfirmLevelTrigger`; TP/MR consolidated onto the shared helper (duplicate private `TriggerConfirmed` removed), BO switch extended, FBO layered additively (default reclaim unchanged). Added `ENUM_LEVEL_SOURCE` (range/prev-day/session/opening-range/swing) + `InpBO_LevelSource`, wired into BO. All additive, defaulted to current behavior.
@@ -534,12 +541,14 @@ Live: prohibited
 - Remaining build-out phases (tasks #13-16): stop/target/exit variations; risk/execution hardening; AllocationEngine + CounterfactualTracker; the three delegated-stub modules.
 
 ### 2026-07-20 -- Full build-out Phase 2: stop / target / exit variations
+**Commit:** `cb989fe` (bundled — see commit message for the full entry list)
 
 - Added `ENUM_STOP_MODE` (default/ATR/swing/structural/sweep) + `ENUM_TARGET_MODE` (default/fixedR/VWAP/rangeMid/oppBoundary) via shared `StrategyBase::ComputeStop`/`ComputeTarget`, wired into all four engines (each passes its native calc as DEFAULT so defaults are byte-identical), with 8 `Inp*_StopMode`/`_TargetMode` inputs. Added two additive exit types -- momentum-failure (`EXIT_FAILED_MOMENTUM`) and regime-deterioration (`EXIT_REGIME_DETERIORATE`) -- in both `ShadowPortfolio` (feat shock proxy) and `PositionManager` (full regime), gated by `InpEnableMomentumExit`/`InpEnableRegimeExit` (default off).
 - Verified: compile 0/0, self-tests **58 passed, 0 failed** (TEST 54 stop/target dispatch + TEST 55 extended exits added); journaled Apr 20-24 baseline **preserved** (BO 2, FBO 9, TP 0, MR 5).
 - Evidence: `TestEvidence/phase2_stop_target_exit_20260720/EVIDENCE.md`. ex5 `c701edb6...`.
 
 ### 2026-07-20/21 -- Full build-out Phase 3: risk / execution hardening
+**Commit:** `cb989fe` (bundled — see commit message for the full entry list)
 
 - ChallengeMode: added attempt-lockout enforcement in `IsTradeAllowed` (blocks when attempts_this_stage >= max_attempts) and `IsPyramidingAllowed`/`AllowsPyramiding` gate wiring the previously-dead `m_allowPyramiding` member. Shadow pending-order lifecycle wired (QuantBeastEA ~1451 'not implemented' block replaced with `g_Shadow.OpenPending` virtual stop/limit placement, classified stop-vs-limit by entry-vs-price, gated by InpUseStopOrders/InpUseLimitOrders, expiry via InpOrderExpirySeconds; `ShadowPortfolio.Update` fills/expires/cancels). Session/rollover exits confirmed already complete (`ProcessSessionExitPolicy` + TEST 43).
 - Verified: compile 0/0, self-tests **59 passed, 0 failed** (TEST 56 challenge pyramiding added; TEST 49/43 unchanged); journaled Apr 20-24 baseline **preserved** (BO 2/FBO 9/TP 0/MR 5); pending-enabled run placed **6 SHADOW PENDING** virtual orders (was hard-rejected before).
@@ -1145,6 +1154,7 @@ scope rule.
 - **⚠ LIVE-ARMED: QuantBeast is now live-armed on Coinexx-Demo and actively watching for real FBO signals. It can autonomously transmit a real broker order at any point from now until detached or switched back to Shadow. This is a new state for this project — every prior broker action was manual/script/MCP-placed, never EA-autonomous. Do not mistake an autonomous entry for a fixture artifact.**
 
 ### 2026-07-21 — Full build-out Phases 1-4: strategy variations, risk/exec hardening, AllocationEngine + CounterfactualTracker
+**Commit:** `cb989fe` (bundled — see commit message for the full entry list)
 
 - Scope: additive, default-preserving completion of the strategy engines and two new wired subsystems, per the approved 5-phase plan. Every new mode/input defaults to the pre-existing behavior.
 - **Phase 1 (entry modes / level sources):** shared `ConfirmCandleTrigger` / `ConfirmLevelTrigger` / `SelectLevel` helpers in `StrategyBase.mqh`; `ENUM_LEVEL_SOURCE`; per-strategy `Inp*_LevelSource`. Break-retest / probe-confirm / displacement / rejection trigger modes wired fail-closed on unsupported values. TEST 52-53.
@@ -1155,6 +1165,7 @@ scope rule.
 - **FBO 9→11 investigation (resolved):** an early per-tick `FileFlush` counterfactual design was redesigned to memory-buffered/write-at-Close after per-tick I/O was suspected of perturbing the tester. A runtime diagnostic then showed `InpEnableCounterfactual=true` is *never applied* via the tester `.ini` (`flag=0` in every run, `true` and numeric `1` both), while an identical `input bool` on the same `.ini` does apply — a MetaTrader input-application quirk, not a code defect. Counterfactual was therefore OFF in every backtest, so it could not have caused the one-off FBO 11 (a non-reproducing tester-nondeterminism outlier; FBO=9 in 6+ runs). CSV tester-population is a documented verification limitation; the tracker logic is proven by TEST 58. Evidence: `TestEvidence/phase4_allocation_counterfactual_20260721/EVIDENCE.md`.
 
 ### 2026-07-21 — Full build-out Phase 5 (FINAL): ExposureManager / Reconciliation / RecoveryEngine built into real modules
+**Commit:** `9279048`
 
 - Scope: the three delegated placeholder classes became real, wired modules via behavior-preserving extractions. The decision logic moved into the modules; irreducible side effects (broker calls, global kill-switch / protection-state mutations) stay at the call sites.
 - `CExposureManager` (`Portfolio/ExposureManager.mqh`): owns the aggregate-exposure limit policy — pre-sizing capacity gate, post-sizing projection, headroom. `CRiskEngine` now consults it for both exposure checks (`AtCapacity` / `WouldExceed`) instead of hard-coding them. TEST 59.
