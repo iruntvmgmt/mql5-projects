@@ -129,6 +129,10 @@ Enter an established directional move after a controlled pullback and momentum r
 - Requires depth between 0.1 and configured maximum.
 - Enforces long pullback age from bars since swing high and short pullback age from bars since swing low.
 - Uses `returning_to_value` as a weak proxy for pullback completion.
+- Exports separate observational diagnostics for actual one-bar contraction
+  toward VWAP (`moving_toward_value`, `value_return_progress`, and
+  `crossed_into_value`). TP eligibility still consumes the legacy near-value
+  proxy until organic evidence supports a state-transition rule.
 - Stop is beyond the recent swing/range plus ATR.
 - Target is fixed extension R.
 

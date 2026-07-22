@@ -107,8 +107,12 @@ struct FeatureSnapshot
    double vwap_sd;           // Weighted standard deviation around VWAP
    double range_midpoint;    // Range midpoint
    double norm_dist_vwap;    // Normalized distance from VWAP
+   double previous_norm_dist_vwap; // Prior closed bar's normalized VWAP distance
+   double value_return_progress;   // Positive when absolute VWAP distance contracts
    double sd_dist;           // Standard deviation distance from VWAP
    bool   returning_to_value; // Return to value area detected
+   bool   moving_toward_value; // Distance contracted versus the prior closed bar
+   bool   crossed_into_value;  // Entered the existing 0.3 ATR value area this bar
 
    // Liquidity/execution features
    double current_spread;    // Current spread in points

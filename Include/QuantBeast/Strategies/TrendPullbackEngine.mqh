@@ -118,7 +118,10 @@ public:
                 " dirEff=" + DoubleToString(features.dir_efficiency, 3) +
                 " displacement=" + DoubleToString(features.displacement, 3) +
                 " equilibrium=" + DoubleToString(MathAbs(features.dist_from_equil), 3) +
-                " returning=" + (features.returning_to_value ? "yes" : "no");
+                " returning=" + (features.returning_to_value ? "yes" : "no") +
+                " movingToward=" + (features.moving_toward_value ? "yes" : "no") +
+                " valueProgress=" + DoubleToString(features.value_return_progress, 3) +
+                " crossedValue=" + (features.crossed_into_value ? "yes" : "no");
 
       // Event normal
       if(regime.event_state != EVENT_NORMAL) return "event state not normal";

@@ -2703,6 +2703,11 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 62 PASS: Strategy overlap map " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 62 FAIL: Strategy overlap map " + detail); }
+
+      if(QBTestValueReturnDiagnostics(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 63 PASS: Value-return diagnostics " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 63 FAIL: Value-return diagnostics " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

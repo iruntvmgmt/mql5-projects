@@ -5,6 +5,12 @@
 
 ## Runtime and testing
 
+- TP's `returning_to_value` currently means the closed bar is within 0.3 ATR
+  of rolling VWAP, not that price demonstrably moved toward VWAP. Separate
+  movement and crossing diagnostics are now emitted on TP structure
+  rejections, but do not yet change eligibility. A completed multi-window
+  organic comparison is required before replacing the legacy proxy.
+
 - The final source compiles at `0 errors, 0 warnings`, but compilation is not runtime proof.
 - The native MT5 tester API still returns the invalid/ambiguous identifier `job_id: 0` and reports `tester stopped`; local agent logs must be inspected to confirm completion.
 - A Shadow fixture completed with 52 startup tests passed and 0 failed, including rejected-direction, regime, all arbitration enum modes, broker-fault, centralized protection-close, final-decision signal-writer, performance-without-file-journal, live-mode gate, live broker-transmission acknowledgement gate, recovery, alert, preflight, session-exit, self-test detail-control, chart-object toggle, fill/reconciliation alert-category, strategy-counter restore, arbitration persistence, and Shadow pending-order lifecycle policies. Latest boundary/regression proof is under `TestEvidence/current_regression_20260716/`, with follow-on wiring proof under `TestEvidence/bo_compression_pct_20260716/`, `TestEvidence/tp_pullback_age_20260716/`, `TestEvidence/mr_target_band_20260716/`, `TestEvidence/fbo_target_variants_20260716/`, and `TestEvidence/shadow_pending_lifecycle_20260718/`.

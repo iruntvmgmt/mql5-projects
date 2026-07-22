@@ -2053,4 +2053,42 @@ bool QBTestStrategyOverlapMap(CSymbolAdapter &adapter, string &detail)
    return overlapOk;
 }
 
+//+------------------------------------------------------------------+
+//| TEST 63: near-value location and movement diagnostics remain      |
+//| distinct. Eligibility still consumes the legacy location flag;   |
+//| these fields support evidence before a strategy-behavior change. |
+//+------------------------------------------------------------------+
+bool QBTestValueReturnDiagnostics(string &detail)
+{
+   FeatureSnapshot approaching; ZeroMemory(approaching);
+   approaching.previous_norm_dist_vwap = 0.8;
+   approaching.norm_dist_vwap = 0.5;
+   approaching.value_return_progress = MathAbs(approaching.previous_norm_dist_vwap) -
+                                       MathAbs(approaching.norm_dist_vwap);
+   approaching.moving_toward_value = approaching.value_return_progress > QB_EPSILON;
+   approaching.returning_to_value = MathAbs(approaching.norm_dist_vwap) < 0.3;
+
+   FeatureSnapshot departing; ZeroMemory(departing);
+   departing.previous_norm_dist_vwap = 0.1;
+   departing.norm_dist_vwap = 0.2;
+   departing.value_return_progress = MathAbs(departing.previous_norm_dist_vwap) -
+                                     MathAbs(departing.norm_dist_vwap);
+   departing.moving_toward_value = departing.value_return_progress > QB_EPSILON;
+   departing.returning_to_value = MathAbs(departing.norm_dist_vwap) < 0.3;
+
+   FeatureSnapshot crossing; ZeroMemory(crossing);
+   crossing.previous_norm_dist_vwap = -0.6;
+   crossing.norm_dist_vwap = -0.2;
+   crossing.crossed_into_value = MathAbs(crossing.previous_norm_dist_vwap) >= 0.3 &&
+                                 MathAbs(crossing.norm_dist_vwap) < 0.3;
+
+   bool ok = approaching.moving_toward_value && !approaching.returning_to_value &&
+             !departing.moving_toward_value && departing.returning_to_value &&
+             crossing.crossed_into_value;
+   detail = "approach=" + (approaching.moving_toward_value ? "moving" : "FAIL") +
+            " depart=" + (!departing.moving_toward_value ? "distinct" : "FAIL") +
+            " cross=" + (crossing.crossed_into_value ? "yes" : "FAIL");
+   return ok;
+}
+
 #endif // QB_SAFETYTESTS_MQH

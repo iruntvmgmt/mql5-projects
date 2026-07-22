@@ -1,5 +1,22 @@
 # QuantBeast Handoff
 
+## 2026-07-22 — TP value-return diagnostics separated from eligibility
+
+- Confirmed a Medium research/semantic defect: `returning_to_value` only
+  represented current location within 0.3 ATR of VWAP, so reachability reports
+  could not distinguish a bar approaching value from one departing while still
+  nearby.
+- Added prior closed-bar VWAP distance, contraction progress, movement-toward-
+  value, and value-zone-crossing diagnostics. TP structure rejection text now
+  exposes them for byte-bounded journal analysis.
+- Deliberately preserved current TP eligibility and all entry/stop/target/risk
+  behavior; this is instrumentation before strategy redesign.
+- Compile: `0 errors, 0 warnings`, MetaEditor build 6033.
+- Shadow regression: `66 passed, 0 failed`; 22,080 generated ticks and 1,104
+  bars; natural `test passed` footer; no broker orders transmitted.
+- Evidence: `TestEvidence/tp_value_return_diagnostics_20260722/README.md`.
+- Readiness remains exactly `READY FOR SHADOW MODE`.
+
 **Last updated:** 2026-07-20  
 **Current phase:** Broker-free audit, repair, deterministic validation, and organic true-tick journal proof complete through safe phases  
 **Current verdict:** **READY FOR SHADOW MODE; live and Challenge trading prohibited**  

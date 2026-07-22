@@ -38,6 +38,8 @@ private:
    FeatureSnapshot  m_current;
    datetime         m_lastCalcTime;
    bool             m_initialized;
+   double           m_previousNormDistVWAP;
+   bool             m_hasPreviousNormDistVWAP;
 
    // Configuration
    int   m_atrPeriod;
@@ -61,6 +63,8 @@ public:
       m_atrHandleHTF     = INVALID_HANDLE;
       m_lastCalcTime = 0;
       m_initialized  = false;
+      m_previousNormDistVWAP = 0.0;
+      m_hasPreviousNormDistVWAP = false;
       ZeroMemory(m_current);
    }
 
@@ -661,6 +665,24 @@ private:
       // Return to value detection
       if(MathAbs(m_current.norm_dist_vwap) < 0.3)
          m_current.returning_to_value = true;
+
+      // Preserve the legacy near-value flag above for compatibility, while
+      // separately measuring actual closed-bar movement toward VWAP. This
+      // diagnostic distinction is intentionally not an eligibility change.
+      if(m_hasPreviousNormDistVWAP)
+      {
+         m_current.previous_norm_dist_vwap = m_previousNormDistVWAP;
+         m_current.value_return_progress = MathAbs(m_previousNormDistVWAP) -
+                                           MathAbs(m_current.norm_dist_vwap);
+         m_current.moving_toward_value =
+            (m_current.value_return_progress > QB_EPSILON);
+         m_current.crossed_into_value =
+            (MathAbs(m_previousNormDistVWAP) >= 0.3 &&
+             MathAbs(m_current.norm_dist_vwap) < 0.3);
+      }
+
+      m_previousNormDistVWAP = m_current.norm_dist_vwap;
+      m_hasPreviousNormDistVWAP = (m_current.vwap > 0 && m_current.atr > 0);
    }
 
    //+------------------------------------------------------------------+
