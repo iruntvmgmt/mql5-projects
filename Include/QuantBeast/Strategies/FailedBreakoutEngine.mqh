@@ -26,6 +26,7 @@ private:
    double   m_targetVWAPR;          // Target to VWAP R
    ENUM_STOP_MODE   m_stopMode;
    ENUM_TARGET_MODE m_targetMode;
+   double           m_maxSpreadPts;
 
 public:
    //+------------------------------------------------------------------+
@@ -39,6 +40,7 @@ public:
       m_targetVWAPR       = 1.5;
       m_stopMode          = STOP_MODE_DEFAULT;
       m_targetMode        = TARGET_MODE_DEFAULT;
+      m_maxSpreadPts      = 40.0;
    }
 
    //+------------------------------------------------------------------+
@@ -47,7 +49,8 @@ public:
              double minPenetration, int maxBarsBeyond, double reclaimThreshold,
              double stopBeyondSweep, double targetMidR, double targetVWAPR,
              ENUM_STOP_MODE stopMode = STOP_MODE_DEFAULT,
-             ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT)
+             ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT,
+             double maxSpreadPts = 40.0)
    {
       CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
       m_minPenetration   = minPenetration;
@@ -58,6 +61,7 @@ public:
       m_targetVWAPR      = targetVWAPR;
       m_stopMode         = stopMode;
       m_targetMode       = targetMode;
+      m_maxSpreadPts     = maxSpreadPts;
    }
 
    //+------------------------------------------------------------------+
@@ -72,7 +76,7 @@ public:
          return false;
 
       // Spread acceptable
-      if(market.spread_points > 40.0)
+      if(market.spread_points > m_maxSpreadPts)
          return false;
 
       // Event state normal

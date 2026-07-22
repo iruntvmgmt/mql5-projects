@@ -25,6 +25,7 @@ private:
    double   m_emergencyStopR;      // Emergency stop in R
    ENUM_STOP_MODE   m_stopMode;
    ENUM_TARGET_MODE m_targetMode;
+   double           m_maxSpreadPts;
 
 public:
    //+------------------------------------------------------------------+
@@ -37,6 +38,7 @@ public:
       m_emergencyStopR     = 1.0;
       m_stopMode           = STOP_MODE_DEFAULT;
       m_targetMode         = TARGET_MODE_DEFAULT;
+      m_maxSpreadPts       = 30.0;
    }
 
    //+------------------------------------------------------------------+
@@ -46,7 +48,8 @@ public:
              double minRejectionWick, double targetVWAPR,
              double emergencyStopR,
              ENUM_STOP_MODE stopMode = STOP_MODE_DEFAULT,
-             ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT)
+             ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT,
+             double maxSpreadPts = 30.0)
    {
       CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
       m_maxTrendStrength  = maxTrendStrength;
@@ -56,6 +59,7 @@ public:
       m_emergencyStopR    = emergencyStopR;
       m_stopMode          = stopMode;
       m_targetMode        = targetMode;
+      m_maxSpreadPts      = maxSpreadPts;
    }
 
    //+------------------------------------------------------------------+
@@ -87,7 +91,7 @@ public:
          return false;
 
       // Spread acceptable (tighter for MR)
-      if(market.spread_points > 30.0)
+      if(market.spread_points > m_maxSpreadPts)
          return false;
 
       // Event normal

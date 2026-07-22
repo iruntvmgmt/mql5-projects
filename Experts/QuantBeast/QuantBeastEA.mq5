@@ -758,26 +758,27 @@ int OnInit()
                      g_Adapter, InpBO_TriggerMode,
                      InpBO_MinCompressionBars, InpBO_MinDisplacement,
                      InpBO_StopATRMultiplier, InpBO_TargetR, InpBO_RequireHTFBias,
-                     InpBO_LevelSource, InpBO_StopMode, InpBO_TargetMode);
+                     InpBO_LevelSource, InpBO_StopMode, InpBO_TargetMode,
+                     InpBO_MaxSpreadPts);
 
    g_StrategyFBO.Init(STRATEGY_ID_FAILED_BREAKOUT, "Failed Breakout", InpFBO_Enabled,
                       InpFBO_MinConfidence, g_Adapter, InpFBO_TriggerMode,
                       InpFBO_MinPenetration, InpFBO_MaxBarsBeyond, InpFBO_ReclaimThreshold,
                       InpFBO_StopBeyondSweep, InpFBO_TargetMidR, InpFBO_TargetVWAPR,
-                      InpFBO_StopMode, InpFBO_TargetMode);
+                      InpFBO_StopMode, InpFBO_TargetMode, InpFBO_MaxSpreadPts);
 
    g_StrategyTP.Init(STRATEGY_ID_TREND_PULLBACK, "Trend Pullback", InpTP_Enabled,
                      InpTP_MinConfidence, g_Adapter, InpTP_TriggerMode,
                      InpTP_MinDirEfficiency, InpTP_MinTrendPersistence, InpTP_RequireHTFAgreement,
                      InpTP_MaxPullbackDepth, InpTP_MaxPullbackBars,
                      InpTP_TargetExtensionR, InpTP_StopBeyondStruct,
-                     InpTP_StopMode, InpTP_TargetMode);
+                     InpTP_StopMode, InpTP_TargetMode, InpTP_MaxSpreadPts);
 
    g_StrategyMR.Init(STRATEGY_ID_MEAN_REVERSION, "Mean Reversion", InpMR_Enabled,
                      InpMR_MinConfidence, g_Adapter, InpMR_TriggerMode,
                      InpMR_MaxTrendStrength, InpMR_MinDeviationSD, InpMR_MinRejectionWick,
                      InpMR_TargetVWAPR, InpMR_EmergencyStopR,
-                     InpMR_StopMode, InpMR_TargetMode);
+                     InpMR_StopMode, InpMR_TargetMode, InpMR_MaxSpreadPts);
 
    g_Strategies[QB_STRAT_IDX_BO]  = &g_StrategyBO;
    g_Strategies[QB_STRAT_IDX_FBO] = &g_StrategyFBO;

@@ -27,6 +27,7 @@ private:
    double   m_stopBeyondStruct;    // ATR multiple beyond structure
    ENUM_STOP_MODE   m_stopMode;
    ENUM_TARGET_MODE m_targetMode;
+   double           m_maxSpreadPts;
 
 public:
    //+------------------------------------------------------------------+
@@ -41,6 +42,7 @@ public:
       m_stopBeyondStruct     = 0.5;
       m_stopMode             = STOP_MODE_DEFAULT;
       m_targetMode           = TARGET_MODE_DEFAULT;
+      m_maxSpreadPts         = 35.0;
    }
 
    //+------------------------------------------------------------------+
@@ -50,7 +52,8 @@ public:
              double maxPullbackDepth, int maxPullbackBars,
              double targetExtensionR, double stopBeyondStruct,
              ENUM_STOP_MODE stopMode = STOP_MODE_DEFAULT,
-             ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT)
+             ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT,
+             double maxSpreadPts = 35.0)
    {
       CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
       m_minDirEfficiency    = minDirEff;
@@ -62,6 +65,7 @@ public:
       m_stopBeyondStruct    = stopBeyondStruct;
       m_stopMode            = stopMode;
       m_targetMode          = targetMode;
+      m_maxSpreadPts        = maxSpreadPts;
    }
 
    //+------------------------------------------------------------------+
@@ -93,7 +97,7 @@ public:
          return false;
 
       // Spread
-      if(market.spread_points > 35.0) return false;
+      if(market.spread_points > m_maxSpreadPts) return false;
 
       // Structure should support trend (impulse or pullback)
       if(!(regime.structure == STRUCTURE_IMPULSE || regime.structure == STRUCTURE_PULLBACK))

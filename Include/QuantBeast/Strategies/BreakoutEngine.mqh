@@ -26,6 +26,7 @@ private:
    ENUM_LEVEL_SOURCE m_levelSource;
    ENUM_STOP_MODE    m_stopMode;
    ENUM_TARGET_MODE  m_targetMode;
+   double            m_maxSpreadPts;
 
 public:
    //+------------------------------------------------------------------+
@@ -39,6 +40,7 @@ public:
       m_levelSource          = LEVEL_SRC_RANGE;
       m_stopMode             = STOP_MODE_DEFAULT;
       m_targetMode           = TARGET_MODE_DEFAULT;
+      m_maxSpreadPts         = 40.0;
    }
 
    //+------------------------------------------------------------------+
@@ -48,7 +50,8 @@ public:
              double stopATRMult, double targetR, bool requireHTFBias,
              ENUM_LEVEL_SOURCE levelSource = LEVEL_SRC_RANGE,
              ENUM_STOP_MODE stopMode = STOP_MODE_DEFAULT,
-             ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT)
+             ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT,
+             double maxSpreadPts = 40.0)
    {
       CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
       m_minCompressionBars  = minCompBars;
@@ -59,6 +62,7 @@ public:
       m_levelSource         = levelSource;
       m_stopMode            = stopMode;
       m_targetMode          = targetMode;
+      m_maxSpreadPts        = maxSpreadPts;
    }
 
    //+------------------------------------------------------------------+
@@ -80,7 +84,7 @@ public:
          return false;
 
       // Spread acceptable
-      if(market.spread_points > 40.0)
+      if(market.spread_points > m_maxSpreadPts)
          return false;
 
       // Event state must be normal

@@ -101,6 +101,7 @@ input bool   InpBO_RequireHTFBias    = true;    // Require HTF Directional Bias
 input ENUM_LEVEL_SOURCE InpBO_LevelSource = LEVEL_SRC_RANGE; // Breakout Level Source: Range|PrevDay|Session|OpeningRange|Swing
 input ENUM_STOP_MODE   InpBO_StopMode   = STOP_MODE_DEFAULT;   // BO Stop Mode: Default|ATR|Swing|Structural|Sweep
 input ENUM_TARGET_MODE InpBO_TargetMode = TARGET_MODE_DEFAULT; // BO Target Mode: Default|FixedR|VWAP|RangeMid|OppBoundary
+input double InpBO_MaxSpreadPts      = 40.0;    // Max Spread for Eligibility (points, symbol-scaled -- was hardcoded)
 
 //+------------------------------------------------------------------+
 //| === GROUP: Failed Breakout Strategy ===                           |
@@ -117,6 +118,7 @@ input double InpFBO_TargetVWAPR      = 1.5;     // Target: VWAP (R multiple)
 input double InpFBO_MinConfidence    = 0.55;    // Minimum Signal Confidence
 input ENUM_STOP_MODE   InpFBO_StopMode   = STOP_MODE_DEFAULT;   // FBO Stop Mode: Default|ATR|Swing|Structural|Sweep
 input ENUM_TARGET_MODE InpFBO_TargetMode = TARGET_MODE_DEFAULT; // FBO Target Mode: Default|FixedR|VWAP|RangeMid|OppBoundary
+input double InpFBO_MaxSpreadPts     = 40.0;    // Max Spread for Eligibility (points, symbol-scaled -- was hardcoded)
 
 //+------------------------------------------------------------------+
 //| === GROUP: Trend Pullback Strategy ===                            |
@@ -134,6 +136,7 @@ input ENUM_TRIGGER_TYPE InpTP_TriggerMode = TRIGGER_CANDLE_CLOSE_BREAK; // Trigg
 input double InpTP_MinConfidence      = 0.55;   // Minimum Signal Confidence
 input ENUM_STOP_MODE   InpTP_StopMode   = STOP_MODE_DEFAULT;   // TP Stop Mode: Default|ATR|Swing|Structural|Sweep
 input ENUM_TARGET_MODE InpTP_TargetMode = TARGET_MODE_DEFAULT; // TP Target Mode: Default|FixedR|VWAP|RangeMid|OppBoundary
+input double InpTP_MaxSpreadPts      = 35.0;    // Max Spread for Eligibility (points, symbol-scaled -- was hardcoded)
 
 //+------------------------------------------------------------------+
 //| === GROUP: Mean Reversion Strategy ===                            |
@@ -149,6 +152,7 @@ input double InpMR_EmergencyStopR     = 1.0;    // Emergency Stop (R from entry)
 input double InpMR_MinConfidence      = 0.5;    // Minimum Signal Confidence
 input ENUM_STOP_MODE   InpMR_StopMode   = STOP_MODE_DEFAULT;   // MR Stop Mode: Default|ATR|Swing|Structural|Sweep
 input ENUM_TARGET_MODE InpMR_TargetMode = TARGET_MODE_DEFAULT; // MR Target Mode: Default|FixedR|VWAP|RangeMid|OppBoundary
+input double InpMR_MaxSpreadPts      = 30.0;    // Max Spread for Eligibility (points, symbol-scaled -- was hardcoded)
 
 //+------------------------------------------------------------------+
 //| === GROUP: Signal Arbitration ===                                 |
