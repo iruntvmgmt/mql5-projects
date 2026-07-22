@@ -47,15 +47,34 @@ Deterministic reachability and diagnostic serialization are proven. Natural
 market reachability is not; it requires a fresh exact-byte-bounded organic run.
 Readiness remains `READY FOR SHADOW MODE`.
 
-## Organic-run attempt
+## Organic-run result
 
-The intended XAUUSD M5 `Model=4` 2026-01-05 run was requested through the
-native tester MCP after the compile/regression evidence above. The initial
-request overlapped the preceding regression agent's delayed shutdown and never
-loaded a profile. After `MetaTester 5 stopped` appeared, later clean requests
-alternated between `{ok:false, job_id:0}` and `{ok:true, job_id:0}` but created
-no tester process, new controller/agent-log section, or signal-journal bytes.
-The signal journal remained exactly 15,520,142 bytes. Therefore no organic
-result is claimed and no report was generated from a nonexistent slice. This
-matches the already documented intermittent native tester no-execution mode;
-the next session should retry only after confirming fresh agent-log growth.
+The native launcher initially appeared to remain in its documented
+`job_id: 0` no-execution mode, but the final clean request started after a
+delay and completed naturally. The authoritative agent footer records XAUUSD
+M5, `Model=4`, 2026-01-05, 372,741 ticks, 276 bars, `OnTester result 0`,
+`test passed`, and `thread finished`. The exact signal-journal slice is
+`[15520142,16093698)`.
+
+The slice contains 196 TP decisions and zero TP risk/stop evaluations or
+accepted signals. Lifecycle coverage was:
+
+| Phase | Rows |
+| --- | ---: |
+| idle | 114 |
+| invalidated | 64 |
+| impulse | 14 |
+| retracing | 4 |
+| resume_candidate | 0 |
+
+All 82 non-empty seed annotations were `tp_specific`; median observed impulse
+span was 0.842 ATR and maximum was 2.615 ATR. Because long and short evaluations
+share one completed-bar snapshot, row counts occur in direction pairs. The two
+retracing snapshots continued moving toward value and were followed by loss of
+directional trend context, so the lifecycle invalidated before resumption.
+
+This proves natural seed, impulse, retracement, anchor, and serialization
+reachability. It does not prove a resumption entry. Reports:
+
+- `organic_tp_structure_report.md`
+- `organic_acceptance_funnel.md`

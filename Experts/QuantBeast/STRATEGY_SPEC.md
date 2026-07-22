@@ -149,8 +149,9 @@ Enter an established directional move after a controlled pullback and momentum r
 
 ### Required completion
 
-- Validate the anchored observational impulse/retracement/resumption lifecycle
-  on organic, exact-byte-bounded windows before considering candidate logic.
+- Extend the exact-byte-bounded organic evidence beyond the first naturally
+  reached seed/impulse/retracement window; resumption remains unobserved and
+  must be validated before considering candidate logic.
 - Implement actual trigger modes such as rejection, micro-break, close confirmation, or retest.
 - Add trend maturity/exhaustion constraints.
 - Add failed-continuation, regime-deterioration, session, and time exits.

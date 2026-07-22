@@ -1,0 +1,56 @@
+# QuantBeast acceptance funnel
+
+Input journals: 1
+Offset-scoped inputs: 1
+End-bounded inputs: 1
+Signal rows analyzed: 784
+
+| Strategy | Rows | Strategy | Arbitration | Risk/stop | Sizing | Broker | Accepted | Other |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| BO | 196 | 196 | 0 | 0 | 0 | 0 | 0 | 0 |
+| FBO | 196 | 190 | 1 | 2 | 0 | 0 | 3 | 0 |
+| MR | 196 | 193 | 0 | 0 | 0 | 0 | 3 | 0 |
+| TP | 196 | 196 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+## Risk/stop detail
+
+| Strategy | Risk/stop rejects | With geometry | Mean price distance | Top risk/stop reason | Count |
+| --- | --- | --- | --- | --- | --- |
+| BO | 0 | 0 | n/a |  | 0 |
+| FBO | 2 | 2 | 13.89500 | Risk: Stop too far: 1456.0 > 1000 | 1 |
+| MR | 0 | 0 | n/a |  | 0 |
+| TP | 0 | 0 | n/a |  | 0 |
+
+## Risk/stop rejection categories
+
+| Strategy | Category | Count |
+| --- | --- | --- |
+| FBO | stop_too_far | 2 |
+
+## Strategy rejection categories
+
+| Strategy | Category | Count |
+| --- | --- | --- |
+| BO | compression | 148 |
+| BO | htf_alignment | 16 |
+| BO | htf_direction | 16 |
+| BO | setup_location | 11 |
+| BO | trigger | 5 |
+| FBO | failed_breakout_or_reclaim | 178 |
+| FBO | directional_setup | 9 |
+| FBO | reclaim_depth | 3 |
+| MR | vwap_deviation | 143 |
+| MR | balanced_structure | 24 |
+| MR | rejection_wick | 12 |
+| MR | volatility | 10 |
+| MR | trigger | 2 |
+| MR | trend_strength | 2 |
+| TP | directional_trend | 164 |
+| TP | impulse_pullback_structure | 30 |
+| TP | trend_persistence | 2 |
+
+## Interpretation boundary
+
+Inputs without byte bounds may contain overlapping combined and isolated strategy runs. Start-and-end-bounded inputs contain only rows within the recorded run slice.
+
+This report starts at emitted strategy decisions. Tick/data-quality preflight blocks occur before journal emission and must be measured from the matching tester-agent log. Do not infer that absent journal rows are strategy or risk rejections.

@@ -18,13 +18,19 @@
 - Extended `tp_structure_report.py` compatibly to summarize seed sources and
   spans; parser syntax and anchored synthetic-row checks passed.
 - Evidence: `TestEvidence/tp_specific_impulse_seed_20260722/README.md`.
-- Organic follow-up was attempted with the Jan 2026 `Model=4` profile. After a
-  stale prior agent finished shutting down, clean MCP requests returned
-  ambiguous/false `job_id: 0` results but launched no tester process and added
-  no agent-log or signal-journal bytes (journal stayed at 15,520,142). No
-  organic result is claimed. Next: retry only after a fresh agent-log-growth
-  health check, then measure seed/phase reachability using the exact new byte
-  slice. Readiness remains exactly `READY FOR SHADOW MODE`.
+- Organic follow-up eventually started after the native launcher's delay and
+  completed naturally: Jan 5 2026, `Model=4`, 372,741 ticks, 276 bars,
+  `OnTester result 0`, exact slice `[15520142,16093698)`. Across 196 TP
+  decisions the tracker recorded 114 idle, 64 invalidated, 14 impulse, and 4
+  retracing rows; no resume candidate. All 82 populated seed annotations were
+  `tp_specific`, with median span 0.842 ATR and maximum 2.615 ATR. The two
+  direction-paired retracing snapshots remained moving toward value and then
+  lost directional trend context, invalidating before resumption.
+- TP still produced zero risk/stop evaluations and zero accepted signals. This
+  proves natural seed/impulse/retracement reachability and reinforces that TP's
+  present blocker is upstream of risk/stop management. It does not validate an
+  entry or edge. Next: repeat across independent windows before changing the
+  lifecycle or eligibility. Readiness remains exactly `READY FOR SHADOW MODE`.
 
 ## 2026-07-22 — TP value-return diagnostics separated from eligibility
 
