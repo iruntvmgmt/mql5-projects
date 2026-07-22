@@ -13,8 +13,15 @@
 - Compile: `0 errors, 0 warnings`, 14,212 ms. Shadow regression: `67 passed,
   0 failed`, 22,080 ticks, 1,104 bars, natural completion.
 - Evidence: `TestEvidence/tp_lifecycle_direction_20260722/README.md`.
-- Next: gather a direction-attributed organic slice and add side-effect-free
-  forward outcome tracking. Readiness remains exactly `READY FOR SHADOW MODE`.
+- Direction-attributed organic rerun completed naturally for 2025-01-06:
+  240,447 ticks, exact slice `[17787378,18597518)`. It reproduced four unique
+  resume events (eight direction-paired rows), all nominated `down`; TP again
+  produced zero risk/stop evaluations and zero accepted signals.
+- The read-only MT5 chart-history API reported XAUUSD availability from 2018
+  but returned no M5 bars for the 2025 range. Next: add side-effect-free
+  forward MFE/MAE tracking inside the tester observation path rather than infer
+  outcomes from missing external history. Readiness remains exactly
+  `READY FOR SHADOW MODE`.
 
 ## 2026-07-22 — TP-specific observational impulse seed anchored
 

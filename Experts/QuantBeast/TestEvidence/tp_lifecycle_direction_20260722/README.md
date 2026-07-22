@@ -34,3 +34,23 @@ tp_structure_report.py           aa58703fc43025822120b9c5806d558fef78271eeea011f
 ```
 
 Readiness remains `READY FOR SHADOW MODE`.
+
+## Organic direction proof
+
+The 2025-01-06 `Model=4` Shadow window was rerun with the new field and
+completed naturally: 240,447 ticks, 276 bars, `OnTester result 0`, `test
+passed`, and `thread finished`. Exact signal-journal slice:
+`[17787378,18597518)`.
+
+The rerun reproduced 264 TP decisions, including 30 impulse, 24 retracing, and
+8 resume-candidate rows. The eight rows represent four completed-bar events;
+all four nominated `lifecycleDirection=down` at 06:35, 07:10, 07:35, and
+16:15 broker time. Direction counts over all TP rows were 202 none, 44 down,
+and 18 up. TP again produced no risk/stop evaluation or accepted signal.
+
+Report: `organic_20250106_direction_report.md`.
+
+The read-only MT5 `get_chart_history` API reported XAUUSD availability from
+2018 but returned an empty M5 payload for both filtered 2025 requests. Forward
+MFE/MAE is therefore still unmeasured; implement it inside the broker-free
+tester observation path rather than infer outcomes from missing chart data.
