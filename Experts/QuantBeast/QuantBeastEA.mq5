@@ -747,7 +747,8 @@ int OnInit()
 
    // --- Initialize Regime Engine ---
    if(!g_RegimeEngine.Init(InpRegimeEnabled, InpTrendSlopeThreshold,
-                            InpCompressionPct, InpShockVolMultiplier, InpExpansionMinBars))
+                            InpCompressionPct, InpShockVolMultiplier, InpExpansionMinBars,
+                            InpStructureImpulseMinDisplacement))
    {
       QBLogError("Regime engine init FAILED");
       return INIT_FAILED;

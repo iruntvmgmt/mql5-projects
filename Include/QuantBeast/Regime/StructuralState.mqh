@@ -20,13 +20,19 @@ class CStructuralState
 {
 private:
    double m_trendSlopeThreshold;
+   double m_impulseMinDisplacement;
 
 public:
-   CStructuralState() { m_trendSlopeThreshold = 0.3; }
+   CStructuralState()
+   {
+      m_trendSlopeThreshold = 0.3;
+      m_impulseMinDisplacement = 1.0;
+   }
 
-   void Init(double trendSlopeThreshold)
+   void Init(double trendSlopeThreshold, double impulseMinDisplacement = 1.0)
    {
       m_trendSlopeThreshold = MathMax(0.0001, trendSlopeThreshold);
+      m_impulseMinDisplacement = MathMax(0.0, impulseMinDisplacement);
    }
 
    //+------------------------------------------------------------------+
@@ -60,7 +66,8 @@ public:
       // threshold. Quality remains independently enforced by efficiency and
       // displacement.
       if(MathAbs(feat.slope_norm) > m_trendSlopeThreshold &&
-         feat.dir_efficiency > 0.4 && feat.displacement > 1.0)
+         feat.dir_efficiency > 0.4 &&
+         feat.displacement > m_impulseMinDisplacement)
       {
          score = 0.85;
          return STRUCTURE_IMPULSE;

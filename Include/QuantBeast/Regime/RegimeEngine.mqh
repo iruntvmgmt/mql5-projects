@@ -48,11 +48,12 @@ public:
    //| Initialize classifiers                                            |
    //+------------------------------------------------------------------+
    bool Init(bool enabled, double trendSlopeThreshold, double compressionPct,
-             double shockMultiplier, int minExpBars)
+             double shockMultiplier, int minExpBars,
+             double impulseMinDisplacement = 1.0)
    {
       m_enabled = enabled;
       m_trendClassifier.Init(trendSlopeThreshold);
-      m_structClassifier.Init(trendSlopeThreshold);
+      m_structClassifier.Init(trendSlopeThreshold, impulseMinDisplacement);
       m_volClassifier.Init(compressionPct, shockMultiplier, minExpBars);
       m_initialized = true;
 

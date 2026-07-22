@@ -97,6 +97,16 @@ bool QBTestRegimeClassification(string &detail)
    bool coherentThreshold = baselineThreshold.structure == STRUCTURE_BALANCED &&
                             loweredThreshold.structure == STRUCTURE_IMPULSE;
 
+   thresholdProbe.displacement = 0.8;
+   CRegimeEngine defaultDisplacement;
+   defaultDisplacement.Init(true, 0.2, 20.0, 3.0, 3, 1.0);
+   RegimeState defaultDispState = defaultDisplacement.Classify(thresholdProbe, SESSION_LONDON_OPEN, EVENT_NORMAL);
+   CRegimeEngine loweredDisplacement;
+   loweredDisplacement.Init(true, 0.2, 20.0, 3.0, 3, 0.6);
+   RegimeState loweredDispState = loweredDisplacement.Classify(thresholdProbe, SESSION_LONDON_OPEN, EVENT_NORMAL);
+   bool coherentDisplacement = defaultDispState.structure == STRUCTURE_BALANCED &&
+                               loweredDispState.structure == STRUCTURE_IMPULSE;
+
    f.abnormal_candle = true;
    RegimeState shock = engine.Classify(f, SESSION_LONDON_OPEN, EVENT_NORMAL);
    bool shockSafe = engine.IsSafeForTrading();
@@ -107,13 +117,15 @@ bool QBTestRegimeClassification(string &detail)
             EnumToString(healthy.structure) +
             " shock=" + EnumToString(shock.volatility) +
             " threshold=" + EnumToString(baselineThreshold.structure) + "->" +
-            EnumToString(loweredThreshold.structure);
+            EnumToString(loweredThreshold.structure) +
+            " displacement=" + EnumToString(defaultDispState.structure) + "->" +
+            EnumToString(loweredDispState.structure);
    return healthy.trend == TREND_STRONG_UP &&
           healthy.volatility == VOL_NORMAL &&
           healthy.liquidity == LIQUIDITY_GOOD &&
           healthy.structure == STRUCTURE_ACCEPTED_BREAKOUT &&
           healthySafe && shock.volatility == VOL_SHOCK && !shockSafe &&
-          coherentThreshold;
+          coherentThreshold && coherentDisplacement;
 }
 
 void QBMakeArbitrationSignal(StrategySignal &signal, string strategy,

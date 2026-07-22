@@ -23,6 +23,10 @@ Counts are overlapping predicate failures; one rejected observation may appear i
 | disp | 0.017 | 0.325 | 1.803 |
 | equil | 0.664 | 1.372 | 3.609 |
 
+## Otherwise impulse-qualified displacement
+
+Rows: 10; minimum: 0.203; median: 0.419; maximum: 0.805
+
 ## Failure combinations
 
 | Combination | Rows |

@@ -80,6 +80,7 @@ input group "══════════ Regime Engine ═══════�
 input bool   InpRegimeEnabled        = true;    // Enable Regime Detection
 input int    InpRegimeATRPeriod      = 14;      // ATR Period
 input double InpTrendSlopeThreshold  = 0.3;     // Trend Slope Threshold (normalized)
+input double InpStructureImpulseMinDisplacement = 1.0; // Structural impulse minimum displacement (ATR)
 input int    InpTrendLookback        = 20;      // Trend Lookback Bars
 input double InpCompressionPct       = 20.0;    // Compression Percentile Threshold
 input int    InpCompressionLookback  = 50;      // Compression Lookback Bars
