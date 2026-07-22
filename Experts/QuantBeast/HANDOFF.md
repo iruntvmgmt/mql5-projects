@@ -36,6 +36,21 @@
   weaken the central maximum-stop safety control to increase acceptance.
 - Evidence: `TestEvidence/tp_multiwindow_screen_20260722/README.md`.
 
+## 2026-07-22 — FBO/MR multi-window stop-geometry audit
+
+- Added a reusable exact-slice stop-geometry report and applied it to the three
+  completed TP-screen windows.
+- FBO: 10 accepted geometries (median 728.5 points) and nine stop-too-far
+  rejects (median 1,499; range 1,138–2,181; 1.57–2.90 ATR). Source review
+  confirms the width comes from the intended sweep extreme plus 1.0 ATR.
+- MR: four accepted geometries (median 258 points) and one 1,006-point reject,
+  only six points over the cap and 0.75 ATR. Source review confirms intended
+  range-boundary construction; one boundary sample is insufficient for policy
+  change.
+- No stop arithmetic defect was confirmed. Preserve `InpMaxStopPoints=1000`;
+  do not clip structural stops or relax the central safety limit for acceptance.
+- Evidence: `TestEvidence/stop_geometry_multiwindow_20260722/`.
+
 **Last updated:** 2026-07-20  
 **Current phase:** Broker-free audit, repair, deterministic validation, and organic true-tick journal proof complete through safe phases  
 **Current verdict:** **READY FOR SHADOW MODE; live and Challenge trading prohibited**  

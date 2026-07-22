@@ -9,6 +9,11 @@
 > Issue one request only, then monitor `Tester/logs` and the local agent log
 > read-only. Do not retry until a natural `test passed` / `thread finished`
 > footer exists or the first request is proven never to have loaded a profile.
+
+For cross-window stop audits, use `Tools/stop_geometry_report.py` with one
+`--slice LABEL:START:END` argument per naturally completed journal range. Supply
+the recorded symbol point size and unchanged configured maximum stop. The tool
+intentionally excludes strategy-stage rejections that have no final geometry.
 **Rule:** A successful compile or profitable backtest alone is not completion.
 
 The audit and test program must follow `PROJECT_MISSION_AND_AUDIT_CONTEXT.md`. In particular, it must preserve independent strategy engines, examine Challenge Mode as a deterministic bounded-risk system, and avoid treating architectural sophistication as evidence of trading edge.
