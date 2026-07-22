@@ -48,6 +48,7 @@
 #include <QuantBeast/Execution/ShadowPortfolio.mqh>
 #include <QuantBeast/Analytics/TradeJournal.mqh>
 #include <QuantBeast/Analytics/CounterfactualTracker.mqh>
+#include <QuantBeast/Analytics/TPOutcomeTracker.mqh>
 #include <QuantBeast/UI/Dashboard.mqh>
 #include <QuantBeast/UI/Alerts.mqh>
 #include <QuantBeast/Testing/SafetyTests.mqh>
@@ -90,6 +91,7 @@ CShadowPortfolio      g_Shadow;
 // Analytics & UI
 CTradeJournal         g_Journal;
 CCounterfactualTracker g_Counterfactual;
+CTPOutcomeTracker      g_TPOutcomeTracker;
 CDashboard            g_Dashboard;
 CAlerts               g_Alerts;
 
@@ -845,6 +847,7 @@ int OnInit()
    // --- Initialize Journal ---
    g_Journal.Init(InpEnableSignalJournal, InpEnableOrderJournal, InpEnableTradeJournal, InpJournalTesterPrefix);
    g_Counterfactual.Init(InpEnableCounterfactual, InpJournalTesterPrefix);
+   g_TPOutcomeTracker.Init(InpEnableTPOutcomeJournal, InpJournalTesterPrefix);
 
    // --- Initialize Dashboard ---
    g_Dashboard.Init(InpDashboardEnabled, InpDashboardX, InpDashboardY,
@@ -1065,6 +1068,7 @@ void OnDeinit(const int reason)
    // Close journals
    g_Journal.CloseAll();
    g_Counterfactual.Close();
+   g_TPOutcomeTracker.Close();
 
    // Clear dashboard
    g_Dashboard.Clear();
@@ -1134,6 +1138,7 @@ void OnTick()
    if(dataQualityOK && (isNewBar || !g_StartupReconciled))
    {
       g_CurrentFeat = g_FeatureEngine.Calculate(InpPrimaryTF, InpHTF, InpDailyTF, g_CurrentSnap);
+      g_TPOutcomeTracker.UpdatePending(g_CurrentFeat);
    }
 
    // --- Step 8: Classify regime ---
@@ -1309,6 +1314,15 @@ void EvaluateAndTrade()
       if(sigShort.valid)
       {
          candidates[candidateCount++] = sigShort;
+      }
+
+      // Observation-only: sample the TP lifecycle's settled state for this bar
+      // exactly once (both EvaluateLong/EvaluateShort above have already run for
+      // strategy i here), never creates a signal or touches risk/arbitration.
+      if(i == QB_STRAT_IDX_TP)
+      {
+         g_TPOutcomeTracker.CheckAndRegister(g_StrategyTP, g_CurrentSnap, g_CurrentFeat,
+                                             g_CurrentRegime, g_Adapter.Symbol());
       }
    }
 
@@ -2713,6 +2727,59 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 64 PASS: TP lifecycle observation " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 64 FAIL: TP lifecycle observation " + detail); }
+   }
+
+   {
+      string detail = "";
+      if(QBTestTPOutcomeEventID(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 65 PASS: TP outcome event ID " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 65 FAIL: TP outcome event ID " + detail); }
+
+      if(QBTestTPOutcomeRegistrationDedup(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 66 PASS: TP outcome registration dedup " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 66 FAIL: TP outcome registration dedup " + detail); }
+
+      if(QBTestTPOutcomeSignOrientation(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 67 PASS: TP outcome sign orientation " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 67 FAIL: TP outcome sign orientation " + detail); }
+
+      if(QBTestTPOutcomeDirectionImmutability(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 68 PASS: TP outcome direction immutability " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 68 FAIL: TP outcome direction immutability " + detail); }
+
+      if(QBTestTPOutcomeOnlyFutureBars(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 69 PASS: TP outcome only future bars " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 69 FAIL: TP outcome only future bars " + detail); }
+
+      if(QBTestTPOutcomeTruncatedHorizon(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 70 PASS: TP outcome truncated horizon " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 70 FAIL: TP outcome truncated horizon " + detail); }
+
+      if(QBTestTPOutcomeNoTradingSideEffects(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 71 PASS: TP outcome no trading side effects " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 71 FAIL: TP outcome no trading side effects " + detail); }
+
+      if(QBTestTPOutcomeReinitNoDuplication(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 72 PASS: TP outcome reinit no duplication " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 72 FAIL: TP outcome reinit no duplication " + detail); }
+
+      if(QBTestTPOutcomeThresholdAmbiguity(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 73 PASS: TP outcome threshold ambiguity " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 73 FAIL: TP outcome threshold ambiguity " + detail); }
+
+      if(QBTestTPOutcomeRetracementDepth(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 74 PASS: TP outcome retracement depth " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 74 FAIL: TP outcome retracement depth " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

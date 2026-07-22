@@ -281,6 +281,7 @@ input bool   InpUseGlobalVars         = true;    // Use Terminal Global Variable
 input group "══════════ Logging ══════════"
 input bool   InpEnableSignalJournal   = true;    // Enable Signal Journal
 input bool   InpEnableCounterfactual  = false;   // Enable Counterfactual Journal (rejected-signal hypotheticals)
+input bool   InpEnableTPOutcomeJournal = true;   // Enable TP Resume-Candidate Outcome Journal (observation-only)
 input bool   InpEnableOrderJournal    = true;    // Enable Order Journal
 input bool   InpEnableTradeJournal    = true;    // Enable Trade Journal
 input bool   InpJournalTesterPrefix  = false;   // Route journals to Tester\ subdirectory (set true in Strategy Tester)

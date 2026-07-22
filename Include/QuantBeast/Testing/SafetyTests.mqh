@@ -24,6 +24,7 @@
 #include "../Portfolio/SignalArbitrator.mqh"
 #include "../Portfolio/AllocationEngine.mqh"
 #include "../Analytics/CounterfactualTracker.mqh"
+#include "../Analytics/TPOutcomeTracker.mqh"
 #include "../Execution/RecoveryEngine.mqh"
 #include "../Strategies/BreakoutEngine.mqh"
 #include "../Strategies/FailedBreakoutEngine.mqh"
@@ -2159,6 +2160,495 @@ bool QBTestTPLifecycleObservation(CSymbolAdapter &adapter, string &detail)
             " invalid=" + (invalidated ? "yes" : "FAIL") +
             " tpSeed=" + (specificSeed ? "yes" : "FAIL");
    return impulse && retracing && resumed && invalidated && specificSeed;
+}
+
+//+------------------------------------------------------------------+
+//| Shared fixtures for the TP outcome tracker tests (65-74) below.   |
+//| Both drive a fresh CTrendPullbackEngine deterministically through |
+//| impulse -> retracing -> resume_candidate, mirroring Test 64's own |
+//| bar-by-bar recipe (STRUCTURE_IMPULSE seed, then moving_toward_    |
+//| value=true for one bar, then an aligned candle with                |
+//| moving_toward_value=false to resume).                              |
+//+------------------------------------------------------------------+
+void QBDriveTPToResumeCandidate(CSymbolAdapter &adapter, CTrendPullbackEngine &strategy,
+                                MarketSnapshot &market, FeatureSnapshot &f, RegimeState &regime,
+                                int direction, datetime baseTime)
+{
+   strategy.Init("TP_OUTCOME_TEST", "TP outcome test", true, 0.0, adapter,
+                 TRIGGER_CANDLE_CLOSE_BREAK, 0.4, 5, false, 0.618, 3, 1.5, 0.5);
+   double d;
+   QBMakeSyntheticMarket(adapter, market, d);
+   QBMakeNormalRegime(regime);
+   regime.trend = (direction > 0) ? TREND_STRONG_UP : TREND_STRONG_DOWN;
+
+   ZeroMemory(f);
+   f.atr = d; f.dir_efficiency = 0.8; f.trend_persistence = 10;
+   f.current_range_low = market.mid - 4.0 * d;
+   f.current_range_high = market.mid + 2.0 * d;
+   f.swing_high = f.current_range_high; f.swing_low = f.current_range_low;
+
+   // Bar 1: shared STRUCTURE_IMPULSE seed, aligned candle in trend direction.
+   f.calc_time = baseTime;
+   f.closed_open = market.mid;
+   f.closed_close = market.mid + direction * d;
+   regime.structure = STRUCTURE_IMPULSE;
+   strategy.EvaluateLong(market, f, regime);
+
+   // Bar 2: moving toward value -> retracing. Counter-trend candle.
+   f.calc_time = baseTime + 1;
+   f.moving_toward_value = true;
+   f.closed_open = market.mid + direction * d;
+   f.closed_close = market.mid;
+   regime.structure = STRUCTURE_BALANCED;
+   strategy.EvaluateLong(market, f, regime);
+
+   // Bar 3: pullback ends, aligned candle -> resume_candidate.
+   f.calc_time = baseTime + 2;
+   f.moving_toward_value = false;
+   f.closed_open = market.mid;
+   f.closed_close = market.mid + direction * d;
+   strategy.EvaluateLong(market, f, regime);
+}
+
+//+------------------------------------------------------------------+
+//| Same recipe, but with bar 1's close and bar 3's open/close placed |
+//| at explicit ATR offsets from market.mid, so a test can target a   |
+//| precise impulse_extreme/impulse_start_price/ref_price triple --   |
+//| used only by the retracement-depth table test (74). Always the up |
+//| direction; depth math is direction-symmetric.                     |
+//+------------------------------------------------------------------+
+void QBDriveTPToResumeCandidateCustom(CSymbolAdapter &adapter, CTrendPullbackEngine &strategy,
+                                      MarketSnapshot &market, FeatureSnapshot &f, RegimeState &regime,
+                                      datetime baseTime, double bar1CloseOffsetATR,
+                                      double bar3OpenOffsetATR, double bar3CloseOffsetATR)
+{
+   strategy.Init("TP_OUTCOME_TEST", "TP outcome test", true, 0.0, adapter,
+                 TRIGGER_CANDLE_CLOSE_BREAK, 0.4, 5, false, 0.618, 3, 1.5, 0.5);
+   double d;
+   QBMakeSyntheticMarket(adapter, market, d);
+   QBMakeNormalRegime(regime);
+   regime.trend = TREND_STRONG_UP;
+
+   ZeroMemory(f);
+   f.atr = d; f.dir_efficiency = 0.8; f.trend_persistence = 10;
+   f.current_range_low = market.mid - 4.0 * d;
+   f.current_range_high = market.mid + 2.0 * d;
+   f.swing_high = f.current_range_high; f.swing_low = f.current_range_low;
+
+   f.calc_time = baseTime;
+   f.closed_open = market.mid;
+   f.closed_close = market.mid + bar1CloseOffsetATR * d;
+   regime.structure = STRUCTURE_IMPULSE;
+   strategy.EvaluateLong(market, f, regime);
+
+   f.calc_time = baseTime + 1;
+   f.moving_toward_value = true;
+   f.closed_open = f.closed_close;
+   f.closed_close = market.mid;
+   regime.structure = STRUCTURE_BALANCED;
+   strategy.EvaluateLong(market, f, regime);
+
+   f.calc_time = baseTime + 2;
+   f.moving_toward_value = false;
+   f.closed_open = market.mid + bar3OpenOffsetATR * d;
+   f.closed_close = market.mid + bar3CloseOffsetATR * d;
+   strategy.EvaluateLong(market, f, regime);
+}
+
+//+------------------------------------------------------------------+
+//| TEST 65: deterministic event IDs.                                  |
+//+------------------------------------------------------------------+
+bool QBTestTPOutcomeEventID(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine s1, s2, s3;
+   MarketSnapshot m; FeatureSnapshot f; RegimeState r;
+
+   CTPOutcomeTracker t1;
+   t1.Init(true, true);
+   QBDriveTPToResumeCandidate(adapter, s1, m, f, r, 1, 100);
+   t1.CheckAndRegister(s1, m, f, r, "XAUUSD");
+   string id1 = t1.GetPending(0).event_id;
+
+   CTPOutcomeTracker t2;
+   t2.Init(true, true);
+   QBDriveTPToResumeCandidate(adapter, s2, m, f, r, 1, 100);
+   t2.CheckAndRegister(s2, m, f, r, "XAUUSD");
+   string id2 = t2.GetPending(0).event_id;
+
+   CTPOutcomeTracker t3;
+   t3.Init(true, true);
+   QBDriveTPToResumeCandidate(adapter, s3, m, f, r, 1, 200);
+   t3.CheckAndRegister(s3, m, f, r, "XAUUSD");
+   string id3 = t3.GetPending(0).event_id;
+
+   bool sameInputsSameID = (id1 == id2) && id1 != "";
+   bool differentTimeDifferentID = (id1 != id3);
+
+   detail = "id1=" + id1 + " id3=" + id3 +
+            " sameInputsSameID=" + (sameInputsSameID ? "yes" : "FAIL") +
+            " differentTimeDifferentID=" + (differentTimeDifferentID ? "yes" : "FAIL");
+   return sameInputsSameID && differentTimeDifferentID;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 66: exactly one event registers despite a hypothetical extra |
+//| same-bar invocation (BUY/SELL pairing risk), via the tracker's own |
+//| internal dedupe -- independent of the EA's call-site placement.    |
+//+------------------------------------------------------------------+
+bool QBTestTPOutcomeRegistrationDedup(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine strategy;
+   MarketSnapshot m; FeatureSnapshot f; RegimeState r;
+   QBDriveTPToResumeCandidate(adapter, strategy, m, f, r, 1, 300);
+
+   CTPOutcomeTracker t;
+   t.Init(true, true);
+   t.CheckAndRegister(strategy, m, f, r, "XAUUSD");   // simulates the real post-EvaluateShort hook
+   strategy.EvaluateShort(m, f, r);                    // same-bar no-op per ObserveLifecycle's own guard
+   t.CheckAndRegister(strategy, m, f, r, "XAUUSD");   // hypothetical duplicate invocation
+
+   int total = t.PendingCount() + (int)t.TotalFinalized();
+   bool onlyOne = (total == 1) && (t.TotalRegistered() == 1);
+   detail = "pending=" + IntegerToString(t.PendingCount()) +
+            " finalized=" + IntegerToString((int)t.TotalFinalized()) +
+            " registered=" + IntegerToString((int)t.TotalRegistered()) +
+            " onlyOne=" + (onlyOne ? "yes" : "FAIL");
+   return onlyOne;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 67: MFE/MAE sign orientation is correct for both directions -- |
+//| the same relative bar shape (bigger rally than dip) is favorable    |
+//| for an up-nominated event and adverse for a down-nominated one.     |
+//+------------------------------------------------------------------+
+bool QBTestTPOutcomeSignOrientation(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine sUp;
+   MarketSnapshot mUp; FeatureSnapshot fUp; RegimeState rUp;
+   QBDriveTPToResumeCandidate(adapter, sUp, mUp, fUp, rUp, 1, 400);
+   CTPOutcomeTracker tUp;
+   tUp.Init(true, true);
+   tUp.CheckAndRegister(sUp, mUp, fUp, rUp, "XAUUSD");
+   double refUp = tUp.GetPending(0).ref_price;
+   double atrUp = tUp.GetPending(0).atr_ref;
+   FeatureSnapshot barUp; ZeroMemory(barUp);
+   barUp.calc_time = 1000;
+   barUp.closed_high = refUp + 0.6 * atrUp;
+   barUp.closed_low  = refUp - 0.3 * atrUp;
+   barUp.closed_close = refUp + 0.1 * atrUp;
+   tUp.UpdatePending(barUp);
+   TPOutcomeEvent up = tUp.GetPending(0);
+   bool upOK = MathAbs(up.mfe_atr[0] - 0.6) <= 0.01 && MathAbs(up.mae_atr[0] - 0.3) <= 0.01;
+
+   CTrendPullbackEngine sDown;
+   MarketSnapshot mDown; FeatureSnapshot fDown; RegimeState rDown;
+   QBDriveTPToResumeCandidate(adapter, sDown, mDown, fDown, rDown, -1, 500);
+   CTPOutcomeTracker tDown;
+   tDown.Init(true, true);
+   tDown.CheckAndRegister(sDown, mDown, fDown, rDown, "XAUUSD");
+   double refDown = tDown.GetPending(0).ref_price;
+   double atrDown = tDown.GetPending(0).atr_ref;
+   FeatureSnapshot barDown; ZeroMemory(barDown);
+   barDown.calc_time = 1000;
+   barDown.closed_high = refDown + 0.6 * atrDown;
+   barDown.closed_low  = refDown - 0.3 * atrDown;
+   barDown.closed_close = refDown + 0.1 * atrDown;
+   tDown.UpdatePending(barDown);
+   TPOutcomeEvent down = tDown.GetPending(0);
+   bool downOK = MathAbs(down.mfe_atr[0] - 0.3) <= 0.01 && MathAbs(down.mae_atr[0] - 0.6) <= 0.01;
+
+   detail = "up.mfe=" + DoubleToString(up.mfe_atr[0], 3) + " up.mae=" + DoubleToString(up.mae_atr[0], 3) +
+            " down.mfe=" + DoubleToString(down.mfe_atr[0], 3) + " down.mae=" + DoubleToString(down.mae_atr[0], 3) +
+            " upOK=" + (upOK ? "yes" : "FAIL") + " downOK=" + (downOK ? "yes" : "FAIL");
+   return upOK && downOK;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 68: direction is frozen at registration -- invalidating the   |
+//| live engine afterward must not retroactively change the stored     |
+//| event.                                                              |
+//+------------------------------------------------------------------+
+bool QBTestTPOutcomeDirectionImmutability(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine strategy;
+   MarketSnapshot m; FeatureSnapshot f; RegimeState r;
+   QBDriveTPToResumeCandidate(adapter, strategy, m, f, r, 1, 600);
+
+   CTPOutcomeTracker t;
+   t.Init(true, true);
+   t.CheckAndRegister(strategy, m, f, r, "XAUUSD");
+   string before = t.GetPending(0).direction;
+
+   f.calc_time = 603;
+   r.trend = TREND_STRONG_DOWN;
+   strategy.EvaluateLong(m, f, r);
+   bool engineInvalidated = strategy.GetLifecyclePhase() == "invalidated";
+
+   FeatureSnapshot bar; ZeroMemory(bar);
+   bar.calc_time = 1000;
+   bar.closed_high = m.mid + 0.1; bar.closed_low = m.mid - 0.1; bar.closed_close = m.mid;
+   t.UpdatePending(bar);
+   string after = t.GetPending(0).direction;
+
+   bool unchanged = (before == after) && (before == "up");
+   detail = "before=" + before + " after=" + after +
+            " engineInvalidated=" + (engineInvalidated ? "yes" : "FAIL") +
+            " unchanged=" + (unchanged ? "yes" : "FAIL");
+   return unchanged && engineInvalidated;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 69: only genuinely future bars are folded into MFE/MAE. The   |
+//| registration bar itself is untouched (bars_elapsed==0, MFE/MAE==0  |
+//| immediately after registration), and the EA's real per-bar order   |
+//| (UpdatePending runs in Step 7 before that bar's own registration   |
+//| can happen in EvaluateAndTrade) is mirrored explicitly here.       |
+//+------------------------------------------------------------------+
+bool QBTestTPOutcomeOnlyFutureBars(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine strategy;
+   MarketSnapshot m; FeatureSnapshot f; RegimeState r;
+   QBDriveTPToResumeCandidate(adapter, strategy, m, f, r, 1, 700);   // resumes at calc_time=702
+
+   CTPOutcomeTracker t;
+   t.Init(true, true);
+   t.UpdatePending(f);                                // mirrors Step 7 running before registration
+   t.CheckAndRegister(strategy, m, f, r, "XAUUSD");    // registers at bar 702
+
+   bool untouchedAtRegistration = (t.GetPending(0).bars_elapsed == 0) &&
+                                  MathAbs(t.GetPending(0).mfe_atr[0]) <= QB_EPSILON &&
+                                  MathAbs(t.GetPending(0).mae_atr[0]) <= QB_EPSILON;
+
+   FeatureSnapshot bar703; ZeroMemory(bar703);
+   bar703.calc_time = 703;
+   double refPrice = t.GetPending(0).ref_price;
+   double atrRef = t.GetPending(0).atr_ref;
+   bar703.closed_high = refPrice + 0.2 * atrRef;
+   bar703.closed_low  = refPrice - 0.05 * atrRef;
+   bar703.closed_close = refPrice + 0.1 * atrRef;
+   t.UpdatePending(bar703);
+
+   TPOutcomeEvent e = t.GetPending(0);
+   bool onlyForwardBarCounted = (e.bars_elapsed == 1) && MathAbs(e.mfe_atr[0] - 0.2) <= 0.01;
+
+   detail = "untouchedAtRegistration=" + (untouchedAtRegistration ? "yes" : "FAIL") +
+            " bars@703=" + IntegerToString(e.bars_elapsed) +
+            " mfe@703=" + DoubleToString(e.mfe_atr[0], 3) +
+            " onlyForwardBarCounted=" + (onlyForwardBarCounted ? "yes" : "FAIL");
+   return untouchedAtRegistration && onlyForwardBarCounted;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 70: an incomplete horizon is never silently treated as         |
+//| complete -- it is explicitly TRUNCATED with no fabricated close     |
+//| return, while a horizon that did complete keeps its real value.     |
+//+------------------------------------------------------------------+
+bool QBTestTPOutcomeTruncatedHorizon(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine strategy;
+   MarketSnapshot m; FeatureSnapshot f; RegimeState r;
+   QBDriveTPToResumeCandidate(adapter, strategy, m, f, r, 1, 800);   // resumes at calc_time=802
+
+   CTPOutcomeTracker t;
+   t.Init(true, true);
+   t.CheckAndRegister(strategy, m, f, r, "XAUUSD");
+   double refPrice = t.GetPending(0).ref_price;
+   double atrRef = t.GetPending(0).atr_ref;
+
+   for(int i = 1; i <= 5; i++)
+   {
+      FeatureSnapshot bar; ZeroMemory(bar);
+      bar.calc_time = 802 + i;
+      bar.closed_high = refPrice + 0.1 * atrRef;
+      bar.closed_low  = refPrice - 0.05 * atrRef;
+      bar.closed_close = refPrice + 0.05 * atrRef;
+      t.UpdatePending(bar);
+   }
+
+   bool stillPending = (t.PendingCount() == 1);
+   bool h3CompleteBeforeClose = t.GetPending(0).status[0] == "COMPLETE";
+
+   t.Close();
+
+   TPOutcomeEvent finalized = t.GetLastFinalized();
+   bool h3Complete = finalized.status[0] == "COMPLETE";
+   bool h6Truncated = finalized.status[1] == "TRUNCATED";
+   bool h12Truncated = finalized.status[2] == "TRUNCATED";
+   bool h24Truncated = finalized.status[3] == "TRUNCATED";
+
+   detail = "h3=" + finalized.status[0] + " h6=" + finalized.status[1] +
+            " h12=" + finalized.status[2] + " h24=" + finalized.status[3] +
+            " stillPendingBeforeClose=" + (stillPending ? "yes" : "FAIL") +
+            " h3CompleteBeforeClose=" + (h3CompleteBeforeClose ? "yes" : "FAIL");
+   return stillPending && h3CompleteBeforeClose && h3Complete && h6Truncated && h12Truncated && h24Truncated;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 71: the tracker only reads the engine it observes -- every     |
+//| public lifecycle accessor is byte-identical before/after            |
+//| CheckAndRegister/UpdatePending. Its API takes no broker/risk/       |
+//| arbitration object at all, so there is no execution surface to      |
+//| touch in the first place.                                           |
+//+------------------------------------------------------------------+
+bool QBTestTPOutcomeNoTradingSideEffects(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine strategy;
+   MarketSnapshot m; FeatureSnapshot f; RegimeState r;
+   QBDriveTPToResumeCandidate(adapter, strategy, m, f, r, 1, 900);   // resumes at calc_time=902
+
+   string phaseBefore = strategy.GetLifecyclePhase();
+   int barsBefore = strategy.GetLifecycleBars();
+   string dirBefore = strategy.GetLifecycleDirection();
+   string seedBefore = strategy.GetLifecycleSeedSource();
+   datetime impStartTimeBefore = strategy.GetImpulseStartTime();
+   double impStartPriceBefore = strategy.GetImpulseStartPrice();
+   double impExtremeBefore = strategy.GetImpulseExtreme();
+   double impSpanBefore = strategy.GetImpulseSpanATR();
+
+   CTPOutcomeTracker t;
+   t.Init(true, true);
+   t.CheckAndRegister(strategy, m, f, r, "XAUUSD");
+
+   FeatureSnapshot bar; ZeroMemory(bar);
+   bar.calc_time = 903;
+   bar.closed_high = t.GetPending(0).ref_price + 0.1;
+   bar.closed_low  = t.GetPending(0).ref_price - 0.1;
+   bar.closed_close = t.GetPending(0).ref_price;
+   t.UpdatePending(bar);
+
+   bool identical = (strategy.GetLifecyclePhase() == phaseBefore) &&
+                    (strategy.GetLifecycleBars() == barsBefore) &&
+                    (strategy.GetLifecycleDirection() == dirBefore) &&
+                    (strategy.GetLifecycleSeedSource() == seedBefore) &&
+                    (strategy.GetImpulseStartTime() == impStartTimeBefore) &&
+                    MathAbs(strategy.GetImpulseStartPrice() - impStartPriceBefore) <= QB_EPSILON &&
+                    MathAbs(strategy.GetImpulseExtreme() - impExtremeBefore) <= QB_EPSILON &&
+                    MathAbs(strategy.GetImpulseSpanATR() - impSpanBefore) <= QB_EPSILON;
+
+   detail = "phase=" + phaseBefore + " identicalAfterTrackerCalls=" + (identical ? "yes" : "FAIL");
+   return identical;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 72: reinitialization clears in-memory state without touching   |
+//| any persistence layer, so it cannot duplicate already-registered    |
+//| events within the same run.                                         |
+//+------------------------------------------------------------------+
+bool QBTestTPOutcomeReinitNoDuplication(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine strategy;
+   MarketSnapshot m; FeatureSnapshot f; RegimeState r;
+   QBDriveTPToResumeCandidate(adapter, strategy, m, f, r, 1, 1000);   // resumes at calc_time=1002
+
+   CTPOutcomeTracker t;
+   t.Init(true, true);
+   t.CheckAndRegister(strategy, m, f, r, "XAUUSD");
+   string idBeforeReinit = t.GetPending(0).event_id;
+   bool registeredOnce = (t.PendingCount() == 1) && (t.TotalRegistered() == 1);
+
+   t.Init(true, true);   // simulates an OnInit re-entry within the same terminal session
+   bool clearedOnReinit = (t.PendingCount() == 0) && (t.TotalRegistered() == 0) && (t.TotalFinalized() == 0);
+
+   t.CheckAndRegister(strategy, m, f, r, "XAUUSD");
+   string idAfterReinit = t.GetPending(0).event_id;
+   bool freshRegistration = (t.PendingCount() == 1) && (t.TotalRegistered() == 1) &&
+                            (idAfterReinit == idBeforeReinit);
+
+   detail = "registeredOnce=" + (registeredOnce ? "yes" : "FAIL") +
+            " clearedOnReinit=" + (clearedOnReinit ? "yes" : "FAIL") +
+            " freshRegistration=" + (freshRegistration ? "yes" : "FAIL");
+   return registeredOnce && clearedOnReinit && freshRegistration;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 73: a bar whose high and low both cross a threshold is         |
+//| recorded as genuinely ambiguous rather than arbitrarily resolved,   |
+//| while a bar crossing only one side stays unambiguous.                |
+//+------------------------------------------------------------------+
+bool QBTestTPOutcomeThresholdAmbiguity(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine s1;
+   MarketSnapshot m1; FeatureSnapshot f1; RegimeState r1;
+   QBDriveTPToResumeCandidate(adapter, s1, m1, f1, r1, 1, 1100);
+   CTPOutcomeTracker t1;
+   t1.Init(true, true);
+   t1.CheckAndRegister(s1, m1, f1, r1, "XAUUSD");
+   double ref1 = t1.GetPending(0).ref_price;
+   double atr1 = t1.GetPending(0).atr_ref;
+   FeatureSnapshot bothBar; ZeroMemory(bothBar);
+   bothBar.calc_time = 1200;
+   bothBar.closed_high = ref1 + 0.4 * atr1;
+   bothBar.closed_low  = ref1 - 0.4 * atr1;
+   bothBar.closed_close = ref1;
+   t1.UpdatePending(bothBar);
+   TPOutcomeEvent e1 = t1.GetPending(0);
+   bool ambiguous = (e1.first_threshold[0] == "AMBIGUOUS_SAME_BAR") &&
+                    e1.reached_p25[0] > 0 && e1.reachedNeg_p25[0] > 0;
+
+   CTrendPullbackEngine s2;
+   MarketSnapshot m2; FeatureSnapshot f2; RegimeState r2;
+   QBDriveTPToResumeCandidate(adapter, s2, m2, f2, r2, 1, 1300);
+   CTPOutcomeTracker t2;
+   t2.Init(true, true);
+   t2.CheckAndRegister(s2, m2, f2, r2, "XAUUSD");
+   double ref2 = t2.GetPending(0).ref_price;
+   double atr2 = t2.GetPending(0).atr_ref;
+   FeatureSnapshot favOnlyBar; ZeroMemory(favOnlyBar);
+   favOnlyBar.calc_time = 1400;
+   favOnlyBar.closed_high = ref2 + 0.4 * atr2;
+   favOnlyBar.closed_low  = ref2 - 0.05 * atr2;
+   favOnlyBar.closed_close = ref2;
+   t2.UpdatePending(favOnlyBar);
+   TPOutcomeEvent e2 = t2.GetPending(0);
+   bool unambiguousFavorable = (e2.first_threshold[0] == "FAVORABLE") && (e2.reachedNeg_p25[0] == 0);
+
+   detail = "case1=" + e1.first_threshold[0] + " case2=" + e2.first_threshold[0] +
+            " ambiguous=" + (ambiguous ? "yes" : "FAIL") +
+            " unambiguousFavorable=" + (unambiguousFavorable ? "yes" : "FAIL");
+   return ambiguous && unambiguousFavorable;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 74: retracement depth is computed correctly across a partial,  |
+//| near-full, and overshoot retrace, and a degenerate (zero-span)      |
+//| impulse is skipped entirely rather than recording an undefined      |
+//| depth.                                                               |
+//+------------------------------------------------------------------+
+bool QBTestTPOutcomeRetracementDepth(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine s1; MarketSnapshot m1; FeatureSnapshot f1; RegimeState r1;
+   QBDriveTPToResumeCandidateCustom(adapter, s1, m1, f1, r1, 1500, 1.0, 0.0, 0.5);
+   CTPOutcomeTracker t1; t1.Init(true, true);
+   t1.CheckAndRegister(s1, m1, f1, r1, "XAUUSD");
+   bool partial = (t1.PendingCount() == 1) && MathAbs(t1.GetPending(0).retracement_depth - 0.5) <= 0.02;
+
+   CTrendPullbackEngine s2; MarketSnapshot m2; FeatureSnapshot f2; RegimeState r2;
+   QBDriveTPToResumeCandidateCustom(adapter, s2, m2, f2, r2, 1600, 1.0, -0.5, 0.001);
+   CTPOutcomeTracker t2; t2.Init(true, true);
+   t2.CheckAndRegister(s2, m2, f2, r2, "XAUUSD");
+   bool full = (t2.PendingCount() == 1) && MathAbs(t2.GetPending(0).retracement_depth - 1.0) <= 0.02;
+
+   CTrendPullbackEngine s3; MarketSnapshot m3; FeatureSnapshot f3; RegimeState r3;
+   QBDriveTPToResumeCandidateCustom(adapter, s3, m3, f3, r3, 1700, 1.0, -0.5, -0.2);
+   CTPOutcomeTracker t3; t3.Init(true, true);
+   t3.CheckAndRegister(s3, m3, f3, r3, "XAUUSD");
+   bool overshoot = (t3.PendingCount() == 1) && (t3.GetPending(0).retracement_depth > 1.0);
+
+   CTrendPullbackEngine s4; MarketSnapshot m4; FeatureSnapshot f4; RegimeState r4;
+   QBDriveTPToResumeCandidateCustom(adapter, s4, m4, f4, r4, 1800, 0.0, -0.1, 0.1);
+   bool degenerateReachedResume = (s4.GetLifecyclePhase() == "resume_candidate");
+   CTPOutcomeTracker t4; t4.Init(true, true);
+   t4.CheckAndRegister(s4, m4, f4, r4, "XAUUSD");
+   bool degenerateSkipped = (t4.PendingCount() == 0) && (t4.TotalRegistered() == 0);
+
+   detail = "partialDepth=" + DoubleToString(t1.GetPending(0).retracement_depth, 3) +
+            " fullDepth=" + DoubleToString(t2.GetPending(0).retracement_depth, 3) +
+            " overshootDepth=" + DoubleToString(t3.GetPending(0).retracement_depth, 3) +
+            " degenerateReachedResume=" + (degenerateReachedResume ? "yes" : "FAIL") +
+            " degenerateSkipped=" + (degenerateSkipped ? "yes" : "FAIL") +
+            " partial=" + (partial ? "yes" : "FAIL") + " full=" + (full ? "yes" : "FAIL") +
+            " overshoot=" + (overshoot ? "yes" : "FAIL");
+   return partial && full && overshoot && degenerateReachedResume && degenerateSkipped;
 }
 
 #endif // QB_SAFETYTESTS_MQH
