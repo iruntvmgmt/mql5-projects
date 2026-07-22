@@ -21,3 +21,21 @@ The baseline profile completed on the local tester agent with 417,423 real ticks
 This proves the profile and terminal path are reachable and confirms both preflight and stop-distance gates can suppress entries in the same window. Its shared journal rows are excluded from comparative evidence because an earlier incomplete attempt may have appended to the same files before offsets were captured.
 
 An experimental per-run journal-label input compiled and passed its internal helper test but did not appear in the tester agent's effective external-input schema. It was removed rather than retained as unverified infrastructure. Restarting only the idle local tester agent did not refresh that schema and temporarily returned the MCP launcher to its documented no-run state; the main MT5 terminal was not restarted.
+
+## Controlled results
+
+All completed variants used the same 417,423 real ticks and 276 bars. Each funnel contains exactly 880 signal decisions (220 per strategy). Net P&L and summed R are calculated from the matching byte-offset-scoped TradeJournal suffix.
+
+| Variant | BO accepted | FBO accepted | MR accepted | TP accepted | Risk/stop rejects | Trades | Net P&L | Sum R |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 0 | 5 | 1 | 0 | 2 | 6 | $215.31 | 2.67 |
+| No price jump | 0 | 5 | 1 | 0 | 2 | 6 | $215.31 | 2.67 |
+| Relaxed stops | 0 | 7 | 0 | 0 | 0 | 7 | $173.53 | 1.79 |
+| Relaxed account locks | 0 | 5 | 1 | 0 | 2 | 6 | $215.31 | 2.67 |
+| All relaxed | 0 | 7 | 0 | 0 | 0 | 7 | $173.53 | 1.79 |
+
+The baseline funnel is reconstructed from its bounded tester-agent section and matching trade sequence because its signal-journal start offset was contaminated by the earlier incomplete attempt. The other four variant reports use exact signal byte offsets: `1,204,436` for no-price-jump, `1,740,944` for relaxed stops, `2,277,564` for relaxed account locks, and `2,814,072` for all-relaxed.
+
+### Finding
+
+The price-jump gate and account-risk locks had no measurable acceptance effect in this window. Relaxing stop bounds converted two FBO stop-too-far rejections into entries, but those positions displaced the profitable MR trade through arbitration. Acceptance rose from six to seven trades while net P&L fell $41.78 and summed R fell 0.88. Stop distance is therefore a genuine reachability gate, but removing it globally is not supported by this test.

@@ -12,11 +12,19 @@ from pathlib import Path
 csv.field_size_limit(sys.maxsize)
 
 
-def decode(path: Path) -> str:
-    data = path.read_bytes()
+def decode(path: Path, offset: int = 0) -> str:
+    data = path.read_bytes()[offset:]
     encodings = []
     if data.startswith((b"\xff\xfe", b"\xfe\xff")):
         encodings.append("utf-16")
+    elif len(data) >= 4:
+        odd_nuls = data[1::2].count(0)
+        even_nuls = data[0::2].count(0)
+        pairs = max(1, len(data) // 2)
+        if odd_nuls / pairs > 0.25:
+            encodings.append("utf-16le")
+        elif even_nuls / pairs > 0.25:
+            encodings.append("utf-16be")
     encodings.extend(("utf-8-sig", "utf-8", "utf-16"))
     for encoding in encodings:
         try:
@@ -26,8 +34,8 @@ def decode(path: Path) -> str:
     raise UnicodeError(f"Unable to decode {path}")
 
 
-def rows(path: Path):
-    lines = [line for line in decode(path).splitlines() if line.strip()]
+def rows(path: Path, offset: int = 0):
+    lines = [line for line in decode(path, offset).splitlines() if line.strip()]
     if not lines:
         return
     first = [cell.strip() for cell in next(csv.reader([lines[0]]))]
@@ -103,7 +111,18 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("csv", nargs="+", type=Path)
     parser.add_argument("-o", "--output", type=Path)
+    parser.add_argument(
+        "--offset", action="append", default=[], metavar="FILE=BYTES",
+        help="Start one input at an exact byte offset (repeatable)",
+    )
     args = parser.parse_args()
+
+    offsets = {}
+    for spec in args.offset:
+        name, separator, value = spec.rpartition("=")
+        if not separator or not name or not value.isdigit():
+            parser.error(f"invalid --offset value: {spec}")
+        offsets[str(Path(name).resolve())] = int(value)
 
     counts = defaultdict(Counter)
     risk_reasons = defaultdict(Counter)
@@ -111,7 +130,8 @@ def main() -> int:
     stop_distances = defaultdict(list)
     total = 0
     for path in args.csv:
-        for row in rows(path):
+        offset = offsets.get(str(path.resolve()), 0)
+        for row in rows(path, offset):
             strategy = row.get("Strategy", "").strip() or "unknown"
             bucket = stage(row)
             counts[strategy][bucket] += 1
@@ -135,6 +155,7 @@ def main() -> int:
         "# QuantBeast acceptance funnel",
         "",
         f"Input journals: {len(args.csv)}",
+        f"Offset-scoped inputs: {sum(1 for value in offsets.values() if value > 0)}",
         f"Signal rows analyzed: {total}",
         "",
         table(["Strategy", "Rows", "Strategy", "Arbitration", "Risk/stop", "Sizing", "Broker", "Accepted", "Other"], body),
@@ -160,7 +181,7 @@ def main() -> int:
         "",
         "## Interpretation boundary",
         "",
-        "Input journals may contain overlapping combined and isolated strategy runs. Counts describe gate incidence across the evidence package; they are not an independent-trade sample size.",
+        "Inputs without byte offsets may contain overlapping combined and isolated strategy runs. Offset-scoped inputs contain only rows appended after the recorded boundary.",
         "",
         "This report starts at emitted strategy decisions. Tick/data-quality preflight blocks occur before journal emission and must be measured from the matching tester-agent log. Do not infer that absent journal rows are strategy or risk rejections.",
         "",
