@@ -79,6 +79,24 @@ bool QBTestRegimeClassification(string &detail)
    RegimeState healthy = engine.Classify(f, SESSION_LONDON_OPEN, EVENT_NORMAL);
    bool healthySafe = engine.IsSafeForTrading();
 
+   FeatureSnapshot thresholdProbe;
+   ZeroMemory(thresholdProbe);
+   thresholdProbe.slope_norm = 0.25;
+   thresholdProbe.dir_efficiency = 0.5;
+   thresholdProbe.trend_persistence = 6;
+   thresholdProbe.displacement = 1.2;
+   thresholdProbe.atr_ratio = 1.0;
+   thresholdProbe.spread_percentile = 10.0;
+   thresholdProbe.tick_freq = 10.0;
+   thresholdProbe.quote_stable = true;
+   RegimeState baselineThreshold = engine.Classify(thresholdProbe, SESSION_LONDON_OPEN, EVENT_NORMAL);
+
+   CRegimeEngine lowered;
+   lowered.Init(true, 0.2, 20.0, 3.0, 3);
+   RegimeState loweredThreshold = lowered.Classify(thresholdProbe, SESSION_LONDON_OPEN, EVENT_NORMAL);
+   bool coherentThreshold = baselineThreshold.structure == STRUCTURE_BALANCED &&
+                            loweredThreshold.structure == STRUCTURE_IMPULSE;
+
    f.abnormal_candle = true;
    RegimeState shock = engine.Classify(f, SESSION_LONDON_OPEN, EVENT_NORMAL);
    bool shockSafe = engine.IsSafeForTrading();
@@ -87,12 +105,15 @@ bool QBTestRegimeClassification(string &detail)
             EnumToString(healthy.volatility) + "/" +
             EnumToString(healthy.liquidity) + "/" +
             EnumToString(healthy.structure) +
-            " shock=" + EnumToString(shock.volatility);
+            " shock=" + EnumToString(shock.volatility) +
+            " threshold=" + EnumToString(baselineThreshold.structure) + "->" +
+            EnumToString(loweredThreshold.structure);
    return healthy.trend == TREND_STRONG_UP &&
           healthy.volatility == VOL_NORMAL &&
           healthy.liquidity == LIQUIDITY_GOOD &&
           healthy.structure == STRUCTURE_ACCEPTED_BREAKOUT &&
-          healthySafe && shock.volatility == VOL_SHOCK && !shockSafe;
+          healthySafe && shock.volatility == VOL_SHOCK && !shockSafe &&
+          coherentThreshold;
 }
 
 void QBMakeArbitrationSignal(StrategySignal &signal, string strategy,

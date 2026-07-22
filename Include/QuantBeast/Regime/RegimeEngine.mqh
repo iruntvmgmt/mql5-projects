@@ -52,6 +52,7 @@ public:
    {
       m_enabled = enabled;
       m_trendClassifier.Init(trendSlopeThreshold);
+      m_structClassifier.Init(trendSlopeThreshold);
       m_volClassifier.Init(compressionPct, shockMultiplier, minExpBars);
       m_initialized = true;
 
