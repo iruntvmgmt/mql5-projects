@@ -1917,4 +1917,107 @@ bool QBTestStrategyBatchMetadata(CSymbolAdapter &adapter, string &detail)
    return boOk && fboOk && tpOk && mrOk && tagOk;
 }
 
+//+------------------------------------------------------------------+
+//| TEST 62: batch overlap map for the current expansion candidates.  |
+//| Validates that opening-range/session breakout variants and a      |
+//| session-sourced failed-breakout candidate can all be exercised in |
+//| one synthetic pass, which is the batch substrate for later gap    |
+//| analysis and ML feature export.                                   |
+//+------------------------------------------------------------------+
+bool QBTestStrategyOverlapMap(CSymbolAdapter &adapter, string &detail)
+{
+   MarketSnapshot market; double d;
+   QBMakeSyntheticMarket(adapter, market, d);
+   RegimeState regime; QBMakeNormalRegime(regime);
+
+   bool orbOk = false;
+   bool brcOk = false;
+   bool ssrOk = false;
+
+   // Opening-range breakout variant: same BO family, different level source.
+   {
+      CBreakoutEngine strategy;
+      strategy.Init("BO_ORB_BATCH", "BO ORB batch", true, 0.0, adapter,
+                    TRIGGER_CANDLE_CLOSE_BREAK, 5, 2.0, 1.5, 1.5, true,
+                    LEVEL_SRC_OPENING_RANGE, STOP_MODE_DEFAULT, TARGET_MODE_DEFAULT);
+      FeatureSnapshot f; ZeroMemory(f);
+      f.atr = d;
+      f.preceding_compression_bars = 8;
+      f.htf_aligned = true;
+      f.htf_slope = 1.0;
+      f.current_range_low = market.ask - 2.0 * d;
+      f.current_range_high = market.ask + 0.4 * d;
+      f.closed_open = market.ask + 0.1 * d;
+      f.closed_close = market.ask + 0.25 * d;
+      f.or_low = market.ask - 3.0 * d;
+      f.or_high = market.ask - 0.15 * d;
+      StrategySignal sig = strategy.EvaluateLong(market, f, regime);
+      orbOk = sig.valid &&
+              sig.strategy_id == STRATEGY_ID_BREAKOUT &&
+              sig.strategy_template == "opening_range_breakout" &&
+              StringFind(sig.strategy_tags, "level_source=opening_range") >= 0 &&
+              strategy.GetStrategyTemplate() == "opening_range_breakout";
+   }
+
+   // Session breakout variant: same BO family, session level source.
+   {
+      CBreakoutEngine strategy;
+      strategy.Init("BO_SESSION_BATCH", "BO session batch", true, 0.0, adapter,
+                    TRIGGER_CANDLE_CLOSE_BREAK, 5, 2.0, 1.5, 1.5, true,
+                    LEVEL_SRC_SESSION, STOP_MODE_DEFAULT, TARGET_MODE_DEFAULT);
+      FeatureSnapshot f; ZeroMemory(f);
+      f.atr = d;
+      f.preceding_compression_bars = 8;
+      f.htf_aligned = true;
+      f.htf_slope = 1.0;
+      f.current_range_low = market.ask - 2.0 * d;
+      f.current_range_high = market.ask + 0.4 * d;
+      f.closed_open = market.ask + 0.1 * d;
+      f.closed_close = market.ask + 0.25 * d;
+      f.session_low = market.ask - 3.0 * d;
+      f.session_high = market.ask - 0.1 * d;
+      StrategySignal sig = strategy.EvaluateLong(market, f, regime);
+      brcOk = sig.valid &&
+              sig.strategy_id == STRATEGY_ID_BREAKOUT &&
+              sig.strategy_template == "session_breakout" &&
+              StringFind(sig.strategy_tags, "level_source=session") >= 0 &&
+              strategy.GetStrategyTemplate() == "session_breakout";
+   }
+
+   // Session-sourced failed breakout: overlap candidate for SSR-style work.
+   {
+      CFailedBreakoutEngine strategy;
+      strategy.Init("FBO_SESSION_BATCH", "FBO session batch", true, 0.0, adapter,
+                    TRIGGER_CANDLE_CLOSE_BREAK, 3.0, 3, 0.3, 0.5, 1.0, 1.5,
+                    STOP_MODE_DEFAULT, TARGET_MODE_DEFAULT, LEVEL_SRC_SESSION);
+      FeatureSnapshot f; ZeroMemory(f);
+      f.atr = d;
+      f.failed_breakout = true;
+      f.reclaim_detected = true;
+      f.failed_breakout_down = true;
+      f.bars_beyond_level = 1;
+      f.breakout_dist = 5.0 * adapter.Point();
+      f.reclaim_level = market.ask - 2.0 * d;
+      f.sweep_extreme = f.reclaim_level - d;
+      f.closed_close = market.ask;
+      f.vwap = market.ask + 6.0 * d;
+      f.range_midpoint = market.ask + 5.0 * d;
+      StrategySignal sig = strategy.EvaluateLong(market, f, regime);
+      ssrOk = sig.valid &&
+              sig.strategy_id == STRATEGY_ID_FAILED_BREAKOUT &&
+              sig.strategy_family == "failed_breakout" &&
+              sig.strategy_template == "reclaim_reversal" &&
+              StringFind(sig.strategy_tags, "level_source=session") >= 0 &&
+              strategy.GetStrategyFamily() == "failed_breakout";
+   }
+
+   bool overlapOk = orbOk && brcOk && ssrOk;
+
+   detail = "ORB=" + (orbOk ? "ok" : "FAIL") +
+            " BRC=" + (brcOk ? "ok" : "FAIL") +
+            " SSR=" + (ssrOk ? "ok" : "FAIL") +
+            " overlap=" + (overlapOk ? "yes" : "no");
+   return overlapOk;
+}
+
 #endif // QB_SAFETYTESTS_MQH

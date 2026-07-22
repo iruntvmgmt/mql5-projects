@@ -24,6 +24,7 @@ private:
    double   m_stopBeyondSweep;      // ATR multiple beyond sweep extreme
    double   m_targetMidR;           // Target to range midpoint R
    double   m_targetVWAPR;          // Target to VWAP R
+   ENUM_LEVEL_SOURCE m_levelSource;
    ENUM_STOP_MODE   m_stopMode;
    ENUM_TARGET_MODE m_targetMode;
    double           m_maxSpreadPts;
@@ -38,6 +39,7 @@ public:
       m_stopBeyondSweep   = 1.0;
       m_targetMidR        = 1.0;
       m_targetVWAPR       = 1.5;
+      m_levelSource       = LEVEL_SRC_RANGE;
       m_stopMode          = STOP_MODE_DEFAULT;
       m_targetMode        = TARGET_MODE_DEFAULT;
       m_maxSpreadPts      = 40.0;
@@ -50,13 +52,14 @@ public:
              double stopBeyondSweep, double targetMidR, double targetVWAPR,
              ENUM_STOP_MODE stopMode = STOP_MODE_DEFAULT,
              ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT,
+             ENUM_LEVEL_SOURCE levelSource = LEVEL_SRC_RANGE,
              double maxSpreadPts = 40.0)
    {
       string family = "failed_breakout";
       string templateName = "reclaim_reversal";
       string tags = QBComposeStrategyTags(id, family, templateName,
                                           QBTriggerLabel(triggerMode),
-                                          "unknown",
+                                          QBLevelSourceLabel(levelSource),
                                           QBStopModeLabel(stopMode),
                                           QBTargetModeLabel(targetMode));
       CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode,
@@ -67,6 +70,7 @@ public:
       m_stopBeyondSweep  = stopBeyondSweep;
       m_targetMidR       = targetMidR;
       m_targetVWAPR      = targetVWAPR;
+      m_levelSource      = levelSource;
       m_stopMode         = stopMode;
       m_targetMode       = targetMode;
       m_maxSpreadPts     = maxSpreadPts;

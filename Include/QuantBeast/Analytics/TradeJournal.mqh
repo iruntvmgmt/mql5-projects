@@ -84,7 +84,8 @@ public:
          m_signalHandle = OpenJournalFile(QB_SIGNAL_LOG,
             "Timestamp,Symbol,Mode,Strategy,Direction,SignalID,SetupCode,TriggerCode," +
             "Accepted,RejectionCode,RejectionReason,RegimeTrend,RegimeVol,Session," +
-            "Spread,ATR_Points,Entry,Stop,Target,ExpectedR,Confidence", isTester);
+            "Spread,ATR_Points,Entry,Stop,Target,ExpectedR,Confidence," +
+            "StrategyFamily,StrategyTemplate,StrategyTags", isTester);
          if(m_signalHandle == INVALID_HANDLE) success = false;
       }
 
@@ -118,7 +119,7 @@ public:
    {
       if(!m_enabledSignal || m_signalHandle == INVALID_HANDLE) return false;
 
-      string fields[22];
+      string fields[24];
       fields[0]  = FormatTime(sig.signal_time);
       fields[1]  = symbol;
       fields[2]  = IntegerToString(mode);
@@ -142,8 +143,11 @@ public:
       fields[18] = DoubleToString(sig.proposed_target, 5);
       fields[19] = DoubleToString(sig.expected_reward_r, 2);
       fields[20] = DoubleToString(sig.confidence, 3);
+      fields[21] = sig.strategy_family;
+      fields[22] = sig.strategy_template;
+      fields[23] = sig.strategy_tags;
 
-      string row = MakeCSVRow(fields, 21);
+      string row = MakeCSVRow(fields, 24);
       WriteCSVLine(m_signalHandle, row);
       FileFlush(m_signalHandle);
       return true;

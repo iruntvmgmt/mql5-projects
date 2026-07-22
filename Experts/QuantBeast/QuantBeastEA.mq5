@@ -765,7 +765,8 @@ int OnInit()
                       InpFBO_MinConfidence, g_Adapter, InpFBO_TriggerMode,
                       InpFBO_MinPenetration, InpFBO_MaxBarsBeyond, InpFBO_ReclaimThreshold,
                       InpFBO_StopBeyondSweep, InpFBO_TargetMidR, InpFBO_TargetVWAPR,
-                      InpFBO_StopMode, InpFBO_TargetMode, InpFBO_MaxSpreadPts);
+                      InpFBO_StopMode, InpFBO_TargetMode, LEVEL_SRC_RANGE,
+                      InpFBO_MaxSpreadPts);
 
    g_StrategyTP.Init(STRATEGY_ID_TREND_PULLBACK, "Trend Pullback", InpTP_Enabled,
                      InpTP_MinConfidence, g_Adapter, InpTP_TriggerMode,
@@ -2693,6 +2694,14 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 61 PASS: Strategy batch metadata and reachability " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 61 FAIL: Strategy batch metadata and reachability " + detail); }
+   }
+
+   {
+      string detail = "";
+      if(QBTestStrategyOverlapMap(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 62 PASS: Strategy overlap map " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 62 FAIL: Strategy overlap map " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

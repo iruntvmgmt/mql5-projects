@@ -72,7 +72,7 @@ public:
          return;                                      // no computable hypothetical trade
       if(m_rowCount >= QB_CF_MAX_ROWS) return;        // bounded buffer
 
-      string fields[16];
+      string fields[19];
       fields[0]  = FormatTime(sig.signal_time);
       fields[1]  = symbol;
       fields[2]  = sig.strategy_id;
@@ -89,8 +89,11 @@ public:
       fields[13] = IntegerToString(regime.volatility);
       fields[14] = DoubleToString(snap.spread_points, 1);
       fields[15] = DoubleToString(feat.atr_points, 1);
+      fields[16] = sig.strategy_family;
+      fields[17] = sig.strategy_template;
+      fields[18] = sig.strategy_tags;
 
-      m_rows[m_rowCount] = MakeCSVRow(fields, 16);
+      m_rows[m_rowCount] = MakeCSVRow(fields, 19);
       m_rowCount++;
    }
 
@@ -105,7 +108,7 @@ public:
       int handle = OpenJournalFile(QB_COUNTERFACTUAL_LOG,
          "Timestamp,Symbol,Strategy,Direction,SetupCode,RejectionCode," +
          "RejectionReason,HypoEntry,HypoStop,HypoTarget,ExpectedR,Confidence," +
-         "RegimeTrend,RegimeVol,Spread,ATR_Points", m_isTester);
+         "RegimeTrend,RegimeVol,Spread,ATR_Points,StrategyFamily,StrategyTemplate,StrategyTags", m_isTester);
       if(handle == INVALID_HANDLE) return;
 
       for(int i = 0; i < m_rowCount; i++)
