@@ -51,7 +51,15 @@ public:
              ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT,
              double maxSpreadPts = 30.0)
    {
-      CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
+      string family = "mean_reversion";
+      string templateName = "value_reversion";
+      string tags = QBComposeStrategyTags(id, family, templateName,
+                                          QBTriggerLabel(triggerMode),
+                                          "unknown",
+                                          QBStopModeLabel(stopMode),
+                                          QBTargetModeLabel(targetMode));
+      CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode,
+                          family, templateName, tags);
       m_maxTrendStrength  = maxTrendStrength;
       m_minDeviationSD    = minDeviationSD;
       m_minRejectionWick  = minRejectionWick;

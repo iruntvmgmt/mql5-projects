@@ -24,6 +24,9 @@ class CStrategyBase
 protected:
    string             m_strategyId;
    string             m_strategyName;
+   string             m_strategyFamily;
+   string             m_strategyTemplate;
+   string             m_strategyTags;
    bool               m_enabled;
    double             m_minConfidence;
    CSymbolAdapter*    m_adapter;
@@ -41,6 +44,9 @@ public:
    {
       m_strategyId   = "";
       m_strategyName = "";
+      m_strategyFamily = "";
+      m_strategyTemplate = "";
+      m_strategyTags  = "";
       m_enabled      = false;
       m_minConfidence = 0.5;
       m_adapter      = NULL;
@@ -53,10 +59,16 @@ public:
    //+------------------------------------------------------------------+
    virtual void Init(string id, string name, bool enabled,
                      double minConfidence, CSymbolAdapter &adapter,
-                     ENUM_TRIGGER_TYPE triggerMode)
+                     ENUM_TRIGGER_TYPE triggerMode,
+                     string family = "",
+                     string templateName = "",
+                     string tags = "")
    {
       m_strategyId    = id;
       m_strategyName  = name;
+      m_strategyFamily = family;
+      m_strategyTemplate = templateName;
+      m_strategyTags  = tags;
       m_enabled       = enabled;
       m_minConfidence = minConfidence;
       m_adapter       = &adapter;
@@ -88,6 +100,9 @@ public:
    //+------------------------------------------------------------------+
    string GetStrategyId()   const { return m_strategyId; }
    string GetStrategyName() const { return m_strategyName; }
+   string GetStrategyFamily() const { return m_strategyFamily; }
+   string GetStrategyTemplate() const { return m_strategyTemplate; }
+   string GetStrategyTags() const { return m_strategyTags; }
    bool   IsEnabled()       const { return m_enabled; }
 
    //+------------------------------------------------------------------+
@@ -99,6 +114,9 @@ public:
       ZeroMemory(sig);
       sig.valid = false;
       sig.strategy_id = m_strategyId;
+      sig.strategy_family = m_strategyFamily;
+      sig.strategy_template = m_strategyTemplate;
+      sig.strategy_tags = m_strategyTags;
       sig.direction = dir;
       sig.signal_time = TimeCurrent();
       sig.rejection_code = rejectionCode;
@@ -119,6 +137,9 @@ public:
       ZeroMemory(sig);
       sig.valid = true;
       sig.strategy_id = m_strategyId;
+      sig.strategy_family = m_strategyFamily;
+      sig.strategy_template = m_strategyTemplate;
+      sig.strategy_tags = m_strategyTags;
       sig.direction = dir;
       sig.signal_time = TimeCurrent();
       sig.proposed_entry = NormalizeEntry(entry);

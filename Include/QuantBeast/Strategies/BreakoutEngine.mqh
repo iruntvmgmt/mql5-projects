@@ -53,7 +53,19 @@ public:
              ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT,
              double maxSpreadPts = 40.0)
    {
-      CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
+      string family = "breakout";
+      string templateName = "range_breakout";
+      if(levelSource == LEVEL_SRC_PREV_DAY)      templateName = "prev_day_breakout";
+      else if(levelSource == LEVEL_SRC_SESSION)  templateName = "session_breakout";
+      else if(levelSource == LEVEL_SRC_OPENING_RANGE) templateName = "opening_range_breakout";
+      else if(levelSource == LEVEL_SRC_SWING)    templateName = "swing_breakout";
+      string tags = QBComposeStrategyTags(id, family, templateName,
+                                          QBTriggerLabel(triggerMode),
+                                          QBLevelSourceLabel(levelSource),
+                                          QBStopModeLabel(stopMode),
+                                          QBTargetModeLabel(targetMode));
+      CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode,
+                          family, templateName, tags);
       m_minCompressionBars  = minCompBars;
       m_minDisplacement      = minDisplacement;
       m_stopATRMult         = stopATRMult;

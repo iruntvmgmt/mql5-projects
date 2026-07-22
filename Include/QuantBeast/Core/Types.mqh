@@ -148,6 +148,9 @@ struct StrategySignal
 {
    bool     valid;              // Signal is valid for consideration
    string   strategy_id;        // STRATEGY_ID_* constant
+   string   strategy_family;    // High-level family tag (breakout, MR, etc.)
+   string   strategy_template;  // Current setup template within the family
+   string   strategy_tags;      // Compact metadata tag string for ML/journals
    ENUM_ORDER_TYPE direction;   // ORDER_TYPE_BUY or ORDER_TYPE_SELL
 
    datetime signal_time;        // When signal was generated
@@ -166,6 +169,88 @@ struct StrategySignal
 
    string   reason;             // Human-readable signal reason
 };
+
+//+------------------------------------------------------------------+
+//| Strategy metadata labels                                         |
+//+------------------------------------------------------------------+
+string QBStrategyFamilyLabel(const string strategyId)
+{
+   if(strategyId == STRATEGY_ID_BREAKOUT)        return "breakout";
+   if(strategyId == STRATEGY_ID_FAILED_BREAKOUT) return "failed_breakout";
+   if(strategyId == STRATEGY_ID_TREND_PULLBACK)  return "trend_pullback";
+   if(strategyId == STRATEGY_ID_MEAN_REVERSION)  return "mean_reversion";
+   return "unknown";
+}
+
+string QBTriggerLabel(ENUM_TRIGGER_TYPE triggerMode)
+{
+   switch(triggerMode)
+   {
+      case TRIGGER_IMMEDIATE_BREAK:   return "immediate_break";
+      case TRIGGER_CANDLE_CLOSE_BREAK:return "candle_close_break";
+      case TRIGGER_DISPLACEMENT:      return "displacement";
+      case TRIGGER_BREAK_RETEST:      return "break_retest";
+      case TRIGGER_PROBE_CONFIRM:     return "probe_confirm";
+      case TRIGGER_REJECTION:         return "rejection";
+   }
+   return "unsupported";
+}
+
+string QBLevelSourceLabel(ENUM_LEVEL_SOURCE levelSource)
+{
+   switch(levelSource)
+   {
+      case LEVEL_SRC_RANGE:         return "range";
+      case LEVEL_SRC_PREV_DAY:      return "prev_day";
+      case LEVEL_SRC_SESSION:       return "session";
+      case LEVEL_SRC_OPENING_RANGE: return "opening_range";
+      case LEVEL_SRC_SWING:         return "swing";
+   }
+   return "unknown";
+}
+
+string QBStopModeLabel(ENUM_STOP_MODE stopMode)
+{
+   switch(stopMode)
+   {
+      case STOP_MODE_DEFAULT:    return "default";
+      case STOP_MODE_ATR:        return "atr";
+      case STOP_MODE_SWING:      return "swing";
+      case STOP_MODE_STRUCTURAL: return "structural";
+      case STOP_MODE_SWEEP:      return "sweep";
+   }
+   return "unknown";
+}
+
+string QBTargetModeLabel(ENUM_TARGET_MODE targetMode)
+{
+   switch(targetMode)
+   {
+      case TARGET_MODE_DEFAULT:      return "default";
+      case TARGET_MODE_FIXED_R:      return "fixed_r";
+      case TARGET_MODE_VWAP:         return "vwap";
+      case TARGET_MODE_RANGE_MID:    return "range_mid";
+      case TARGET_MODE_OPP_BOUNDARY: return "opp_boundary";
+   }
+   return "unknown";
+}
+
+string QBComposeStrategyTags(const string strategyId,
+                             const string family,
+                             const string templateName,
+                             const string trigger,
+                             const string levelSource,
+                             const string stopMode,
+                             const string targetMode)
+{
+   return "strategy=" + strategyId +
+          ";family=" + family +
+          ";template=" + templateName +
+          ";trigger=" + trigger +
+          ";level=" + levelSource +
+          ";stop=" + stopMode +
+          ";target=" + targetMode;
+}
 
 //+------------------------------------------------------------------+
 //| Order Intent - approved order to be transmitted                   |

@@ -55,7 +55,15 @@ public:
              ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT,
              double maxSpreadPts = 35.0)
    {
-      CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
+      string family = "trend_pullback";
+      string templateName = "pullback_resume";
+      string tags = QBComposeStrategyTags(id, family, templateName,
+                                          QBTriggerLabel(triggerMode),
+                                          "unknown",
+                                          QBStopModeLabel(stopMode),
+                                          QBTargetModeLabel(targetMode));
+      CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode,
+                          family, templateName, tags);
       m_minDirEfficiency    = minDirEff;
       m_minTrendPersistence = minTrendPersist;
       m_requireHTFAgreement = requireHTF;

@@ -52,7 +52,15 @@ public:
              ENUM_TARGET_MODE targetMode = TARGET_MODE_DEFAULT,
              double maxSpreadPts = 40.0)
    {
-      CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode);
+      string family = "failed_breakout";
+      string templateName = "reclaim_reversal";
+      string tags = QBComposeStrategyTags(id, family, templateName,
+                                          QBTriggerLabel(triggerMode),
+                                          "unknown",
+                                          QBStopModeLabel(stopMode),
+                                          QBTargetModeLabel(targetMode));
+      CStrategyBase::Init(id, name, enabled, minConfidence, adapter, triggerMode,
+                          family, templateName, tags);
       m_minPenetration   = minPenetration;
       m_maxBarsBeyond    = maxBarsBeyond;
       m_reclaimThreshold = reclaimThreshold;

@@ -2686,6 +2686,15 @@ void RunSelfTests()
       { g_SelfTestFailed++; QBLogError("TEST 60 FAIL: Reconciliation verdict " + detail); }
    }
 
+   // Test 61: batch metadata registry and reachability proof for all current strategies
+   {
+      string detail = "";
+      if(QBTestStrategyBatchMetadata(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 61 PASS: Strategy batch metadata and reachability " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 61 FAIL: Strategy batch metadata and reachability " + detail); }
+   }
+
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +
              IntegerToString(g_SelfTestFailed) + " failed");
 }

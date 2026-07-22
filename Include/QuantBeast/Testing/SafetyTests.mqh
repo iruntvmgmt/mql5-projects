@@ -1799,4 +1799,122 @@ bool QBTestReconciliationVerdict(string &detail)
    return cleanOk && unkQok && unkIok && unprOk && bothOk;
 }
 
+//+------------------------------------------------------------------+
+//| TEST 61: batch metadata and reachability proof for all four      |
+//| current strategy families. Validates family/template tags in one |
+//| pass so the workflow can inspect the full set together.          |
+//+------------------------------------------------------------------+
+bool QBTestStrategyBatchMetadata(CSymbolAdapter &adapter, string &detail)
+{
+   MarketSnapshot market; double d;
+   QBMakeSyntheticMarket(adapter, market, d);
+   RegimeState regime; QBMakeNormalRegime(regime);
+
+   bool boOk = false;
+   bool fboOk = false;
+   bool tpOk = false;
+   bool mrOk = false;
+
+   // Breakout: range breakout template.
+   {
+      CBreakoutEngine strategy;
+      strategy.Init("BO_BATCH", "BO batch", true, 0.0, adapter,
+                    TRIGGER_CANDLE_CLOSE_BREAK, 5, 2.0, 1.0, 1.5, true,
+                    LEVEL_SRC_RANGE, STOP_MODE_DEFAULT, TARGET_MODE_DEFAULT);
+      FeatureSnapshot f; ZeroMemory(f);
+      f.atr = d; f.preceding_compression_bars = 8; f.htf_aligned = true;
+      f.htf_slope = 1.0;
+      f.current_range_low = market.ask - 4.0 * d;
+      f.current_range_high = market.ask - d;
+      f.closed_open = market.ask - 1.5 * d;
+      f.closed_close = market.ask - 0.4 * d;
+      StrategySignal sig = strategy.EvaluateLong(market, f, regime);
+      boOk = sig.valid && sig.strategy_id == STRATEGY_ID_BREAKOUT &&
+             sig.strategy_family == "breakout" &&
+             sig.strategy_template == "range_breakout" &&
+             StringFind(sig.strategy_tags, "family=breakout") >= 0 &&
+             StringFind(sig.strategy_tags, "template=range_breakout") >= 0 &&
+             strategy.GetStrategyFamily() == "breakout" &&
+             strategy.GetStrategyTemplate() == "range_breakout";
+   }
+
+   // Failed breakout: reclaim reversal template.
+   {
+      CFailedBreakoutEngine strategy;
+      strategy.Init("FBO_BATCH", "FBO batch", true, 0.0, adapter,
+                    TRIGGER_CANDLE_CLOSE_BREAK, 3.0, 3, 0.3, 0.5, 1.0, 1.5);
+      FeatureSnapshot f; ZeroMemory(f);
+      f.atr = d; f.failed_breakout = true; f.reclaim_detected = true;
+      f.failed_breakout_down = true; f.bars_beyond_level = 1;
+      f.breakout_dist = 5.0 * adapter.Point();
+      f.reclaim_level = market.ask - 2.0 * d;
+      f.sweep_extreme = f.reclaim_level - d;
+      f.closed_close = market.ask;
+      f.vwap = market.ask + 6.0 * d; f.range_midpoint = market.ask + 5.0 * d;
+      StrategySignal sig = strategy.EvaluateLong(market, f, regime);
+      fboOk = sig.valid && sig.strategy_id == STRATEGY_ID_FAILED_BREAKOUT &&
+              sig.strategy_family == "failed_breakout" &&
+              sig.strategy_template == "reclaim_reversal" &&
+              StringFind(sig.strategy_tags, "family=failed_breakout") >= 0 &&
+              StringFind(sig.strategy_tags, "template=reclaim_reversal") >= 0 &&
+              strategy.GetStrategyFamily() == "failed_breakout" &&
+              strategy.GetStrategyTemplate() == "reclaim_reversal";
+   }
+
+   // Trend pullback: pullback-resume template.
+   {
+      CTrendPullbackEngine strategy;
+      strategy.Init("TP_BATCH", "TP batch", true, 0.0, adapter,
+                    TRIGGER_IMMEDIATE_BREAK, 0.4, 5, true, 0.618, 20, 1.5, 0.5);
+      FeatureSnapshot f; ZeroMemory(f);
+      f.atr = d; f.dir_efficiency = 0.8; f.trend_persistence = 10;
+      f.htf_aligned = true; f.returning_to_value = true;
+      regime.trend = TREND_STRONG_UP;
+      regime.structure = STRUCTURE_PULLBACK;
+      f.swing_high = market.mid + d; f.swing_high_bars = 6;
+      f.swing_low = market.mid - 4.0 * d; f.swing_low_bars = 6;
+      f.current_range_high = f.swing_high; f.current_range_low = f.swing_low;
+      f.closed_open = market.mid - 0.2 * d; f.closed_close = market.mid + 0.2 * d;
+      StrategySignal sig = strategy.EvaluateLong(market, f, regime);
+      tpOk = sig.valid && sig.strategy_id == STRATEGY_ID_TREND_PULLBACK &&
+             sig.strategy_family == "trend_pullback" &&
+             sig.strategy_template == "pullback_resume" &&
+             StringFind(sig.strategy_tags, "family=trend_pullback") >= 0 &&
+             StringFind(sig.strategy_tags, "template=pullback_resume") >= 0 &&
+             strategy.GetStrategyFamily() == "trend_pullback" &&
+             strategy.GetStrategyTemplate() == "pullback_resume";
+   }
+
+   // Mean reversion: value reversion template.
+   {
+      QBMakeNormalRegime(regime);
+      CMeanReversionEngine strategy;
+      strategy.Init("MR_BATCH", "MR batch", true, 0.0, adapter,
+                    TRIGGER_REJECTION, 0.25, 1.5, 0.3, 1.0, 1.0);
+      FeatureSnapshot f; ZeroMemory(f);
+      f.atr = d; f.slope_norm = 0.0; f.rejection_wick = 0.6;
+      f.sd_dist = -2.0; f.rejection_wick_lower = 0.6;
+      f.closed_open = market.ask - 0.2 * d; f.closed_close = market.ask;
+      f.current_range_low = market.ask - 2.0 * d;
+      f.vwap = market.ask + 2.0 * d; f.range_midpoint = market.ask + d; f.vwap_sd = d;
+      StrategySignal sig = strategy.EvaluateLong(market, f, regime);
+      mrOk = sig.valid && sig.strategy_id == STRATEGY_ID_MEAN_REVERSION &&
+             sig.strategy_family == "mean_reversion" &&
+             sig.strategy_template == "value_reversion" &&
+             StringFind(sig.strategy_tags, "family=mean_reversion") >= 0 &&
+             StringFind(sig.strategy_tags, "template=value_reversion") >= 0 &&
+             strategy.GetStrategyFamily() == "mean_reversion" &&
+             strategy.GetStrategyTemplate() == "value_reversion";
+   }
+
+   bool tagOk = boOk && fboOk && tpOk && mrOk;
+
+   detail = "BO=" + (boOk ? "ok" : "FAIL") +
+            " FBO=" + (fboOk ? "ok" : "FAIL") +
+            " TP=" + (tpOk ? "ok" : "FAIL") +
+            " MR=" + (mrOk ? "ok" : "FAIL") +
+            " tagged=" + (tagOk ? "yes" : "no");
+   return boOk && fboOk && tpOk && mrOk && tagOk;
+}
+
 #endif // QB_SAFETYTESTS_MQH
