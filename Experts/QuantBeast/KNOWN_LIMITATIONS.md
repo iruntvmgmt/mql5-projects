@@ -16,9 +16,10 @@
   TP-specific fallback seed now records completed-bar time/open, directional
   extreme, source, and ATR span when existing persistence/efficiency floors and
   a fixed 0.30 ATR research threshold are met. That threshold is not a
-  production configuration. One Jan 2026 organic generated-tick window proved
-  seed, impulse, and retracing reachability, but produced no resume candidate;
-  independent-window coverage and entry validity remain unproven.
+  production configuration. Three independent organic generated-tick windows
+  proved seed, impulse, and retracing reachability; two reached resumption.
+  Lifecycle direction is not yet serialized and forward resumption outcomes
+  remain unmeasured, so entry validity remains unproven.
 
 - The final source compiles at `0 errors, 0 warnings`, but compilation is not runtime proof.
 - The native MT5 tester API still returns the invalid/ambiguous identifier `job_id: 0` and reports `tester stopped`; local agent logs must be inspected to confirm completion.

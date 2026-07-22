@@ -78,3 +78,35 @@ reachability. It does not prove a resumption entry. Reports:
 
 - `organic_tp_structure_report.md`
 - `organic_acceptance_funnel.md`
+
+## Independent-window extension
+
+Two additional one-day `Model=4` Shadow windows completed naturally with exact
+journal bounds and unchanged observational logic:
+
+| Window | Exact slice | TP rows | Impulse | Retracing | Resume candidate | TP risk/stop | TP accepted |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2026-01-05 | `[15520142,16093698)` | 196 | 14 | 4 | 0 | 0 | 0 |
+| 2025-01-06 | `[16093698,16891238)` | 264 | 30 | 24 | 8 | 0 | 0 |
+| 2026-05-04 | `[16891238,17787378)` | 304 | 30 | 2 | 2 | 0 | 0 |
+| **Total** | | **764** | **74** | **30** | **10** | **0** | **0** |
+
+Aggregate phase rows were 298 idle, 352 invalidated, 74 impulse, 30
+retracing, and 10 resume candidate. Aggregate seed annotations were 298 none,
+370 TP-specific, and 96 structural. Direction-paired strategy evaluation means
+the 10 resume rows represent five completed-bar observations, not ten
+independent setups.
+
+The 2025 and May 2026 windows prove that the full observational lifecycle is
+naturally reachable in independent samples. They do not justify production
+candidate logic: lifecycle direction is not yet serialized, and no forward
+counterfactual outcome has been measured for the five resumption observations.
+The next instrumentation step is explicit lifecycle-direction attribution,
+followed by side-effect-free outcome tracking.
+
+Additional reports:
+
+- `organic_20250106_tp_structure_report.md`
+- `organic_20250106_acceptance_funnel.md`
+- `organic_20260504_tp_structure_report.md`
+- `organic_20260504_acceptance_funnel.md`

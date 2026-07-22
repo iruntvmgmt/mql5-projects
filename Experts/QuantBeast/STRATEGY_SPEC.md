@@ -149,9 +149,10 @@ Enter an established directional move after a controlled pullback and momentum r
 
 ### Required completion
 
-- Extend the exact-byte-bounded organic evidence beyond the first naturally
-  reached seed/impulse/retracement window; resumption remains unobserved and
-  must be validated before considering candidate logic.
+- Serialize the nominated lifecycle direction and measure side-effect-free
+  forward outcomes for naturally reached resume candidates before considering
+  candidate logic. Three independent exact-byte-bounded windows now prove the
+  full lifecycle is reachable, but not that resumption has an edge.
 - Implement actual trigger modes such as rejection, micro-break, close confirmation, or retest.
 - Add trend maturity/exhaustion constraints.
 - Add failed-continuation, regime-deterioration, session, and time exits.

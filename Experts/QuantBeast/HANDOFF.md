@@ -29,8 +29,18 @@
 - TP still produced zero risk/stop evaluations and zero accepted signals. This
   proves natural seed/impulse/retracement reachability and reinforces that TP's
   present blocker is upstream of risk/stop management. It does not validate an
-  entry or edge. Next: repeat across independent windows before changing the
-  lifecycle or eligibility. Readiness remains exactly `READY FOR SHADOW MODE`.
+  entry or edge.
+- Independent extension completed naturally for 2025-01-06 (240,447 ticks,
+  exact slice `[16093698,16891238)`) and 2026-05-04 (367,390 ticks, exact slice
+  `[16891238,17787378)`). Across all three windows: 764 TP decisions, 74
+  impulse, 30 retracing, and 10 resume-candidate rows, with zero TP risk/stop
+  evaluations and zero TP accepted signals. The latter two windows reached
+  full resumption, proving independent lifecycle reachability.
+- The 10 direction-paired rows represent five completed-bar resumption
+  observations. Current diagnostics do not serialize the lifecycle's nominated
+  direction, and no forward counterfactual outcome is measured. Next: add
+  observation-only direction attribution and outcome tracking before any TP
+  eligibility change. Readiness remains exactly `READY FOR SHADOW MODE`.
 
 ## 2026-07-22 — TP value-return diagnostics separated from eligibility
 
