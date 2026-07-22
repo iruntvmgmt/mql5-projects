@@ -1818,7 +1818,7 @@ bool QBTestStrategyBatchMetadata(CSymbolAdapter &adapter, string &detail)
    // Breakout: range breakout template.
    {
       CBreakoutEngine strategy;
-      strategy.Init("BO_BATCH", "BO batch", true, 0.0, adapter,
+      strategy.Init(STRATEGY_ID_BREAKOUT, "BO batch", true, 0.0, adapter,
                     TRIGGER_CANDLE_CLOSE_BREAK, 5, 2.0, 1.0, 1.5, true,
                     LEVEL_SRC_RANGE, STOP_MODE_DEFAULT, TARGET_MODE_DEFAULT);
       FeatureSnapshot f; ZeroMemory(f);
@@ -1841,7 +1841,7 @@ bool QBTestStrategyBatchMetadata(CSymbolAdapter &adapter, string &detail)
    // Failed breakout: reclaim reversal template.
    {
       CFailedBreakoutEngine strategy;
-      strategy.Init("FBO_BATCH", "FBO batch", true, 0.0, adapter,
+      strategy.Init(STRATEGY_ID_FAILED_BREAKOUT, "FBO batch", true, 0.0, adapter,
                     TRIGGER_CANDLE_CLOSE_BREAK, 3.0, 3, 0.3, 0.5, 1.0, 1.5);
       FeatureSnapshot f; ZeroMemory(f);
       f.atr = d; f.failed_breakout = true; f.reclaim_detected = true;
@@ -1864,7 +1864,7 @@ bool QBTestStrategyBatchMetadata(CSymbolAdapter &adapter, string &detail)
    // Trend pullback: pullback-resume template.
    {
       CTrendPullbackEngine strategy;
-      strategy.Init("TP_BATCH", "TP batch", true, 0.0, adapter,
+      strategy.Init(STRATEGY_ID_TREND_PULLBACK, "TP batch", true, 0.0, adapter,
                     TRIGGER_IMMEDIATE_BREAK, 0.4, 5, true, 0.618, 20, 1.5, 0.5);
       FeatureSnapshot f; ZeroMemory(f);
       f.atr = d; f.dir_efficiency = 0.8; f.trend_persistence = 10;
@@ -1889,7 +1889,7 @@ bool QBTestStrategyBatchMetadata(CSymbolAdapter &adapter, string &detail)
    {
       QBMakeNormalRegime(regime);
       CMeanReversionEngine strategy;
-      strategy.Init("MR_BATCH", "MR batch", true, 0.0, adapter,
+      strategy.Init(STRATEGY_ID_MEAN_REVERSION, "MR batch", true, 0.0, adapter,
                     TRIGGER_REJECTION, 0.25, 1.5, 0.3, 1.0, 1.0);
       FeatureSnapshot f; ZeroMemory(f);
       f.atr = d; f.slope_norm = 0.0; f.rejection_wick = 0.6;
@@ -1937,7 +1937,7 @@ bool QBTestStrategyOverlapMap(CSymbolAdapter &adapter, string &detail)
    // Opening-range breakout variant: same BO family, different level source.
    {
       CBreakoutEngine strategy;
-      strategy.Init("BO_ORB_BATCH", "BO ORB batch", true, 0.0, adapter,
+      strategy.Init(STRATEGY_ID_BREAKOUT, "BO ORB batch", true, 0.0, adapter,
                     TRIGGER_CANDLE_CLOSE_BREAK, 5, 2.0, 1.5, 1.5, true,
                     LEVEL_SRC_OPENING_RANGE, STOP_MODE_DEFAULT, TARGET_MODE_DEFAULT);
       FeatureSnapshot f; ZeroMemory(f);
@@ -1955,14 +1955,14 @@ bool QBTestStrategyOverlapMap(CSymbolAdapter &adapter, string &detail)
       orbOk = sig.valid &&
               sig.strategy_id == STRATEGY_ID_BREAKOUT &&
               sig.strategy_template == "opening_range_breakout" &&
-              StringFind(sig.strategy_tags, "level_source=opening_range") >= 0 &&
+              StringFind(sig.strategy_tags, "level=opening_range") >= 0 &&
               strategy.GetStrategyTemplate() == "opening_range_breakout";
    }
 
    // Session breakout variant: same BO family, session level source.
    {
       CBreakoutEngine strategy;
-      strategy.Init("BO_SESSION_BATCH", "BO session batch", true, 0.0, adapter,
+      strategy.Init(STRATEGY_ID_BREAKOUT, "BO session batch", true, 0.0, adapter,
                     TRIGGER_CANDLE_CLOSE_BREAK, 5, 2.0, 1.5, 1.5, true,
                     LEVEL_SRC_SESSION, STOP_MODE_DEFAULT, TARGET_MODE_DEFAULT);
       FeatureSnapshot f; ZeroMemory(f);
@@ -1980,14 +1980,14 @@ bool QBTestStrategyOverlapMap(CSymbolAdapter &adapter, string &detail)
       brcOk = sig.valid &&
               sig.strategy_id == STRATEGY_ID_BREAKOUT &&
               sig.strategy_template == "session_breakout" &&
-              StringFind(sig.strategy_tags, "level_source=session") >= 0 &&
+              StringFind(sig.strategy_tags, "level=session") >= 0 &&
               strategy.GetStrategyTemplate() == "session_breakout";
    }
 
    // Session-sourced failed breakout: overlap candidate for SSR-style work.
    {
       CFailedBreakoutEngine strategy;
-      strategy.Init("FBO_SESSION_BATCH", "FBO session batch", true, 0.0, adapter,
+      strategy.Init(STRATEGY_ID_FAILED_BREAKOUT, "FBO session batch", true, 0.0, adapter,
                     TRIGGER_CANDLE_CLOSE_BREAK, 3.0, 3, 0.3, 0.5, 1.0, 1.5,
                     STOP_MODE_DEFAULT, TARGET_MODE_DEFAULT, LEVEL_SRC_SESSION);
       FeatureSnapshot f; ZeroMemory(f);
@@ -2007,7 +2007,7 @@ bool QBTestStrategyOverlapMap(CSymbolAdapter &adapter, string &detail)
               sig.strategy_id == STRATEGY_ID_FAILED_BREAKOUT &&
               sig.strategy_family == "failed_breakout" &&
               sig.strategy_template == "reclaim_reversal" &&
-              StringFind(sig.strategy_tags, "level_source=session") >= 0 &&
+              StringFind(sig.strategy_tags, "level=session") >= 0 &&
               strategy.GetStrategyFamily() == "failed_breakout";
    }
 
