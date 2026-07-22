@@ -12,6 +12,8 @@
 
 #include "StrategyBase.mqh"
 
+#define QB_TP_OBS_IMPULSE_MIN_DISPLACEMENT 0.30
+
 enum ENUM_TP_LIFECYCLE_PHASE
 {
    TP_LIFECYCLE_IDLE = 0,
@@ -56,6 +58,11 @@ private:
    int              m_lifecycleDirection;
    int              m_lifecycleBars;
    datetime         m_lifecycleCalcTime;
+   string           m_lifecycleSeedSource;
+   datetime         m_impulseStartTime;
+   double           m_impulseStartPrice;
+   double           m_impulseExtreme;
+   double           m_impulseATR;
 
    int TrendDirection(const RegimeState &regime) const
    {
@@ -72,6 +79,8 @@ private:
       m_lifecycleCalcTime = features.calc_time;
 
       int direction = TrendDirection(regime);
+      bool alignedCandle = (direction > 0 && features.closed_close > features.closed_open) ||
+                           (direction < 0 && features.closed_close < features.closed_open);
       bool invalidContext = (regime.event_state != EVENT_NORMAL || direction == 0);
       if(invalidContext || (m_lifecycleDirection != 0 && direction != m_lifecycleDirection))
       {
@@ -89,19 +98,48 @@ private:
          m_lifecyclePhase = TP_LIFECYCLE_IDLE;
          m_lifecycleDirection = 0;
          m_lifecycleBars = 0;
+         m_lifecycleSeedSource = "none";
+         m_impulseStartTime = 0;
+         m_impulseStartPrice = 0.0;
+         m_impulseExtreme = 0.0;
+         m_impulseATR = 0.0;
       }
 
-      if(regime.structure == STRUCTURE_IMPULSE)
+      // Shared STRUCTURE_IMPULSE remains the primary seed. The TP-specific
+      // alternative is observation-only and deliberately does not alter
+      // EligibilityFailure(): it nominates a directional completed candle
+      // only when the existing TP persistence/efficiency requirements already
+      // hold and candle displacement reaches a moderate 0.30 ATR research
+      // threshold.
+      bool structuralSeed = (regime.structure == STRUCTURE_IMPULSE);
+      bool tpSpecificSeed = (direction != 0 && alignedCandle &&
+                             features.trend_persistence >= m_minTrendPersistence &&
+                             features.dir_efficiency >= m_minDirEfficiency &&
+                             features.displacement >= QB_TP_OBS_IMPULSE_MIN_DISPLACEMENT);
+      if(m_lifecyclePhase == TP_LIFECYCLE_IDLE && (structuralSeed || tpSpecificSeed))
       {
          m_lifecyclePhase = TP_LIFECYCLE_IMPULSE;
          m_lifecycleDirection = direction;
          m_lifecycleBars = 0;
+         m_lifecycleSeedSource = structuralSeed ? "structural" : "tp_specific";
+         m_impulseStartTime = features.calc_time;
+         m_impulseStartPrice = features.closed_open;
+         m_impulseExtreme = (direction > 0) ? features.closed_high : features.closed_low;
+         if(m_impulseExtreme <= 0) m_impulseExtreme = features.closed_close;
+         m_impulseATR = features.atr;
          return;
       }
 
       if(m_lifecyclePhase == TP_LIFECYCLE_IDLE) return;
 
       m_lifecycleBars++;
+      if(m_lifecyclePhase == TP_LIFECYCLE_IMPULSE)
+      {
+         double barExtreme = (direction > 0) ? features.closed_high : features.closed_low;
+         if(barExtreme <= 0) barExtreme = features.closed_close;
+         if(direction > 0) m_impulseExtreme = MathMax(m_impulseExtreme, barExtreme);
+         else              m_impulseExtreme = MathMin(m_impulseExtreme, barExtreme);
+      }
       if(m_lifecycleBars > m_maxPullbackBars)
       {
          m_lifecyclePhase = TP_LIFECYCLE_EXPIRED;
@@ -117,8 +155,6 @@ private:
          return;
       }
 
-      bool alignedCandle = (direction > 0 && features.closed_close > features.closed_open) ||
-                           (direction < 0 && features.closed_close < features.closed_open);
       if(m_lifecyclePhase == TP_LIFECYCLE_RETRACING &&
          !features.moving_toward_value && alignedCandle)
       {
@@ -144,6 +180,11 @@ public:
       m_lifecycleDirection   = 0;
       m_lifecycleBars        = 0;
       m_lifecycleCalcTime    = 0;
+      m_lifecycleSeedSource  = "none";
+      m_impulseStartTime     = 0;
+      m_impulseStartPrice    = 0.0;
+      m_impulseExtreme       = 0.0;
+      m_impulseATR           = 0.0;
    }
 
    //+------------------------------------------------------------------+
@@ -179,10 +220,24 @@ public:
       m_lifecycleDirection  = 0;
       m_lifecycleBars       = 0;
       m_lifecycleCalcTime   = 0;
+      m_lifecycleSeedSource = "none";
+      m_impulseStartTime    = 0;
+      m_impulseStartPrice   = 0.0;
+      m_impulseExtreme      = 0.0;
+      m_impulseATR          = 0.0;
    }
 
    string GetLifecyclePhase() const { return QBTPLifecycleLabel(m_lifecyclePhase); }
    int GetLifecycleBars() const { return m_lifecycleBars; }
+   string GetLifecycleSeedSource() const { return m_lifecycleSeedSource; }
+   datetime GetImpulseStartTime() const { return m_impulseStartTime; }
+   double GetImpulseStartPrice() const { return m_impulseStartPrice; }
+   double GetImpulseExtreme() const { return m_impulseExtreme; }
+   double GetImpulseSpanATR() const
+   {
+      if(m_impulseATR <= 0) return 0.0;
+      return MathAbs(m_impulseExtreme - m_impulseStartPrice) / m_impulseATR;
+   }
 
    StrategySignal MakeLifecycleRejected(ENUM_ORDER_TYPE direction,
                                         int rejectionCode,
@@ -190,7 +245,12 @@ public:
    {
       if(StringFind(reason, "lifecycle=") < 0)
          reason += " lifecycle=" + GetLifecyclePhase() +
-                   " lifecycleBars=" + IntegerToString(m_lifecycleBars);
+                   " lifecycleBars=" + IntegerToString(m_lifecycleBars) +
+                   " lifecycleSeed=" + m_lifecycleSeedSource +
+                   " impulseStart=" + StringFormat("%I64d", (long)m_impulseStartTime) +
+                   " impulseStartPrice=" + DoubleToString(m_impulseStartPrice, 5) +
+                   " impulseExtreme=" + DoubleToString(m_impulseExtreme, 5) +
+                   " impulseSpanATR=" + DoubleToString(GetImpulseSpanATR(), 3);
       return MakeRejected(direction, rejectionCode, reason);
    }
 
@@ -239,9 +299,7 @@ public:
                 " returning=" + (features.returning_to_value ? "yes" : "no") +
                 " movingToward=" + (features.moving_toward_value ? "yes" : "no") +
                 " valueProgress=" + DoubleToString(features.value_return_progress, 3) +
-                " crossedValue=" + (features.crossed_into_value ? "yes" : "no") +
-                " lifecycle=" + GetLifecyclePhase() +
-                " lifecycleBars=" + IntegerToString(m_lifecycleBars);
+                " crossedValue=" + (features.crossed_into_value ? "yes" : "no");
 
       // Event normal
       if(regime.event_state != EVENT_NORMAL) return "event state not normal";

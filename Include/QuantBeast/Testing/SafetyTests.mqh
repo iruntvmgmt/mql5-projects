@@ -2134,11 +2134,30 @@ bool QBTestTPLifecycleObservation(CSymbolAdapter &adapter, string &detail)
    strategy.EvaluateLong(market, f, regime);
    bool invalidated = strategy.GetLifecyclePhase() == "invalidated";
 
+   CTrendPullbackEngine tpSpecific;
+   tpSpecific.Init("TP_SPECIFIC_SEED_TEST", "TP specific seed", true, 0.0, adapter,
+                   TRIGGER_CANDLE_CLOSE_BREAK, 0.4, 5, false, 0.618, 3, 1.5, 0.5);
+   RegimeState seedRegime; QBMakeNormalRegime(seedRegime);
+   seedRegime.trend = TREND_WEAK_UP;
+   seedRegime.structure = STRUCTURE_BALANCED;
+   FeatureSnapshot seed; ZeroMemory(seed);
+   seed.calc_time = 10; seed.atr = d; seed.dir_efficiency = 0.6;
+   seed.trend_persistence = 6; seed.displacement = 0.4;
+   seed.closed_open = market.mid; seed.closed_close = market.mid + 0.4 * d;
+   seed.closed_high = market.mid + 0.5 * d; seed.closed_low = market.mid - 0.1 * d;
+   tpSpecific.EvaluateLong(market, seed, seedRegime);
+   bool specificSeed = tpSpecific.GetLifecyclePhase() == "impulse" &&
+                       tpSpecific.GetLifecycleSeedSource() == "tp_specific" &&
+                       tpSpecific.GetImpulseStartTime() == 10 &&
+                       MathAbs(tpSpecific.GetImpulseStartPrice() - seed.closed_open) <= QB_EPSILON &&
+                       tpSpecific.GetImpulseSpanATR() >= 0.49;
+
    detail = "impulse=" + (impulse ? "yes" : "FAIL") +
             " retrace=" + (retracing ? "yes" : "FAIL") +
             " resume=" + (resumed ? "yes" : "FAIL") +
-            " invalid=" + (invalidated ? "yes" : "FAIL");
-   return impulse && retracing && resumed && invalidated;
+            " invalid=" + (invalidated ? "yes" : "FAIL") +
+            " tpSeed=" + (specificSeed ? "yes" : "FAIL");
+   return impulse && retracing && resumed && invalidated && specificSeed;
 }
 
 #endif // QB_SAFETYTESTS_MQH

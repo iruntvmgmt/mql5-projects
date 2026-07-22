@@ -138,14 +138,19 @@ Enter an established directional move after a controlled pullback and momentum r
   terminal observations. It advances once per feature snapshot even though
   both directions are evaluated. Lifecycle state is journaled but cannot yet
   authorize a trade.
+- The lifecycle first uses shared `STRUCTURE_IMPULSE`; when that is absent, an
+  observation-only TP-specific seed may nominate an aligned completed candle
+  after the existing TP persistence and efficiency floors are met and candle
+  displacement is at least 0.30 ATR. The seed records source, completed-bar
+  time/open, directional extreme, and ATR-normalized span. This research
+  threshold is not a production input and does not change TP eligibility.
 - Stop is beyond the recent swing/range plus ATR.
 - Target is fixed extension R.
 
 ### Required completion
 
-- Validate the observational impulse/retracement/resumption lifecycle on
-  organic, exact-byte-bounded windows, then define the price anchors needed to
-  turn it into candidate logic.
+- Validate the anchored observational impulse/retracement/resumption lifecycle
+  on organic, exact-byte-bounded windows before considering candidate logic.
 - Implement actual trigger modes such as rejection, micro-break, close confirmation, or retest.
 - Add trend maturity/exhaustion constraints.
 - Add failed-continuation, regime-deterioration, session, and time exits.

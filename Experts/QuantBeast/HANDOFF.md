@@ -1,5 +1,27 @@
 # QuantBeast Handoff
 
+## 2026-07-22 — TP-specific observational impulse seed anchored
+
+- Confirmed the prior exact-slice organic run left all 196 TP decisions in
+  `idle` because shared `STRUCTURE_IMPULSE` was never present. This is a Medium
+  research-reachability defect in the observation path, not evidence that TP
+  eligibility or central risk should be weakened.
+- Added an observation-only fallback seed requiring directional context, an
+  aligned completed candle, the existing TP persistence/efficiency floors, and
+  at least 0.30 ATR displacement. Shared `STRUCTURE_IMPULSE` remains primary.
+- The tracker now records seed source, completed-bar time/open, directional
+  extreme, and ATR-normalized impulse span on every TP rejection. None of these
+  fields can authorize a signal or alter geometry, arbitration, or risk.
+- Extended deterministic Test 64 to prove the balanced-structure TP seed and
+  its anchors. Final compile: `0 errors, 0 warnings`; Shadow regression:
+  `67 passed, 0 failed`, 22,080 ticks, 1,104 bars, natural completion.
+- Extended `tp_structure_report.py` compatibly to summarize seed sources and
+  spans; parser syntax and anchored synthetic-row checks passed.
+- Evidence: `TestEvidence/tp_specific_impulse_seed_20260722/README.md`.
+- Next: run one uninterrupted organic true-tick window and measure seed/phase
+  reachability using an exact byte slice. Readiness remains exactly
+  `READY FOR SHADOW MODE`.
+
 ## 2026-07-22 — TP value-return diagnostics separated from eligibility
 
 - Confirmed a Medium research/semantic defect: `returning_to_value` only

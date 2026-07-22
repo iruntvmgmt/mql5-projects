@@ -22,7 +22,10 @@ DETAIL = re.compile(
     re.IGNORECASE,
 )
 LIFECYCLE = re.compile(
-    r"lifecycle=(?P<lifecycle>[a-z_]+) lifecycleBars=(?P<lifecycle_bars>[0-9]+)",
+    r"lifecycle=(?P<lifecycle>[a-z_]+) lifecycleBars=(?P<lifecycle_bars>[0-9]+)"
+    r"(?: lifecycleSeed=(?P<seed>[a-z_]+) impulseStart=(?P<start>[0-9]+)"
+    r" impulseStartPrice=(?P<start_price>[0-9.]+) impulseExtreme=(?P<extreme>[0-9.]+)"
+    r" impulseSpanATR=(?P<span_atr>[0-9.]+))?",
     re.IGNORECASE,
 )
 
@@ -54,6 +57,8 @@ def main() -> int:
     diagnostic_rows = 0
     lifecycle_phases = Counter()
     lifecycle_bars = defaultdict(list)
+    lifecycle_seeds = Counter()
+    impulse_spans = defaultdict(list)
     matched = 0
     for row in rows(args.csv, args.offset, args.end_offset):
         if row.get("Strategy", "").strip() != "TP":
@@ -64,6 +69,11 @@ def main() -> int:
             phase = lifecycle_match.group("lifecycle").lower()
             lifecycle_phases[phase] += 1
             lifecycle_bars[phase].append(int(lifecycle_match.group("lifecycle_bars")))
+            if lifecycle_match.group("seed") is not None:
+                seed = lifecycle_match.group("seed").lower()
+                lifecycle_seeds[seed] += 1
+                if seed != "none":
+                    impulse_spans[seed].append(float(lifecycle_match.group("span_atr")))
         match = DETAIL.search(reason)
         if not match:
             continue
@@ -137,6 +147,14 @@ def main() -> int:
             for phase, count in lifecycle_phases.most_common()
         ]) if lifecycle_phases else
          "No lifecycle fields were present; this is a pre-lifecycle journal slice."), "",
+        "## Observational impulse seeds", "",
+        (table(["Seed source", "Rows", "Median span ATR", "Maximum span ATR"], [
+            [seed, count,
+             (f"{median(impulse_spans[seed]):.3f}" if impulse_spans[seed] else "n/a"),
+             (f"{max(impulse_spans[seed]):.3f}" if impulse_spans[seed] else "n/a")]
+            for seed, count in lifecycle_seeds.most_common()
+        ]) if lifecycle_seeds else
+         "No impulse-seed fields were present."), "",
         "## Failure combinations", "",
         table(["Combination", "Rows"], combinations.most_common()), "",
         "## State and failure combination", "",
