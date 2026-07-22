@@ -16,10 +16,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Dict, Tuple
+
+csv.field_size_limit(sys.maxsize)
 
 
 @dataclass
@@ -55,27 +58,135 @@ def infer_template(strategy: str) -> str:
     return mapping.get(strategy, "unknown")
 
 
+def infer_strategy_from_comment(comment: str) -> str:
+    comment = (comment or "").strip()
+    if not comment.startswith("QB_"):
+        return ""
+    body = comment[3:]
+    return body.split("_", 1)[0].strip()
+
+
 def read_rows(path: Path) -> List[Row]:
-    text = path.read_text(encoding="utf-16")
-    reader = csv.DictReader(text.splitlines())
+    data = path.read_bytes()
+    text = None
+    for encoding in ("utf-16", "utf-8-sig", "utf-8"):
+        try:
+            text = data.decode(encoding)
+            break
+        except UnicodeError:
+            continue
+    if text is None:
+        raise UnicodeError(f"Unable to decode {path} as utf-16, utf-8-sig, or utf-8")
     rows: List[Row] = []
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return rows
+
+    first_cells = [cell.strip() for cell in lines[0].split(",")]
+    file_name = path.name.lower()
+    known_headers = {
+        "Strategy",
+        "Accepted",
+        "StrategyFamily",
+        "StrategyTemplate",
+        "StrategyTags",
+        "RejectionReason",
+        "Direction",
+    }
+    has_header = bool(known_headers.intersection(first_cells))
+
+    if "tradejournal" in file_name:
+        reader = csv.reader(lines)
+        for raw in reader:
+            strategy = raw[0].strip() if len(raw) > 0 else ""
+            family = infer_family(strategy)
+            template = infer_template(strategy)
+            rows.append(
+                Row(
+                    source=path.name,
+                    strategy=strategy,
+                    direction=raw[4].strip() if len(raw) > 4 else "",
+                    accepted=True,
+                    rejection_reason="",
+                    family=family,
+                    template=template,
+                    tags="",
+                    row={"raw": raw},
+                )
+            )
+        return rows
+
+    if "orderjournal" in file_name:
+        reader = csv.reader(lines)
+        for raw in reader:
+            comment = raw[11].strip() if len(raw) > 11 else ""
+            strategy = infer_strategy_from_comment(comment)
+            family = infer_family(strategy)
+            template = infer_template(strategy)
+            state = int(raw[10]) if len(raw) > 10 and raw[10].strip().isdigit() else -1
+            accepted = state not in (9, 10)
+            rejection_reason = ""
+            if state == 9:
+                rejection_reason = "order rejected"
+            elif state == 10:
+                rejection_reason = "order expired"
+            rows.append(
+                Row(
+                    source=path.name,
+                    strategy=strategy,
+                    direction="BUY" if len(raw) > 1 and "BUY" in raw[1] else "SELL",
+                    accepted=accepted,
+                    rejection_reason=rejection_reason,
+                    family=family,
+                    template=template,
+                    tags=comment,
+                    row={"raw": raw},
+                )
+            )
+        return rows
+
+    if has_header:
+        reader = csv.DictReader(lines)
+        for raw in reader:
+            strategy = raw.get("Strategy", "").strip()
+            family = (raw.get("StrategyFamily") or "").strip() or infer_family(strategy)
+            template = (raw.get("StrategyTemplate") or "").strip() or infer_template(strategy)
+            tags = (raw.get("StrategyTags") or "").strip()
+            accepted = (raw.get("Accepted") or "").strip().upper() == "ACCEPTED"
+            rows.append(
+                Row(
+                    source=path.name,
+                    strategy=strategy,
+                    direction=(raw.get("Direction") or "").strip(),
+                    accepted=accepted,
+                    rejection_reason=(raw.get("RejectionReason") or "").strip(),
+                    family=family,
+                    template=template,
+                    tags=tags,
+                    row=raw,
+                )
+            )
+        return rows
+
+    reader = csv.reader(lines)
     for raw in reader:
-        strategy = raw.get("Strategy", "").strip()
-        family = (raw.get("StrategyFamily") or "").strip() or infer_family(strategy)
-        template = (raw.get("StrategyTemplate") or "").strip() or infer_template(strategy)
-        tags = (raw.get("StrategyTags") or "").strip()
-        accepted = (raw.get("Accepted") or "").strip().upper() == "ACCEPTED"
+        strategy = raw[3].strip() if len(raw) > 3 else ""
+        direction = raw[4].strip() if len(raw) > 4 else ""
+        accepted = raw[8].strip().upper() == "ACCEPTED" if len(raw) > 8 else False
+        rejection_reason = raw[10].strip() if len(raw) > 10 else ""
+        family = infer_family(strategy)
+        template = infer_template(strategy)
         rows.append(
             Row(
                 source=path.name,
                 strategy=strategy,
-                direction=(raw.get("Direction") or "").strip(),
+                direction=direction,
                 accepted=accepted,
-                rejection_reason=(raw.get("RejectionReason") or "").strip(),
+                rejection_reason=rejection_reason,
                 family=family,
                 template=template,
-                tags=tags,
-                row=raw,
+                tags="",
+                row={"raw": raw},
             )
         )
     return rows
