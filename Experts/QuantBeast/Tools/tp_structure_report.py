@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from statistics import median
 
@@ -17,7 +17,8 @@ DETAIL = re.compile(
     r"dirEff=(?P<eff>[0-9.]+) displacement=(?P<disp>[0-9.]+) "
     r"equilibrium=(?P<equil>[0-9.]+) returning=(?P<returning>yes|no)"
     r"(?: movingToward=(?P<moving>yes|no) valueProgress=(?P<progress>-?[0-9.]+)"
-    r" crossedValue=(?P<crossed>yes|no))?",
+    r" crossedValue=(?P<crossed>yes|no))?"
+    r"(?: lifecycle=(?P<lifecycle>[a-z_]+) lifecycleBars=(?P<lifecycle_bars>[0-9]+))?",
     re.IGNORECASE,
 )
 
@@ -47,6 +48,8 @@ def main() -> int:
     movement = Counter()
     progress = []
     diagnostic_rows = 0
+    lifecycle_phases = Counter()
+    lifecycle_bars = defaultdict(list)
     matched = 0
     for row in rows(args.csv, args.offset, args.end_offset):
         if row.get("Strategy", "").strip() != "TP":
@@ -69,6 +72,10 @@ def main() -> int:
             movement["crossed_into_value"] += int(is_crossed)
             movement["near_value_but_departing"] += int(returning and not is_moving)
             progress.append(float(match.group("progress")))
+        if match.group("lifecycle") is not None:
+            phase = match.group("lifecycle").lower()
+            lifecycle_phases[phase] += 1
+            lifecycle_bars[phase].append(int(match.group("lifecycle_bars")))
         if (values["slope"] > args.slope and values["eff"] > 0.4 and
                 values["disp"] <= args.displacement):
             displacement_only.append(values["disp"])
@@ -117,6 +124,13 @@ def main() -> int:
          ", median " + f"{median(progress):.3f}" +
          ", maximum " + f"{max(progress):.3f}" + "."
          if progress else ""), "",
+        "## Observational lifecycle phases", "",
+        (table(["Phase", "Rows", "Median phase bars", "Maximum phase bars"], [
+            [phase, count, f"{median(lifecycle_bars[phase]):.1f}",
+             max(lifecycle_bars[phase])]
+            for phase, count in lifecycle_phases.most_common()
+        ]) if lifecycle_phases else
+         "No lifecycle fields were present; this is a pre-lifecycle journal slice."), "",
         "## Failure combinations", "",
         table(["Combination", "Rows"], combinations.most_common()), "",
         "## State and failure combination", "",

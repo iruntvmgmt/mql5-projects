@@ -51,6 +51,23 @@
   do not clip structural stops or relax the central safety limit for acceptance.
 - Evidence: `TestEvidence/stop_geometry_multiwindow_20260722/`.
 
+## 2026-07-22 — TP observational lifecycle added
+
+- Added a closed-bar, observation-only TP lifecycle with `idle`, `impulse`,
+  `retracing`, `resume_candidate`, `invalidated`, and `expired` phases.
+- The tracker advances once per `FeatureSnapshot::calc_time`, preventing the
+  normal long/short evaluation pair from double-advancing state.
+- It does not alter eligibility, candidate validity, geometry, arbitration, or
+  risk. Structure rejection diagnostics now include phase and phase age.
+- Deterministic Test 64 proves impulse → retracing → resume candidate,
+  same-bar idempotence, and opposite-trend invalidation.
+- Compile: `0 errors, 0 warnings`. Shadow regression: `67 passed, 0 failed`,
+  22,080 generated ticks, 1,104 bars, natural completion, no broker orders.
+- `tp_structure_report.py` now summarizes lifecycle phase coverage while
+  remaining compatible with pre-lifecycle slices.
+- Evidence: `TestEvidence/tp_lifecycle_observation_20260722/README.md`.
+- Readiness remains exactly `READY FOR SHADOW MODE`.
+
 **Last updated:** 2026-07-20  
 **Current phase:** Broker-free audit, repair, deterministic validation, and organic true-tick journal proof complete through safe phases  
 **Current verdict:** **READY FOR SHADOW MODE; live and Challenge trading prohibited**  

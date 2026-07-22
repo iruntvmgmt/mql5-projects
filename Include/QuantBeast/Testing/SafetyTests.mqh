@@ -2091,4 +2091,54 @@ bool QBTestValueReturnDiagnostics(string &detail)
    return ok;
 }
 
+//+------------------------------------------------------------------+
+//| TEST 64: observational TP lifecycle advances once per closed bar  |
+//| and does not itself authorize a signal.                           |
+//+------------------------------------------------------------------+
+bool QBTestTPLifecycleObservation(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine strategy;
+   strategy.Init("TP_LIFECYCLE_TEST", "TP lifecycle", true, 0.0, adapter,
+                 TRIGGER_CANDLE_CLOSE_BREAK, 0.4, 5, false, 0.618, 3, 1.5, 0.5);
+   MarketSnapshot market; double d;
+   QBMakeSyntheticMarket(adapter, market, d);
+   RegimeState regime; QBMakeNormalRegime(regime);
+   regime.trend = TREND_STRONG_UP;
+   FeatureSnapshot f; ZeroMemory(f);
+   f.atr = d; f.dir_efficiency = 0.8; f.trend_persistence = 10;
+   f.current_range_low = market.mid - 4.0 * d;
+   f.current_range_high = market.mid + 2.0 * d;
+   f.swing_high = f.current_range_high; f.swing_low = f.current_range_low;
+
+   f.calc_time = 1; f.closed_open = market.mid; f.closed_close = market.mid + d;
+   regime.structure = STRUCTURE_IMPULSE;
+   strategy.EvaluateLong(market, f, regime);
+   bool impulse = strategy.GetLifecyclePhase() == "impulse";
+
+   f.calc_time = 2; f.moving_toward_value = true;
+   f.closed_open = market.mid + d; f.closed_close = market.mid;
+   regime.structure = STRUCTURE_BALANCED;
+   strategy.EvaluateLong(market, f, regime);
+   int barsAfterLong = strategy.GetLifecycleBars();
+   strategy.EvaluateShort(market, f, regime); // same bar must not advance twice
+   bool retracing = strategy.GetLifecyclePhase() == "retracing" &&
+                    strategy.GetLifecycleBars() == barsAfterLong;
+
+   f.calc_time = 3; f.moving_toward_value = false;
+   f.closed_open = market.mid; f.closed_close = market.mid + d;
+   strategy.EvaluateLong(market, f, regime);
+   bool resumed = strategy.GetLifecyclePhase() == "resume_candidate";
+
+   f.calc_time = 4;
+   regime.trend = TREND_STRONG_DOWN;
+   strategy.EvaluateLong(market, f, regime);
+   bool invalidated = strategy.GetLifecyclePhase() == "invalidated";
+
+   detail = "impulse=" + (impulse ? "yes" : "FAIL") +
+            " retrace=" + (retracing ? "yes" : "FAIL") +
+            " resume=" + (resumed ? "yes" : "FAIL") +
+            " invalid=" + (invalidated ? "yes" : "FAIL");
+   return impulse && retracing && resumed && invalidated;
+}
+
 #endif // QB_SAFETYTESTS_MQH

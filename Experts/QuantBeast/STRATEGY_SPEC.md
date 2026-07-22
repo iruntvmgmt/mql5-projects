@@ -133,12 +133,19 @@ Enter an established directional move after a controlled pullback and momentum r
   toward VWAP (`moving_toward_value`, `value_return_progress`, and
   `crossed_into_value`). TP eligibility still consumes the legacy near-value
   proxy until organic evidence supports a state-transition rule.
+- Maintains an observation-only closed-bar lifecycle: `idle` → `impulse` →
+  `retracing` → `resume_candidate`, with explicit `invalidated` and `expired`
+  terminal observations. It advances once per feature snapshot even though
+  both directions are evaluated. Lifecycle state is journaled but cannot yet
+  authorize a trade.
 - Stop is beyond the recent swing/range plus ATR.
 - Target is fixed extension R.
 
 ### Required completion
 
-- Calculate a defined impulse leg and its confirmed retracement.
+- Validate the observational impulse/retracement/resumption lifecycle on
+  organic, exact-byte-bounded windows, then define the price anchors needed to
+  turn it into candidate logic.
 - Implement actual trigger modes such as rejection, micro-break, close confirmation, or retest.
 - Add trend maturity/exhaustion constraints.
 - Add failed-continuation, regime-deterioration, session, and time exits.

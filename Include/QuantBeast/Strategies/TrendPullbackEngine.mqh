@@ -12,6 +12,30 @@
 
 #include "StrategyBase.mqh"
 
+enum ENUM_TP_LIFECYCLE_PHASE
+{
+   TP_LIFECYCLE_IDLE = 0,
+   TP_LIFECYCLE_IMPULSE,
+   TP_LIFECYCLE_RETRACING,
+   TP_LIFECYCLE_RESUME_CANDIDATE,
+   TP_LIFECYCLE_INVALIDATED,
+   TP_LIFECYCLE_EXPIRED
+};
+
+string QBTPLifecycleLabel(ENUM_TP_LIFECYCLE_PHASE phase)
+{
+   switch(phase)
+   {
+      case TP_LIFECYCLE_IMPULSE:          return "impulse";
+      case TP_LIFECYCLE_RETRACING:        return "retracing";
+      case TP_LIFECYCLE_RESUME_CANDIDATE: return "resume_candidate";
+      case TP_LIFECYCLE_INVALIDATED:      return "invalidated";
+      case TP_LIFECYCLE_EXPIRED:          return "expired";
+      case TP_LIFECYCLE_IDLE:
+      default:                            return "idle";
+   }
+}
+
 //+------------------------------------------------------------------+
 //| Trend Pullback Strategy - Enters after controlled pullback        |
 //+------------------------------------------------------------------+
@@ -28,6 +52,79 @@ private:
    ENUM_STOP_MODE   m_stopMode;
    ENUM_TARGET_MODE m_targetMode;
    double           m_maxSpreadPts;
+   ENUM_TP_LIFECYCLE_PHASE m_lifecyclePhase;
+   int              m_lifecycleDirection;
+   int              m_lifecycleBars;
+   datetime         m_lifecycleCalcTime;
+
+   int TrendDirection(const RegimeState &regime) const
+   {
+      if(regime.trend == TREND_STRONG_UP || regime.trend == TREND_WEAK_UP) return 1;
+      if(regime.trend == TREND_STRONG_DOWN || regime.trend == TREND_WEAK_DOWN) return -1;
+      return 0;
+   }
+
+   void ObserveLifecycle(const FeatureSnapshot &features, const RegimeState &regime)
+   {
+      // EvaluateLong and EvaluateShort are both called for the same completed
+      // bar. Advance the observational lifecycle exactly once per snapshot.
+      if(features.calc_time == m_lifecycleCalcTime) return;
+      m_lifecycleCalcTime = features.calc_time;
+
+      int direction = TrendDirection(regime);
+      bool invalidContext = (regime.event_state != EVENT_NORMAL || direction == 0);
+      if(invalidContext || (m_lifecycleDirection != 0 && direction != m_lifecycleDirection))
+      {
+         m_lifecyclePhase = (m_lifecyclePhase == TP_LIFECYCLE_IDLE)
+                            ? TP_LIFECYCLE_IDLE : TP_LIFECYCLE_INVALIDATED;
+         m_lifecycleDirection = 0;
+         m_lifecycleBars = 0;
+         return;
+      }
+
+      if(m_lifecyclePhase == TP_LIFECYCLE_INVALIDATED ||
+         m_lifecyclePhase == TP_LIFECYCLE_EXPIRED ||
+         m_lifecyclePhase == TP_LIFECYCLE_RESUME_CANDIDATE)
+      {
+         m_lifecyclePhase = TP_LIFECYCLE_IDLE;
+         m_lifecycleDirection = 0;
+         m_lifecycleBars = 0;
+      }
+
+      if(regime.structure == STRUCTURE_IMPULSE)
+      {
+         m_lifecyclePhase = TP_LIFECYCLE_IMPULSE;
+         m_lifecycleDirection = direction;
+         m_lifecycleBars = 0;
+         return;
+      }
+
+      if(m_lifecyclePhase == TP_LIFECYCLE_IDLE) return;
+
+      m_lifecycleBars++;
+      if(m_lifecycleBars > m_maxPullbackBars)
+      {
+         m_lifecyclePhase = TP_LIFECYCLE_EXPIRED;
+         m_lifecycleDirection = 0;
+         return;
+      }
+
+      if((m_lifecyclePhase == TP_LIFECYCLE_IMPULSE ||
+          m_lifecyclePhase == TP_LIFECYCLE_RETRACING) &&
+         features.moving_toward_value)
+      {
+         m_lifecyclePhase = TP_LIFECYCLE_RETRACING;
+         return;
+      }
+
+      bool alignedCandle = (direction > 0 && features.closed_close > features.closed_open) ||
+                           (direction < 0 && features.closed_close < features.closed_open);
+      if(m_lifecyclePhase == TP_LIFECYCLE_RETRACING &&
+         !features.moving_toward_value && alignedCandle)
+      {
+         m_lifecyclePhase = TP_LIFECYCLE_RESUME_CANDIDATE;
+      }
+   }
 
 public:
    //+------------------------------------------------------------------+
@@ -43,6 +140,10 @@ public:
       m_stopMode             = STOP_MODE_DEFAULT;
       m_targetMode           = TARGET_MODE_DEFAULT;
       m_maxSpreadPts         = 35.0;
+      m_lifecyclePhase       = TP_LIFECYCLE_IDLE;
+      m_lifecycleDirection   = 0;
+      m_lifecycleBars        = 0;
+      m_lifecycleCalcTime    = 0;
    }
 
    //+------------------------------------------------------------------+
@@ -74,7 +175,14 @@ public:
       m_stopMode            = stopMode;
       m_targetMode          = targetMode;
       m_maxSpreadPts        = maxSpreadPts;
+      m_lifecyclePhase      = TP_LIFECYCLE_IDLE;
+      m_lifecycleDirection  = 0;
+      m_lifecycleBars       = 0;
+      m_lifecycleCalcTime   = 0;
    }
+
+   string GetLifecyclePhase() const { return QBTPLifecycleLabel(m_lifecyclePhase); }
+   int GetLifecycleBars() const { return m_lifecycleBars; }
 
    //+------------------------------------------------------------------+
    string EligibilityFailure(const MarketSnapshot &market,
@@ -121,7 +229,9 @@ public:
                 " returning=" + (features.returning_to_value ? "yes" : "no") +
                 " movingToward=" + (features.moving_toward_value ? "yes" : "no") +
                 " valueProgress=" + DoubleToString(features.value_return_progress, 3) +
-                " crossedValue=" + (features.crossed_into_value ? "yes" : "no");
+                " crossedValue=" + (features.crossed_into_value ? "yes" : "no") +
+                " lifecycle=" + GetLifecyclePhase() +
+                " lifecycleBars=" + IntegerToString(m_lifecycleBars);
 
       // Event normal
       if(regime.event_state != EVENT_NORMAL) return "event state not normal";
@@ -141,6 +251,7 @@ public:
                                 const FeatureSnapshot &features,
                                 const RegimeState &regime)
    {
+      ObserveLifecycle(features, regime);
       string eligibility = EligibilityFailure(market, features, regime);
       if(eligibility != "")
          return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "TP eligibility: " + eligibility);
@@ -215,6 +326,7 @@ public:
                                  const FeatureSnapshot &features,
                                  const RegimeState &regime)
    {
+      ObserveLifecycle(features, regime);
       string eligibility = EligibilityFailure(market, features, regime);
       if(eligibility != "")
          return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "TP eligibility: " + eligibility);

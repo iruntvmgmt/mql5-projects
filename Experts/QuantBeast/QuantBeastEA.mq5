@@ -2708,6 +2708,11 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 63 PASS: Value-return diagnostics " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 63 FAIL: Value-return diagnostics " + detail); }
+
+      if(QBTestTPLifecycleObservation(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 64 PASS: TP lifecycle observation " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 64 FAIL: TP lifecycle observation " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

@@ -10,6 +10,10 @@
   movement and crossing diagnostics are now emitted on TP structure
   rejections, but do not yet change eligibility. A completed multi-window
   organic comparison is required before replacing the legacy proxy.
+- TP now tracks impulse, retracement, resume-candidate, invalidation, and
+  expiry phases, but this lifecycle is observational only. Its resume candidate
+  is not a validated entry and does not change current eligibility. Impulse
+  price anchors and organic lifecycle coverage remain unproven.
 
 - The final source compiles at `0 errors, 0 warnings`, but compilation is not runtime proof.
 - The native MT5 tester API still returns the invalid/ambiguous identifier `job_id: 0` and reports `tester stopped`; local agent logs must be inspected to confirm completion.
