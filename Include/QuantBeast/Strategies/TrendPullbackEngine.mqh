@@ -113,7 +113,11 @@ public:
 
       // Structure should support trend (impulse or pullback)
       if(!(regime.structure == STRUCTURE_IMPULSE || regime.structure == STRUCTURE_PULLBACK))
-         return "structure not impulse/pullback";
+         return "structure not impulse/pullback slope=" + DoubleToString(MathAbs(features.slope_norm), 3) +
+                " dirEff=" + DoubleToString(features.dir_efficiency, 3) +
+                " displacement=" + DoubleToString(features.displacement, 3) +
+                " equilibrium=" + DoubleToString(MathAbs(features.dist_from_equil), 3) +
+                " returning=" + (features.returning_to_value ? "yes" : "no");
 
       // Event normal
       if(regime.event_state != EVENT_NORMAL) return "event state not normal";
