@@ -1,5 +1,21 @@
 # QuantBeast Handoff
 
+## 2026-07-22 — TP lifecycle direction attribution added
+
+- Three-window evidence exposed an attribution ambiguity: each completed
+  snapshot is evaluated as both BUY and SELL, while the lifecycle internally
+  carries only its nominated trend direction.
+- Added observation-only `lifecycleDirection=up|down|none` annotation to every
+  TP rejection and backward-compatible report counts. Test 64 now verifies the
+  direction of a TP-specific seed.
+- No eligibility, candidate, geometry, arbitration, risk, or execution behavior
+  changed. Parser syntax and a directional synthetic row passed.
+- Compile: `0 errors, 0 warnings`, 14,212 ms. Shadow regression: `67 passed,
+  0 failed`, 22,080 ticks, 1,104 bars, natural completion.
+- Evidence: `TestEvidence/tp_lifecycle_direction_20260722/README.md`.
+- Next: gather a direction-attributed organic slice and add side-effect-free
+  forward outcome tracking. Readiness remains exactly `READY FOR SHADOW MODE`.
+
 ## 2026-07-22 — TP-specific observational impulse seed anchored
 
 - Confirmed the prior exact-slice organic run left all 196 TP decisions in

@@ -144,14 +144,16 @@ Enter an established directional move after a controlled pullback and momentum r
   displacement is at least 0.30 ATR. The seed records source, completed-bar
   time/open, directional extreme, and ATR-normalized span. This research
   threshold is not a production input and does not change TP eligibility.
+  Rejection diagnostics also serialize the lifecycle's nominated direction
+  (`up`, `down`, or `none`) independently of the BUY/SELL evaluation row.
 - Stop is beyond the recent swing/range plus ATR.
 - Target is fixed extension R.
 
 ### Required completion
 
-- Serialize the nominated lifecycle direction and measure side-effect-free
-  forward outcomes for naturally reached resume candidates before considering
-  candidate logic. Three independent exact-byte-bounded windows now prove the
+- Measure side-effect-free forward outcomes for direction-attributed,
+  naturally reached resume candidates before considering candidate logic.
+  Three independent exact-byte-bounded windows now prove the
   full lifecycle is reachable, but not that resumption has an edge.
 - Implement actual trigger modes such as rejection, micro-break, close confirmation, or retest.
 - Add trend maturity/exhaustion constraints.

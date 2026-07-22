@@ -18,8 +18,9 @@
   a fixed 0.30 ATR research threshold are met. That threshold is not a
   production configuration. Three independent organic generated-tick windows
   proved seed, impulse, and retracing reachability; two reached resumption.
-  Lifecycle direction is not yet serialized and forward resumption outcomes
-  remain unmeasured, so entry validity remains unproven.
+  Lifecycle direction is now serialized independently of direction-paired
+  evaluation rows, but forward resumption outcomes remain unmeasured, so entry
+  validity remains unproven.
 
 - The final source compiles at `0 errors, 0 warnings`, but compilation is not runtime proof.
 - The native MT5 tester API still returns the invalid/ambiguous identifier `job_id: 0` and reports `tester stopped`; local agent logs must be inspected to confirm completion.

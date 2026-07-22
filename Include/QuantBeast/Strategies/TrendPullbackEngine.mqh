@@ -229,6 +229,12 @@ public:
 
    string GetLifecyclePhase() const { return QBTPLifecycleLabel(m_lifecyclePhase); }
    int GetLifecycleBars() const { return m_lifecycleBars; }
+   string GetLifecycleDirection() const
+   {
+      if(m_lifecycleDirection > 0) return "up";
+      if(m_lifecycleDirection < 0) return "down";
+      return "none";
+   }
    string GetLifecycleSeedSource() const { return m_lifecycleSeedSource; }
    datetime GetImpulseStartTime() const { return m_impulseStartTime; }
    double GetImpulseStartPrice() const { return m_impulseStartPrice; }
@@ -246,6 +252,7 @@ public:
       if(StringFind(reason, "lifecycle=") < 0)
          reason += " lifecycle=" + GetLifecyclePhase() +
                    " lifecycleBars=" + IntegerToString(m_lifecycleBars) +
+                   " lifecycleDirection=" + GetLifecycleDirection() +
                    " lifecycleSeed=" + m_lifecycleSeedSource +
                    " impulseStart=" + StringFormat("%I64d", (long)m_impulseStartTime) +
                    " impulseStartPrice=" + DoubleToString(m_impulseStartPrice, 5) +

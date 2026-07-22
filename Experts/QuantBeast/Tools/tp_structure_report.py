@@ -23,6 +23,7 @@ DETAIL = re.compile(
 )
 LIFECYCLE = re.compile(
     r"lifecycle=(?P<lifecycle>[a-z_]+) lifecycleBars=(?P<lifecycle_bars>[0-9]+)"
+    r"(?: lifecycleDirection=(?P<direction>up|down|none))?"
     r"(?: lifecycleSeed=(?P<seed>[a-z_]+) impulseStart=(?P<start>[0-9]+)"
     r" impulseStartPrice=(?P<start_price>[0-9.]+) impulseExtreme=(?P<extreme>[0-9.]+)"
     r" impulseSpanATR=(?P<span_atr>[0-9.]+))?",
@@ -57,6 +58,7 @@ def main() -> int:
     diagnostic_rows = 0
     lifecycle_phases = Counter()
     lifecycle_bars = defaultdict(list)
+    lifecycle_directions = Counter()
     lifecycle_seeds = Counter()
     impulse_spans = defaultdict(list)
     matched = 0
@@ -69,6 +71,8 @@ def main() -> int:
             phase = lifecycle_match.group("lifecycle").lower()
             lifecycle_phases[phase] += 1
             lifecycle_bars[phase].append(int(lifecycle_match.group("lifecycle_bars")))
+            if lifecycle_match.group("direction") is not None:
+                lifecycle_directions[lifecycle_match.group("direction").lower()] += 1
             if lifecycle_match.group("seed") is not None:
                 seed = lifecycle_match.group("seed").lower()
                 lifecycle_seeds[seed] += 1
@@ -155,6 +159,10 @@ def main() -> int:
             for seed, count in lifecycle_seeds.most_common()
         ]) if lifecycle_seeds else
          "No impulse-seed fields were present."), "",
+        "## Observational lifecycle directions", "",
+        (table(["Nominated direction", "Rows"], lifecycle_directions.most_common())
+         if lifecycle_directions else
+         "No lifecycle-direction fields were present."), "",
         "## Failure combinations", "",
         table(["Combination", "Rows"], combinations.most_common()), "",
         "## State and failure combination", "",

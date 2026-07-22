@@ -2147,6 +2147,7 @@ bool QBTestTPLifecycleObservation(CSymbolAdapter &adapter, string &detail)
    seed.closed_high = market.mid + 0.5 * d; seed.closed_low = market.mid - 0.1 * d;
    tpSpecific.EvaluateLong(market, seed, seedRegime);
    bool specificSeed = tpSpecific.GetLifecyclePhase() == "impulse" &&
+                       tpSpecific.GetLifecycleDirection() == "up" &&
                        tpSpecific.GetLifecycleSeedSource() == "tp_specific" &&
                        tpSpecific.GetImpulseStartTime() == 10 &&
                        MathAbs(tpSpecific.GetImpulseStartPrice() - seed.closed_open) <= QB_EPSILON &&
