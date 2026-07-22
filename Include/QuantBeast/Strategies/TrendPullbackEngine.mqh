@@ -77,44 +77,55 @@ public:
    }
 
    //+------------------------------------------------------------------+
-   bool IsEligible(const MarketSnapshot &market,
-                   const FeatureSnapshot &features,
-                   const RegimeState &regime)
+   string EligibilityFailure(const MarketSnapshot &market,
+                             const FeatureSnapshot &features,
+                             const RegimeState &regime)
    {
-      if(!m_enabled) return false;
+      if(!m_enabled) return "disabled";
 
       // Must have a directional trend (up or down)
       bool trendUp   = (regime.trend == TREND_STRONG_UP || regime.trend == TREND_WEAK_UP);
       bool trendDown = (regime.trend == TREND_STRONG_DOWN || regime.trend == TREND_WEAK_DOWN);
-      if(!trendUp && !trendDown) return false;
+      if(!trendUp && !trendDown) return "trend not directional";
 
       // Not exhausted
       if(regime.trend == TREND_EXHAUSTED_UP || regime.trend == TREND_EXHAUSTED_DOWN)
-         return false;
+         return "trend exhausted";
 
       // Directional efficiency minimum
       if(features.dir_efficiency < m_minDirEfficiency)
-         return false;
+         return "directional efficiency " + DoubleToString(features.dir_efficiency, 2) +
+                " below " + DoubleToString(m_minDirEfficiency, 2);
 
       // Trend persistence minimum
       if(features.trend_persistence < m_minTrendPersistence)
-         return false;
+         return "trend persistence " + IntegerToString(features.trend_persistence) +
+                " below " + IntegerToString(m_minTrendPersistence);
 
       // HTF agreement (optional)
       if(m_requireHTFAgreement && !features.htf_aligned)
-         return false;
+         return "HTF not aligned";
 
       // Spread
-      if(market.spread_points > m_maxSpreadPts) return false;
+      if(market.spread_points > m_maxSpreadPts)
+         return "spread " + DoubleToString(market.spread_points, 1) +
+                " above " + DoubleToString(m_maxSpreadPts, 1);
 
       // Structure should support trend (impulse or pullback)
       if(!(regime.structure == STRUCTURE_IMPULSE || regime.structure == STRUCTURE_PULLBACK))
-         return false;
+         return "structure not impulse/pullback";
 
       // Event normal
-      if(regime.event_state != EVENT_NORMAL) return false;
+      if(regime.event_state != EVENT_NORMAL) return "event state not normal";
 
-      return true;
+      return "";
+   }
+
+   bool IsEligible(const MarketSnapshot &market,
+                   const FeatureSnapshot &features,
+                   const RegimeState &regime)
+   {
+      return EligibilityFailure(market, features, regime) == "";
    }
 
    //+------------------------------------------------------------------+
@@ -122,8 +133,9 @@ public:
                                 const FeatureSnapshot &features,
                                 const RegimeState &regime)
    {
-      if(!IsEligible(market, features, regime))
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "TP: not eligible");
+      string eligibility = EligibilityFailure(market, features, regime);
+      if(eligibility != "")
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "TP eligibility: " + eligibility);
 
       // Must be in an uptrend
       if(!(regime.trend == TREND_STRONG_UP || regime.trend == TREND_WEAK_UP))
@@ -195,8 +207,9 @@ public:
                                  const FeatureSnapshot &features,
                                  const RegimeState &regime)
    {
-      if(!IsEligible(market, features, regime))
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "TP: not eligible");
+      string eligibility = EligibilityFailure(market, features, regime);
+      if(eligibility != "")
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "TP eligibility: " + eligibility);
 
       if(!(regime.trend == TREND_STRONG_DOWN || regime.trend == TREND_WEAK_DOWN))
          return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: not downtrend");

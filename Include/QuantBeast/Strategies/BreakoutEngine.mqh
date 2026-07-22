@@ -78,11 +78,11 @@ public:
    }
 
    //+------------------------------------------------------------------+
-   bool IsEligible(const MarketSnapshot &market,
-                   const FeatureSnapshot &features,
-                   const RegimeState &regime)
+   string EligibilityFailure(const MarketSnapshot &market,
+                             const FeatureSnapshot &features,
+                             const RegimeState &regime)
    {
-      if(!m_enabled) return false;
+      if(!m_enabled) return "disabled";
 
       // Compression must PRECEDE the completed breakout bar. Use the
       // preceding-compression run (independent of the trigger bar's own
@@ -93,29 +93,38 @@ public:
       // still block dangerous expansion below). The old BO-specific
       // compression-percentile input was removed together with that gate.
       if(features.preceding_compression_bars < m_minCompressionBars)
-         return false;
+         return "compression bars " + IntegerToString(features.preceding_compression_bars) +
+                " below " + IntegerToString(m_minCompressionBars);
 
       // Spread acceptable
       if(market.spread_points > m_maxSpreadPts)
-         return false;
+         return "spread " + DoubleToString(market.spread_points, 1) +
+                " above " + DoubleToString(m_maxSpreadPts, 1);
 
       // Event state must be normal
       if(regime.event_state != EVENT_NORMAL)
-         return false;
+         return "event state not normal";
 
       // Not in shock or extreme volatility
       if(regime.volatility == VOL_SHOCK || regime.volatility == VOL_EXTREME)
-         return false;
+         return "volatility shock/extreme";
 
       // Liquidity must be tradeable
       if(regime.liquidity == LIQUIDITY_UNSAFE)
-         return false;
+         return "liquidity unsafe";
 
       // HTF bias check (optional)
       if(m_requireHTFBias && !features.htf_aligned)
-         return false;
+         return "HTF not aligned";
 
-      return true;
+      return "";
+   }
+
+   bool IsEligible(const MarketSnapshot &market,
+                   const FeatureSnapshot &features,
+                   const RegimeState &regime)
+   {
+      return EligibilityFailure(market, features, regime) == "";
    }
 
    //+------------------------------------------------------------------+
@@ -123,8 +132,9 @@ public:
                                 const FeatureSnapshot &features,
                                 const RegimeState &regime)
    {
-      if(!IsEligible(market, features, regime))
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "Breakout: not eligible");
+      string eligibility = EligibilityFailure(market, features, regime);
+      if(eligibility != "")
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "Breakout eligibility: " + eligibility);
 
       if(m_requireHTFBias && features.htf_slope <= 0)
          return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "Breakout Long: HTF bias is not up");
@@ -218,8 +228,9 @@ public:
                                  const FeatureSnapshot &features,
                                  const RegimeState &regime)
    {
-      if(!IsEligible(market, features, regime))
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "Breakout: not eligible");
+      string eligibility = EligibilityFailure(market, features, regime);
+      if(eligibility != "")
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "Breakout eligibility: " + eligibility);
 
       if(m_requireHTFBias && features.htf_slope >= 0)
          return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "Breakout Short: HTF bias is not down");

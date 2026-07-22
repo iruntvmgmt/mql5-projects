@@ -71,42 +71,51 @@ public:
    }
 
    //+------------------------------------------------------------------+
-   bool IsEligible(const MarketSnapshot &market,
-                   const FeatureSnapshot &features,
-                   const RegimeState &regime)
+   string EligibilityFailure(const MarketSnapshot &market,
+                             const FeatureSnapshot &features,
+                             const RegimeState &regime)
    {
-      if(!m_enabled) return false;
+      if(!m_enabled) return "disabled";
 
       // Must be balanced market structure
       if(regime.structure != STRUCTURE_BALANCED)
-         return false;
+         return "structure not balanced";
 
       // Trend strength must be low (below threshold)
       if(MathAbs(features.slope_norm) > m_maxTrendStrength)
-         return false;
+         return "trend strength " + DoubleToString(MathAbs(features.slope_norm), 2) +
+                " above " + DoubleToString(m_maxTrendStrength, 2);
 
       // Not in expansion or shock volatility
       if(regime.volatility == VOL_EXPANSION || regime.volatility == VOL_EXTREME ||
          regime.volatility == VOL_SHOCK)
-         return false;
+         return "volatility expansion/extreme/shock";
 
       // Not exhausted trend
       if(regime.trend == TREND_EXHAUSTED_UP || regime.trend == TREND_EXHAUSTED_DOWN)
-         return false;
+         return "trend exhausted";
 
       // No breakout acceptance active
       if(regime.structure == STRUCTURE_ACCEPTED_BREAKOUT || regime.structure == STRUCTURE_BREAKOUT_ATTEMPT)
-         return false;
+         return "breakout structure active";
 
       // Spread acceptable (tighter for MR)
       if(market.spread_points > m_maxSpreadPts)
-         return false;
+         return "spread " + DoubleToString(market.spread_points, 1) +
+                " above " + DoubleToString(m_maxSpreadPts, 1);
 
       // Event normal
       if(regime.event_state != EVENT_NORMAL)
-         return false;
+         return "event state not normal";
 
-      return true;
+      return "";
+   }
+
+   bool IsEligible(const MarketSnapshot &market,
+                   const FeatureSnapshot &features,
+                   const RegimeState &regime)
+   {
+      return EligibilityFailure(market, features, regime) == "";
    }
 
    //+------------------------------------------------------------------+
@@ -114,8 +123,9 @@ public:
                                 const FeatureSnapshot &features,
                                 const RegimeState &regime)
    {
-      if(!IsEligible(market, features, regime))
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "MR: not eligible");
+      string eligibility = EligibilityFailure(market, features, regime);
+      if(eligibility != "")
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "MR eligibility: " + eligibility);
 
       // Check deviation below VWAP (oversold)
       double deviation = features.sd_dist;
@@ -187,8 +197,9 @@ public:
                                  const FeatureSnapshot &features,
                                  const RegimeState &regime)
    {
-      if(!IsEligible(market, features, regime))
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "MR: not eligible");
+      string eligibility = EligibilityFailure(market, features, regime);
+      if(eligibility != "")
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "MR eligibility: " + eligibility);
 
       // Check deviation above VWAP (overbought)
       double deviation = features.sd_dist;

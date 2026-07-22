@@ -77,29 +77,37 @@ public:
    }
 
    //+------------------------------------------------------------------+
+   string EligibilityFailure(const MarketSnapshot &market,
+                             const FeatureSnapshot &features,
+                             const RegimeState &regime)
+   {
+      if(!m_enabled) return "disabled";
+
+      // Must have a failed breakout signal
+      if(!features.failed_breakout && !features.reclaim_detected)
+         return "no failed breakout or reclaim";
+
+      // Spread acceptable
+      if(market.spread_points > m_maxSpreadPts)
+         return "spread " + DoubleToString(market.spread_points, 1) +
+                " above " + DoubleToString(m_maxSpreadPts, 1);
+
+      // Event state normal
+      if(regime.event_state != EVENT_NORMAL)
+         return "event state not normal";
+
+      // Not shock/extreme volatility
+      if(regime.volatility == VOL_SHOCK || regime.volatility == VOL_EXTREME)
+         return "volatility shock/extreme";
+
+      return "";
+   }
+
    bool IsEligible(const MarketSnapshot &market,
                    const FeatureSnapshot &features,
                    const RegimeState &regime)
    {
-      if(!m_enabled) return false;
-
-      // Must have a failed breakout signal
-      if(!features.failed_breakout && !features.reclaim_detected)
-         return false;
-
-      // Spread acceptable
-      if(market.spread_points > m_maxSpreadPts)
-         return false;
-
-      // Event state normal
-      if(regime.event_state != EVENT_NORMAL)
-         return false;
-
-      // Not shock/extreme volatility
-      if(regime.volatility == VOL_SHOCK || regime.volatility == VOL_EXTREME)
-         return false;
-
-      return true;
+      return EligibilityFailure(market, features, regime) == "";
    }
 
    //+------------------------------------------------------------------+
@@ -107,8 +115,9 @@ public:
                                 const FeatureSnapshot &features,
                                 const RegimeState &regime)
    {
-      if(!IsEligible(market, features, regime))
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "FBO: not eligible");
+      string eligibility = EligibilityFailure(market, features, regime);
+      if(eligibility != "")
+         return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "FBO eligibility: " + eligibility);
 
       if(!features.failed_breakout_down)
          return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "FBO Long: no downside failed auction");
@@ -187,8 +196,9 @@ public:
                                  const FeatureSnapshot &features,
                                  const RegimeState &regime)
    {
-      if(!IsEligible(market, features, regime))
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "FBO: not eligible");
+      string eligibility = EligibilityFailure(market, features, regime);
+      if(eligibility != "")
+         return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "FBO eligibility: " + eligibility);
 
       if(!features.failed_breakout_up)
          return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "FBO Short: no upside failed auction");
