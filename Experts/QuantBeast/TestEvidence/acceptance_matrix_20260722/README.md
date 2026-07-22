@@ -34,7 +34,7 @@ All completed variants used the same 417,423 real ticks and 276 bars. Each funne
 | Relaxed account locks | 0 | 5 | 1 | 0 | 2 | 6 | $215.31 | 2.67 |
 | All relaxed | 0 | 7 | 0 | 0 | 0 | 7 | $173.53 | 1.79 |
 
-The baseline funnel is reconstructed from its bounded tester-agent section and matching trade sequence because its signal-journal start offset was contaminated by the earlier incomplete attempt. The other four variant reports use exact signal byte offsets: `1,204,436` for no-price-jump, `1,740,944` for relaxed stops, `2,277,564` for relaxed account locks, and `2,814,072` for all-relaxed.
+The baseline funnel is reconstructed from its bounded tester-agent section and matching trade sequence because its signal-journal start offset was contaminated by the earlier incomplete attempt. The other four variant reports use non-overlapping signal-journal byte ranges: `1,204,436..1,740,944` for no-price-jump, `1,740,944..2,277,564` for relaxed stops, `2,277,564..2,814,072` for relaxed account locks, and `2,814,072..3,350,692` for all-relaxed.
 
 ### Finding
 

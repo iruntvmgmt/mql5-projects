@@ -2,6 +2,7 @@
 
 Input journals: 1
 Offset-scoped inputs: 1
+End-bounded inputs: 0
 Signal rows analyzed: 880
 
 | Strategy | Rows | Strategy | Arbitration | Risk/stop | Sizing | Broker | Accepted | Other |
@@ -26,6 +27,6 @@ No risk/stop rejections.
 
 ## Interpretation boundary
 
-Inputs without byte offsets may contain overlapping combined and isolated strategy runs. Offset-scoped inputs contain only rows appended after the recorded boundary.
+Inputs without byte bounds may contain overlapping combined and isolated strategy runs. Start-and-end-bounded inputs contain only rows within the recorded run slice.
 
 This report starts at emitted strategy decisions. Tick/data-quality preflight blocks occur before journal emission and must be measured from the matching tester-agent log. Do not infer that absent journal rows are strategy or risk rejections.

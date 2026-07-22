@@ -12,8 +12,8 @@ from pathlib import Path
 csv.field_size_limit(sys.maxsize)
 
 
-def decode(path: Path, offset: int = 0) -> str:
-    data = path.read_bytes()[offset:]
+def decode(path: Path, offset: int = 0, end_offset: int | None = None) -> str:
+    data = path.read_bytes()[offset:end_offset]
     encodings = []
     if data.startswith((b"\xff\xfe", b"\xfe\xff")):
         encodings.append("utf-16")
@@ -34,8 +34,8 @@ def decode(path: Path, offset: int = 0) -> str:
     raise UnicodeError(f"Unable to decode {path}")
 
 
-def rows(path: Path, offset: int = 0):
-    lines = [line for line in decode(path, offset).splitlines() if line.strip()]
+def rows(path: Path, offset: int = 0, end_offset: int | None = None):
+    lines = [line for line in decode(path, offset, end_offset).splitlines() if line.strip()]
     if not lines:
         return
     first = [cell.strip() for cell in next(csv.reader([lines[0]]))]
@@ -115,6 +115,10 @@ def main() -> int:
         "--offset", action="append", default=[], metavar="FILE=BYTES",
         help="Start one input at an exact byte offset (repeatable)",
     )
+    parser.add_argument(
+        "--end-offset", action="append", default=[], metavar="FILE=BYTES",
+        help="End one input before an exact byte offset (repeatable)",
+    )
     args = parser.parse_args()
 
     offsets = {}
@@ -124,14 +128,27 @@ def main() -> int:
             parser.error(f"invalid --offset value: {spec}")
         offsets[str(Path(name).resolve())] = int(value)
 
+    end_offsets = {}
+    for spec in args.end_offset:
+        name, separator, value = spec.rpartition("=")
+        if not separator or not name or not value.isdigit():
+            parser.error(f"invalid --end-offset value: {spec}")
+        end_offsets[str(Path(name).resolve())] = int(value)
+
+    for name, end_offset in end_offsets.items():
+        if end_offset < offsets.get(name, 0):
+            parser.error(f"end offset precedes start offset: {name}")
+
     counts = defaultdict(Counter)
     risk_reasons = defaultdict(Counter)
     risk_categories = defaultdict(Counter)
     stop_distances = defaultdict(list)
     total = 0
     for path in args.csv:
-        offset = offsets.get(str(path.resolve()), 0)
-        for row in rows(path, offset):
+        resolved = str(path.resolve())
+        offset = offsets.get(resolved, 0)
+        end_offset = end_offsets.get(resolved)
+        for row in rows(path, offset, end_offset):
             strategy = row.get("Strategy", "").strip() or "unknown"
             bucket = stage(row)
             counts[strategy][bucket] += 1
@@ -156,6 +173,7 @@ def main() -> int:
         "",
         f"Input journals: {len(args.csv)}",
         f"Offset-scoped inputs: {sum(1 for value in offsets.values() if value > 0)}",
+        f"End-bounded inputs: {len(end_offsets)}",
         f"Signal rows analyzed: {total}",
         "",
         table(["Strategy", "Rows", "Strategy", "Arbitration", "Risk/stop", "Sizing", "Broker", "Accepted", "Other"], body),
@@ -181,7 +199,7 @@ def main() -> int:
         "",
         "## Interpretation boundary",
         "",
-        "Inputs without byte offsets may contain overlapping combined and isolated strategy runs. Offset-scoped inputs contain only rows appended after the recorded boundary.",
+        "Inputs without byte bounds may contain overlapping combined and isolated strategy runs. Start-and-end-bounded inputs contain only rows within the recorded run slice.",
         "",
         "This report starts at emitted strategy decisions. Tick/data-quality preflight blocks occur before journal emission and must be measured from the matching tester-agent log. Do not infer that absent journal rows are strategy or risk rejections.",
         "",
