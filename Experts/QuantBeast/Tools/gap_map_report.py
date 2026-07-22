@@ -69,7 +69,11 @@ def infer_strategy_from_comment(comment: str) -> str:
 def read_rows(path: Path) -> List[Row]:
     data = path.read_bytes()
     text = None
-    for encoding in ("utf-16", "utf-8-sig", "utf-8"):
+    encodings = []
+    if data.startswith(b"\xff\xfe") or data.startswith(b"\xfe\xff"):
+        encodings.extend(["utf-16"])
+    encodings.extend(["utf-8-sig", "utf-8", "utf-16"])
+    for encoding in encodings:
         try:
             text = data.decode(encoding)
             break
