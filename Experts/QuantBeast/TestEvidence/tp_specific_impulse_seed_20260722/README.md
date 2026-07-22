@@ -46,3 +46,16 @@ tp_structure_report.py           5935c5b784bb2d1bbf2753ad0c9154dba0df7f2c1c1356c
 Deterministic reachability and diagnostic serialization are proven. Natural
 market reachability is not; it requires a fresh exact-byte-bounded organic run.
 Readiness remains `READY FOR SHADOW MODE`.
+
+## Organic-run attempt
+
+The intended XAUUSD M5 `Model=4` 2026-01-05 run was requested through the
+native tester MCP after the compile/regression evidence above. The initial
+request overlapped the preceding regression agent's delayed shutdown and never
+loaded a profile. After `MetaTester 5 stopped` appeared, later clean requests
+alternated between `{ok:false, job_id:0}` and `{ok:true, job_id:0}` but created
+no tester process, new controller/agent-log section, or signal-journal bytes.
+The signal journal remained exactly 15,520,142 bytes. Therefore no organic
+result is claimed and no report was generated from a nonexistent slice. This
+matches the already documented intermittent native tester no-execution mode;
+the next session should retry only after confirming fresh agent-log growth.

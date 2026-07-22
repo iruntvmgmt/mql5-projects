@@ -18,9 +18,13 @@
 - Extended `tp_structure_report.py` compatibly to summarize seed sources and
   spans; parser syntax and anchored synthetic-row checks passed.
 - Evidence: `TestEvidence/tp_specific_impulse_seed_20260722/README.md`.
-- Next: run one uninterrupted organic true-tick window and measure seed/phase
-  reachability using an exact byte slice. Readiness remains exactly
-  `READY FOR SHADOW MODE`.
+- Organic follow-up was attempted with the Jan 2026 `Model=4` profile. After a
+  stale prior agent finished shutting down, clean MCP requests returned
+  ambiguous/false `job_id: 0` results but launched no tester process and added
+  no agent-log or signal-journal bytes (journal stayed at 15,520,142). No
+  organic result is claimed. Next: retry only after a fresh agent-log-growth
+  health check, then measure seed/phase reachability using the exact new byte
+  slice. Readiness remains exactly `READY FOR SHADOW MODE`.
 
 ## 2026-07-22 — TP value-return diagnostics separated from eligibility
 
