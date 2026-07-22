@@ -1,6 +1,14 @@
 # QuantBeast Testing Guide
 
 **Current evidence status:** Evidence is under `TestEvidence/*_20260715/` and `TestEvidence/*_20260716/`; compile is `0 errors, 0 warnings`, and the latest validated Shadow fixture passed 51 startup tests with no broker orders. The current source now adds family/template/tag metadata to emitted strategy signals, writes those tags into the tester signal/counterfactual journals, and includes a batch strategy metadata/reachability validator (TEST 61); the latest tester rerun confirms `TEST 61 PASS` and `Self-tests complete: 63 passed, 0 failed`. A batch gap-map report script now summarizes tester journals into `TestEvidence/gap_map_report.md` for overlap and rejection analysis. Organic true-tick Shadow data reached accepted FBO BUY/SELL entries and final-decision CSV proof. Manual/MCP demo broker lifecycle evidence exists, but QuantBeast EA-autonomous demo execution remains unproven. A combined true-tick training baseline, clean holdout retry, and independent BO/FBO/TP/MR train and holdout baselines completed under `TestEvidence/performance_readiness_20260716/`; the first holdout attempt is preserved as invalid/incomplete evidence. Current boundary and wiring proof also lives under `TestEvidence/current_regression_20260716/`, `TestEvidence/bo_compression_pct_20260716/`, `TestEvidence/tp_pullback_age_20260716/`, `TestEvidence/mr_target_band_20260716/`, and `TestEvidence/fbo_target_variants_20260716/`. Only FBO reached accepted trade state in these baseline windows. Strategy edge, real restart recovery, and actual broker failures remain unproven.
+
+> **Native tester MCP caution (confirmed 2026-07-22):**
+> `tester_run_backtest` behaves like a start/stop toggle while returning the
+> ambiguous `job_id: 0`. A second call during `preliminary downloading of
+> history ticks` cancels the active synchronization and logs `stopped by user`.
+> Issue one request only, then monitor `Tester/logs` and the local agent log
+> read-only. Do not retry until a natural `test passed` / `thread finished`
+> footer exists or the first request is proven never to have loaded a profile.
 **Rule:** A successful compile or profitable backtest alone is not completion.
 
 The audit and test program must follow `PROJECT_MISSION_AND_AUDIT_CONTEXT.md`. In particular, it must preserve independent strategy engines, examine Challenge Mode as a deterministic bounded-risk system, and avoid treating architectural sophistication as evidence of trading edge.

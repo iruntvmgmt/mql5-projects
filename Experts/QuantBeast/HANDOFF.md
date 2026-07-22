@@ -20,6 +20,22 @@
   departures, and contraction-progress distribution when present.
 - Readiness remains exactly `READY FOR SHADOW MODE`.
 
+## 2026-07-22 — TP three-window reachability screen completed
+
+- Completed three naturally bounded `Model=4` one-day screens for 2025-01-06,
+  2026-01-05, and 2026-05-04. The latter runs processed 372,741 and 367,390
+  ticks respectively and ended with normal `test passed` / `thread finished`
+  footers.
+- TP produced 722 decisions, zero risk/stop evaluations, and zero accepted
+  signals. Of 84 structure rows carrying the new diagnostics, 22 moved toward
+  VWAP, 62 did not, and zero crossed into the current 0.3 ATR value zone.
+- Movement alone is therefore not approved as a replacement eligibility gate;
+  the next design step is an explicit impulse/retracement/resumption lifecycle.
+- Completed comparison windows also exposed nine FBO and one MR
+  `stop_too_far` rejects. Audit their proposed geometry separately; do not
+  weaken the central maximum-stop safety control to increase acceptance.
+- Evidence: `TestEvidence/tp_multiwindow_screen_20260722/README.md`.
+
 **Last updated:** 2026-07-20  
 **Current phase:** Broker-free audit, repair, deterministic validation, and organic true-tick journal proof complete through safe phases  
 **Current verdict:** **READY FOR SHADOW MODE; live and Challenge trading prohibited**  
