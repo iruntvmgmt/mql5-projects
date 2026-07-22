@@ -49,6 +49,24 @@ After the coverage fix, compile remained `0 errors, 0 warnings` and the Shadow
 regression again completed with `67 passed, 0 failed`. A fresh organic slice is
 still required.
 
+## Full-coverage organic result
+
+The fresh 2026-01-05 run completed naturally over 372,741 ticks. Exact journal
+range: `[14991982, 15520142)`. All 196 TP decisions carried lifecycle metadata;
+all 196 were `idle` with phase age zero. TP again produced zero accepted or
+risk-evaluated signals, while FBO and MR each accepted three.
+
+This isolates lifecycle reachability: no `STRUCTURE_IMPULSE` observation
+occurred, so the lifecycle never started. Retracement and resumption rules were
+not reached organically and cannot yet be judged. Do not loosen the shared
+structural displacement threshold merely to start the tracker; prior threshold
+probes already showed state preemption and weak displacement. The next research
+step is to define and instrument a TP-specific, observable impulse leg with
+price/time anchors, without changing accepted signals.
+
+Reports: `organic_full_coverage_funnel.md` and
+`organic_full_coverage_lifecycle.md`.
+
 ## Hashes
 
 - `QuantBeastEA.mq5`: `95cda300c9d10558b00c18f121951972b79e5bf15a26dfe0347a160305aaea70`

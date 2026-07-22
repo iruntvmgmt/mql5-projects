@@ -77,6 +77,14 @@
   Preserve the first organic reports as incomplete-coverage evidence and rerun
   a fresh exact slice before deciding lifecycle reachability.
 
+- Full-coverage retry completed naturally over 372,741 ticks with exact slice
+  `[14991982,15520142)`. Every one of 196 TP decisions carried lifecycle fields;
+  all 196 were `idle` at age zero. The tracker never observed
+  `STRUCTURE_IMPULSE`, so organic retracement/resumption reachability remains
+  untested. Next: instrument a TP-specific impulse-leg hypothesis with explicit
+  anchors; do not lower the shared structural threshold or change eligibility
+  solely to activate the lifecycle.
+
 **Last updated:** 2026-07-20  
 **Current phase:** Broker-free audit, repair, deterministic validation, and organic true-tick journal proof complete through safe phases  
 **Current verdict:** **READY FOR SHADOW MODE; live and Challenge trading prohibited**  
