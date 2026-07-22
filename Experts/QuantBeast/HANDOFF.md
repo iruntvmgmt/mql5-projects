@@ -15,6 +15,9 @@
 - Shadow regression: `66 passed, 0 failed`; 22,080 generated ticks and 1,104
   bars; natural `test passed` footer; no broker orders transmitted.
 - Evidence: `TestEvidence/tp_value_return_diagnostics_20260722/README.md`.
+- The TP structure reporting tool is backward-compatible with legacy slices
+  and now summarizes moving/not-moving, value-zone crossings, near-value
+  departures, and contraction-progress distribution when present.
 - Readiness remains exactly `READY FOR SHADOW MODE`.
 
 **Last updated:** 2026-07-20  

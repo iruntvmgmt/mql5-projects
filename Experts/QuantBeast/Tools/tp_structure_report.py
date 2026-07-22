@@ -15,7 +15,9 @@ from acceptance_funnel_report import rows
 DETAIL = re.compile(
     r"structure not impulse/pullback state=(?P<state>[A-Z0-9_]+) slope=(?P<slope>[0-9.]+) "
     r"dirEff=(?P<eff>[0-9.]+) displacement=(?P<disp>[0-9.]+) "
-    r"equilibrium=(?P<equil>[0-9.]+) returning=(?P<returning>yes|no)",
+    r"equilibrium=(?P<equil>[0-9.]+) returning=(?P<returning>yes|no)"
+    r"(?: movingToward=(?P<moving>yes|no) valueProgress=(?P<progress>-?[0-9.]+)"
+    r" crossedValue=(?P<crossed>yes|no))?",
     re.IGNORECASE,
 )
 
@@ -42,6 +44,9 @@ def main() -> int:
     state_combinations = Counter()
     observed = {name: [] for name in ("slope", "eff", "disp", "equil")}
     displacement_only = []
+    movement = Counter()
+    progress = []
+    diagnostic_rows = 0
     matched = 0
     for row in rows(args.csv, args.offset, args.end_offset):
         if row.get("Strategy", "").strip() != "TP":
@@ -51,11 +56,19 @@ def main() -> int:
             continue
         matched += 1
         states[match.group("state")] += 1
-        values = {key: float(value) for key, value in match.groupdict().items()
-                  if key not in ("state", "returning")}
+        values = {key: float(match.group(key)) for key in ("slope", "eff", "disp", "equil")}
         for name in observed:
             observed[name].append(values[name])
         returning = match.group("returning").lower() == "yes"
+        if match.group("moving") is not None:
+            diagnostic_rows += 1
+            is_moving = match.group("moving").lower() == "yes"
+            is_crossed = match.group("crossed").lower() == "yes"
+            movement["moving_toward"] += int(is_moving)
+            movement["not_moving_toward"] += int(not is_moving)
+            movement["crossed_into_value"] += int(is_crossed)
+            movement["near_value_but_departing"] += int(returning and not is_moving)
+            progress.append(float(match.group("progress")))
         if (values["slope"] > args.slope and values["eff"] > 0.4 and
                 values["disp"] <= args.displacement):
             displacement_only.append(values["disp"])
@@ -94,6 +107,16 @@ def main() -> int:
         (f"Rows: {len(displacement_only)}; minimum: {min(displacement_only):.3f}; "
          f"median: {median(displacement_only):.3f}; maximum: {max(displacement_only):.3f}"
          if displacement_only else "No rows."), "",
+        "## Value-return movement diagnostics", "",
+        (table(["Diagnostic", "Rows", "Share of diagnostic rows"], [
+            [name, count, f"{count / diagnostic_rows:.1%}"]
+            for name, count in movement.items()
+        ]) if diagnostic_rows else
+         "No movement fields were present; this is a legacy journal slice."),
+        ("\n\nProgress distribution: minimum " + f"{min(progress):.3f}" +
+         ", median " + f"{median(progress):.3f}" +
+         ", maximum " + f"{max(progress):.3f}" + "."
+         if progress else ""), "",
         "## Failure combinations", "",
         table(["Combination", "Rows"], combinations.most_common()), "",
         "## State and failure combination", "",

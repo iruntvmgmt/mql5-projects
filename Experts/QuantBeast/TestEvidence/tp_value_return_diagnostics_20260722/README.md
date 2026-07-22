@@ -27,6 +27,9 @@ target, sizing, and risk behavior are unchanged.
 - Tester footer: 22,080 generated ticks, 1,104 bars, final balance 10,000 USD,
   natural `test passed` / `thread finished` completion.
 - Journals were disabled and Shadow mode was used; no broker orders were sent.
+- `tp_structure_report.py` accepts both legacy rejection rows and the new
+  optional movement fields. A legacy bounded slice and a synthetic new-format
+  row both passed parser checks.
 
 ## Hashes
 
