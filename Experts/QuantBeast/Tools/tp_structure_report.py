@@ -21,6 +21,10 @@ DETAIL = re.compile(
     r"(?: lifecycle=(?P<lifecycle>[a-z_]+) lifecycleBars=(?P<lifecycle_bars>[0-9]+))?",
     re.IGNORECASE,
 )
+LIFECYCLE = re.compile(
+    r"lifecycle=(?P<lifecycle>[a-z_]+) lifecycleBars=(?P<lifecycle_bars>[0-9]+)",
+    re.IGNORECASE,
+)
 
 
 def table(headers, body):
@@ -54,7 +58,13 @@ def main() -> int:
     for row in rows(args.csv, args.offset, args.end_offset):
         if row.get("Strategy", "").strip() != "TP":
             continue
-        match = DETAIL.search(row.get("RejectionReason", ""))
+        reason = row.get("RejectionReason", "")
+        lifecycle_match = LIFECYCLE.search(reason)
+        if lifecycle_match is not None:
+            phase = lifecycle_match.group("lifecycle").lower()
+            lifecycle_phases[phase] += 1
+            lifecycle_bars[phase].append(int(lifecycle_match.group("lifecycle_bars")))
+        match = DETAIL.search(reason)
         if not match:
             continue
         matched += 1
@@ -72,10 +82,6 @@ def main() -> int:
             movement["crossed_into_value"] += int(is_crossed)
             movement["near_value_but_departing"] += int(returning and not is_moving)
             progress.append(float(match.group("progress")))
-        if match.group("lifecycle") is not None:
-            phase = match.group("lifecycle").lower()
-            lifecycle_phases[phase] += 1
-            lifecycle_bars[phase].append(int(match.group("lifecycle_bars")))
         if (values["slope"] > args.slope and values["eff"] > 0.4 and
                 values["disp"] <= args.displacement):
             displacement_only.append(values["disp"])

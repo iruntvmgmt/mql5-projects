@@ -184,6 +184,16 @@ public:
    string GetLifecyclePhase() const { return QBTPLifecycleLabel(m_lifecyclePhase); }
    int GetLifecycleBars() const { return m_lifecycleBars; }
 
+   StrategySignal MakeLifecycleRejected(ENUM_ORDER_TYPE direction,
+                                        int rejectionCode,
+                                        string reason) const
+   {
+      if(StringFind(reason, "lifecycle=") < 0)
+         reason += " lifecycle=" + GetLifecyclePhase() +
+                   " lifecycleBars=" + IntegerToString(m_lifecycleBars);
+      return MakeRejected(direction, rejectionCode, reason);
+   }
+
    //+------------------------------------------------------------------+
    string EligibilityFailure(const MarketSnapshot &market,
                              const FeatureSnapshot &features,
@@ -254,11 +264,11 @@ public:
       ObserveLifecycle(features, regime);
       string eligibility = EligibilityFailure(market, features, regime);
       if(eligibility != "")
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "TP eligibility: " + eligibility);
+         return MakeLifecycleRejected(ORDER_TYPE_BUY, REJECT_REGIME_INELIGIBLE, "TP eligibility: " + eligibility);
 
       // Must be in an uptrend
       if(!(regime.trend == TREND_STRONG_UP || regime.trend == TREND_WEAK_UP))
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: not uptrend");
+         return MakeLifecycleRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: not uptrend");
 
       // Must be pulling back (price below recent high)
       double recentHigh = features.swing_high;
@@ -269,21 +279,21 @@ public:
       // pullback. A zero value means the feature is unavailable and is not
       // treated as proof of stale age.
       if(features.swing_high_bars > 0 && features.swing_high_bars > m_maxPullbackBars)
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: pullback age " +
+         return MakeLifecycleRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: pullback age " +
                              IntegerToString(features.swing_high_bars) + " exceeds maximum");
 
       // Check pullback depth
       double pullbackDepth = (recentHigh - mid) / MathMax(recentHigh - features.current_range_low, 0.0001);
       if(pullbackDepth < 0.1 || pullbackDepth > m_maxPullbackDepth)
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: pullback depth " +
+         return MakeLifecycleRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: pullback depth " +
                              DoubleToString(pullbackDepth, 2) + " outside range");
 
       // Check we're returning to value (pullback ending)
       if(!features.returning_to_value && pullbackDepth < 0.3)
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "TP Long: pullback not ending");
+         return MakeLifecycleRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "TP Long: pullback not ending");
 
       if(!ConfirmCandleTrigger(true, features))
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "TP Long: configured trigger not confirmed");
+         return MakeLifecycleRejected(ORDER_TYPE_BUY, REJECT_NO_TRIGGER, "TP Long: configured trigger not confirmed");
 
       double entry = market.ask;
 
@@ -305,13 +315,13 @@ public:
 
       double rewardR;
       if(!CheckRiskReward(ORDER_TYPE_BUY, entry, stop, target, 1.0, rewardR))
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: insufficient R:R");
+         return MakeLifecycleRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: insufficient R:R");
 
       double confidence = Clamp((features.dir_efficiency + (pullbackDepth / m_maxPullbackDepth)) / 2.0, 0.0, 1.0);
       confidence = (confidence + regime.confidence) / 2.0;
 
       if(!CheckConfidence(confidence))
-         return MakeRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: low confidence");
+         return MakeLifecycleRejected(ORDER_TYPE_BUY, REJECT_NO_SETUP, "TP Long: low confidence");
 
       return MakeSignal(ORDER_TYPE_BUY, entry, stop, target,
                         confidence, rewardR,
@@ -329,10 +339,10 @@ public:
       ObserveLifecycle(features, regime);
       string eligibility = EligibilityFailure(market, features, regime);
       if(eligibility != "")
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "TP eligibility: " + eligibility);
+         return MakeLifecycleRejected(ORDER_TYPE_SELL, REJECT_REGIME_INELIGIBLE, "TP eligibility: " + eligibility);
 
       if(!(regime.trend == TREND_STRONG_DOWN || regime.trend == TREND_WEAK_DOWN))
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: not downtrend");
+         return MakeLifecycleRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: not downtrend");
 
       double recentLow = features.swing_low;
       if(recentLow <= 0) recentLow = features.current_range_low;
@@ -342,19 +352,19 @@ public:
       // pullback. A zero value means the feature is unavailable and is not
       // treated as proof of stale age.
       if(features.swing_low_bars > 0 && features.swing_low_bars > m_maxPullbackBars)
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: pullback age " +
+         return MakeLifecycleRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: pullback age " +
                              IntegerToString(features.swing_low_bars) + " exceeds maximum");
 
       double pullbackDepth = (mid - recentLow) / MathMax(features.current_range_high - recentLow, 0.0001);
       if(pullbackDepth < 0.1 || pullbackDepth > m_maxPullbackDepth)
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: pullback depth " +
+         return MakeLifecycleRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: pullback depth " +
                              DoubleToString(pullbackDepth, 2) + " outside range");
 
       if(!features.returning_to_value && pullbackDepth < 0.3)
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "TP Short: pullback not ending");
+         return MakeLifecycleRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "TP Short: pullback not ending");
 
       if(!ConfirmCandleTrigger(false, features))
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "TP Short: configured trigger not confirmed");
+         return MakeLifecycleRejected(ORDER_TYPE_SELL, REJECT_NO_TRIGGER, "TP Short: configured trigger not confirmed");
 
       double entry = market.bid;
 
@@ -372,13 +382,13 @@ public:
 
       double rewardR;
       if(!CheckRiskReward(ORDER_TYPE_SELL, entry, stop, target, 1.0, rewardR))
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: insufficient R:R");
+         return MakeLifecycleRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: insufficient R:R");
 
       double confidence = Clamp((features.dir_efficiency + (pullbackDepth / m_maxPullbackDepth)) / 2.0, 0.0, 1.0);
       confidence = (confidence + regime.confidence) / 2.0;
 
       if(!CheckConfidence(confidence))
-         return MakeRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: low confidence");
+         return MakeLifecycleRejected(ORDER_TYPE_SELL, REJECT_NO_SETUP, "TP Short: low confidence");
 
       return MakeSignal(ORDER_TYPE_SELL, entry, stop, target,
                         confidence, rewardR,

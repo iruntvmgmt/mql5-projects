@@ -34,9 +34,24 @@ These are observational labels only. No phase can authorize a signal.
 - No broker orders were transmitted.
 - The report parser accepts legacy rows and synthetic lifecycle-formatted rows.
 
+## First organic observation
+
+The naturally completed 2026-01-05 rerun covered 372,741 ticks and the exact
+journal slice `[14474114, 14991982)`. All 30 structure-rejection rows reported
+`idle`. Review then found that lifecycle phase was only present on the
+structure-rejection path; two earlier TP rejection paths in the same run could
+therefore conceal lifecycle starts. The journal instrumentation was corrected
+so every TP rejection now carries phase and phase age. The incomplete-coverage
+run is preserved in `organic_funnel.md` and `organic_lifecycle.md`, but is not
+accepted as full lifecycle reachability evidence.
+
+After the coverage fix, compile remained `0 errors, 0 warnings` and the Shadow
+regression again completed with `67 passed, 0 failed`. A fresh organic slice is
+still required.
+
 ## Hashes
 
 - `QuantBeastEA.mq5`: `95cda300c9d10558b00c18f121951972b79e5bf15a26dfe0347a160305aaea70`
-- `QuantBeastEA.ex5`: `b7d77c4cc9fe608277ee9fdc3b50b9ed35f75e40e24c9b9c8da8b28111a931d3`
-- `TrendPullbackEngine.mqh`: `c7ca741b0409c921e8d354af62263607d202551eb69c752971b7e99cbf790ac4`
+- `QuantBeastEA.ex5`: `371d1d157273441540dd9dd834cb941dc9fac01c525a64883d0e07fe2461f934`
+- `TrendPullbackEngine.mqh`: `55009459dc58efc8ee3aebd7ca8b53885fd8ffc29ab0d2a2827e157a352d92e0`
 - `SafetyTests.mqh`: `bb795f1d09e20b6e4813a129821bef558c5aadb11e3e569d23f87e3955cc9726`

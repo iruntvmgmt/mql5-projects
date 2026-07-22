@@ -68,6 +68,15 @@
 - Evidence: `TestEvidence/tp_lifecycle_observation_20260722/README.md`.
 - Readiness remains exactly `READY FOR SHADOW MODE`.
 
+- Follow-up organic run: 2026-01-05, 372,741 ticks, bounded slice
+  `[14474114,14991982)`, natural completion. All 30 structure-rejection rows
+  showed `idle`, but the run exposed that non-structure TP rejection reasons did
+  not carry lifecycle fields. Universal TP rejection annotation was added;
+  report parsing now counts lifecycle phases across every TP rejection while
+  retaining structure decomposition. Recompile `0/0`; regression `67/0`.
+  Preserve the first organic reports as incomplete-coverage evidence and rerun
+  a fresh exact slice before deciding lifecycle reachability.
+
 **Last updated:** 2026-07-20  
 **Current phase:** Broker-free audit, repair, deterministic validation, and organic true-tick journal proof complete through safe phases  
 **Current verdict:** **READY FOR SHADOW MODE; live and Challenge trading prohibited**  
