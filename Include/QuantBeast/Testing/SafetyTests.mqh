@@ -3302,4 +3302,65 @@ bool QBTestTPV2RegimePriorityCompatibility(string &detail)
    return v1WinsWhenFirst && v2WinsWhenFirst;
 }
 
+//+------------------------------------------------------------------+
+//| Phase 6 (follow-on sprint): five simultaneous strategy candidates |
+//| on one bar -- proves the fifth strategy is included in the         |
+//| candidate loop (not omitted by any stale array bound), that TP V2  |
+//| can win arbitration on merit (highest score), and that it can lose |
+//| to a higher-confidence competitor from any of the other four       |
+//| strategies -- all in the same ARBITRATION_HIGHEST_SCORE pass.      |
+//+------------------------------------------------------------------+
+bool QBTestFiveStrategyArbitration(string &detail)
+{
+   datetime now = TimeCurrent();
+   RegimeState regime;
+   ZeroMemory(regime);
+   regime.trend = TREND_NEUTRAL;
+   regime.structure = STRUCTURE_BALANCED;
+   FeatureSnapshot f;
+   ZeroMemory(f);
+
+   // Case 1: TPV2 has the highest confidence among all five -- must win.
+   StrategySignal five[5];
+   QBMakeArbitrationSignal(five[0], STRATEGY_ID_BREAKOUT, ORDER_TYPE_BUY, now, 2700.0, 0.50);
+   QBMakeArbitrationSignal(five[1], STRATEGY_ID_FAILED_BREAKOUT, ORDER_TYPE_BUY, now, 2701.0, 0.55);
+   QBMakeArbitrationSignal(five[2], STRATEGY_ID_TREND_PULLBACK, ORDER_TYPE_BUY, now, 2702.0, 0.60);
+   QBMakeArbitrationSignal(five[3], STRATEGY_ID_MEAN_REVERSION, ORDER_TYPE_BUY, now, 2703.0, 0.65);
+   QBMakeArbitrationSignal(five[4], STRATEGY_ID_TREND_PULLBACK_V2, ORDER_TYPE_BUY, now, 2704.0, 0.90);
+   CSignalArbitrator arbV2Wins;
+   arbV2Wins.Init(ARBITRATION_HIGHEST_SCORE, 0, 600, true, true);
+   StrategySignal bestV2Wins = arbV2Wins.Arbitrate(five, 5, regime, f);
+   bool tpv2Wins = bestV2Wins.valid && bestV2Wins.strategy_id == STRATEGY_ID_TREND_PULLBACK_V2;
+   // All four others must be marked rejected-by-arbitration, proving the
+   // loop actually evaluated all five, not just a subset.
+   bool othersRejected = !five[0].valid && !five[1].valid && !five[2].valid && !five[3].valid &&
+                         five[0].rejection_code == REJECT_ARBITRATION_LOST &&
+                         five[1].rejection_code == REJECT_ARBITRATION_LOST &&
+                         five[2].rejection_code == REJECT_ARBITRATION_LOST &&
+                         five[3].rejection_code == REJECT_ARBITRATION_LOST;
+
+   // Case 2: TPV2 has the LOWEST confidence -- each of the other four, in
+   // turn, must be able to beat it (proves no accidental priority/ordering
+   // bias toward or against TPV2).
+   bool eachBeatsTPV2 = true;
+   string ids[4] = {STRATEGY_ID_BREAKOUT, STRATEGY_ID_FAILED_BREAKOUT,
+                     STRATEGY_ID_TREND_PULLBACK, STRATEGY_ID_MEAN_REVERSION};
+   for(int k = 0; k < 4; k++)
+   {
+      StrategySignal pair[2];
+      QBMakeArbitrationSignal(pair[0], STRATEGY_ID_TREND_PULLBACK_V2, ORDER_TYPE_BUY, now, 2705.0, 0.40);
+      QBMakeArbitrationSignal(pair[1], ids[k], ORDER_TYPE_BUY, now + 1, 2706.0, 0.70);
+      CSignalArbitrator arbPair;
+      arbPair.Init(ARBITRATION_HIGHEST_SCORE, 0, 600, true, true);
+      StrategySignal bestPair = arbPair.Arbitrate(pair, 2, regime, f);
+      if(!(bestPair.valid && bestPair.strategy_id == ids[k]))
+         eachBeatsTPV2 = false;
+   }
+
+   detail = "tpv2Wins=" + (tpv2Wins ? "yes" : "FAIL") +
+            " othersRejected=" + (othersRejected ? "yes" : "FAIL") +
+            " eachBeatsTPV2=" + (eachBeatsTPV2 ? "yes" : "FAIL");
+   return tpv2Wins && othersRejected && eachBeatsTPV2;
+}
+
 #endif // QB_SAFETYTESTS_MQH

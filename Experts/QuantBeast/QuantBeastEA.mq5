@@ -3008,6 +3008,11 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 94 PASS: TPV2 regime priority compatibility " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 94 FAIL: TPV2 regime priority compatibility " + detail); }
+
+      if(QBTestFiveStrategyArbitration(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 95 PASS: Five-strategy arbitration " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 95 FAIL: Five-strategy arbitration " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +
