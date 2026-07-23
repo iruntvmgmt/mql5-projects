@@ -2,6 +2,77 @@
 
 ---
 
+Decision ID: D011
+Date/time: 2026-07-23, restricted FBO+MR Conservative-Demo activation
+Question: Under the user's explicit instruction to "activate the
+restricted FBO+MR Coinexx demo candidate while BO and TP V2 continue in
+Shadow," `QB_CONSERVATIVE_LIVE_FBO_MR.tpl` was built (derived from the
+existing FBO-only Conservative-Live template) and applied to a live
+XAUUSD chart by the operator (the agent's own attempt via
+`chart_apply_template` was denied by the Claude Code auto-mode
+classifier -- a hard, deliberate client-side guardrail on autonomously
+attaching a broker-order-capable EA; the agent did not attempt to route
+around it, per the denial's own instructions). Same for `git push`,
+initially blocked by the classifier and only completed after the
+operator explicitly updated their own Claude Code permission settings.
+First two init attempts failed closed correctly (config combinations not
+yet matching intent: TP V1 enabled, then TPV2 enabled-but-unauthorized).
+Third attempt initialized successfully with the intended FBO+MR-only
+roster -- but then exhibited a real bug: `ProcessKillSwitchActions()`
+fired `CancelAllPending()`/`CloseAllPositions()` every second
+indefinitely (harmless only because 0 positions/orders existed to act
+on). Root cause: `CKillSwitch::IsFlattenAll()` returns true if EITHER
+`flatten_all` OR `emergency` is set, and `emergency` has no automatic
+clear by design (a deliberate fail-safe latch). `LoadKillSwitchState()`
+had restored `emergency=true` from a stale, pre-existing
+`QB_Emergency_871221_XAUUSD` GlobalVariable -- not a fresh trigger (real
+equity 999.64 was nowhere near the 50.00 emergency floor) -- almost
+certainly a leftover from an earlier, unrelated session/test that this
+was the first live-attached, `InpUseGlobalVars=true` instance to ever
+actually load and act on. Once latched, `IsEntryKill()` also returns
+true, meaning the EA was silently unable to trade at all during this
+window, not merely noisy.
+Decision: instructed the operator to remove the EA from the chart
+immediately (stops the 1-second timer); operator manually cleared the
+stale `QB_Emergency_871221_XAUUSD` GlobalVariable (and checked the four
+sibling kill keys) via MT5's Tools -> Global Variables dialog -- no code
+change made to resolve this instance, since no MCP tool exposes
+GlobalVariable read/write and the fix was a one-time data correction,
+not a logic error requiring a source change to unblock this activation.
+Reattaching afterward produced a clean init: no EMERGENCY line from the
+real `g_KillSwitch`, no repeating CancelAll/CloseAll, self-tests
+105/105, "0 positions reconstructed [clean]", confirmed roster
+(FBO=on/MR=on, BO/TP/TPV2=off, DemoAuthorized FBO=yes/MR=yes,
+BrokerTier=QB_BROKER_TIER_CONSERVATIVE_DEMO).
+Reason: per the user's own instruction, this is intentionally NOTED as a
+known issue rather than fixed in code this session -- the immediate
+activation was unblocked by clearing the stale data, and a proper code
+hardening (e.g., loudly surfacing a restored emergency at startup rather
+than silently entering the retry loop, or requiring explicit operator
+re-acknowledgment to resume after a restored emergency/flatten/cancel
+latch) is deferred to a future pass if this recurs.
+Trading-behavior impact: none from a broker-order perspective (0
+positions/orders existed throughout; zero orders transmitted by this
+sequence) -- but real: the EA was completely unable to enter any trade
+during the ~35-minute window before the stale flag was cleared, which
+would have silently suppressed any genuine FBO/MR organic signal that
+occurred in that window had one occurred.
+Files affected: none (data-only fix via MT5 GUI, no source changed).
+Commit: (pending, this decision-log entry)
+Follow-up: **KNOWN ISSUE, not yet fixed in code** -- if
+`ProcessKillSwitchActions()` is ever observed hammering
+CancelAll/CloseAll again on a fresh live attach, check
+`QB_Emergency_871221_XAUUSD` (and `QB_KillFlatten_...`/`QB_KillCancel_...`/
+`QB_KillEntries_...`/`QB_KillSymbol_...`) first before assuming a fresh
+real trigger. Candidate hardening for a future pass: log the loaded
+kill-switch state explicitly and loudly at `OnInit` (not just implicitly
+via the retry spam), and/or require a distinct, explicit operator
+acknowledgment input before a *restored* (not freshly-triggered)
+emergency/flatten/cancel latch is allowed to actually execute broker
+actions on a live attach.
+
+---
+
 Decision ID: D008
 Date/time: 2026-07-23, Phase 1 of the follow-on sprint (`QuantBeast_Production_Readiness_Sprint.md`)
 Question: Independently verify the prior sprint's documented final state
