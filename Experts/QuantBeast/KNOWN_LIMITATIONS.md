@@ -1,7 +1,9 @@
 # QuantBeast Known Limitations
 
-**Status date:** 2026-07-20  
-**Current readiness:** `READY FOR SHADOW MODE` for broker-free mechanical research only. Live and Challenge operation prohibited.
+**Status date:** 2026-07-23
+**Current readiness:** `READY FOR SHADOW MODE` for broker-free mechanical research only. Live and Challenge operation prohibited. FBO's existing 2026-07-16 Conservative Live demo-account authorization is unaffected and unexpanded.
+
+**2026-07-22/23 — production-readiness closure sprint (TP V1 freeze, TP V2, infra audit, demo candidate, unified evidence):** see `TestEvidence/production_readiness_tp_v2_20260722/final_readiness/FINAL_PRODUCTION_READINESS_REPORT.md` for the full report. Summary: TP V1 frozen at tag `quantbeast-tp-v1-research-freeze-20260722` (commit `953c2d0`); TP V2 (`Include/QuantBeast/Strategies/TrendPullbackV2Engine.mqh`, commits `ee7db48`/`026e91c`) is a from-scratch 8-state lifecycle with its own decoupled trend-integrity/invalidation model, wired as a 5th strategy behind `InpEnableTPV2Experimental=false` (default) -- its full lifecycle including TRIGGERED is organically reachable (9 episodes across 3 of 6 fresh XAUUSD M5 windows) but it has never been arbitration/risk-reachable and has transmitted zero signals. Infrastructure audit (commits `acefa09`, `e04d8aa`) added safety-critical input validation + startup config logging (two genuine array-bounds defects also fixed while wiring TP V2 in) and closed the "no per-strategy/direction/session/regime report" gap (`Tools/strategy_performance_report.py`). A restricted all-strategy demo candidate is prepared but not activatable (`XAUUSD_Conservative_Demo_AllStrategy.set`, commit `8f33449`) -- `QBLiveStrategySetAllowed()` remains FBO-only, deliberately untouched. Compile 0/0, tests 96/0. No broker orders transmitted.
 
 ## Runtime and testing
 
@@ -111,7 +113,7 @@ Remaining Shadow limitations:
 ## Analytics and UI
 
 - Performance metrics include tracked manual exit deals by stable position identifier, but broker-side runtime validation is still absent.
-- No per-strategy/direction/session/regime report exists.
+- CLOSED 2026-07-23: `Tools/strategy_performance_report.py` joins TradeJournal.csv to SignalJournal.csv by (Strategy, Direction, Timestamp==EntryTime), traceable candidate-through-exit, grouped by strategy/direction/session/entry-regime-trend. Validated against 48 real completed trades across 6 XAUUSD M5 windows, 100% joined (48/48). See `TestEvidence/production_readiness_tp_v2_20260722/infrastructure_audit/INFRASTRUCTURE_AUDIT.md`.
 - Final strategy/arbitration/risk decision routing is implemented and deterministically tested, rejected signals preserve BUY/SELL direction, and signal IDs include direction. File-level proof from a completed organic post-repair true-tick run is under `TestEvidence/organic_true_ticks_20260716/`. The shared historical journal intentionally retains pre-repair rows and a pre-fix corrupted prefix; only byte-bounded suffixes should be treated as current evidence.
 - Counterfactual tracking is implemented (buffered, side-effect-free; disabled by default). Its buffer/ignore/no-op logic is deterministically tested, but end-to-end population of `CounterfactualJournal.csv` inside the Strategy Tester could not be demonstrated: `InpEnableCounterfactual=true` set via the tester `.ini` `[TesterInputs]` is not applied by the tester (both `true` and numeric forms read back as `0`, while an otherwise-identical `input bool` on the same `.ini` does apply). This is a MetaTrader input-application quirk, not a code defect; see `TestEvidence/phase4_allocation_counterfactual_20260721/EVIDENCE.md`.
 - `UI/Alerts.mqh` now fail-closes push delivery on `SendNotification()` failure and the EA wrapper now latches entries closed when an enabled configured alert cannot be delivered. This source-level propagation still requires a fresh compile and Shadow fixture rerun; current evidence is under `TestEvidence/alert_failclosed_20260716/`. Push delivery itself has been operator-verified through the MT5 app, but end-to-end EA alert behavior remains unproven outside Strategy Tester.

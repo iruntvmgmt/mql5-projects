@@ -108,7 +108,13 @@ FeatureEngine now assigns directional failed-breakout, reclaim, bars-beyond, bre
 - Add opposite-boundary, partial, and runner targets.
 - Add deterministic tests preventing ordinary wicks from being mislabeled as failed auctions.
 
-## Strategy 3: Trend Pullback (`TP`)
+## Strategy 3: Trend Pullback (`TP`, V1 -- FROZEN 2026-07-22)
+
+**Status:** Frozen research baseline. Tag `quantbeast-tp-v1-research-freeze-20260722`
+at commit `953c2d0`. See `TestEvidence/production_readiness_tp_v2_20260722/tp_v1_freeze/README.md`.
+V1 remains wired (unchanged trading behavior) for future passive
+larger-window verification, but is superseded for active research by TP V2
+below. Do not add new capability to V1 -- corrections only, as errata.
 
 ### Intended model
 
@@ -170,6 +176,55 @@ Enter an established directional move after a controlled pullback and momentum r
 - Add trend maturity/exhaustion constraints.
 - Add failed-continuation, regime-deterioration, session, and time exits.
 - Add long/short and choppy-regime scenario tests.
+
+## Strategy 3b: Trend Pullback V2 (`TPV2`, experimental)
+
+**Status:** Implemented, mechanically sound (96/96 tests), organically
+reachable through its full lifecycle including `TRIGGERED` (9 episodes
+across 3 of 6 fresh XAUUSD M5 windows, both reused and untouched), but
+never arbitration/risk-reachable and has transmitted zero signals
+(`InpEnableTPV2Experimental=false` by default). Full spec:
+`TestEvidence/production_readiness_tp_v2_20260722/tp_v2_spec/`.
+
+### Intended model
+
+An established directional XAUUSD auction produces a valid impulse,
+undergoes a measurable countertrend correction without invalidating the
+broader trend structure, then demonstrates renewed directional control
+through an explicit resumption trigger with economically valid stop/target
+geometry -- distinct from BO (initial expansion), FBO (level failing), MR
+(reversion in balanced markets), and a shallow momentum pause (out of
+scope by construction, not a post-hoc filter).
+
+### Lifecycle
+
+`IDLE -> TREND_QUALIFIED -> IMPULSE_ACTIVE -> PULLBACK_ACTIVE ->
+RESUMPTION_ARMED -> TRIGGERED`, plus `INVALIDATED`/`EXPIRED`. Unlike V1,
+trend qualification is a distinct prior state (never checked on the same
+bar as impulse detection), and invalidation uses its own decoupled
+trend-integrity check plus an explicit price-based level frozen at impulse
+start -- no single instantaneous `regime.structure` reading is ever the
+sole authority over a transition (the direct fix for V1's documented
+11/16 rejection mode).
+
+### Trigger set
+
+Four predefined variants sharing identical upstream trend/impulse/
+pullback/integrity/invalidation logic (`InpTPV2_TriggerMode`): closed-bar
+micro-structure break, rejection+directional-confirmation (**default**,
+chosen from the hypothesis wording, not trade count), displacement
+reclaim, break-retest.
+
+### Required completion before `DEMO_READY`
+
+- Organic arbitration/risk reachability evidence (not yet gathered --
+  `InpEnableTPV2Experimental` has never been enabled, even in Shadow
+  mode). A Shadow-only experimental-on run is the defined next step.
+- An evidence-justified, decision-logged update to
+  `QBLiveStrategySetAllowed()` before any live-armed activation --
+  deliberately not made this session.
+- Broader-window sampling of TRIGGERED-episode geometry outcomes (current
+  n=9 is reachability evidence only, not an edge claim).
 
 ## Strategy 4: Mean Reversion (`MR`)
 
