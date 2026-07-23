@@ -1,0 +1,82 @@
+;+------------------------------------------------------------------+
+;|                     XAUUSD_Conservative_Demo_AllStrategy.set      |
+;| QuantBeast EA - Restricted All-Strategy Conservative Demo         |
+;| candidate (Part G, production-readiness sprint 2026-07-22).       |
+;|                                                                    |
+;| NOT APPROVED FOR USE. PREPARED, NOT ACTIVATED.                    |
+;|                                                                    |
+;| This preset currently CANNOT initialize in InpMode=2 (Conservative |
+;| Live): QBLiveStrategySetAllowed() in QuantBeastEA.mq5 hard-gates   |
+;| any live-armed mode to FBO-only until BO/TP/MR/TPV2 accepted-entry |
+;| evidence is complete. That gate was deliberately NOT weakened to   |
+;| make this preset load -- see DECISION_LOG.md D001-D005 and the     |
+;| final production-readiness report for the exact remaining blocker. |
+;| Loading this preset today reproduces the same                     |
+;| "Live strategy gate blocked initialization" failure as loading any |
+;| non-FBO-only config -- this is intentional, correct, fail-closed   |
+;| behavior, not a bug in this preset.                                |
+;|                                                                    |
+;| Activation requires: (1) organic BO/TP-family/MR/TPV2 accepted-    |
+;| entry evidence (see unified_strategy_matrix/, gathered last in     |
+;| this sprint per the user's build-then-test sequencing), (2) a      |
+;| DECISION_LOG-recorded, evidence-justified update to                |
+;| QBLiveStrategySetAllowed() itself, and (3) explicit operator        |
+;| authorization, exactly as the 2026-07-16 FBO-only Conservative Live |
+;| activation required (see HANDOFF.md "Operator authorization").     |
+;|                                                                    |
+;| Roster: BO + FBO + MR + TP V2 (experimental gate still OFF).       |
+;| TP V1 explicitly excluded from this roster (InpTP_Enabled=false)   |
+;| -- it remains wired for research/observation in Shadow-mode runs   |
+;| (see tp_v1_freeze/README.md) but is not part of this trading       |
+;| candidate; V1's own evidence found no reliable directional         |
+;| information. TP V2 (InpTPV2_Enabled=true) keeps its lifecycle       |
+;| observing bars, but InpEnableTPV2Experimental=false means it can    |
+;| still never produce a tradeable signal until organic reachability   |
+;| evidence supports enabling it -- do not flip that flag without a    |
+;| DECISION_LOG entry citing that evidence.                           |
+;+------------------------------------------------------------------+
+InpMode=2
+InpAcknowledgeLiveBrokerRisk=false
+InpAcknowledgeChallengeRisk=false
+InpBO_Enabled=true
+InpFBO_Enabled=true
+InpTP_Enabled=false
+InpMR_Enabled=true
+InpTPV2_Enabled=true
+InpEnableTPV2Experimental=false
+InpRiskPercent=0.10
+InpMaxRiskPerTrade=0.25
+InpMinRewardRisk=1.5
+InpMaxPositions=1
+InpMaxPendingOrders=0
+InpMaxTotalExposureLots=0.03
+InpMaxSpreadPoints=20
+InpDailyLossLimitPct=1.0
+InpWeeklyLossLimitPct=2.0
+InpMaxDrawdownPct=3.0
+InpMaxConsecLosses=1
+InpMaxConsecutiveBrokerFailures=1
+InpAllowOppositeSignals=false
+InpAllowSameDirectionStack=false
+InpUseMarketOrders=true
+InpUseStopOrders=false
+InpUseLimitOrders=false
+InpPersistState=true
+InpUseGlobalVars=true
+InpDashboardEnabled=true
+InpEnableDebugLogging=false
+InpEnableSignalJournal=true
+InpEnableOrderJournal=true
+InpEnableTradeJournal=true
+InpEnableBreakeven=true
+InpEnablePartialClose=true
+InpEnableATRTrail=true
+InpUnknownPosPolicy=2
+InpAlertSignalAccepted=true
+InpAlertSignalRejected=false
+InpAlertOrderFilled=true
+InpAlertOrderRejected=true
+InpAlertPositionClosed=true
+InpAlertKillSwitch=true
+InpAlertReconFailure=true
+InpAlertUnprotectedPos=true

@@ -178,3 +178,46 @@ Follow-up: Part F (infrastructure audit) should grep for any other
 per-strategy fixed-size arrays this pass may have missed.
 
 ---
+
+Decision ID: D006
+Date/time: 2026-07-22
+Question: Should the restricted all-strategy Conservative Demo candidate
+(Part G) include TP V1, TP V2, both, or neither, and should
+`QBLiveStrategySetAllowed()` (the FBO-only live gate) be updated to let the
+prepared candidate actually initialize?
+Evidence considered: TP V1's own frozen evidence found "no reliable
+directional information" (`tp_v1_freeze/README.md`) -- there is no basis to
+include it in a trading candidate. TP V2 has zero organic evidence yet
+(Part E, the unified matrix, has not run -- it is deliberately last in this
+sprint). `QBLiveStrategySetAllowed()` explicitly documents its own
+restriction as evidence-gated ("BO/TP/MR accepted-entry evidence is not
+complete"), and the task instructions explicitly prohibit weakening gates
+to make a strategy trade.
+Options considered: (a) include V1 in the roster since it's already wired
+and enabled elsewhere; (b) include V2 with its experimental flag ON,
+banking on this sprint's implementation alone as sufficient evidence; (c)
+include V2 with the experimental flag OFF (lifecycle observes, never
+trades), exclude V1 entirely from this trading candidate, and leave
+`QBLiveStrategySetAllowed()` untouched.
+Decision: (c).
+Reason: V1 has a completed, negative research result -- putting it in a
+"candidate" roster would misrepresent settled research as still-open.
+V2 has an implementation but zero organic reachability evidence yet (a unit
+fixture generating a signal is explicitly NOT sufficient per the task's own
+Part H rule) -- shipping it with the experimental flag on would be
+promoting on code existing, not on evidence. Leaving the live gate
+untouched keeps this a genuinely PREPARED-not-ACTIVATED artifact: loading
+it today fails closed at `OnInit` with the same "Live strategy gate blocked
+initialization" message any non-FBO-only config gets, which is correct,
+not a bug in the preset.
+Trading behavior affected: None -- the preset is a new, uncommitted-until-
+staged `.set` file; nothing about its existence changes any running
+behavior, and it cannot currently initialize in a live-armed mode at all.
+Files affected: `Experts/QuantBeast/XAUUSD_Conservative_Demo_AllStrategy.set`
+Commit: (pending, Part G commit)
+Follow-up: once `../unified_strategy_matrix/` evidence exists (Part E),
+revisit whether TP V2's experimental flag and/or
+`QBLiveStrategySetAllowed()` should change -- as its own decision entry,
+evidence-cited, not a silent edit to this preset.
+
+---
