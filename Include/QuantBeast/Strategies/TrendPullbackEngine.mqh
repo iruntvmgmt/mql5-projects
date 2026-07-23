@@ -14,6 +14,13 @@
 
 #define QB_TP_OBS_IMPULSE_MIN_DISPLACEMENT 0.30
 
+// Frozen at the TP_LIFECYCLE_V1 research freeze (see
+// TestEvidence/production_readiness_tp_v2_20260722/tp_v1_freeze/README.md).
+// Serialized into every lifecycle diagnostic tag and outcome-tracker row so
+// V1 and V2 evidence can never be silently pooled. TP V2 uses a distinct
+// engine/tracker pair with QB_TP_LIFECYCLE_VERSION == 2.
+#define QB_TP_LIFECYCLE_VERSION 1
+
 enum ENUM_TP_LIFECYCLE_PHASE
 {
    TP_LIFECYCLE_IDLE = 0,
@@ -236,6 +243,7 @@ public:
       return "none";
    }
    string GetLifecycleSeedSource() const { return m_lifecycleSeedSource; }
+   int GetLifecycleVersion() const { return QB_TP_LIFECYCLE_VERSION; }
    datetime GetImpulseStartTime() const { return m_impulseStartTime; }
    double GetImpulseStartPrice() const { return m_impulseStartPrice; }
    double GetImpulseExtreme() const { return m_impulseExtreme; }
@@ -250,7 +258,8 @@ public:
                                         string reason) const
    {
       if(StringFind(reason, "lifecycle=") < 0)
-         reason += " lifecycle=" + GetLifecyclePhase() +
+         reason += " lifecycleVersion=" + IntegerToString(QB_TP_LIFECYCLE_VERSION) +
+                   " lifecycle=" + GetLifecyclePhase() +
                    " lifecycleBars=" + IntegerToString(m_lifecycleBars) +
                    " lifecycleDirection=" + GetLifecycleDirection() +
                    " lifecycleSeed=" + m_lifecycleSeedSource +

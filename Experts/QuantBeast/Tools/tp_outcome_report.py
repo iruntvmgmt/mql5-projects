@@ -44,11 +44,17 @@ HORIZONS = ("H3", "H6", "H12", "H24")
 # default (treat line 1 as header), which would silently drop a real event
 # and misalign every field into the wrong column.
 CONTEXT_COLUMNS = [
-    "EventID", "Symbol", "SchemaVersion", "RegistrationTime", "Direction", "RefPrice", "ATR_Ref",
+    "EventID", "Symbol", "SchemaVersion", "LifecycleVersion", "RegistrationTime", "Direction", "RefPrice", "ATR_Ref",
     "SeedSource", "ImpulseStartTime", "ImpulseStartPrice", "ImpulseExtreme", "ImpulseSpanATR",
     "RetracementDepth", "LifecycleBars", "RegimeTrend", "RegimeVol", "RegimeStructure", "Session",
     "SpreadPoints", "DirEfficiency", "TrendPersistence", "SlopeNorm", "Displacement", "FinalizeReason",
 ]
+# Schema v1 rows (pre TP_LIFECYCLE_V1 freeze, 2026-07-22) have no
+# LifecycleVersion column -- 76 fields instead of 77. All such rows are
+# already fully captured in TestEvidence/tp_forward_outcome_20260722/ and the
+# live journals were rotated at the freeze, so this fallback exists only for
+# reproducing that historical evidence from its original extracted slices.
+CONTEXT_COLUMNS_SCHEMA_V1 = [c for c in CONTEXT_COLUMNS if c != "LifecycleVersion"]
 HORIZON_COLUMNS = [
     suffix.format(h=h)
     for h in HORIZONS
@@ -60,6 +66,7 @@ HORIZON_COLUMNS = [
     )
 ]
 TP_OUTCOME_COLUMNS = CONTEXT_COLUMNS + HORIZON_COLUMNS
+TP_OUTCOME_COLUMNS_SCHEMA_V1 = CONTEXT_COLUMNS_SCHEMA_V1 + HORIZON_COLUMNS
 
 
 def rows(path: Path, offset: int = 0, end_offset: int | None = None):
@@ -72,7 +79,8 @@ def rows(path: Path, offset: int = 0, end_offset: int | None = None):
         yield from csv.DictReader(lines)
         return
     for raw in csv.reader(lines):
-        yield dict(zip(TP_OUTCOME_COLUMNS, raw))
+        columns = TP_OUTCOME_COLUMNS if len(raw) == len(TP_OUTCOME_COLUMNS) else TP_OUTCOME_COLUMNS_SCHEMA_V1
+        yield dict(zip(columns, raw))
 
 
 def to_float(row: dict, key: str):

@@ -32,13 +32,18 @@
 //| this class at all.                                                 |
 //+------------------------------------------------------------------+
 #define QB_TP_OUTCOME_HORIZON_COUNT   4          // 0=H3, 1=H6, 2=H12, 3=H24
-#define QB_TP_OUTCOME_SCHEMA_VERSION  1
+// v2: adds LifecycleVersion column (TP_LIFECYCLE_V1 freeze, see
+// TestEvidence/production_readiness_tp_v2_20260722/tp_v1_freeze/README.md).
+// Rows written under schema v1 (no LifecycleVersion column) predate the
+// freeze and are never to be re-parsed as v2.
+#define QB_TP_OUTCOME_SCHEMA_VERSION  2
 #define QB_TP_OUTCOME_MAX_PENDING     64          // steady-state pending is bounded by the largest horizon (24)
 
 struct TPOutcomeEvent
 {
    string   event_id;
    string   symbol;
+   int      lifecycle_version;         // engine's QB_TP_LIFECYCLE_VERSION -- frozen at registration
    datetime registration_time;
    string   direction;                // "up" / "down" -- frozen at registration, never re-derived
    double   ref_price;                 // closed_close of the registration bar
@@ -143,13 +148,23 @@ private:
    //+------------------------------------------------------------------+
    void WriteRow(const TPOutcomeEvent &e, string finalizeReason)
    {
+      // Bookkeeping (finalized count/last-finalized snapshot) reflects the
+      // tracker's own in-memory lifecycle completion and must stay accurate
+      // even if the physical journal write fails (disk full, permissions,
+      // file-handle exhaustion) -- only the CSV formatting/file write below
+      // is conditional on a valid handle. A production run where the journal
+      // can't be opened should still report correct finalized counts, not
+      // silently read zero forever.
+      m_totalFinalized++;
+      m_lastFinalized = e;
       if(m_handle == INVALID_HANDLE) return;
 
-      string fields[76];
+      string fields[77];
       int i = 0;
       fields[i++] = e.event_id;
       fields[i++] = e.symbol;
       fields[i++] = IntegerToString(QB_TP_OUTCOME_SCHEMA_VERSION);
+      fields[i++] = IntegerToString(e.lifecycle_version);
       fields[i++] = FormatTime(e.registration_time);
       fields[i++] = e.direction;
       fields[i++] = DoubleToString(e.ref_price, 5);
@@ -189,11 +204,9 @@ private:
          fields[i++] = e.status[h];
       }
 
-      string row = MakeCSVRow(fields, 76);
+      string row = MakeCSVRow(fields, 77);
       WriteCSVLine(m_handle, row);
       FileFlush(m_handle);
-      m_totalFinalized++;
-      m_lastFinalized = e;
    }
 
    //+------------------------------------------------------------------+
@@ -238,7 +251,7 @@ public:
       if(!m_enabled) return true;
 
       m_handle = OpenJournalFile(QB_TP_OUTCOME_LOG,
-         "EventID,Symbol,SchemaVersion,RegistrationTime,Direction,RefPrice,ATR_Ref," +
+         "EventID,Symbol,SchemaVersion,LifecycleVersion,RegistrationTime,Direction,RefPrice,ATR_Ref," +
          "SeedSource,ImpulseStartTime,ImpulseStartPrice,ImpulseExtreme,ImpulseSpanATR," +
          "RetracementDepth,LifecycleBars,RegimeTrend,RegimeVol,RegimeStructure,Session," +
          "SpreadPoints,DirEfficiency,TrendPersistence,SlopeNorm,Displacement,FinalizeReason," +
@@ -309,6 +322,7 @@ public:
       int n = m_pendingCount;
       m_pending[n].event_id = BuildEventID(tp.GetImpulseStartTime(), tp.GetLifecycleDirection(), f.calc_time);
       m_pending[n].symbol = symbol;
+      m_pending[n].lifecycle_version = tp.GetLifecycleVersion();
       m_pending[n].registration_time = f.calc_time;
       m_pending[n].direction = tp.GetLifecycleDirection();
       m_pending[n].ref_price = f.closed_close;

@@ -1,0 +1,17 @@
+# HASHES.sha256 -- production_readiness_tp_v2_20260722
+# Regenerated at each logical phase close. Entries grouped by phase.
+
+## Phase A: TP V1 freeze (commit 953c2d0, tag quantbeast-tp-v1-research-freeze-20260722)
+c61451ec8cd8b926a9d6443d3ab97c9e4b43ff8349a2575536fea872ce38e181  Include/QuantBeast/Strategies/TrendPullbackEngine.mqh (at 953c2d0)
+5ac554dde1088d0b5e2d466cce1bb5ca8c3b48c10b15175e81f63fb1ebb5e566  Experts/QuantBeast/QuantBeastEA.mq5 (at 953c2d0)
+868a5f4966f28b305cee8c36db0f14dea2011a1344839bf042d51eeb553b8b28  Include/QuantBeast/Analytics/TPOutcomeTracker.mqh (at 953c2d0)
+6aa7e7500f55b515f973cb2f6cabaeb3573ddc77e12c454af3d03d55b1fc563f  Experts/QuantBeast/Tools/tp_outcome_report.py (at 953c2d0)
+480b29201e253983e69bdb353bfadbf389866ae7514260c975303c90843ac5f6  Experts/QuantBeast/Tools/tp_rejection_attribution_report.py (at 953c2d0)
+aa58703fc43025822120b9c5806d558fef78271eeea011f1980a48a7dc22e7d0  Experts/QuantBeast/Tools/tp_structure_report.py (at 953c2d0)
+6d730eea4a7283b36da4df172fc00e5acf01a6cf7c415e3676b652edd8d7cc8a  Experts/QuantBeast/QuantBeastEA.ex5 (current build, post freeze-prep)
+87eeb0ffc5c811358322ec96af247b1df26166a5fd61ec63c91e86f5d3bcfded  Profiles/Tester/QuantBeastEA.XAUUSD.M5.20260105_20260106.400.ini
+85272d227ada50f5ea1f7fa0edb8e90e6e51aa685266fc14610aa213fbba7a24  Profiles/Tester/QuantBeastEA.XAUUSD.M5.20250106_20250107.400.ini
+b0589af841bbce681061e54be4ac60e55e059869e153291d49fedb52aa89e00b  Profiles/Tester/QuantBeastEA.XAUUSD.M5.20260504_20260505.400.ini
+295620a98758b4f6a3c10b81447868d66e43e3da83e9bb27f1489bd72c374065  Profiles/Tester/QuantBeastEA.XAUUSD.M5.20260126_20260130.400.ini
+070e09e9c29b375d7294430fc1444aa66243fa45a6ce97685cbfd304f4ee555e  Profiles/Tester/QuantBeastEA.XAUUSD.M5.20260216_20260220.400.ini
+205e12868baeb72b7666ee6364f2ae1457f04d5538ef45df51f38d9b90ceb627  Profiles/Tester/QuantBeastEA.XAUUSD.M5.20260620_20260624.400.ini

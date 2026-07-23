@@ -95,11 +95,14 @@ def first_rejection_reason(row) -> str:
     if row is None:
         return NOT_OBSERVED
     reason = row.get("RejectionReason", "")
-    # Strip the always-appended lifecycle= tag block to show only the
-    # actual production rejection reason, matching what a human reading
-    # "why was this rejected" would want -- the lifecycle tag is observation
-    # metadata, not the rejection cause.
-    cut = reason.find(" lifecycle=")
+    # Strip the always-appended lifecycleVersion=/lifecycle= tag block to show
+    # only the actual production rejection reason, matching what a human
+    # reading "why was this rejected" would want -- the lifecycle tag is
+    # observation metadata, not the rejection cause. Cut at
+    # " lifecycleVersion=" (added at the TP_LIFECYCLE_V1 freeze) rather than
+    # " lifecycle=" so the version token itself isn't left dangling in the
+    # reported reason text.
+    cut = reason.find(" lifecycleVersion=")
     return reason[:cut].strip() if cut >= 0 else reason.strip()
 
 
