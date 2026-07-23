@@ -32,7 +32,8 @@ bool QBIsKnownStrategyId(const string strategyId)
    return strategyId == STRATEGY_ID_BREAKOUT ||
           strategyId == STRATEGY_ID_FAILED_BREAKOUT ||
           strategyId == STRATEGY_ID_TREND_PULLBACK ||
-          strategyId == STRATEGY_ID_MEAN_REVERSION;
+          strategyId == STRATEGY_ID_MEAN_REVERSION ||
+          strategyId == STRATEGY_ID_TREND_PULLBACK_V2;
 }
 
 // Single source of truth for recovering a strategy id from a QB_<id>[_...]

@@ -3003,6 +3003,11 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 93 PASS: Production config boundary validation " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 93 FAIL: Production config boundary validation " + detail); }
+
+      if(QBTestTPV2RegimePriorityCompatibility(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 94 PASS: TPV2 regime priority compatibility " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 94 FAIL: TPV2 regime priority compatibility " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

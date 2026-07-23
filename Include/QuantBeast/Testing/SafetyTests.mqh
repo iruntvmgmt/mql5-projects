@@ -1410,8 +1410,16 @@ bool QBTestStrategyIdFromComment(string &detail)
    { detail = "no-prefix comment wrongly accepted"; return false; }
    if(QBStrategyIdFromComment("QB_NOTASTRATEGY") != "UNKNOWN")
    { detail = "unknown strategy id wrongly accepted"; return false; }
+   // Regression for the fifth-strategy cardinality audit (2026-07-23):
+   // QBIsKnownStrategyId() initially omitted STRATEGY_ID_TREND_PULLBACK_V2,
+   // meaning any real TPV2-owned position/order comment would resolve to
+   // UNKNOWN at both live-fill and restart time -- never actively managed.
+   if(QBStrategyIdFromComment("QB_TPV2") != "TPV2")
+   { detail = "TPV2 plain comment failed"; return false; }
+   if(QBStrategyIdFromComment("QB_TPV2_fixture") != "TPV2")
+   { detail = "TPV2 suffixed comment failed"; return false; }
 
-   detail = "plain=FBO suffixed=FBO multi=BO noPrefix=UNKNOWN unknownId=UNKNOWN";
+   detail = "plain=FBO suffixed=FBO multi=BO noPrefix=UNKNOWN unknownId=UNKNOWN tpv2=TPV2";
    return true;
 }
 
@@ -3238,6 +3246,60 @@ bool QBTestConfigBoundaryValidation(string &detail)
             " acceptsAtMax=" + (acceptsAtMax ? "yes" : "FAIL");
    return rejectsNaN && rejectsInfinite && rejectsZero && rejectsNegative &&
           rejectsAboveMax && acceptsMidRange && acceptsAtMax;
+}
+
+//+------------------------------------------------------------------+
+//| Regression for the fifth-strategy cardinality audit (2026-07-23): |
+//| ARBITRATION_REGIME_PRIORITY's compatibility bonus chain checked   |
+//| STRATEGY_ID_TREND_PULLBACK but not _V2, so a TPV2 candidate always|
+//| scored a 0.0 regime-compatibility bonus regardless of trend regime|
+//| -- silently disadvantaging it against TP V1 in this arbitration   |
+//| mode. Both represent the same trend-following compatibility claim|
+//| (regime.trend != TREND_NEUTRAL), so TPV2 must score identically   |
+//| to TP V1 here.                                                     |
+//+------------------------------------------------------------------+
+bool QBTestTPV2RegimePriorityCompatibility(string &detail)
+{
+   datetime now = TimeCurrent();
+   RegimeState trendingRegime;
+   ZeroMemory(trendingRegime);
+   trendingRegime.trend = TREND_STRONG_UP;
+   trendingRegime.structure = STRUCTURE_BALANCED;
+   FeatureSnapshot f;
+   ZeroMemory(f);
+
+   StrategySignal cands[2];
+   QBMakeArbitrationSignal(cands[0], STRATEGY_ID_TREND_PULLBACK,
+                           ORDER_TYPE_BUY, now, 2600.0, 0.50);
+   QBMakeArbitrationSignal(cands[1], STRATEGY_ID_TREND_PULLBACK_V2,
+                           ORDER_TYPE_BUY, now + 1, 2601.0, 0.50);
+
+   CSignalArbitrator arbV1First;
+   arbV1First.Init(ARBITRATION_REGIME_PRIORITY, 0, 600, true, true);
+   StrategySignal bestV1First = arbV1First.Arbitrate(cands, 2, trendingRegime, f);
+
+   // Swap order and identical confidence so a tie only resolves in TPV2's
+   // favor if it actually receives the same compatibility bonus as V1 --
+   // proves the bonus is applied, not just that V1 happens to win first.
+   StrategySignal cands2[2];
+   QBMakeArbitrationSignal(cands2[0], STRATEGY_ID_TREND_PULLBACK_V2,
+                           ORDER_TYPE_BUY, now, 2600.0, 0.50);
+   QBMakeArbitrationSignal(cands2[1], STRATEGY_ID_TREND_PULLBACK,
+                           ORDER_TYPE_BUY, now + 1, 2601.0, 0.50);
+   CSignalArbitrator arbV2First;
+   arbV2First.Init(ARBITRATION_REGIME_PRIORITY, 0, 600, true, true);
+   StrategySignal bestV2First = arbV2First.Arbitrate(cands2, 2, trendingRegime, f);
+
+   // Both candidates score identically (same confidence, same +0.20 trend
+   // compatibility bonus) -- the highest-score loop keeps the FIRST seen on
+   // a tie (strict '>' comparison), so whichever is listed first should win
+   // in both orderings if and only if TPV2 gets the same bonus as V1.
+   bool v1WinsWhenFirst = bestV1First.valid && bestV1First.strategy_id == STRATEGY_ID_TREND_PULLBACK;
+   bool v2WinsWhenFirst = bestV2First.valid && bestV2First.strategy_id == STRATEGY_ID_TREND_PULLBACK_V2;
+
+   detail = "v1WinsWhenFirst=" + (v1WinsWhenFirst ? "yes" : "FAIL") +
+            " v2WinsWhenFirst=" + (v2WinsWhenFirst ? "yes" : "FAIL");
+   return v1WinsWhenFirst && v2WinsWhenFirst;
 }
 
 #endif // QB_SAFETYTESTS_MQH

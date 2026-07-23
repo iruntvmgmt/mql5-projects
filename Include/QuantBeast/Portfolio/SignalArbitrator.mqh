@@ -350,7 +350,8 @@ public:
                    regime.structure == STRUCTURE_ACCEPTED_BREAKOUT)) compatibility = 0.25;
                else if(validCands[i].strategy_id == STRATEGY_ID_FAILED_BREAKOUT &&
                        regime.structure == STRUCTURE_FAILED_BREAKOUT) compatibility = 0.25;
-               else if(validCands[i].strategy_id == STRATEGY_ID_TREND_PULLBACK &&
+               else if((validCands[i].strategy_id == STRATEGY_ID_TREND_PULLBACK ||
+                        validCands[i].strategy_id == STRATEGY_ID_TREND_PULLBACK_V2) &&
                        (regime.trend != TREND_NEUTRAL)) compatibility = 0.20;
                else if(validCands[i].strategy_id == STRATEGY_ID_MEAN_REVERSION &&
                        regime.structure == STRUCTURE_BALANCED) compatibility = 0.20;
