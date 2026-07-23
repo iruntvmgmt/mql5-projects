@@ -3363,4 +3363,187 @@ bool QBTestFiveStrategyArbitration(string &detail)
    return tpv2Wins && othersRejected && eachBeatsTPV2;
 }
 
+//+------------------------------------------------------------------+
+//| Phase 6 (follow-on sprint): ten directional candidates (5          |
+//| strategies x BUY+SELL) in one Arbitrate call -- proves the buffer  |
+//| and loop scale correctly beyond the 8-element bound several        |
+//| pre-TPV2 arrays used to have, and that confidence comparison       |
+//| genuinely spans every candidate regardless of direction.           |
+//+------------------------------------------------------------------+
+bool QBTestTenDirectionalCandidates(string &detail)
+{
+   datetime now = TimeCurrent();
+   RegimeState regime;
+   ZeroMemory(regime);
+   regime.trend = TREND_NEUTRAL;
+   regime.structure = STRUCTURE_BALANCED;
+   FeatureSnapshot f;
+   ZeroMemory(f);
+
+   string ids[5] = {STRATEGY_ID_BREAKOUT, STRATEGY_ID_FAILED_BREAKOUT,
+                     STRATEGY_ID_TREND_PULLBACK, STRATEGY_ID_MEAN_REVERSION,
+                     STRATEGY_ID_TREND_PULLBACK_V2};
+   StrategySignal ten[10];
+   for(int i = 0; i < 5; i++)
+   {
+      QBMakeArbitrationSignal(ten[i * 2], ids[i], ORDER_TYPE_BUY, now,
+                              2700.0 + i, 0.30 + i * 0.05);
+      QBMakeArbitrationSignal(ten[i * 2 + 1], ids[i], ORDER_TYPE_SELL, now,
+                              2700.0 + i, 0.30 + i * 0.05);
+   }
+   // Make the TPV2 SELL slot (index 9) the unambiguous highest score.
+   ten[9].confidence = 0.95;
+
+   CSignalArbitrator arb;
+   arb.Init(ARBITRATION_HIGHEST_SCORE, 0, 600, true, true);
+   StrategySignal bst = arb.Arbitrate(ten, 10, regime, f);
+   bool winnerCorrect = bst.valid && bst.strategy_id == STRATEGY_ID_TREND_PULLBACK_V2 &&
+                        bst.direction == ORDER_TYPE_SELL;
+
+   int rejectedCount = 0;
+   for(int i = 0; i < 10; i++)
+      if(!ten[i].valid && ten[i].rejection_code == REJECT_ARBITRATION_LOST) rejectedCount++;
+   bool allNineRejected = (rejectedCount == 9);
+
+   detail = "winnerCorrect=" + (winnerCorrect ? "yes" : "FAIL") +
+            " rejectedCount=" + IntegerToString(rejectedCount) + "/9";
+   return winnerCorrect && allNineRejected;
+}
+
+//+------------------------------------------------------------------+
+//| Phase 6: one-position-limit / exposure-blocking behavior applies   |
+//| to TP V2 exactly as it does to any other strategy -- a             |
+//| deterministic counterpart to the organic MR-blocks-TPV2 collision  |
+//| found in Phase 5's real evidence (see                              |
+//| final_readiness/PHASE5_ALL_STRATEGY_SHADOW_MATRIX.md).             |
+//+------------------------------------------------------------------+
+bool QBTestArbitrationOnePositionLimit(string &detail)
+{
+   datetime now = TimeCurrent();
+   RegimeState regime;
+   ZeroMemory(regime);
+   FeatureSnapshot f;
+   ZeroMemory(f);
+
+   // Case 1: an existing LONG (from any strategy) blocks a new TPV2 SELL
+   // candidate when opposite-direction signals are disallowed.
+   CSignalArbitrator arbOpp;
+   arbOpp.Init(ARBITRATION_HIGHEST_SCORE, 0, 600, false, true);
+   arbOpp.SetPositionCounts(1, 0); // one existing long, zero short
+   StrategySignal oppCand[1];
+   QBMakeArbitrationSignal(oppCand[0], STRATEGY_ID_TREND_PULLBACK_V2,
+                           ORDER_TYPE_SELL, now, 2700.0, 0.90);
+   StrategySignal oppResult = arbOpp.Arbitrate(oppCand, 1, regime, f);
+   bool oppBlocked = !oppResult.valid && !oppCand[0].valid &&
+                      oppCand[0].rejection_code == REJECT_CONFLICTING_SIGNAL;
+
+   // Case 2: an existing LONG blocks a new TPV2 BUY (same-direction stack)
+   // when stacking is disallowed.
+   CSignalArbitrator arbStack;
+   arbStack.Init(ARBITRATION_HIGHEST_SCORE, 0, 600, true, false);
+   arbStack.SetPositionCounts(1, 0);
+   StrategySignal stackCand[1];
+   QBMakeArbitrationSignal(stackCand[0], STRATEGY_ID_TREND_PULLBACK_V2,
+                           ORDER_TYPE_BUY, now, 2700.0, 0.90);
+   StrategySignal stackResult = arbStack.Arbitrate(stackCand, 1, regime, f);
+   bool stackBlocked = !stackResult.valid && !stackCand[0].valid &&
+                       stackCand[0].rejection_code == REJECT_EXPOSURE_LIMIT;
+
+   // Case 3: with zero existing positions, the identical TPV2 candidate
+   // is accepted -- proving the block is specifically position-state
+   // driven, not a hidden TPV2-specific rejection.
+   CSignalArbitrator arbFree;
+   arbFree.Init(ARBITRATION_HIGHEST_SCORE, 0, 600, false, false);
+   arbFree.SetPositionCounts(0, 0);
+   StrategySignal freeCand[1];
+   QBMakeArbitrationSignal(freeCand[0], STRATEGY_ID_TREND_PULLBACK_V2,
+                           ORDER_TYPE_SELL, now, 2700.0, 0.90);
+   StrategySignal freeResult = arbFree.Arbitrate(freeCand, 1, regime, f);
+   bool freeAccepted = freeResult.valid && freeResult.strategy_id == STRATEGY_ID_TREND_PULLBACK_V2;
+
+   detail = "oppBlocked=" + (oppBlocked ? "yes" : "FAIL") +
+            " stackBlocked=" + (stackBlocked ? "yes" : "FAIL") +
+            " freeAccepted=" + (freeAccepted ? "yes" : "FAIL");
+   return oppBlocked && stackBlocked && freeAccepted;
+}
+
+//+------------------------------------------------------------------+
+//| Phase 6: equal-score tie handling under the default                |
+//| ARBITRATION_HIGHEST_SCORE method is deterministic (first-seen      |
+//| wins, strict '>' comparison) regardless of which strategy occupies |
+//| which slot -- proves no accidental priority for or against TPV2.   |
+//+------------------------------------------------------------------+
+bool QBTestArbitrationEqualScoreTieHighestScore(string &detail)
+{
+   datetime now = TimeCurrent();
+   RegimeState regime;
+   ZeroMemory(regime);
+   FeatureSnapshot f;
+   ZeroMemory(f);
+
+   StrategySignal orderA[2];
+   QBMakeArbitrationSignal(orderA[0], STRATEGY_ID_TREND_PULLBACK_V2, ORDER_TYPE_BUY, now, 2700.0, 0.60);
+   QBMakeArbitrationSignal(orderA[1], STRATEGY_ID_MEAN_REVERSION, ORDER_TYPE_BUY, now, 2700.0, 0.60);
+   CSignalArbitrator arbA;
+   arbA.Init(ARBITRATION_HIGHEST_SCORE, 0, 600, true, true);
+   StrategySignal bstA = arbA.Arbitrate(orderA, 2, regime, f);
+   bool firstWinsA = bstA.valid && bstA.strategy_id == STRATEGY_ID_TREND_PULLBACK_V2;
+
+   StrategySignal orderB[2];
+   QBMakeArbitrationSignal(orderB[0], STRATEGY_ID_MEAN_REVERSION, ORDER_TYPE_BUY, now, 2700.0, 0.60);
+   QBMakeArbitrationSignal(orderB[1], STRATEGY_ID_TREND_PULLBACK_V2, ORDER_TYPE_BUY, now, 2700.0, 0.60);
+   CSignalArbitrator arbB;
+   arbB.Init(ARBITRATION_HIGHEST_SCORE, 0, 600, true, true);
+   StrategySignal bstB = arbB.Arbitrate(orderB, 2, regime, f);
+   bool firstWinsB = bstB.valid && bstB.strategy_id == STRATEGY_ID_MEAN_REVERSION;
+
+   detail = "firstWinsA(TPV2 first)=" + (firstWinsA ? "yes" : "FAIL") +
+            " firstWinsB(MR first)=" + (firstWinsB ? "yes" : "FAIL");
+   return firstWinsA && firstWinsB;
+}
+
+//+------------------------------------------------------------------+
+//| Phase 6: CAllocationEngine correctly includes TP V2 as a fifth,   |
+//| independently-keyed strategy (ID-keyed [8] array, not index-      |
+//| keyed) under ALLOC_EQUAL (default, must stay 1.0), ALLOC_CONFIDENCE|
+//| (must reflect TPV2's own recorded confidence, not another          |
+//| strategy's), and ALLOC_PERFORMANCE (must reflect TPV2's own R).    |
+//+------------------------------------------------------------------+
+bool QBTestAllocationEngineIncludesTPV2(string &detail)
+{
+   CAllocationEngine eqEngine;
+   eqEngine.Init(ALLOC_EQUAL);
+   eqEngine.RecordSignal(STRATEGY_ID_TREND_PULLBACK_V2, 0.9);
+   bool equalStaysOne = MathAbs(eqEngine.GetWeight(STRATEGY_ID_TREND_PULLBACK_V2) - 1.0) < 0.0001;
+
+   CAllocationEngine confEngine;
+   confEngine.Init(ALLOC_CONFIDENCE);
+   confEngine.RecordSignal(STRATEGY_ID_BREAKOUT, 0.5);
+   confEngine.RecordSignal(STRATEGY_ID_FAILED_BREAKOUT, 0.5);
+   confEngine.RecordSignal(STRATEGY_ID_TREND_PULLBACK, 0.5);
+   confEngine.RecordSignal(STRATEGY_ID_MEAN_REVERSION, 0.5);
+   confEngine.RecordSignal(STRATEGY_ID_TREND_PULLBACK_V2, 0.9); // TPV2 above the others
+   double tpv2Weight = confEngine.GetWeight(STRATEGY_ID_TREND_PULLBACK_V2);
+   double boWeight    = confEngine.GetWeight(STRATEGY_ID_BREAKOUT);
+   bool confidenceDistinct = tpv2Weight > boWeight;
+
+   CAllocationEngine perfEngine;
+   perfEngine.Init(ALLOC_PERFORMANCE);
+   perfEngine.RecordOutcome(STRATEGY_ID_BREAKOUT, -0.5);
+   perfEngine.RecordOutcome(STRATEGY_ID_FAILED_BREAKOUT, -0.5);
+   perfEngine.RecordOutcome(STRATEGY_ID_TREND_PULLBACK, -0.5);
+   perfEngine.RecordOutcome(STRATEGY_ID_MEAN_REVERSION, -0.5);
+   perfEngine.RecordOutcome(STRATEGY_ID_TREND_PULLBACK_V2, 1.5); // TPV2 outperforms
+   double tpv2PerfWeight = perfEngine.GetWeight(STRATEGY_ID_TREND_PULLBACK_V2);
+   double boPerfWeight    = perfEngine.GetWeight(STRATEGY_ID_BREAKOUT);
+   bool performanceDistinct = tpv2PerfWeight > boPerfWeight;
+
+   detail = "equalStaysOne=" + (equalStaysOne ? "yes" : "FAIL") +
+            " confidenceDistinct(tpv2=" + DoubleToString(tpv2Weight, 3) +
+            ",bo=" + DoubleToString(boWeight, 3) + ")=" + (confidenceDistinct ? "yes" : "FAIL") +
+            " performanceDistinct(tpv2=" + DoubleToString(tpv2PerfWeight, 3) +
+            ",bo=" + DoubleToString(boPerfWeight, 3) + ")=" + (performanceDistinct ? "yes" : "FAIL");
+   return equalStaysOne && confidenceDistinct && performanceDistinct;
+}
+
 #endif // QB_SAFETYTESTS_MQH

@@ -3013,6 +3013,26 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 95 PASS: Five-strategy arbitration " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 95 FAIL: Five-strategy arbitration " + detail); }
+
+      if(QBTestTenDirectionalCandidates(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 96 PASS: Ten directional candidates " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 96 FAIL: Ten directional candidates " + detail); }
+
+      if(QBTestArbitrationOnePositionLimit(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 97 PASS: Arbitration one-position limit " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 97 FAIL: Arbitration one-position limit " + detail); }
+
+      if(QBTestArbitrationEqualScoreTieHighestScore(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 98 PASS: Arbitration equal-score tie " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 98 FAIL: Arbitration equal-score tie " + detail); }
+
+      if(QBTestAllocationEngineIncludesTPV2(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 99 PASS: Allocation engine includes TPV2 " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 99 FAIL: Allocation engine includes TPV2 " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +
