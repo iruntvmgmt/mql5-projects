@@ -250,4 +250,18 @@ double SMA_Slice(const double &arr[], int start, int count)
    return sum / count;
 }
 
+//+------------------------------------------------------------------+
+//| Finite and within (minExclusive, maxInclusive]. Used by            |
+//| QBProductionConfigurationValid() (QuantBeastEA.mq5, Part F         |
+//| configuration audit) to reject nonfinite/negative/zero/dangerously |
+//| permissive safety-critical inputs.                                 |
+//+------------------------------------------------------------------+
+bool QBValidNumberInRange(double value, double minExclusive, double maxInclusive)
+{
+   if(!MathIsValidNumber(value)) return false;
+   if(value <= minExclusive) return false;
+   if(value > maxInclusive) return false;
+   return true;
+}
+
 #endif // QB_MATHUTILS_MQH

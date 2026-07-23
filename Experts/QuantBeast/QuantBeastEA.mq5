@@ -479,6 +479,106 @@ void MarkStrategyTrade(string strategyId)
    }
 }
 
+//+------------------------------------------------------------------+
+//| Production configuration audit (Part F, configuration_audit/):    |
+//| rejects nonfinite, negative, zero, or dangerously permissive      |
+//| values for safety-critical inputs before any subsystem is Init'd. |
+//| Runs unconditionally (every mode, not just live-armed), since a   |
+//| malformed risk config is unsafe in Shadow evidence-gathering too. |
+//+------------------------------------------------------------------+
+bool QBProductionConfigurationValid(string &reason)
+{
+   if(!MathIsValidNumber(InpFixedLots) || InpFixedLots <= 0)
+      { reason = "InpFixedLots must be a finite positive number"; return false; }
+   if(!MathIsValidNumber(InpFixedRiskCurrency) || InpFixedRiskCurrency <= 0)
+      { reason = "InpFixedRiskCurrency must be a finite positive number"; return false; }
+   if(!QBValidNumberInRange(InpRiskPercent, 0.0, 10.0))
+      { reason = "InpRiskPercent must be a finite value in (0,10] percent"; return false; }
+   if(!MathIsValidNumber(InpMaxLotSize) || InpMaxLotSize <= 0)
+      { reason = "InpMaxLotSize must be a finite positive number"; return false; }
+   if(!MathIsValidNumber(InpMinLotSize) || InpMinLotSize <= 0)
+      { reason = "InpMinLotSize must be a finite positive number"; return false; }
+   if(InpMinLotSize > InpMaxLotSize)
+      { reason = "InpMinLotSize must not exceed InpMaxLotSize"; return false; }
+
+   if(!QBValidNumberInRange(InpMaxRiskPerTrade, 0.0, 20.0))
+      { reason = "InpMaxRiskPerTrade must be a finite value in (0,20] percent"; return false; }
+   if(InpMinStopPoints <= 0)
+      { reason = "InpMinStopPoints must be a positive integer"; return false; }
+   if(InpMaxStopPoints <= InpMinStopPoints)
+      { reason = "InpMaxStopPoints must exceed InpMinStopPoints"; return false; }
+
+   if(!QBValidNumberInRange(InpDailyLossLimitPct, 0.0, 100.0))
+      { reason = "InpDailyLossLimitPct must be a finite value in (0,100] percent"; return false; }
+   if(!QBValidNumberInRange(InpWeeklyLossLimitPct, 0.0, 100.0))
+      { reason = "InpWeeklyLossLimitPct must be a finite value in (0,100] percent"; return false; }
+   if(!QBValidNumberInRange(InpMaxDrawdownPct, 0.0, 100.0))
+      { reason = "InpMaxDrawdownPct must be a finite value in (0,100] percent"; return false; }
+   if(InpMaxConsecLosses <= 0)
+      { reason = "InpMaxConsecLosses must be a positive integer"; return false; }
+   if(!MathIsValidNumber(InpMinMarginLevelPct) || InpMinMarginLevelPct <= 0)
+      { reason = "InpMinMarginLevelPct must be a finite positive number"; return false; }
+   if(!MathIsValidNumber(InpEmergencyEquityFloor) || InpEmergencyEquityFloor < 0)
+      { reason = "InpEmergencyEquityFloor must be a finite non-negative number"; return false; }
+   if(InpMaxPositions <= 0)
+      { reason = "InpMaxPositions must be a positive integer"; return false; }
+   if(InpMaxPendingOrders < 0)
+      { reason = "InpMaxPendingOrders must be a non-negative integer"; return false; }
+   if(!MathIsValidNumber(InpMaxTotalExposureLots) || InpMaxTotalExposureLots <= 0)
+      { reason = "InpMaxTotalExposureLots must be a finite positive number"; return false; }
+
+   // Per-strategy spread ceilings -- a nonfinite/zero/negative value would
+   // either always reject (zero) or is meaningless (nonfinite); an extremely
+   // large value is dangerously permissive (effectively disables the gate).
+   if(!QBValidNumberInRange(InpBO_MaxSpreadPts, 0.0, 500.0))
+      { reason = "InpBO_MaxSpreadPts must be a finite value in (0,500] points"; return false; }
+   if(!QBValidNumberInRange(InpFBO_MaxSpreadPts, 0.0, 500.0))
+      { reason = "InpFBO_MaxSpreadPts must be a finite value in (0,500] points"; return false; }
+   if(!QBValidNumberInRange(InpTP_MaxSpreadPts, 0.0, 500.0))
+      { reason = "InpTP_MaxSpreadPts must be a finite value in (0,500] points"; return false; }
+   if(!QBValidNumberInRange(InpMR_MaxSpreadPts, 0.0, 500.0))
+      { reason = "InpMR_MaxSpreadPts must be a finite value in (0,500] points"; return false; }
+   if(!QBValidNumberInRange(InpTPV2_MaxSpreadPts, 0.0, 500.0))
+      { reason = "InpTPV2_MaxSpreadPts must be a finite value in (0,500] points"; return false; }
+
+   reason = "ok";
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| Logs the fully resolved production configuration once validated,  |
+//| so a future auditor can answer "what configuration actually ran"  |
+//| from the journal/log alone (Part F, configuration_audit/).        |
+//+------------------------------------------------------------------+
+void QBLogResolvedProductionConfiguration()
+{
+   QBLogInfo("── Resolved Production Configuration ──");
+   QBLogInfo("  Mode=" + EnumToString(InpMode) + " EffectiveMode=" + EnumToString(g_EffectiveMode));
+   QBLogInfo("  LotMode=" + EnumToString(InpLotMode) + " FixedLots=" + DoubleToString(InpFixedLots, 2) +
+             " FixedRiskCcy=" + DoubleToString(InpFixedRiskCurrency, 2) +
+             " RiskPct=" + DoubleToString(InpRiskPercent, 2) +
+             " MaxLot=" + DoubleToString(InpMaxLotSize, 2) + " MinLot=" + DoubleToString(InpMinLotSize, 2));
+   QBLogInfo("  MaxRiskPerTradePct=" + DoubleToString(InpMaxRiskPerTrade, 2) +
+             " MinRR=" + DoubleToString(InpMinRewardRisk, 2) +
+             " StopPts=[" + IntegerToString(InpMinStopPoints) + "," + IntegerToString(InpMaxStopPoints) + "]");
+   QBLogInfo("  DailyLossPct=" + DoubleToString(InpDailyLossLimitPct, 2) +
+             " WeeklyLossPct=" + DoubleToString(InpWeeklyLossLimitPct, 2) +
+             " MaxDrawdownPct=" + DoubleToString(InpMaxDrawdownPct, 2) +
+             " MaxConsecLosses=" + IntegerToString(InpMaxConsecLosses) +
+             " EmergencyEquityFloor=" + DoubleToString(InpEmergencyEquityFloor, 2));
+   QBLogInfo("  MaxPositions=" + IntegerToString(InpMaxPositions) +
+             " MaxPendingOrders=" + IntegerToString(InpMaxPendingOrders) +
+             " MaxTotalExposureLots=" + DoubleToString(InpMaxTotalExposureLots, 2));
+   QBLogInfo("  Strategies: BO=" + (InpBO_Enabled ? "on" : "off") + " FBO=" + (InpFBO_Enabled ? "on" : "off") +
+             " TP=" + (InpTP_Enabled ? "on" : "off") + " MR=" + (InpMR_Enabled ? "on" : "off") +
+             " TPV2=" + (InpTPV2_Enabled ? "on" : "off") +
+             " TPV2Experimental=" + (InpEnableTPV2Experimental ? "on" : "off"));
+   QBLogInfo("  UnknownPosPolicy=" + EnumToString(InpUnknownPosPolicy) +
+             " UseMarketOrders=" + (InpUseMarketOrders ? "yes" : "no") +
+             " UseStopOrders=" + (InpUseStopOrders ? "yes" : "no") +
+             " UseLimitOrders=" + (InpUseLimitOrders ? "yes" : "no"));
+}
+
 bool QBLiveStrategySetAllowed(bool boEnabled, bool fboEnabled,
                               bool tpEnabled, bool mrEnabled,
                               string &reason)
@@ -619,6 +719,16 @@ int OnInit()
    QBLogSeparator();
    QBLogInfo("══════════ " + QB_EA_NAME + " v" + QB_VERSION + " Initializing ══════════");
 
+   // Configuration validation runs first, unconditionally -- a malformed
+   // safety-critical input is unsafe to build any subsystem on top of,
+   // Shadow mode included.
+   string configReason = "";
+   if(!QBProductionConfigurationValid(configReason))
+   {
+      QBLogError("Production configuration validation failed: " + configReason);
+      return INIT_FAILED;
+   }
+
    // --- Determine effective mode ---
    g_EffectiveMode = InpMode;
    if(g_EffectiveMode == QB_MODE_CHALLENGE_LIVE && !InpAcknowledgeChallengeRisk)
@@ -626,6 +736,7 @@ int OnInit()
       QBLogWarn("Challenge mode requested but not acknowledged. Falling back to Shadow.");
       g_EffectiveMode = QB_MODE_SHADOW;
    }
+   QBLogResolvedProductionConfiguration();
 
    bool requestedLiveMode = (g_EffectiveMode == QB_MODE_CONSERVATIVE_LIVE ||
                              g_EffectiveMode == QB_MODE_CHALLENGE_LIVE);
@@ -2887,6 +2998,11 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 92 PASS: TPV2 no side effects when experimental off " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 92 FAIL: TPV2 no side effects when experimental off " + detail); }
+
+      if(QBTestConfigBoundaryValidation(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 93 PASS: Production config boundary validation " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 93 FAIL: Production config boundary validation " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

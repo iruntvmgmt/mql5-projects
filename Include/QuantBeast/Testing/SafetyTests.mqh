@@ -3212,4 +3212,32 @@ bool QBTestTPV2NoSideEffectsWhenExperimentalOff(CSymbolAdapter &adapter, string 
    return offNeverValid && offReasonTagged && offReachedTriggered && onValid;
 }
 
+//+------------------------------------------------------------------+
+//| TEST 93: production configuration boundary validation (Part F).   |
+//| QBValidNumberInRange() is the primitive QBProductionConfiguration- |
+//| Valid() (QuantBeastEA.mq5 OnInit gate) is built from -- rejects    |
+//| NaN/infinite, zero, negative, and dangerously-permissive-above-max |
+//| values, accepts a genuine mid-range value.                         |
+//+------------------------------------------------------------------+
+bool QBTestConfigBoundaryValidation(string &detail)
+{
+   bool rejectsNaN      = !QBValidNumberInRange(MathSqrt(-1.0), 0.0, 100.0);
+   bool rejectsInfinite = !QBValidNumberInRange(DBL_MAX * 2.0, 0.0, 100.0);
+   bool rejectsZero     = !QBValidNumberInRange(0.0, 0.0, 100.0);
+   bool rejectsNegative = !QBValidNumberInRange(-5.0, 0.0, 100.0);
+   bool rejectsAboveMax = !QBValidNumberInRange(150.0, 0.0, 100.0);
+   bool acceptsMidRange = QBValidNumberInRange(5.0, 0.0, 100.0);
+   bool acceptsAtMax    = QBValidNumberInRange(100.0, 0.0, 100.0);
+
+   detail = "rejectsNaN=" + (rejectsNaN ? "yes" : "FAIL") +
+            " rejectsInfinite=" + (rejectsInfinite ? "yes" : "FAIL") +
+            " rejectsZero=" + (rejectsZero ? "yes" : "FAIL") +
+            " rejectsNegative=" + (rejectsNegative ? "yes" : "FAIL") +
+            " rejectsAboveMax=" + (rejectsAboveMax ? "yes" : "FAIL") +
+            " acceptsMidRange=" + (acceptsMidRange ? "yes" : "FAIL") +
+            " acceptsAtMax=" + (acceptsAtMax ? "yes" : "FAIL");
+   return rejectsNaN && rejectsInfinite && rejectsZero && rejectsNegative &&
+          rejectsAboveMax && acceptsMidRange && acceptsAtMax;
+}
+
 #endif // QB_SAFETYTESTS_MQH
