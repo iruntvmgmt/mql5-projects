@@ -1,9 +1,9 @@
 # Session manifest -- production_readiness_tp_v2_20260722
 
-**Status: IN PROGRESS.** This is a living document, updated at the close of
-each phase. See `DECISION_LOG.md` for the reasoning behind material
-decisions and `FINAL_REPO_STATE.md` (added at session close) for the closing
-snapshot.
+**Status: COMPLETE.** See `DECISION_LOG.md` for the reasoning behind
+material decisions, `FINAL_REPO_STATE.md` for the closing repo snapshot,
+and `final_readiness/FINAL_PRODUCTION_READINESS_REPORT.md` for the full
+final deliverable.
 
 ## Objective
 
@@ -27,7 +27,8 @@ this and run after every code change as normal verification.
 
 ## Ending state
 
-_(filled in at session close, see `FINAL_REPO_STATE.md`)_
+Branch `main`, HEAD `e22bfd0`, 1 ahead / 0 behind `github/main` (not
+pushed). See `FINAL_REPO_STATE.md` for full detail.
 
 ## Repository / environment
 
@@ -46,16 +47,22 @@ _(appended as each is made; see `git log` for authoritative order)_
 1. `6ce0a41` docs: freeze TP V1 research baseline (tag `quantbeast-tp-v1-research-freeze-20260722` @ `953c2d0`)
 2. `ee7db48` docs: specify TP V2 hypothesis and state machine
 3. `026e91c` feat: implement TP V2 lifecycle and trigger set (+ Tests 75-92)
+4. `ed6bb18` docs: update session manifest and decision log after TP V2 implementation
+5. `acefa09` fix: validate safety-critical inputs and log resolved config at startup
+6. `e04d8aa` docs: production infrastructure closure audit (Part F)
+7. `8f33449` config: add restricted all-strategy demo candidate (prepared, not active)
+8. `cce55a2` docs: unified all-strategy window matrix -- windows 1-4 of 6 (Part E)
+9. `a17484c` docs: unified all-strategy window matrix complete -- all 6 windows (Part E)
+10. `e22bfd0` docs: final production-readiness report and top-level doc sync
 
 ## Evidence directories
 
-- `tp_v1_freeze/` -- TP V1 freeze record (this phase)
-- `tp_v2_spec/`, `tp_v2_tests/` -- TP V2 (pending)
-- `unified_strategy_matrix/` -- Part E (pending, deferred to end of sprint per user instruction)
-- `infrastructure_audit/`, `restart_recovery/`, `execution_safety/`,
-  `configuration_audit/` -- Part F (pending)
-- `analytics_reports/` -- Part F analytics (pending)
-- `final_readiness/` -- final deliverable (pending)
+- `tp_v1_freeze/` -- TP V1 freeze record.
+- `tp_v2_spec/` -- TP V2 pre-registered specification.
+- `infrastructure_audit/` -- Part F audit document.
+- `unified_strategy_matrix/` -- Part E, all 6 windows, 24 report files + README.
+- `run_manifests/` -- one manifest per evidence-producing tester run (6).
+- `final_readiness/` -- the final production-readiness report.
 
 ## Tools/scripts added or modified this session
 
@@ -63,25 +70,37 @@ _(appended as each is made; see `git log` for authoritative order)_
   `LifecycleVersion` column / schema v1 vs v2 fallback.
 - `Experts/QuantBeast/Tools/tp_rejection_attribution_report.py` -- rejection-
   reason truncation point updated for the new `lifecycleVersion=` tag prefix.
+- `Experts/QuantBeast/Tools/strategy_performance_report.py` -- new canonical
+  per-strategy/direction/session/regime report (Part F).
+- `Experts/QuantBeast/Tools/tpv2_structure_report.py` -- new TP V2 lifecycle
+  decomposition report (Part E).
 
-## Test totals / compile status (running total, updated per phase)
+## Test totals / compile status (final)
 
-- Compile: 0 errors, 0 warnings (after TP V2 implementation).
-- Self-tests: 95 passed, 0 failed (Model=1 regression,
+- Compile: 0 errors, 0 warnings.
+- Self-tests: 96 passed, 0 failed (Model=1 regression,
   `Profiles/Tester/QuantBeast.SelfTestDetail.20260722.ini`).
 
 ## Trading behavior changed this session?
 
-No. All changes so far are additive diagnostics (lifecycle-version tagging)
-and an observability bugfix (`WriteRow` bookkeeping) in an observation-only,
-side-effect-free tracker. No eligibility, signal, risk, or arbitration logic
-was modified.
+No default behavior change. TP V2 is wired and its lifecycle observes real
+bars, but `InpEnableTPV2Experimental=false` (default) means zero reachable
+path to a valid signal, arbitration, risk, or execution -- verified by
+Test 92 and by 6 real evidence windows (zero TP V2 acceptances throughout).
+The safety-critical input validator added in Part F only rejects
+configurations that were already invalid; every existing default and
+tester profile passes unchanged.
 
 ## Broker orders transmitted?
 
-None. No open positions/orders at any point this session (verified before
-every terminal-sensitive action). No live or Challenge-mode run was executed.
+None, at any point in this session. No open positions/orders verified
+before every terminal-sensitive action, throughout, including before and
+after all 6 real evidence-gathering tester runs. No live or Challenge-mode
+run was executed.
 
 ## Final readiness state
 
-_(filled in at session close)_
+`READY FOR SHADOW MODE`, unchanged. FBO's existing 2026-07-16 Conservative
+Live demo-account authorization is unaffected and unexpanded. See
+`final_readiness/FINAL_PRODUCTION_READINESS_REPORT.md` section 13 for
+per-strategy readiness labels.
