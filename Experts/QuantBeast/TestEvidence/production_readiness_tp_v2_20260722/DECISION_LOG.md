@@ -112,3 +112,40 @@ tester run (not just the self-test block), re-open the file-handle
 investigation -- it has not been seen there in this or any prior session.
 
 ---
+
+Decision ID: D004
+Date/time: 2026-07-22
+Question: Which of the four predefined TP V2 trigger types should be the
+default (`InpTPV2_TriggerMode` default value)?
+Evidence considered: The economic hypothesis text itself ("demonstrates
+renewed directional control through an explicit resumption trigger"). No
+historical trade-count comparison across the four variants was run or
+consulted before this decision -- by design, per the audit protocol's
+explicit instruction not to select a default based on which produces the
+most historical trades.
+Options considered: (1) closed-bar micro-structure break -- simplest, but a
+bare break of a small local extreme is weak evidence of "control" specifically
+(price moving is not the same as a market rejecting adverse movement); (3)
+displacement reclaim -- requires a large committed bar, may fire well after
+control was already re-established, understating how early genuine control
+can be observed; (4) break-retest -- a reasonable two-phase confirmation but
+strictly a refinement of (1), inheriting its weakness on the initial break;
+(2) rejection + directional confirmation -- a rejection wick against further
+retracement, confirmed by a directional close, is the most direct measurement
+of the market *rejecting* continued adverse movement at a specific point.
+Decision: (2), rejection + directional confirmation, is the default. The
+other three remain explicit, individually selectable research variants.
+Reason: (2) most literally matches the hypothesis's own wording about
+"renewed directional control" being *demonstrated*, not merely inferred from
+price having moved a certain distance.
+Trading behavior affected: None yet -- TP V2 ships with
+`InpEnableTPV2Experimental=false`; this only fixes which trigger fires first
+when the experimental flag is eventually enabled and evidence supports it.
+Files affected: `Include/QuantBeast/Strategies/TrendPullbackV2Engine.mqh` (pending implementation)
+Commit: (pending, spec commit)
+Follow-up: If organic evidence in `../unified_strategy_matrix/` shows the
+default trigger never organically fires while others would have, that is
+itself evidence worth recording -- not grounds to silently swap the default
+without a new decision entry.
+
+---
