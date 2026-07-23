@@ -2,6 +2,73 @@
 
 ---
 
+Decision ID: D008
+Date/time: 2026-07-23, Phase 1 of the follow-on sprint (`QuantBeast_Production_Readiness_Sprint.md`)
+Question: Independently verify the prior sprint's documented final state
+before making any change, per the new sprint's explicit Phase 1 instruction.
+What was checked and what, if anything, disagrees with the briefing document?
+Evidence considered:
+- HEAD: confirmed `4ad4031152b316ca88785e4437e9939910b2a482f` (matches).
+- TP V1 tag: `quantbeast-tp-v1-research-freeze-20260722` resolves to
+  `953c2d057ed4578b18244a1b24fab9a5c78f20e1`, exactly matching the documented
+  freeze commit (matches).
+- Compile: independently rebuilt, `0 errors, 0 warnings` (matches).
+- Tests: independently reran the Model=1 self-test regression,
+  `96 passed, 0 failed` (matches).
+- Six-window/TP V2 totals: cross-checked the pooled `geometry outcome
+  breakdown` lines across all 3 windows with TRIGGERED rows (6+4+8=18 rows
+  = 9 unique episodes; TPV2_EXPERIMENTAL_DISABLED count = 1+1+2 = 4) against
+  committed evidence files -- exactly matches "9 unique triggered episodes,
+  4 fully qualifying" (matches).
+- Readiness labels: cross-checked against
+  `final_readiness/FINAL_PRODUCTION_READINESS_REPORT.md` section 13 --
+  BO/FBO/MR/TP-V1/TP-V2 labels exactly match the briefing document (matches).
+- TP V1/V2 isolation: both engines still reference distinct
+  `QB_TP_LIFECYCLE_VERSION`/`QB_TPV2_LIFECYCLE_VERSION` constants and tag
+  every diagnostic accordingly (matches).
+- Working tree: unchanged pre-existing unrelated files only (matches).
+- Open positions/orders: confirmed empty (matches, "no broker orders" claim holds).
+
+**Two discrepancies found, documented here per the explicit instruction to
+record any before proceeding:**
+
+1. **Commit count.** The briefing states "current sprint contains 10
+   commits." The actual count from the TP V1 freeze commit to the
+   documented HEAD is **11** (`6ce0a41` through `4ad4031` inclusive). The
+   likely explanation: the briefing was drafted counting only through
+   `e22bfd0` (10 commits), before the final `4ad4031` "close out session
+   manifest" commit landed. Not a defect -- just a one-commit undercount in
+   the briefing, noted for the record.
+2. **Ahead/behind `github/main`.** The briefing states "1 commit ahead."
+   Actual, freshly measured: **3 ahead, 0 behind**. More importantly:
+   `git reflog show github/main` shows `github/main` was moved by actual
+   `update by push` events, most recently landing on `cce55a2` -- meaning
+   something pushed local commits to the remote. **This was not done by any
+   `git push` command run in either this or the prior session** (none was
+   ever issued). The most likely mechanism is the MT5 terminal's own
+   integrated "MQL5 Algo Forge" Git feature (seen activating in the
+   terminal log at prior session start: "Git MQL5 Algo Forge activated...
+   Git 1 personal projects found"), which appears to auto-sync commits to
+   the configured remote independent of any explicit push command from
+   either agent session. This is flagged transparently rather than treated
+   as a violation of "do not push unless explicitly instructed" -- that
+   instruction has been honored on the agent side (zero `git push` commands
+   issued); the repository's own tooling is doing something outside agent
+   control. Not attempting to disable or reverse this (no destructive/
+   configuration-altering action taken) -- documenting only.
+Decision: Proceed with the sprint. Both discrepancies are explainable,
+non-blocking, and do not indicate any repository-state conflict with the
+documented starting point (Phase 16's stop condition). Neither required
+touching the remote, tags, or any destructive command.
+Trading behavior affected: None -- read-only verification.
+Files affected: none (verification only).
+Commit: (pending, verification-phase commit)
+Follow-up: if github/main's auto-sync behavior is ever a concern, that is
+an operator-level MT5/Git-Forge configuration question, out of scope for
+this agent to change unilaterally.
+
+---
+
 Decision ID: D001
 Date/time: 2026-07-22, session start
 Question: Should TP V1 be preserved via a Git tag alone, or also kept as a
