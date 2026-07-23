@@ -221,3 +221,41 @@ revisit whether TP V2's experimental flag and/or
 evidence-cited, not a silent edit to this preset.
 
 ---
+
+Decision ID: D007
+Date/time: 2026-07-22, before launching any Part E evidence run
+Question: Which XAUUSD M5 windows should the unified all-strategy matrix
+use, and how many?
+Evidence considered: the task requires previously-tested windows
+(regression reproduction), untouched windows, and windows chosen for
+high-volatility/quiet/London-NY-overlap/mixed-regime coverage, without
+optimizing against untouched windows. V1's forward-outcome sprint
+(`tp_forward_outcome_20260722/README.md`) used 6 windows at comparable
+scope and that was judged proportionate evidence for a similarly-bounded
+research question.
+Decision (fixed BEFORE running anything, in order):
+1. `2026-01-05_20260106` -- reused (V1 evidence), regression reproduction.
+2. `2025-01-06_20250107` -- reused (V1 evidence), regression reproduction,
+   different year/session mix.
+3. `2026-02-16_20260220` -- reused (V1 evidence), largest-n TP V1 window,
+   distinct regime.
+4. `2026-06-20_20260624` -- reused (V1 evidence), regression reproduction.
+5. `2026-03-30_20260407` -- untouched by any prior TP research, full week,
+   different month/quarter.
+6. `2026-06-22_20260623` -- untouched, single day, different session
+   composition from the others.
+Reason: reusing 4 already-characterized windows gives true regression
+reproduction (proves nothing silently changed for BO/FBO/MR/TP-V1's
+already-observed behavior when TPV2 was added to the roster) while 2 new
+windows give genuine untouched validation, matching V1's precedent scale
+without expanding scope further given the size of this sprint already.
+This list is fixed before any window is run -- if a later window shows an
+interesting result, it is reported as-is, not used to justify adding or
+dropping windows after the fact.
+Trading behavior affected: None -- Shadow-mode evidence gathering only, no
+broker orders transmitted, InpEnableTPV2Experimental=false throughout.
+Files affected: none (evidence-gathering decision, not a code change).
+Commit: (pending, Part E evidence commit)
+Follow-up: none -- this list is final for this sprint's Part E pass.
+
+---
