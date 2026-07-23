@@ -149,3 +149,32 @@ itself evidence worth recording -- not grounds to silently swap the default
 without a new decision entry.
 
 ---
+
+Decision ID: D005
+Date/time: 2026-07-22
+Question: Adding TP V2 as a 5th strategy (QB_STRAT_COUNT 4->5) surfaced two
+fixed-size arrays sized for exactly 4 strategies. Fix immediately or defer?
+Evidence considered: `KillSwitchState.strategy_kill` was `bool[4]` (Types.mqh)
+-- writing `strategy_kill[4]` for TPV2 would silently overrun. The
+arbitration loop's `StrategySignal candidates[8]` (QuantBeastEA.mq5, 4
+strategies x 2 directions) would silently overrun once a 5th strategy could
+produce 2 more candidates in the same bar.
+Options considered: (a) defer TPV2's strategy-array wiring to a later pass
+to avoid touching these; (b) fix both bounds immediately as part of wiring
+TPV2 in.
+Decision: (b), fixed immediately.
+Reason: Per the audit protocol, "engineering safety defects may be fixed
+immediately" -- these are exactly that category: silent fixed-array overruns
+newly reachable the moment a 5th strategy exists, unrelated to any economic
+threshold or trading-behavior choice. Leaving them would make TPV2's mere
+presence in the strategy roster a latent memory-safety hazard regardless of
+whether InpEnableTPV2Experimental is ever turned on.
+Trading behavior affected: None -- both fixes only widen array bounds to
+match the new strategy count; no logic changed.
+Files affected: `Include/QuantBeast/Core/Types.mqh`,
+`Experts/QuantBeast/QuantBeastEA.mq5`.
+Commit: `026e91c`
+Follow-up: Part F (infrastructure audit) should grep for any other
+per-strategy fixed-size arrays this pass may have missed.
+
+---

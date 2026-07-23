@@ -43,7 +43,9 @@ _(filled in at session close, see `FINAL_REPO_STATE.md`)_
 
 _(appended as each is made; see `git log` for authoritative order)_
 
-1. TP V1 freeze + lifecycle-version tagging + `WriteRow` bookkeeping fix
+1. `6ce0a41` docs: freeze TP V1 research baseline (tag `quantbeast-tp-v1-research-freeze-20260722` @ `953c2d0`)
+2. `ee7db48` docs: specify TP V2 hypothesis and state machine
+3. `026e91c` feat: implement TP V2 lifecycle and trigger set (+ Tests 75-92)
 
 ## Evidence directories
 
@@ -64,8 +66,8 @@ _(appended as each is made; see `git log` for authoritative order)_
 
 ## Test totals / compile status (running total, updated per phase)
 
-- Compile: 0 errors, 0 warnings (after TP V1 freeze prep changes).
-- Self-tests: 77 passed, 0 failed (Model=1 regression,
+- Compile: 0 errors, 0 warnings (after TP V2 implementation).
+- Self-tests: 95 passed, 0 failed (Model=1 regression,
   `Profiles/Tester/QuantBeast.SelfTestDetail.20260722.ini`).
 
 ## Trading behavior changed this session?
