@@ -69,6 +69,52 @@ this agent to change unilaterally.
 
 ---
 
+Decision ID: D009
+Date/time: 2026-07-23, Phase 3 (TP V2 Shadow promotion gate)
+Question: A dedicated Shadow profile with `InpEnableTPV2Experimental=true`
+was built and run against the 2025-01-06 window (reproducing the exact
+tick/bar counts of the original evidence run: 240,447 ticks, 276 bars,
+natural completion). The known-qualifying SELL episode at 2025.01.06
+07:15:00 still shows `TPV2_EXPERIMENTAL_DISABLED` in `SignalJournal.csv`,
+and the new startup config log (`QBLogResolvedProductionConfiguration`,
+added in the prior sprint's Part F) explicitly confirms
+`TPV2Experimental=off` was the value actually applied at `OnInit` --
+proving this is not a misread of the journal, it is a real input-
+non-application. Stop and report, or diagnose further/restart unilaterally?
+Evidence considered: this matches, in exact kind, a previously documented
+finding (`tp_displacement_matrix_20260722/README.md`): "The first attempted
+0.8 run was invalid: MT5 omitted the new input from its effective schema
+and reproduced the 1.0 funnel... After restart, the effective-input log
+explicitly recorded 0.8." `InpEnableTPV2Experimental` is itself a genuinely
+new input (added this sprint, commit `026e91c`), consistent with the same
+"MetaEditor/terminal's cached effective-input schema doesn't yet recognize
+a just-compiled new input inside the tester" class of issue. The `.ini`
+line format used (`InpEnableTPV2Experimental=true||false||0||true||N`)
+exactly matches every other working boolean input's serialization in this
+same profile family (verified against `InpAcknowledgeLiveBrokerRisk`,
+`InpTP_Enabled`, etc.), ruling out a simple formatting mistake.
+Options considered: (a) restart the MT5 terminal myself (the documented
+prior fix) and continue Phase 3 immediately; (b) stop and report before
+restarting.
+Decision: (b). Phase 16 of this sprint's own instructions explicitly lists
+"a normal terminal restart may restore a live-armed chart" as a stop
+condition requiring the agent to halt and report rather than act
+unilaterally. Current state is low-risk (zero open positions/orders
+confirmed immediately before this run and again now; the one open chart,
+XAUUSD H1, shows no attached EA in `list_open_charts`) but "appears
+low-risk" is not the same as explicit authorization for a stop-listed
+action, so proceeding without asking would not honor the instruction's own
+terms.
+Trading behavior affected: None -- read-only diagnosis only; the
+experimental flag never actually applied, so TP V2 never reached a valid
+signal in this run either (confirmed: zero TPV2 ACCEPTED rows).
+Files affected: none this decision (profiles created, no source changed).
+Commit: (pending)
+Follow-up: pause and report to the user; await explicit authorization
+before any terminal restart.
+
+---
+
 Decision ID: D001
 Date/time: 2026-07-22, session start
 Question: Should TP V1 be preserved via a Git tag alone, or also kept as a
