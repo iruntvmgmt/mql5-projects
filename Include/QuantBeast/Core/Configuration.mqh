@@ -140,6 +140,23 @@ input ENUM_TARGET_MODE InpTP_TargetMode = TARGET_MODE_DEFAULT; // TP Target Mode
 input double InpTP_MaxSpreadPts      = 35.0;    // Max Spread for Eligibility (points, symbol-scaled -- was hardcoded)
 
 //+------------------------------------------------------------------+
+//| === GROUP: Trend Pullback V2 (experimental) ===                   |
+//| See TestEvidence/production_readiness_tp_v2_20260722/tp_v2_spec/  |
+//| InpTPV2_Enabled keeps the lifecycle observing bars (same           |
+//| convention as V1's InpTP_Enabled); InpEnableTPV2Experimental is    |
+//| the SOLE gate on whether a TRIGGERED episode's signal can ever be  |
+//| marked valid and reach arbitration. Default false: zero reachable  |
+//| path into signal generation until organic evidence supports it.   |
+//+------------------------------------------------------------------+
+input group "══════════ Trend Pullback V2 (Experimental) ══════════"
+input bool   InpTPV2_Enabled          = true;   // Enable TP V2 Lifecycle Observation
+input bool   InpEnableTPV2Experimental = false; // Allow TP V2 to emit valid (tradeable) signals
+input ENUM_TPV2_TRIGGER_MODE InpTPV2_TriggerMode = TPV2_TRIGGER_REJECTION_CONFIRM; // Resumption trigger (default per Decision D004)
+input double InpTPV2_MinConfidence    = 0.55;   // Minimum Signal Confidence
+input ENUM_TARGET_MODE InpTPV2_TargetMode = TARGET_MODE_DEFAULT; // TPV2 Target Mode: Default|FixedR|VWAP|RangeMid|OppBoundary
+input double InpTPV2_MaxSpreadPts    = 35.0;    // Max Spread for Eligibility (points)
+
+//+------------------------------------------------------------------+
 //| === GROUP: Mean Reversion Strategy ===                            |
 //+------------------------------------------------------------------+
 input group "══════════ Mean Reversion Strategy ══════════"

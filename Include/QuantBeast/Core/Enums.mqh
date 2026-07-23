@@ -157,6 +157,21 @@ enum ENUM_TRIGGER_TYPE
 };
 
 //+------------------------------------------------------------------+
+//| TP V2 resumption trigger set -- see                               |
+//| TestEvidence/production_readiness_tp_v2_20260722/tp_v2_spec/      |
+//| TP_V2_PARAMETER_CONTRACT.md Part C. Declared here (not in          |
+//| Strategies/TrendPullbackV2Engine.mqh) because it is referenced by  |
+//| an `input` in Core/Configuration.mqh, which is included first.     |
+//+------------------------------------------------------------------+
+enum ENUM_TPV2_TRIGGER_MODE
+{
+   TPV2_TRIGGER_REJECTION_CONFIRM = 0,   // default -- see Decision D004
+   TPV2_TRIGGER_MICROBREAK        = 1,
+   TPV2_TRIGGER_DISPLACEMENT_RECLAIM = 2,
+   TPV2_TRIGGER_BREAK_RETEST      = 3
+};
+
+//+------------------------------------------------------------------+
 //| Level Source (which objective level a strategy references)        |
 //+------------------------------------------------------------------+
 enum ENUM_LEVEL_SOURCE
@@ -303,7 +318,9 @@ enum ENUM_SETUP_CODE
    // Mean reversion setups
    SETUP_MR_BALANCED_MARKET         = 400,
    SETUP_MR_DEVIATION_EXTREME       = 401,
-   SETUP_MR_REJECTION_VISIBLE       = 402
+   SETUP_MR_REJECTION_VISIBLE       = 402,
+   // Trend pullback V2 setups (see TP_V2_SPEC.md)
+   SETUP_TPV2_TRIGGERED             = 500
 };
 
 //+------------------------------------------------------------------+
@@ -327,7 +344,12 @@ enum ENUM_TRIGGER_CODE
    TRIGGER_TP_VALUE_RECLAIM         = 312,
    // Mean reversion triggers
    TRIGGER_MR_DEVIATION_PEAK        = 410,
-   TRIGGER_MR_RETURN_START          = 411
+   TRIGGER_MR_RETURN_START          = 411,
+   // Trend pullback V2 triggers (see TP_V2_PARAMETER_CONTRACT.md Part C)
+   TRIGGER_TPV2_MICROBREAK             = 510,
+   TRIGGER_TPV2_REJECTION_CONFIRM      = 511,
+   TRIGGER_TPV2_DISPLACEMENT_RECLAIM   = 512,
+   TRIGGER_TPV2_BREAK_RETEST           = 513
 };
 
 //+------------------------------------------------------------------+
@@ -375,5 +397,6 @@ enum ENUM_REJECTION_CODE
 #define STRATEGY_ID_FAILED_BREAKOUT "FBO"
 #define STRATEGY_ID_TREND_PULLBACK  "TP"
 #define STRATEGY_ID_MEAN_REVERSION  "MR"
+#define STRATEGY_ID_TREND_PULLBACK_V2 "TPV2"
 
 #endif // QB_ENUMS_MQH

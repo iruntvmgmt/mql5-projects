@@ -81,11 +81,12 @@
 //+------------------------------------------------------------------+
 //| Strategy Indices                                                  |
 //+------------------------------------------------------------------+
-#define QB_STRAT_IDX_BO   0
-#define QB_STRAT_IDX_FBO  1
-#define QB_STRAT_IDX_TP   2
-#define QB_STRAT_IDX_MR   3
-#define QB_STRAT_COUNT    4
+#define QB_STRAT_IDX_BO    0
+#define QB_STRAT_IDX_FBO   1
+#define QB_STRAT_IDX_TP    2
+#define QB_STRAT_IDX_MR    3
+#define QB_STRAT_IDX_TPV2  4
+#define QB_STRAT_COUNT     5
 
 //+------------------------------------------------------------------+
 //| Tick Size Multipliers                                             |

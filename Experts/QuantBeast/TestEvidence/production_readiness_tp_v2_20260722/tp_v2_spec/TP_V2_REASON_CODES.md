@@ -73,8 +73,13 @@ and does not by itself produce any transition -- the direct fix for V1's
   mirroring V1's tag format exactly (`MakeLifecycleRejected()` equivalent for
   V2) so existing parsing tools (`tp_structure_report.py`'s regex family)
   extend rather than fork.
-- A V2-specific outcome/lifecycle journal (separate file from V1's
-  `TPOutcomeJournal.csv`, per `../tp_v1_freeze/README.md`'s isolation
-  guarantee) records every entry-code transition per episode, not just the
-  terminal one, so a full state history is reconstructable per episode ID
-  without replaying the tester run.
+- No separate dedicated V2 lifecycle-transition journal file is written.
+  `EvaluateLong`/`EvaluateShort` run every bar the strategy is enabled
+  (independent of `InpEnableTPV2Experimental`), so with `InpEnableSignalJournal`
+  on, `SignalJournal.csv` already carries one row per bar per direction with
+  the current phase/reasonCode -- a full per-episode transition history is
+  reconstructable by filtering `Strategy=="TPV2"` rows in time order, exactly
+  the same convention V1's `tp_structure_report.py` already uses against
+  `SignalJournal.csv`. This is deliberately not duplicated into a second
+  tracker class the way V1's `CTPOutcomeTracker` was, since V2's own signal
+  path (not a parallel observation-only class) is the thing being measured.

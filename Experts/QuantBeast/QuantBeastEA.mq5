@@ -34,6 +34,7 @@
 #include <QuantBeast/Strategies/BreakoutEngine.mqh>
 #include <QuantBeast/Strategies/FailedBreakoutEngine.mqh>
 #include <QuantBeast/Strategies/TrendPullbackEngine.mqh>
+#include <QuantBeast/Strategies/TrendPullbackV2Engine.mqh>
 #include <QuantBeast/Strategies/MeanReversionEngine.mqh>
 #include <QuantBeast/Portfolio/SignalArbitrator.mqh>
 #include <QuantBeast/Portfolio/AllocationEngine.mqh>
@@ -71,6 +72,7 @@ CRegimeEngine         g_RegimeEngine;
 CBreakoutEngine        g_StrategyBO;
 CFailedBreakoutEngine  g_StrategyFBO;
 CTrendPullbackEngine   g_StrategyTP;
+CTrendPullbackV2Engine g_StrategyTPV2;
 CMeanReversionEngine   g_StrategyMR;
 CStrategyBase*         g_Strategies[QB_STRAT_COUNT];
 
@@ -461,6 +463,7 @@ int StrategyIndexFromId(string strategyId)
    if(strategyId == STRATEGY_ID_FAILED_BREAKOUT) return QB_STRAT_IDX_FBO;
    if(strategyId == STRATEGY_ID_TREND_PULLBACK) return QB_STRAT_IDX_TP;
    if(strategyId == STRATEGY_ID_MEAN_REVERSION) return QB_STRAT_IDX_MR;
+   if(strategyId == STRATEGY_ID_TREND_PULLBACK_V2) return QB_STRAT_IDX_TPV2;
    return -1;
 }
 
@@ -784,10 +787,19 @@ int OnInit()
                      InpMR_TargetVWAPR, InpMR_EmergencyStopR,
                      InpMR_StopMode, InpMR_TargetMode, InpMR_MaxSpreadPts);
 
-   g_Strategies[QB_STRAT_IDX_BO]  = &g_StrategyBO;
-   g_Strategies[QB_STRAT_IDX_FBO] = &g_StrategyFBO;
-   g_Strategies[QB_STRAT_IDX_TP]  = &g_StrategyTP;
-   g_Strategies[QB_STRAT_IDX_MR]  = &g_StrategyMR;
+   // TP V2 (experimental, see TP_V2_SPEC.md): InpTPV2_Enabled keeps the
+   // lifecycle observing real bars (same convention as V1) independent of
+   // InpEnableTPV2Experimental, which is the sole gate on whether a
+   // TRIGGERED episode's signal is ever marked valid.
+   g_StrategyTPV2.Init(STRATEGY_ID_TREND_PULLBACK_V2, "Trend Pullback V2", InpTPV2_Enabled,
+                       InpTPV2_MinConfidence, g_Adapter, InpTPV2_TriggerMode,
+                       InpEnableTPV2Experimental, InpTPV2_TargetMode, InpTPV2_MaxSpreadPts);
+
+   g_Strategies[QB_STRAT_IDX_BO]   = &g_StrategyBO;
+   g_Strategies[QB_STRAT_IDX_FBO]  = &g_StrategyFBO;
+   g_Strategies[QB_STRAT_IDX_TP]   = &g_StrategyTP;
+   g_Strategies[QB_STRAT_IDX_MR]   = &g_StrategyMR;
+   g_Strategies[QB_STRAT_IDX_TPV2] = &g_StrategyTPV2;
 
    // --- Initialize Signal Arbitrator ---
    g_Arbitrator.Init(InpArbitrationMethod, InpCooldownSeconds,
@@ -1274,7 +1286,7 @@ void EvaluateAndTrade()
    double totalExposure = EffectiveExposure();
 
    // Gather all strategy signals
-   StrategySignal candidates[8]; // 4 strategies x 2 directions max
+   StrategySignal candidates[10]; // QB_STRAT_COUNT (5) strategies x 2 directions max
    int candidateCount = 0;
 
    for(int i = 0; i < QB_STRAT_COUNT; i++)
@@ -2780,6 +2792,101 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 74 PASS: TP outcome retracement depth " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 74 FAIL: TP outcome retracement depth " + detail); }
+   }
+
+   // TP V2 (see TP_V2_STATE_MACHINE.md / TP_V2_PARAMETER_CONTRACT.md) --
+   // Tests 75-92.
+   {
+      string detail = "";
+      if(QBTestTPV2TrendPredatesImpulse(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 75 PASS: TPV2 trend predates impulse " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 75 FAIL: TPV2 trend predates impulse " + detail); }
+
+      if(QBTestTPV2ImpulseAnchor(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 76 PASS: TPV2 impulse anchor " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 76 FAIL: TPV2 impulse anchor " + detail); }
+
+      if(QBTestTPV2PullbackDetection(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 77 PASS: TPV2 pullback detection " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 77 FAIL: TPV2 pullback detection " + detail); }
+
+      if(QBTestTPV2ShallowPauseNotPullback(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 78 PASS: TPV2 shallow pause not pullback " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 78 FAIL: TPV2 shallow pause not pullback " + detail); }
+
+      if(QBTestTPV2DeepInvalidation(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 79 PASS: TPV2 deep invalidation " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 79 FAIL: TPV2 deep invalidation " + detail); }
+
+      if(QBTestTPV2LocalBalanceSurvives(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 80 PASS: TPV2 local balance survives " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 80 FAIL: TPV2 local balance survives " + detail); }
+
+      if(QBTestTPV2Expiry(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 81 PASS: TPV2 expiry " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 81 FAIL: TPV2 expiry " + detail); }
+
+      if(QBTestTPV2OneUpdatePerBar(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 82 PASS: TPV2 one update per bar " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 82 FAIL: TPV2 one update per bar " + detail); }
+
+      if(QBTestTPV2BuySellDedup(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 83 PASS: TPV2 buy/sell dedup " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 83 FAIL: TPV2 buy/sell dedup " + detail); }
+
+      if(QBTestTPV2ImmutableDirection(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 84 PASS: TPV2 immutable direction " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 84 FAIL: TPV2 immutable direction " + detail); }
+
+      if(QBTestTPV2TriggerSuccessAndFailure(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 85 PASS: TPV2 trigger success and failure " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 85 FAIL: TPV2 trigger success and failure " + detail); }
+
+      if(QBTestTPV2StopAtInvalidationLevel(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 86 PASS: TPV2 stop at invalidation level " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 86 FAIL: TPV2 stop at invalidation level " + detail); }
+
+      if(QBTestTPV2TargetGeometry(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 87 PASS: TPV2 target geometry " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 87 FAIL: TPV2 target geometry " + detail); }
+
+      if(QBTestTPV2SpreadGuard(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 88 PASS: TPV2 spread guard " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 88 FAIL: TPV2 spread guard " + detail); }
+
+      if(QBTestTPV2NoLookahead(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 89 PASS: TPV2 no lookahead " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 89 FAIL: TPV2 no lookahead " + detail); }
+
+      if(QBTestTPV2RestartResetSemantics(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 90 PASS: TPV2 restart reset semantics " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 90 FAIL: TPV2 restart reset semantics " + detail); }
+
+      if(QBTestTPV1V2Isolation(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 91 PASS: TPV1/V2 isolation " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 91 FAIL: TPV1/V2 isolation " + detail); }
+
+      if(QBTestTPV2NoSideEffectsWhenExperimentalOff(g_Adapter, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 92 PASS: TPV2 no side effects when experimental off " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 92 FAIL: TPV2 no side effects when experimental off " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

@@ -29,6 +29,7 @@
 #include "../Strategies/BreakoutEngine.mqh"
 #include "../Strategies/FailedBreakoutEngine.mqh"
 #include "../Strategies/TrendPullbackEngine.mqh"
+#include "../Strategies/TrendPullbackV2Engine.mqh"
 #include "../Strategies/MeanReversionEngine.mqh"
 
 void QBMakeSyntheticMarket(CSymbolAdapter &adapter, MarketSnapshot &market,
@@ -2649,6 +2650,566 @@ bool QBTestTPOutcomeRetracementDepth(CSymbolAdapter &adapter, string &detail)
             " partial=" + (partial ? "yes" : "FAIL") + " full=" + (full ? "yes" : "FAIL") +
             " overshoot=" + (overshoot ? "yes" : "FAIL");
    return partial && full && overshoot && degenerateReachedResume && degenerateSkipped;
+}
+
+//+------------------------------------------------------------------+
+//| TP V2 (see TP_V2_STATE_MACHINE.md) deterministic fixtures.        |
+//| Drives a fresh engine through IDLE -> TREND_QUALIFIED ->           |
+//| IMPULSE_ACTIVE -> PULLBACK_ACTIVE -> RESUMPTION_ARMED -> TRIGGERED |
+//| (default rejection_confirm trigger) in exactly 6 bars. `barsToRun` |
+//| lets a test stop early to inspect an intermediate phase. All      |
+//| offsets are direction-multiplied so the identical bar template     |
+//| produces a symmetric up/down episode.                              |
+//+------------------------------------------------------------------+
+void QBDriveTPV2(CSymbolAdapter &adapter, CTrendPullbackV2Engine &strategy,
+                 MarketSnapshot &market, FeatureSnapshot &f, RegimeState &regime,
+                 int direction, datetime baseTime, int barsToRun,
+                 bool experimentalEnabled = false,
+                 ENUM_TPV2_TRIGGER_MODE triggerMode = TPV2_TRIGGER_REJECTION_CONFIRM)
+{
+   strategy.Init("TPV2_TEST", "TPV2 test", true, 0.0, adapter, triggerMode, experimentalEnabled);
+   double d;
+   QBMakeSyntheticMarket(adapter, market, d);
+   QBMakeNormalRegime(regime);
+   regime.trend = (direction > 0) ? TREND_STRONG_UP : TREND_STRONG_DOWN;
+
+   ZeroMemory(f);
+   f.dir_efficiency = 0.8;
+   f.trend_persistence = 10;
+   double M = market.mid;
+
+   for(int bar = 0; bar < barsToRun && bar < 6; bar++)
+   {
+      f.calc_time = baseTime + bar;
+      f.atr = d;
+      f.rejection_wick_lower = 0.0;
+      f.rejection_wick_upper = 0.0;
+      switch(bar)
+      {
+         case 0: // TREND_QUALIFIED entry
+            f.closed_open = M; f.closed_close = M; f.closed_high = M; f.closed_low = M;
+            f.displacement = 0.0;
+            break;
+         case 1: // IMPULSE_ACTIVE entry -- aligned candle, displacement 0.5 ATR
+            f.closed_open = M;
+            f.closed_close = M + direction * 1.0 * d;
+            f.closed_high = (direction > 0) ? M + 1.0 * d : M;
+            f.closed_low  = (direction > 0) ? M : M - 1.0 * d;
+            f.displacement = 0.5;
+            break;
+         case 2: // PULLBACK_ACTIVE entry -- counter candle, depth 0.5
+            f.closed_open = M + direction * 1.0 * d;
+            f.closed_close = M + direction * 0.5 * d;
+            f.closed_high = (direction > 0) ? M + 1.0 * d : M - 0.5 * d;
+            f.closed_low  = (direction > 0) ? M + 0.4 * d : M - 1.0 * d;
+            f.moving_toward_value = true;
+            f.displacement = 0.0;
+            break;
+         case 3: // RESUMPTION_ARMED entry -- aligned candle, retracement ending
+            f.closed_open = M + direction * 0.5 * d;
+            f.closed_close = M + direction * 0.6 * d;
+            f.closed_high = (direction > 0) ? M + 0.65 * d : M - 0.45 * d;
+            f.closed_low  = (direction > 0) ? M + 0.45 * d : M - 0.65 * d;
+            f.moving_toward_value = false;
+            break;
+         case 4: // default trigger step 1: rejection wick bar (arms pending confirm)
+            f.closed_open = M + direction * 0.55 * d;
+            f.closed_close = M + direction * 0.5 * d;
+            if(direction > 0) f.rejection_wick_lower = 0.35; else f.rejection_wick_upper = 0.35;
+            break;
+         case 5: // default trigger step 2: confirming close -> TRIGGERED
+            f.closed_open = M + direction * 0.5 * d;
+            f.closed_close = M + direction * 0.55 * d;
+            break;
+      }
+      if(direction > 0) strategy.EvaluateLong(market, f, regime);
+      else              strategy.EvaluateShort(market, f, regime);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| TEST 75: trend must predate impulse -- persistence below floor    |
+//| never qualifies regardless of candle strength; the qualifying bar |
+//| itself never also detects an impulse; only a strictly later bar   |
+//| can.                                                                |
+//+------------------------------------------------------------------+
+bool QBTestTPV2TrendPredatesImpulse(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy;
+   MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   strategy.Init("TPV2_T75", "t75", true, 0.0, adapter, TPV2_TRIGGER_REJECTION_CONFIRM, false);
+   double d;
+   QBMakeSyntheticMarket(adapter, market, d);
+   QBMakeNormalRegime(regime);
+   regime.trend = TREND_STRONG_UP;
+   ZeroMemory(f);
+   f.atr = d;
+
+   f.calc_time = 1000; f.trend_persistence = 2; f.dir_efficiency = 0.8;
+   f.closed_open = market.mid; f.closed_close = market.mid + 2.0 * d;
+   f.closed_high = market.mid + 2.0 * d; f.closed_low = market.mid;
+   f.displacement = 1.0;
+   strategy.EvaluateLong(market, f, regime);
+   bool stillIdleWhenBelowFloor = (strategy.GetLifecyclePhase() == "idle");
+
+   f.calc_time = 1001; f.trend_persistence = 10; // qualifying bar
+   f.closed_open = market.mid; f.closed_close = market.mid + 2.0 * d;
+   f.closed_high = market.mid + 2.0 * d; f.closed_low = market.mid;
+   f.displacement = 1.0;
+   strategy.EvaluateLong(market, f, regime);
+   bool qualifiedNotImpulseSameBar = (strategy.GetLifecyclePhase() == "trend_qualified");
+
+   f.calc_time = 1002; // strictly later bar
+   f.closed_open = market.mid; f.closed_close = market.mid + 1.0 * d;
+   f.closed_high = market.mid + 1.0 * d; f.closed_low = market.mid;
+   f.displacement = 0.5;
+   strategy.EvaluateLong(market, f, regime);
+   bool impulseOnLaterBar = (strategy.GetLifecyclePhase() == "impulse_active");
+
+   detail = "belowFloorStillIdle=" + (stillIdleWhenBelowFloor ? "yes" : "FAIL") +
+            " qualifiedNotImpulseSameBar=" + (qualifiedNotImpulseSameBar ? "yes" : "FAIL") +
+            " impulseOnLaterBar=" + (impulseOnLaterBar ? "yes" : "FAIL");
+   return stillIdleWhenBelowFloor && qualifiedNotImpulseSameBar && impulseOnLaterBar;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 76: impulse direction and anchor correctness, both directions.|
+//+------------------------------------------------------------------+
+bool QBTestTPV2ImpulseAnchor(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine up; MarketSnapshot mu; FeatureSnapshot fu; RegimeState ru;
+   QBDriveTPV2(adapter, up, mu, fu, ru, 1, 2000, 2);
+   bool upOK = (up.GetLifecyclePhase() == "impulse_active") &&
+               (up.GetLifecycleDirection() == "up") &&
+               (up.GetImpulseStartTime() == 2001) &&
+               MathAbs(up.GetImpulseStartPrice() - mu.mid) < 0.0001 &&
+               (up.GetImpulseExtreme() > up.GetImpulseStartPrice());
+
+   CTrendPullbackV2Engine dn; MarketSnapshot md; FeatureSnapshot fd; RegimeState rd;
+   QBDriveTPV2(adapter, dn, md, fd, rd, -1, 2100, 2);
+   bool downOK = (dn.GetLifecyclePhase() == "impulse_active") &&
+                 (dn.GetLifecycleDirection() == "down") &&
+                 (dn.GetImpulseStartTime() == 2101) &&
+                 MathAbs(dn.GetImpulseStartPrice() - md.mid) < 0.0001 &&
+                 (dn.GetImpulseExtreme() < dn.GetImpulseStartPrice());
+
+   detail = "upOK=" + (upOK ? "yes" : "FAIL") + " downOK=" + (downOK ? "yes" : "FAIL");
+   return upOK && downOK;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 77: actual countertrend pullback detection with measured      |
+//| depth (not a same-bar proximity proxy).                            |
+//+------------------------------------------------------------------+
+bool QBTestTPV2PullbackDetection(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 2200, 3);
+   bool inPullback = (strategy.GetLifecyclePhase() == "pullback_active");
+   bool depthOK = MathAbs(strategy.GetRetracementDepth() - 0.5) <= 0.02;
+   detail = "phase=" + strategy.GetLifecyclePhase() +
+            " depth=" + DoubleToString(strategy.GetRetracementDepth(), 3);
+   return inPullback && depthOK;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 78: a shallow 1-bar non-continuation (depth below the floor)  |
+//| is not misclassified as a pullback -- stays IMPULSE_ACTIVE, and    |
+//| the impulse can still resume normally afterward.                   |
+//+------------------------------------------------------------------+
+bool QBTestTPV2ShallowPauseNotPullback(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 2300, 2); // through IMPULSE_ACTIVE entry
+   double d = f.atr; double M = market.mid;
+   // A trivial 0.02-ATR counter tick -- depth ~0.02, below QB_TPV2_MIN_RETRACEMENT_DEPTH (0.10).
+   f.calc_time = 2303;
+   f.closed_open = M + 1.0 * d;
+   f.closed_close = M + 0.98 * d;
+   f.closed_high = M + 1.0 * d; f.closed_low = M + 0.97 * d;
+   strategy.EvaluateLong(market, f, regime);
+   bool stillImpulse = (strategy.GetLifecyclePhase() == "impulse_active");
+   bool reasonOK = (strategy.GetLastReasonCode() == "PB_REJECT_INSUFFICIENT_RETRACEMENT");
+
+   // Impulse can still resume/extend normally afterward.
+   f.calc_time = 2304;
+   f.closed_open = M + 0.98 * d;
+   f.closed_close = M + 1.2 * d;
+   f.closed_high = M + 1.2 * d; f.closed_low = M + 0.98 * d;
+   strategy.EvaluateLong(market, f, regime);
+   bool stillImpulseAfterExtend = (strategy.GetLifecyclePhase() == "impulse_active");
+
+   detail = "stillImpulse=" + (stillImpulse ? "yes" : "FAIL") +
+            " reasonOK=" + (reasonOK ? "yes" : "FAIL") +
+            " stillImpulseAfterExtend=" + (stillImpulseAfterExtend ? "yes" : "FAIL");
+   return stillImpulse && reasonOK && stillImpulseAfterExtend;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 79: deep structural invalidation -- a trend flip invalidates  |
+//| the episode and the following bar resets cleanly to IDLE.          |
+//+------------------------------------------------------------------+
+bool QBTestTPV2DeepInvalidation(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 2400, 3); // through PULLBACK_ACTIVE
+   double d = f.atr; double M = market.mid;
+
+   f.calc_time = 2403;
+   regime.trend = TREND_STRONG_DOWN; // trend flips against the nominated "up" episode
+   f.closed_open = M; f.closed_close = M - 0.2 * d; f.closed_high = M; f.closed_low = M - 0.2 * d;
+   strategy.EvaluateLong(market, f, regime);
+   bool invalidated = (strategy.GetLifecyclePhase() == "invalidated");
+   bool reasonOK = (strategy.GetLastReasonCode() == "INV_TREND_FLIPPED");
+
+   // Reset is observed on a bar where the trend is genuinely non-directional
+   // -- a directional bar here would legitimately re-qualify a fresh episode
+   // on this same bar (correct behavior, not what this assertion isolates).
+   f.calc_time = 2404;
+   regime.trend = TREND_NEUTRAL;
+   strategy.EvaluateLong(market, f, regime);
+   bool resetToIdle = (strategy.GetLifecyclePhase() == "idle") &&
+                      (strategy.GetLifecycleDirection() == "none");
+
+   detail = "invalidated=" + (invalidated ? "yes" : "FAIL") +
+            " reasonOK=" + (reasonOK ? "yes" : "FAIL") +
+            " resetToIdle=" + (resetToIdle ? "yes" : "FAIL");
+   return invalidated && reasonOK && resetToIdle;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 80: temporary local balance (a single bar's regime.structure  |
+//| reading STRUCTURE_BALANCED) does not by itself invalidate a valid  |
+//| higher-order trend context -- the direct fix for V1's 11/16        |
+//| rejection mode (see tp_v1_freeze/README.md).                       |
+//+------------------------------------------------------------------+
+bool QBTestTPV2LocalBalanceSurvives(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 2500, 3); // through PULLBACK_ACTIVE
+   double d = f.atr; double M = market.mid;
+
+   f.calc_time = 2503;
+   regime.structure = STRUCTURE_BALANCED; // local balance reading -- regime.trend untouched
+   f.closed_open = M + 0.5 * d; f.closed_close = M + 0.45 * d; // still within retracement band
+   f.closed_high = M + 0.5 * d; f.closed_low = M + 0.4 * d;
+   f.moving_toward_value = true;
+   strategy.EvaluateLong(market, f, regime);
+   bool notInvalidated = (strategy.GetLifecyclePhase() != "invalidated");
+   bool stillPullbackOrArmed = (strategy.GetLifecyclePhase() == "pullback_active" ||
+                                strategy.GetLifecyclePhase() == "resumption_armed");
+
+   detail = "phase=" + strategy.GetLifecyclePhase() +
+            " notInvalidated=" + (notInvalidated ? "yes" : "FAIL") +
+            " stillPullbackOrArmed=" + (stillPullbackOrArmed ? "yes" : "FAIL");
+   return notInvalidated && stillPullbackOrArmed;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 81: lifecycle expiry after QB_TPV2_MAX_LIFECYCLE_AGE bars     |
+//| without a completed transition, followed by a clean reset to IDLE. |
+//+------------------------------------------------------------------+
+bool QBTestTPV2Expiry(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 2600, 2); // through IMPULSE_ACTIVE entry
+   double d = f.atr; double M = market.mid;
+
+   ENUM_TPV2_LIFECYCLE_PHASE lastPhase = TPV2_IMPULSE_ACTIVE;
+   bool expired = false;
+   for(int i = 0; i < QB_TPV2_MAX_LIFECYCLE_AGE + 2; i++)
+   {
+      f.calc_time = 2602 + i;
+      // Keep extending the impulse (aligned candle) so it never completes a
+      // pullback and never invalidates -- only age can end this episode.
+      f.closed_open = M + (1.0 + i * 0.01) * d;
+      f.closed_close = M + (1.01 + i * 0.01) * d;
+      f.closed_high = f.closed_close; f.closed_low = f.closed_open;
+      strategy.EvaluateLong(market, f, regime);
+      if(strategy.GetLifecyclePhase() == "expired") { expired = true; break; }
+   }
+   bool reasonOK = (strategy.GetLastReasonCode() == "EXP_MAX_LIFECYCLE_AGE");
+
+   // Reset is observed on a bar where the trend is genuinely non-directional
+   // -- a directional bar here would legitimately re-qualify a fresh episode
+   // on this same bar (correct behavior, not what this assertion isolates).
+   f.calc_time += 1;
+   regime.trend = TREND_NEUTRAL;
+   strategy.EvaluateLong(market, f, regime);
+   bool resetToIdle = (strategy.GetLifecyclePhase() == "idle");
+
+   detail = "expired=" + (expired ? "yes" : "FAIL") +
+            " reasonOK=" + (reasonOK ? "yes" : "FAIL") +
+            " resetToIdle=" + (resetToIdle ? "yes" : "FAIL");
+   return expired && reasonOK && resetToIdle;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 82: one lifecycle update per bar -- calling Evaluate twice    |
+//| with the same calc_time is a no-op the second time.                |
+//+------------------------------------------------------------------+
+bool QBTestTPV2OneUpdatePerBar(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 2700, 2);
+   string phaseAfterFirst = strategy.GetLifecyclePhase();
+   int barsAfterFirst = strategy.GetLifecycleBars();
+
+   strategy.EvaluateLong(market, f, regime); // identical f.calc_time as the last driven bar
+   bool unchanged = (strategy.GetLifecyclePhase() == phaseAfterFirst) &&
+                    (strategy.GetLifecycleBars() == barsAfterFirst);
+
+   detail = "phase=" + strategy.GetLifecyclePhase() + " unchanged=" + (unchanged ? "yes" : "FAIL");
+   return unchanged;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 83: BUY/SELL deduplication -- EvaluateShort called on the     |
+//| same bar as a prior EvaluateLong does not reprocess the lifecycle. |
+//+------------------------------------------------------------------+
+bool QBTestTPV2BuySellDedup(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 2800, 1); // one bar -> trend_qualified
+   string phaseAfterLong = strategy.GetLifecyclePhase();
+
+   strategy.EvaluateShort(market, f, regime); // same f.calc_time, opposite-direction call
+   bool unchanged = (strategy.GetLifecyclePhase() == phaseAfterLong);
+
+   detail = "phaseAfterLong=" + phaseAfterLong + " phaseAfterShort=" + strategy.GetLifecyclePhase() +
+            " unchanged=" + (unchanged ? "yes" : "FAIL");
+   return unchanged;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 84: immutable direction -- frozen from TREND_QUALIFIED through|
+//| invalidation, only clearing to "none" after the reset-to-IDLE bar. |
+//+------------------------------------------------------------------+
+bool QBTestTPV2ImmutableDirection(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 2900, 3); // through PULLBACK_ACTIVE
+   bool upThroughout = (strategy.GetLifecycleDirection() == "up");
+
+   f.calc_time = 2903;
+   regime.trend = TREND_STRONG_DOWN;
+   strategy.EvaluateLong(market, f, regime);
+   bool stillUpAtInvalidation = (strategy.GetLifecyclePhase() == "invalidated") &&
+                                (strategy.GetLifecycleDirection() == "up");
+
+   // Reset is observed on a bar where the trend is genuinely non-directional
+   // -- a directional bar here would legitimately re-qualify a fresh episode
+   // on this same bar (correct behavior, not what this assertion isolates).
+   f.calc_time = 2904;
+   regime.trend = TREND_NEUTRAL;
+   strategy.EvaluateLong(market, f, regime);
+   bool clearedAfterReset = (strategy.GetLifecycleDirection() == "none");
+
+   detail = "upThroughout=" + (upThroughout ? "yes" : "FAIL") +
+            " stillUpAtInvalidation=" + (stillUpAtInvalidation ? "yes" : "FAIL") +
+            " clearedAfterReset=" + (clearedAfterReset ? "yes" : "FAIL");
+   return upThroughout && stillUpAtInvalidation && clearedAfterReset;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 85: resumption trigger success and failure (default           |
+//| rejection_confirm trigger).                                        |
+//+------------------------------------------------------------------+
+bool QBTestTPV2TriggerSuccessAndFailure(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine ok; MarketSnapshot mo; FeatureSnapshot fo; RegimeState ro;
+   QBDriveTPV2(adapter, ok, mo, fo, ro, 1, 3000, 6);
+   bool triggeredOK = (ok.GetLifecyclePhase() == "triggered") &&
+                      (ok.GetLastReasonCode() == "TRIG_ENTER_TRIGGERED_REJECTION_CONFIRM");
+
+   CTrendPullbackV2Engine fail; MarketSnapshot mf; FeatureSnapshot ff; RegimeState rf;
+   QBDriveTPV2(adapter, fail, mf, ff, rf, 1, 3100, 5); // through the rejection wick bar (armed pending)
+   double d = ff.atr; double M = mf.mid;
+   ff.calc_time = 3105;
+   ff.closed_open = M + 0.5 * d;
+   ff.closed_close = M + 0.3 * d; // closes AGAINST the nominated direction -- must not confirm
+   fail.EvaluateLong(mf, ff, rf);
+   bool notTriggered = (fail.GetLifecyclePhase() == "resumption_armed") &&
+                       (fail.GetLastReasonCode() == "TRIG_REJECT_NOT_CONFIRMED");
+
+   detail = "triggeredOK=" + (triggeredOK ? "yes" : "FAIL") +
+            " notTriggered=" + (notTriggered ? "yes" : "FAIL");
+   return triggeredOK && notTriggered;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 86: stop is placed exactly at the episode's own invalidation  |
+//| level (never an independently-chosen offset).                      |
+//+------------------------------------------------------------------+
+bool QBTestTPV2StopAtInvalidationLevel(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 3200, 6, true); // experimental ON
+   StrategySignal sig = strategy.EvaluateLong(market, f, regime);
+   bool valid = sig.valid;
+   bool stopMatches = MathAbs(sig.proposed_stop - strategy.GetInvalidationLevel()) < 0.0001;
+   bool stopBelowEntry = (sig.proposed_stop < sig.proposed_entry);
+
+   detail = "valid=" + (valid ? "yes" : "FAIL") +
+            " stop=" + DoubleToString(sig.proposed_stop, 5) +
+            " invalidationLevel=" + DoubleToString(strategy.GetInvalidationLevel(), 5) +
+            " stopMatches=" + (stopMatches ? "yes" : "FAIL") +
+            " stopBelowEntry=" + (stopBelowEntry ? "yes" : "FAIL");
+   return valid && stopMatches && stopBelowEntry;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 87: target geometry -- fixed R extension of the stop distance,|
+//| and the reported expected_reward_r matches QB_TPV2_TARGET_EXTENSION_R.|
+//+------------------------------------------------------------------+
+bool QBTestTPV2TargetGeometry(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 3300, 6, true);
+   StrategySignal sig = strategy.EvaluateLong(market, f, regime);
+   double risk = MathAbs(sig.proposed_entry - sig.proposed_stop);
+   double expectedTarget = sig.proposed_entry + risk * QB_TPV2_TARGET_EXTENSION_R;
+   bool targetMatches = MathAbs(sig.proposed_target - expectedTarget) < 0.01;
+   bool rewardMatches = MathAbs(sig.expected_reward_r - QB_TPV2_TARGET_EXTENSION_R) < 0.05;
+
+   detail = "valid=" + (sig.valid ? "yes" : "FAIL") +
+            " target=" + DoubleToString(sig.proposed_target, 5) +
+            " expectedTarget=" + DoubleToString(expectedTarget, 5) +
+            " rewardR=" + DoubleToString(sig.expected_reward_r, 3) +
+            " targetMatches=" + (targetMatches ? "yes" : "FAIL") +
+            " rewardMatches=" + (rewardMatches ? "yes" : "FAIL");
+   return sig.valid && targetMatches && rewardMatches;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 88: spread/cost guard rejects a triggered episode when spread |
+//| exceeds QB_TPV2_MAX_SPREAD_PTS, even though the lifecycle itself   |
+//| fully completed.                                                    |
+//+------------------------------------------------------------------+
+bool QBTestTPV2SpreadGuard(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 3400, 6, true);
+   market.spread_points = QB_TPV2_MAX_SPREAD_PTS + 5.0;
+   StrategySignal sig = strategy.EvaluateLong(market, f, regime);
+   bool rejected = !sig.valid;
+   bool reasonOK = (StringFind(sig.reason, "GEOM_REJECT_SPREAD") >= 0);
+
+   detail = "rejected=" + (rejected ? "yes" : "FAIL") + " reasonOK=" + (reasonOK ? "yes" : "FAIL");
+   return rejected && reasonOK;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 89: no-lookahead -- the impulse extreme after bar N reflects  |
+//| only bars up to and including N, never a later bar's data.         |
+//+------------------------------------------------------------------+
+bool QBTestTPV2NoLookahead(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 3500, 2); // IMPULSE_ACTIVE entry, bar1 high = M+1.0*d
+   double extremeAfterEntry = strategy.GetImpulseExtreme();
+   double d = f.atr; double M = market.mid;
+   bool extremeMatchesEntryOnly = MathAbs(extremeAfterEntry - (M + 1.0 * d)) < 0.0001;
+
+   // Feed a much higher future bar -- extreme must NOT reflect it until processed.
+   f.calc_time = 3502;
+   f.closed_open = M + 1.0 * d;
+   f.closed_close = M + 5.0 * d; // far higher
+   f.closed_high = M + 5.0 * d; f.closed_low = M + 1.0 * d;
+   double extremeBeforeThisCall = strategy.GetImpulseExtreme();
+   bool unchangedBeforeCall = MathAbs(extremeBeforeThisCall - extremeAfterEntry) < 0.0001;
+   strategy.EvaluateLong(market, f, regime);
+   bool updatedAfterCall = MathAbs(strategy.GetImpulseExtreme() - (M + 5.0 * d)) < 0.0001;
+
+   detail = "extremeMatchesEntryOnly=" + (extremeMatchesEntryOnly ? "yes" : "FAIL") +
+            " unchangedBeforeCall=" + (unchangedBeforeCall ? "yes" : "FAIL") +
+            " updatedAfterCall=" + (updatedAfterCall ? "yes" : "FAIL");
+   return extremeMatchesEntryOnly && unchangedBeforeCall && updatedAfterCall;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 90: restart/reset semantics -- re-Init mid-episode clears all |
+//| residual state and a fresh episode can be driven cleanly.          |
+//+------------------------------------------------------------------+
+bool QBTestTPV2RestartResetSemantics(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine strategy; MarketSnapshot market; FeatureSnapshot f; RegimeState regime;
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 3600, 3); // mid-episode: PULLBACK_ACTIVE
+   bool midEpisode = (strategy.GetLifecyclePhase() == "pullback_active");
+
+   strategy.Init("TPV2_T90_RESTART", "t90", true, 0.0, adapter, TPV2_TRIGGER_REJECTION_CONFIRM, false);
+   bool resetClean = (strategy.GetLifecyclePhase() == "idle") &&
+                     (strategy.GetLifecycleDirection() == "none") &&
+                     (strategy.GetLifecycleBars() == 0) &&
+                     (strategy.GetImpulseStartTime() == 0);
+
+   // A fresh episode drives identically to a never-used engine (no residue).
+   QBDriveTPV2(adapter, strategy, market, f, regime, 1, 3700, 2);
+   bool freshEpisodeWorks = (strategy.GetLifecyclePhase() == "impulse_active");
+
+   detail = "midEpisode=" + (midEpisode ? "yes" : "FAIL") +
+            " resetClean=" + (resetClean ? "yes" : "FAIL") +
+            " freshEpisodeWorks=" + (freshEpisodeWorks ? "yes" : "FAIL");
+   return midEpisode && resetClean && freshEpisodeWorks;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 91: V1/V2 lifecycle version and vocabulary isolation.         |
+//+------------------------------------------------------------------+
+bool QBTestTPV1V2Isolation(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackEngine v1;
+   CTrendPullbackV2Engine v2;
+   bool versionsDiffer = (v1.GetLifecycleVersion() == 1) && (v2.GetLifecycleVersion() == 2);
+
+   MarketSnapshot m1; FeatureSnapshot f1; RegimeState r1;
+   QBDriveTPToResumeCandidate(adapter, v1, m1, f1, r1, 1, 3800);
+   StrategySignal rej1 = v1.EvaluateLong(m1, f1, r1);
+   bool v1TagsVersion1 = (StringFind(rej1.reason, "lifecycleVersion=1") >= 0);
+
+   MarketSnapshot m2; FeatureSnapshot f2; RegimeState r2;
+   QBDriveTPV2(adapter, v2, m2, f2, r2, 1, 3900, 3);
+   StrategySignal rej2 = v2.EvaluateLong(m2, f2, r2);
+   bool v2TagsVersion2 = (StringFind(rej2.reason, "lifecycleVersion=2") >= 0);
+
+   // Disjoint phase vocabularies -- V1's "resume_candidate" never appears in
+   // V2's label set and V2's "resumption_armed"/"triggered" never appear in V1's.
+   bool vocabDisjoint = (v1.GetLifecyclePhase() != "resumption_armed") &&
+                        (v1.GetLifecyclePhase() != "triggered") &&
+                        (v2.GetLifecyclePhase() != "resume_candidate");
+
+   detail = "versionsDiffer=" + (versionsDiffer ? "yes" : "FAIL") +
+            " v1TagsVersion1=" + (v1TagsVersion1 ? "yes" : "FAIL") +
+            " v2TagsVersion2=" + (v2TagsVersion2 ? "yes" : "FAIL") +
+            " vocabDisjoint=" + (vocabDisjoint ? "yes" : "FAIL");
+   return versionsDiffer && v1TagsVersion1 && v2TagsVersion2 && vocabDisjoint;
+}
+
+//+------------------------------------------------------------------+
+//| TEST 92: no trading side effects while InpEnableTPV2Experimental   |
+//| (here, the constructor-level experimentalEnabled flag) is OFF --   |
+//| a fully triggered episode still never emits a valid signal; the    |
+//| identical bar sequence with the flag ON does.                      |
+//+------------------------------------------------------------------+
+bool QBTestTPV2NoSideEffectsWhenExperimentalOff(CSymbolAdapter &adapter, string &detail)
+{
+   CTrendPullbackV2Engine off; MarketSnapshot mo; FeatureSnapshot fo; RegimeState ro;
+   QBDriveTPV2(adapter, off, mo, fo, ro, 1, 4000, 6, false);
+   StrategySignal sigOff = off.EvaluateLong(mo, fo, ro);
+   bool offNeverValid = !sigOff.valid;
+   bool offReasonTagged = (StringFind(sigOff.reason, "TPV2_EXPERIMENTAL_DISABLED") >= 0);
+   bool offReachedTriggered = (off.GetLifecyclePhase() == "triggered"); // lifecycle itself still completes
+
+   CTrendPullbackV2Engine on; MarketSnapshot mn; FeatureSnapshot fn; RegimeState rn;
+   QBDriveTPV2(adapter, on, mn, fn, rn, 1, 4100, 6, true);
+   StrategySignal sigOn = on.EvaluateLong(mn, fn, rn);
+   bool onValid = sigOn.valid;
+
+   detail = "offNeverValid=" + (offNeverValid ? "yes" : "FAIL") +
+            " offReasonTagged=" + (offReasonTagged ? "yes" : "FAIL") +
+            " offReachedTriggered=" + (offReachedTriggered ? "yes" : "FAIL") +
+            " onValid=" + (onValid ? "yes" : "FAIL");
+   return offNeverValid && offReasonTagged && offReachedTriggered && onValid;
 }
 
 #endif // QB_SAFETYTESTS_MQH

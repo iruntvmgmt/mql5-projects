@@ -356,7 +356,7 @@ struct ChallengeState
 //+------------------------------------------------------------------+
 struct KillSwitchState
 {
-   bool strategy_kill[4];       // Per-strategy kill (BO,FBO,TP,MR)
+   bool strategy_kill[5];       // Per-strategy kill (BO,FBO,TP,MR,TPV2) -- keep in sync with QB_STRAT_COUNT
    bool entry_kill;             // Block all new entries
    bool symbol_kill;            // Block XAUUSD
    bool cancel_all;             // Cancel all pending
