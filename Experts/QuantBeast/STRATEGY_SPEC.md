@@ -146,15 +146,26 @@ Enter an established directional move after a controlled pullback and momentum r
   threshold is not a production input and does not change TP eligibility.
   Rejection diagnostics also serialize the lifecycle's nominated direction
   (`up`, `down`, or `none`) independently of the BUY/SELL evaluation row.
+- An observation-only, side-effect-free forward-outcome tracker
+  (`CTPOutcomeTracker`) registers one frozen event per naturally reached
+  `resume_candidate` and measures forward MFE/MAE, close return, and
+  +-0.25/0.50/1.00 ATR threshold reaches over 3/6/12/24-bar horizons, writing
+  `TPOutcomeJournal.csv`. It cannot create a signal or touch risk/arbitration.
 - Stop is beyond the recent swing/range plus ATR.
 - Target is fixed extension R.
 
 ### Required completion
 
-- Measure side-effect-free forward outcomes for direction-attributed,
-  naturally reached resume candidates before considering candidate logic.
-  Three independent exact-byte-bounded windows now prove the
-  full lifecycle is reachable, but not that resumption has an edge.
+- Six independent exact-byte-bounded windows now prove the full lifecycle
+  is reachable (16 unique registered resume events), and the forward-outcome
+  tracker has now measured them: **no reliable directional information found**
+  (the two largest-n windows point in opposite directions). Expand evidence
+  collection across more windows before revisiting whether resumption has an
+  edge -- see `TestEvidence/tp_forward_outcome_20260722/README.md`. Do not
+  weaken `EligibilityFailure()`'s `regime.structure` requirement based on this
+  result alone; the mismatch between the TP-specific lifecycle seed and the
+  shared structural classifier is a documented, intentional design tension,
+  not yet shown to be hiding a real edge.
 - Implement actual trigger modes such as rejection, micro-break, close confirmation, or retest.
 - Add trend maturity/exhaustion constraints.
 - Add failed-continuation, regime-deterioration, session, and time exits.

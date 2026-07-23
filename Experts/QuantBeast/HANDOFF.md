@@ -1,5 +1,59 @@
 # QuantBeast Handoff
 
+## 2026-07-22 — TP forward-outcome tracker built and run: no reliable directional information found
+
+- Built `CTPOutcomeTracker` (`Include/QuantBeast/Analytics/TPOutcomeTracker.mqh`),
+  an observation-only tracker that registers one frozen event per naturally
+  reached `resume_candidate` bar and measures forward MFE/MAE, close return,
+  and +-0.25/0.50/1.00 ATR threshold reaches over predeclared 3/6/12/24-bar
+  horizons, writing `TPOutcomeJournal.csv`. It cannot create a signal or touch
+  risk/arbitration/eligibility — its API only reads `MarketSnapshot`/
+  `FeatureSnapshot`/`RegimeState`/`CTrendPullbackEngine` accessors.
+- Re-audited `TrendPullbackEngine.mqh`'s lifecycle for future leakage and
+  BUY/SELL shared-state risk: no defect found, no engine file changed. The
+  BUY/SELL risk is neutralized by the existing `calc_time` dedupe plus
+  `resume_candidate`'s single-bar-only lifetime.
+- Added 10 deterministic tests (65-74): event-ID determinism, one-event-per-bar
+  registration despite BUY/SELL pairing, MFE/MAE sign orientation both
+  directions, direction immutability, no-lookahead, truncated-vs-complete
+  horizon status, no trading side effects, reinit-no-duplication, same-bar
+  threshold ambiguity, and retracement-depth math including the degenerate
+  zero-span skip. Compile: `0 errors, 0 warnings`, 47,443 ms. Shadow
+  regression: `77 passed, 0 failed` (was 67; +10 new), 22,080 ticks, 1,104
+  bars, natural completion.
+- Added `Tools/tp_outcome_report.py` (per-horizon MFE/MAE/ratio/target-before-
+  adverse stats, Baseline B direction-shuffled comparison) and
+  `Tools/tp_rejection_attribution_report.py` (per-event production
+  rejection-path join against `SignalJournal.csv`).
+- Reran the 3 previously-validated windows plus 3 new untouched windows
+  (2026-01-26..30, 2026-02-16..20, 2026-06-20..24), all XAUUSD M5 Model=4. The
+  3 reruns reproduced the prior session's exact phase counts byte-for-byte —
+  full determinism confirmed. Across all 6 windows: 3,186 TP decisions, 32
+  `resume_candidate` rows = 16 unique registered events, still zero risk/stop
+  evaluations and zero accepted signals.
+- Forward-outcome result: pooled n=16, H24 median MFE 2.33 ATR vs. median MAE
+  1.58 ATR (fav/adv ratio 1.48), but the two largest-n contributing windows
+  point in **opposite directions** (2025-01-06 n=4 strongly favorable;
+  2026-02-16 n=7 adverse). **Conclusion: Outcome A — no reliable directional
+  information.** Not enough samples, and the effect does not survive a
+  by-window check. No candidate logic proposed.
+- Phase 6 rejection-path attribution: all 16 events were rejected at
+  `EligibilityFailure()` on the nominated side, before geometry was ever
+  computed — 11/16 on `structure not impulse/pullback state=STRUCTURE_BALANCED`
+  (the TP-specific lifecycle seed and the shared `regime.structure` classifier
+  define different resumption hypotheses and often disagree at the same bar,
+  by design — see the "deliberately does not alter `EligibilityFailure()`"
+  comment already in the engine), 5/16 on raw `directional efficiency` below
+  the 0.40 floor (plausibly a true quality filter).
+- The read-only `get_chart_history` MCP call now returns real bar data for
+  2026-dated windows (confirmed for 2026-02-16) but still returns empty for
+  the 2025-01-06 range — a new, usable finding for baselines A/C/D in a future
+  pass; full construction was judged disproportionate to this pass's n=16,
+  cross-window-inconsistent result and was not completed.
+- No TP eligibility, risk, arbitration, or geometry logic changed. No broker
+  orders transmitted. Readiness remains exactly `READY FOR SHADOW MODE`.
+- Evidence: `TestEvidence/tp_forward_outcome_20260722/README.md`.
+
 ## 2026-07-22 — TP lifecycle direction attribution added
 
 - Three-window evidence exposed an attribution ambiguity: each completed

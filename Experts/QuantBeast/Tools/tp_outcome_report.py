@@ -36,12 +36,43 @@ csv.field_size_limit(sys.maxsize)
 
 HORIZONS = ("H3", "H6", "H12", "H24")
 
+# TPOutcomeJournal.csv writes its header exactly once, at file creation --
+# never at the start of an exact-byte-bounded evidence slice, which always
+# starts after some prior baseline offset. So a slice's first line is almost
+# always a data row, not a header; only a read starting at byte 0 sees the
+# real header. Detect that case explicitly rather than assume DictReader's
+# default (treat line 1 as header), which would silently drop a real event
+# and misalign every field into the wrong column.
+CONTEXT_COLUMNS = [
+    "EventID", "Symbol", "SchemaVersion", "RegistrationTime", "Direction", "RefPrice", "ATR_Ref",
+    "SeedSource", "ImpulseStartTime", "ImpulseStartPrice", "ImpulseExtreme", "ImpulseSpanATR",
+    "RetracementDepth", "LifecycleBars", "RegimeTrend", "RegimeVol", "RegimeStructure", "Session",
+    "SpreadPoints", "DirEfficiency", "TrendPersistence", "SlopeNorm", "Displacement", "FinalizeReason",
+]
+HORIZON_COLUMNS = [
+    suffix.format(h=h)
+    for h in HORIZONS
+    for suffix in (
+        "{h}_MFE_ATR", "{h}_MAE_ATR", "{h}_CloseReturn_ATR",
+        "{h}_Reached_p25", "{h}_Reached_p50", "{h}_Reached_p100",
+        "{h}_ReachedNeg_p25", "{h}_ReachedNeg_p50", "{h}_ReachedNeg_p100",
+        "{h}_FirstThreshold", "{h}_BarsToMFE", "{h}_BarsToMAE", "{h}_Status",
+    )
+]
+TP_OUTCOME_COLUMNS = CONTEXT_COLUMNS + HORIZON_COLUMNS
+
 
 def rows(path: Path, offset: int = 0, end_offset: int | None = None):
     lines = [line for line in decode(path, offset, end_offset).splitlines() if line.strip()]
     if not lines:
         return
-    yield from csv.DictReader(lines)
+    first = [cell.strip() for cell in next(csv.reader([lines[0]]))]
+    headered = "EventID" in first and "H3_MFE_ATR" in first
+    if headered:
+        yield from csv.DictReader(lines)
+        return
+    for raw in csv.reader(lines):
+        yield dict(zip(TP_OUTCOME_COLUMNS, raw))
 
 
 def to_float(row: dict, key: str):

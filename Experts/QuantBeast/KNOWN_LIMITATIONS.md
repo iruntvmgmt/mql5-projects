@@ -16,11 +16,21 @@
   TP-specific fallback seed now records completed-bar time/open, directional
   extreme, source, and ATR span when existing persistence/efficiency floors and
   a fixed 0.30 ATR research threshold are met. That threshold is not a
-  production configuration. Three independent organic generated-tick windows
-  proved seed, impulse, and retracing reachability; two reached resumption.
-  Lifecycle direction is now serialized independently of direction-paired
-  evaluation rows, but forward resumption outcomes remain unmeasured, so entry
-  validity remains unproven.
+  production configuration. Six independent organic generated-tick windows
+  (XAUUSD M5, Model=4) now prove seed, impulse, retracing, and resumption
+  reachability, with 16 unique registered `resume_candidate` events. A
+  broker-free, side-effect-free forward-outcome tracker (`TPOutcomeTracker.mqh`)
+  measured forward MFE/MAE over these 16 events and found **no reliable
+  directional information**: the two largest-n contributing windows point in
+  opposite directions (2025-01-06 n=4 favorable, 2026-02-16 n=7 adverse), so
+  the pooled result is not a stable property of the lifecycle. All 16 events
+  were independently rejected by production `EligibilityFailure()` before
+  geometry was ever computed -- mostly because the TP-specific lifecycle seed
+  and the shared `regime.structure` classifier define different resumption
+  hypotheses and frequently disagree at the same bar (by design, per the
+  engine's own "does not alter `EligibilityFailure()`" comment). Entry
+  validity and edge remain unproven; see
+  `TestEvidence/tp_forward_outcome_20260722/README.md`.
 
 - The final source compiles at `0 errors, 0 warnings`, but compilation is not runtime proof.
 - The native MT5 tester API still returns the invalid/ambiguous identifier `job_id: 0` and reports `tester stopped`; local agent logs must be inspected to confirm completion.
