@@ -1,6 +1,6 @@
 # Unified all-strategy window matrix (Part E)
 
-**Status: IN PROGRESS.** Updated as each window completes.
+**Status: COMPLETE.** All 6 windows finished naturally.
 
 Six XAUUSD M5 Model=4 (real-tick) windows, run sequentially last in this
 sprint (per the user's explicit build-then-test instruction), after TP V2,
@@ -36,59 +36,75 @@ question):
 | 2 | 2025-01-06 -- 2025-01-07 | Reused (regression reproduction) | Complete | 240,447 | 276 |
 | 3 | 2026-02-16 -- 2026-02-20 | Reused (largest V1 TP window) | Complete | 1,030,228 | 1,074 |
 | 4 | 2026-06-20 -- 2026-06-24 | Reused (regression reproduction) | Complete | 863,499 | 552 |
-| 5 | 2026-03-30 -- 2026-04-07 | Untouched | Running | -- | -- |
-| 6 | 2026-06-22 -- 2026-06-23 | Untouched | Pending | -- | -- |
+| 5 | 2026-03-30 -- 2026-04-07 | Untouched | Complete | 2,005,023 | 1,379 |
+| 6 | 2026-06-22 -- 2026-06-23 | Untouched | Complete | 417,423 | 276 |
+| **Total** | | | | **4,929,361** | **3,833** |
 
-Run manifests: `../run_manifests/run0N_*.md`. All four completed runs finished
-naturally (`Test passed`, `thread finished`, single Initializing/Deinitializing
-pair each); several needed 2-8 launch-request retries before the tester agent
-actually started (a known no-op quirk of this MCP integration, not a data
--quality issue -- confirmed via zero journal growth and no `metatester64`
-process on each no-op).
+Run manifests: `../run_manifests/run0N_*.md`. All six runs finished naturally
+(`Test passed`, `thread finished`, single Initializing/Deinitializing pair
+each, final balance $10,000.00 in every run). Several needed repeated
+launch-request retries (2-10x) before the tester agent actually started -- a
+known no-op quirk of this MCP integration (confirmed transient and unrelated
+to data quality via zero journal growth / no `metatester64` process on each
+no-op, and `server_connected: true` throughout via `get_trading_account_info`);
+never affected a run once it actually started. See individual run manifests
+for exact retry counts and the one network-reconnect event observed
+(2026-07-22 23:53:47, prior to run 5's launch attempts).
 
-## Pooled summary (4 of 6 windows; updated again once all 6 complete)
+## Pooled summary -- all 6 windows, 17,220 total per-strategy signal-decision rows
 
-**Organic acceptance funnel, pooled across runs 1-4 (2,932 total per-strategy decision rows):**
+**Organic acceptance funnel, pooled across all 6 windows:**
 
-| Strategy | Accepted (run01/02/03/04) | Total accepted | Windows with >=1 acceptance |
+| Strategy | Accepted (run01/02/03/04/05/06) | Total accepted | Windows with >=1 acceptance |
 |---|---|---:|---:|
-| BO | 0 / 0 / 0 / 1 | 1 | 1 of 4 |
-| FBO | 3 / 5 / 12 / 7 | 27 | 4 of 4 |
-| MR | 3 / 1 / 2 / 3 | 9 | 4 of 4 |
-| TP (V1) | 0 / 0 / 0 / 0 | 0 | 0 of 4 |
-| TP V2 | 0 / 0 / 0 / 0 (experimental gate forces this; see lifecycle table) | 0 | n/a -- see TRIGGERED reachability below |
+| BO | 0/0/0/1/0/0 | 1 | 1 of 6 |
+| FBO | 3/5/12/7/2/5 | 34 | 6 of 6 |
+| MR | 3/1/2/3/3/1 | 13 | 6 of 6 |
+| TP (V1) | 0/0/0/0/0/0 | 0 | 0 of 6 |
+| TP V2 | 0/0/0/0/0/0 (experimental gate forces this; see lifecycle table) | 0 | n/a -- see TRIGGERED reachability below |
 
-FBO and MR organically reach `ACCEPTED` in every window tested so far,
-consistent with `KNOWN_LIMITATIONS.md`'s existing finding. TP V1 reaches
-zero acceptances in all four, consistent with its frozen conclusion (no
-regression from adding TP V2 to the roster). BO reaches one acceptance in
-one window -- consistent with it being a real but infrequent path, not
-proof of a stable edge.
+FBO and MR organically reach `ACCEPTED` in **every single window tested**
+(6 of 6 each), consistent with `KNOWN_LIMITATIONS.md`'s existing finding.
+TP V1 reaches zero acceptances in all six, consistent with its frozen
+conclusion (no regression from adding TP V2 to the roster across any
+window, including the two genuinely untouched ones). BO reaches one
+acceptance in one window -- consistent with it being a real but infrequent
+path, not proof of a stable edge.
 
-**TP V2 lifecycle reachability, pooled across runs 1-4:**
+**TP V2 lifecycle reachability, pooled across all 6 windows:**
 
-| Phase reached | run01 | run02 | run03 | run04 |
-|---|---:|---:|---:|---:|
-| trend_qualified | yes (14) | yes (60) | yes (304) | yes (128) |
-| impulse_active | yes (4) | yes (16) | yes (34) | yes (8) |
-| pullback_active | yes (22) | yes (28) | yes (86) | yes (8) |
-| resumption_armed | no | yes (30) | yes (70) | no |
-| **triggered** | **no** | **yes (4 rows = 2 unique episodes)** | **yes (6 rows = 3 unique episodes)** | **no** |
-| expired | no | no | yes (2) | no |
+| Phase reached | 01 | 02 | 03 | 04 | 05 | 06 |
+|---|---:|---:|---:|---:|---:|---:|
+| trend_qualified | 14 | 60 | 304 | 128 | 356 | 142 |
+| impulse_active | 4 | 16 | 34 | 8 | 30 | 2 |
+| pullback_active | 22 | 28 | 86 | 8 | 110 | 14 |
+| resumption_armed | 0 | 30 | 70 | 0 | 42 | 0 |
+| **triggered** | **0** | **4 (2 episodes)** | **6 (3 episodes)** | **0** | **8 (4 episodes)** | **0** |
+| expired | 0 | 0 | 2 | 0 | 0 | 0 |
+| invalidated | 4 | 8 | 16 | 10 | 16 | 10 |
 
 Every state in the TP V2 lifecycle is organically reachable, including
-`TRIGGERED` (5 unique episodes across 2 of 4 windows so far) -- this is
-real evidence, not a unit-fixture artifact. Of those 5 TRIGGERED episodes'
-geometry outcomes (nominated-direction side only): 2 x `TPV2_EXPERIMENTAL_DISABLED`
+`TRIGGERED` (**9 unique episodes across 3 of 6 windows**, both reused and
+untouched) -- this is real market-driven evidence, not a unit-fixture
+artifact. Of those 9 TRIGGERED episodes' geometry outcomes
+(nominated-direction side only, pooled): **4 x `TPV2_EXPERIMENTAL_DISABLED`**
 (geometry/spread/confidence all passed -- would have traded if the
-experimental flag were on) and 3 x `GEOM_REJECT_LOW_CONFIDENCE` (trigger
-fired but confidence gate failed). No `GEOM_REJECT_SPREAD` or
-`GEOM_REJECT_INSUFFICIENT_RR` observed yet in this sample.
+experimental flag were on) and **5 x `GEOM_REJECT_LOW_CONFIDENCE`** (trigger
+fired but the confidence gate failed). No `GEOM_REJECT_SPREAD` or
+`GEOM_REJECT_INSUFFICIENT_RR` observed in any window -- the confidence
+gate is the only geometry-side bottleneck seen so far.
 
-**Not yet claimed:** any edge, win rate, or profitability for TP V2 -- n=5
-triggered episodes across 2 windows is far too small, and none were ever
-live/experimental-enabled. This table is reachability evidence only.
+**Not claimed:** any edge, win rate, or profitability for TP V2 -- n=9
+triggered episodes across 6 windows is far too small for any such claim,
+and `InpEnableTPV2Experimental` was `false` throughout every run (zero
+signals ever reached arbitration/risk/execution). This table is
+organic-reachability evidence only, exactly as Part H requires before any
+`DEMO_READY` consideration.
 
-_(Final pooled numbers across all 6 windows, plus the strategy-performance
-join and readiness labels, follow in the final production-readiness
-report once runs 5-6 complete.)_
+**Strategy performance (completed trades, all Shadow mode, joined
+candidate-through-exit):** 48 completed trades pooled across all 6 windows
+(6+6+14+11+5+6), 100% joined to their accepting SignalJournal row in every
+window (48/48) -- see individual `run0N_*_performance.md` for per-window
+win-rate/R/MFE/MAE detail. All FBO and MR; TP V1 and TP V2 contributed zero
+trades (as expected -- TP V1 never accepts, TP V2's experimental flag was
+off throughout).
