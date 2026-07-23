@@ -3546,4 +3546,146 @@ bool QBTestAllocationEngineIncludesTPV2(string &detail)
    return equalStaysOne && confidenceDistinct && performanceDistinct;
 }
 
+//+------------------------------------------------------------------+
+//| Phase 7 (follow-on sprint): TP V2 recognized correctly by the      |
+//| central risk engine and sizer -- accepted on valid geometry,       |
+//| rejected on malformed stop / low R:R, and sized identically to     |
+//| another strategy given identical entry/stop/equity (proving the    |
+//| "central risk contract" claim empirically, not just by reading     |
+//| that CalculateLots/ValidateTrade take no strategy-specific branch).|
+//+------------------------------------------------------------------+
+bool QBTestTPV2RiskEngineAcceptance(CSymbolAdapter &adapter, CPositionSizer &sizer, string &detail)
+{
+   CRiskEngine risk;
+   risk.Init(adapter, sizer, 2.0, 1.0, 1, 100000, 1440, 60,
+             5.0, 10.0, 20.0, 5, 0.0, 1.0,
+             20, 20, 100.0, 20, 100);
+   risk.InitDailyTracking(10000.0, 10000.0, TimeCurrent(),
+                          10000.0, TimeCurrent(), 10000.0,
+                          false, false, false, 0);
+
+   string reason = "";
+
+   // Case 1: valid TPV2 SELL signal (correct geometry, R:R above minimum,
+   // reasonable stop distance, confidence above the floor) is accepted.
+   StrategySignal validSig;
+   ZeroMemory(validSig);
+   validSig.valid = true;
+   validSig.strategy_id = STRATEGY_ID_TREND_PULLBACK_V2;
+   validSig.direction = ORDER_TYPE_SELL;
+   validSig.proposed_entry = 2700.0;
+   validSig.proposed_stop = 2706.0;
+   validSig.proposed_target = 2688.0;
+   validSig.expected_reward_r = 2.0;
+   validSig.confidence = 0.60;
+   bool acceptedValid = risk.ValidateTrade(validSig, 10000.0, 10000.0, 500.0,
+                                            0, 0, 0.0, 0, 0, reason);
+
+   // Case 2: malformed stop -- for a SELL, stop must be ABOVE entry; here
+   // it is below, an invalid geometry that must be rejected regardless of
+   // strategy.
+   StrategySignal badStopSig = validSig;
+   badStopSig.proposed_stop = 2694.0; // wrong side for a SELL
+   bool rejectedBadStop = !risk.ValidateTrade(badStopSig, 10000.0, 10000.0, 500.0,
+                                               0, 0, 0.0, 0, 0, reason);
+   bool badStopReasonCorrect = (StringFind(reason, "geometry") >= 0);
+
+   // Case 3: low expected reward:risk must be rejected.
+   StrategySignal lowRSig = validSig;
+   lowRSig.expected_reward_r = 0.5; // below m_minRewardRisk=1.0
+   bool rejectedLowR = !risk.ValidateTrade(lowRSig, 10000.0, 10000.0, 500.0,
+                                            0, 0, 0.0, 0, 0, reason);
+   bool lowRReasonCorrect = (StringFind(reason, "Reward") >= 0);
+
+   // Case 4: sizing consistency -- an identical entry/stop/equity produces
+   // the identical lot size whether the signal is TPV2 or BO (CalculateLots
+   // takes no strategy_id at all; this proves it empirically).
+   string sizeReason = "";
+   double lotsForTPV2 = sizer.CalculateLots(validSig.proposed_entry, validSig.proposed_stop,
+                                             10000.0, 50.0, sizeReason);
+   StrategySignal boSig = validSig;
+   boSig.strategy_id = STRATEGY_ID_BREAKOUT;
+   double lotsForBO = sizer.CalculateLots(boSig.proposed_entry, boSig.proposed_stop,
+                                           10000.0, 50.0, sizeReason);
+   bool sizingIdentical = MathAbs(lotsForTPV2 - lotsForBO) < 0.0000001;
+
+   // Case 5: the sized TPV2 trade also clears ValidateSizedTrade using the
+   // same central sizer-risk-estimate path as any other strategy.
+   bool sizedAccepted = risk.ValidateSizedTrade(validSig, lotsForTPV2, 10000.0, 0.0, reason);
+
+   detail = "acceptedValid=" + (acceptedValid ? "yes" : "FAIL") +
+            " rejectedBadStop=" + (rejectedBadStop && badStopReasonCorrect ? "yes" : "FAIL") +
+            " rejectedLowR=" + (rejectedLowR && lowRReasonCorrect ? "yes" : "FAIL") +
+            " sizingIdentical(tpv2=" + DoubleToString(lotsForTPV2, 3) +
+            ",bo=" + DoubleToString(lotsForBO, 3) + ")=" + (sizingIdentical ? "yes" : "FAIL") +
+            " sizedAccepted=" + (sizedAccepted ? "yes" : "FAIL");
+   return acceptedValid && rejectedBadStop && badStopReasonCorrect &&
+          rejectedLowR && lowRReasonCorrect && sizingIdentical && sizedAccepted;
+}
+
+//+------------------------------------------------------------------+
+//| Phase 9 (follow-on sprint): restart-persistence round-trip for TP  |
+//| V2's kill-switch flag and daily trade counter. Both               |
+//| Save/LoadKillSwitchState and Save/LoadStrategyTradeCounters wrote  |
+//| and read exactly four strategies' GlobalVariables (BO/FBO/TP/MR)   |
+//| even after TP V2 became a fifth strategy -- silently losing TP     |
+//| V2's kill state and daily count across every restart. Fixed in     |
+//| this same commit; this test proves the fix and guards against      |
+//| regression.                                                        |
+//+------------------------------------------------------------------+
+bool QBTestTPV2RestartPersistence(string &detail)
+{
+   string originalScope = GetStateScopeSymbol();
+   SetStateScopeSymbol("QBTEST_RESTART_PERSIST_" + IntegerToString((int)TimeCurrent()));
+
+   // --- Kill-switch round trip ---
+   KillSwitchState saved;
+   ZeroMemory(saved);
+   saved.strategy_kill[QB_STRAT_IDX_BO]   = false;
+   saved.strategy_kill[QB_STRAT_IDX_FBO]  = false;
+   saved.strategy_kill[QB_STRAT_IDX_TP]   = false;
+   saved.strategy_kill[QB_STRAT_IDX_MR]   = false;
+   saved.strategy_kill[QB_STRAT_IDX_TPV2] = true; // only TPV2 killed
+   SaveKillSwitchState(saved);
+
+   KillSwitchState loaded;
+   LoadKillSwitchState(loaded);
+   bool tpv2KillSurvived = loaded.strategy_kill[QB_STRAT_IDX_TPV2] == true;
+   bool othersStillFalse = !loaded.strategy_kill[QB_STRAT_IDX_BO] &&
+                           !loaded.strategy_kill[QB_STRAT_IDX_FBO] &&
+                           !loaded.strategy_kill[QB_STRAT_IDX_TP] &&
+                           !loaded.strategy_kill[QB_STRAT_IDX_MR];
+
+   // --- Daily trade counter round trip ---
+   int savedCounts[];
+   ArrayResize(savedCounts, QB_STRAT_COUNT);
+   ArrayInitialize(savedCounts, 0);
+   savedCounts[QB_STRAT_IDX_BO]   = 1;
+   savedCounts[QB_STRAT_IDX_FBO]  = 2;
+   savedCounts[QB_STRAT_IDX_TP]   = 3;
+   savedCounts[QB_STRAT_IDX_MR]   = 4;
+   savedCounts[QB_STRAT_IDX_TPV2] = 7;
+   SaveStrategyTradeCounters(TimeCurrent(), savedCounts);
+
+   datetime loadedDay;
+   int loadedCounts[];
+   ArrayResize(loadedCounts, QB_STRAT_COUNT);
+   bool loadedOk = LoadStrategyTradeCounters(loadedDay, loadedCounts);
+   bool tpv2CountSurvived = loadedOk && loadedCounts[QB_STRAT_IDX_TPV2] == 7;
+   bool othersCountCorrect = loadedOk &&
+                             loadedCounts[QB_STRAT_IDX_BO] == 1 &&
+                             loadedCounts[QB_STRAT_IDX_FBO] == 2 &&
+                             loadedCounts[QB_STRAT_IDX_TP] == 3 &&
+                             loadedCounts[QB_STRAT_IDX_MR] == 4;
+
+   ClearAllState();
+   SetStateScopeSymbol(originalScope);
+
+   detail = "tpv2KillSurvived=" + (tpv2KillSurvived ? "yes" : "FAIL") +
+            " othersStillFalse=" + (othersStillFalse ? "yes" : "FAIL") +
+            " tpv2CountSurvived=" + (tpv2CountSurvived ? "yes" : "FAIL") +
+            " othersCountCorrect=" + (othersCountCorrect ? "yes" : "FAIL");
+   return tpv2KillSurvived && othersStillFalse && tpv2CountSurvived && othersCountCorrect;
+}
+
 #endif // QB_SAFETYTESTS_MQH

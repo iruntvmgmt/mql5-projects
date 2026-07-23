@@ -15,3 +15,10 @@ b0589af841bbce681061e54be4ac60e55e059869e153291d49fedb52aa89e00b  Profiles/Teste
 295620a98758b4f6a3c10b81447868d66e43e3da83e9bb27f1489bd72c374065  Profiles/Tester/QuantBeastEA.XAUUSD.M5.20260126_20260130.400.ini
 070e09e9c29b375d7294430fc1444aa66243fa45a6ce97685cbfd304f4ee555e  Profiles/Tester/QuantBeastEA.XAUUSD.M5.20260216_20260220.400.ini
 205e12868baeb72b7666ee6364f2ae1457f04d5538ef45df51f38d9b90ceb627  Profiles/Tester/QuantBeastEA.XAUUSD.M5.20260620_20260624.400.ini
+
+## Follow-on sprint, Phases 6-14 (this batch, 2026-07-23, EX5 compiled 12:51)
+640d1eebe3358a46840aeefbd18c59ff39577435b3c396533dc1da581d0eadcb  Experts/QuantBeast/QuantBeastEA.ex5 (current build, 105 tests passed 0 failed)
+670cafc7b0a3d345666bd087eb5f5d76500601102eaf2472cd75cbb93db5daec  Experts/QuantBeast/QuantBeastEA.mq5
+60dbc887e06e7aa3011499efd789a0acf4b1ce24de0542692aabcb880b76e132  Include/QuantBeast/Core/StateStore.mqh
+779f1b274d10f85624c56385348cfc1d21140bae5bd086e246df75166a450b76  Include/QuantBeast/Core/Configuration.mqh
+a7af870b9165c024a09d3b171136e1e78c49ddb33290387e594ec580ded5fd25  Include/QuantBeast/Testing/SafetyTests.mqh

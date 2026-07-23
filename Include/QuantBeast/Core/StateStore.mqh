@@ -33,6 +33,7 @@
 #define GV_STRAT_TRADES_FBO    GV_PREFIX "StratTradesFBO"
 #define GV_STRAT_TRADES_TP     GV_PREFIX "StratTradesTP"
 #define GV_STRAT_TRADES_MR     GV_PREFIX "StratTradesMR"
+#define GV_STRAT_TRADES_TPV2   GV_PREFIX "StratTradesTPV2"
 #define GV_ARB_LAST_ACCEPT     GV_PREFIX "ArbLastAccept"
 #define GV_ARB_RECENT_COUNT    GV_PREFIX "ArbRecentCount"
 #define GV_ARB_RECENT_HASH     GV_PREFIX "ArbRecentHash"
@@ -55,6 +56,7 @@
 #define GV_KILL_STRAT_FBO      GV_PREFIX "KillFBO"
 #define GV_KILL_STRAT_TP       GV_PREFIX "KillTP"
 #define GV_KILL_STRAT_MR       GV_PREFIX "KillMR"
+#define GV_KILL_STRAT_TPV2     GV_PREFIX "KillTPV2"
 #define GV_EMERGENCY           GV_PREFIX "Emergency"
 #define GV_STATE_VERSION       GV_PREFIX "StateVer"
 
@@ -238,6 +240,7 @@ void SaveKillSwitchState(const KillSwitchState &state)
    GV_WriteDouble(GV_KILL_STRAT_FBO, state.strategy_kill[QB_STRAT_IDX_FBO] ? 1.0 : 0.0);
    GV_WriteDouble(GV_KILL_STRAT_TP, state.strategy_kill[QB_STRAT_IDX_TP] ? 1.0 : 0.0);
    GV_WriteDouble(GV_KILL_STRAT_MR, state.strategy_kill[QB_STRAT_IDX_MR] ? 1.0 : 0.0);
+   GV_WriteDouble(GV_KILL_STRAT_TPV2, state.strategy_kill[QB_STRAT_IDX_TPV2] ? 1.0 : 0.0);
    GV_WriteDouble(GV_EMERGENCY, state.emergency ? 1.0 : 0.0);
 }
 
@@ -255,6 +258,7 @@ void LoadKillSwitchState(KillSwitchState &state)
    state.strategy_kill[QB_STRAT_IDX_FBO] = GV_ReadDouble(GV_KILL_STRAT_FBO, 0) > 0.5;
    state.strategy_kill[QB_STRAT_IDX_TP]  = GV_ReadDouble(GV_KILL_STRAT_TP, 0) > 0.5;
    state.strategy_kill[QB_STRAT_IDX_MR]  = GV_ReadDouble(GV_KILL_STRAT_MR, 0) > 0.5;
+   state.strategy_kill[QB_STRAT_IDX_TPV2] = GV_ReadDouble(GV_KILL_STRAT_TPV2, 0) > 0.5;
    state.emergency = GV_ReadDouble(GV_EMERGENCY, 0) > 0.5;
    if(state.emergency) state.emergency_reason = "Restored persisted emergency lock";
 }
@@ -266,6 +270,7 @@ void SaveStrategyTradeCounters(datetime tradeDay, const int &counts[])
    GV_WriteDouble(GV_STRAT_TRADES_FBO, (double)counts[QB_STRAT_IDX_FBO]);
    GV_WriteDouble(GV_STRAT_TRADES_TP,  (double)counts[QB_STRAT_IDX_TP]);
    GV_WriteDouble(GV_STRAT_TRADES_MR,  (double)counts[QB_STRAT_IDX_MR]);
+   GV_WriteDouble(GV_STRAT_TRADES_TPV2, (double)counts[QB_STRAT_IDX_TPV2]);
 }
 
 bool LoadStrategyTradeCounters(datetime &tradeDay, int &counts[])
@@ -278,6 +283,7 @@ bool LoadStrategyTradeCounters(datetime &tradeDay, int &counts[])
    counts[QB_STRAT_IDX_FBO] = MathMax(0, (int)GV_ReadDouble(GV_STRAT_TRADES_FBO, 0));
    counts[QB_STRAT_IDX_TP]  = MathMax(0, (int)GV_ReadDouble(GV_STRAT_TRADES_TP, 0));
    counts[QB_STRAT_IDX_MR]  = MathMax(0, (int)GV_ReadDouble(GV_STRAT_TRADES_MR, 0));
+   counts[QB_STRAT_IDX_TPV2] = MathMax(0, (int)GV_ReadDouble(GV_STRAT_TRADES_TPV2, 0));
    return true;
 }
 
@@ -372,7 +378,7 @@ void ClearAllState()
       GV_DAILY_LOCK, GV_WEEKLY_LOCK, GV_DRAWDOWN_LOCK, GV_CONSEC_LOSSES,
       GV_BROKER_FAILURES, GV_STRAT_TRADE_DAY,
       GV_STRAT_TRADES_BO, GV_STRAT_TRADES_FBO,
-      GV_STRAT_TRADES_TP, GV_STRAT_TRADES_MR,
+      GV_STRAT_TRADES_TP, GV_STRAT_TRADES_MR, GV_STRAT_TRADES_TPV2,
       GV_ARB_LAST_ACCEPT, GV_ARB_RECENT_COUNT,
       GV_CHALLENGE_STAGE, GV_STAGE_START_EQUITY, GV_STAGE_PEAK,
       GV_STAGE_ATTEMPTS, GV_STAGE_TARGET, GV_STAGE_RISK,
@@ -380,7 +386,7 @@ void ClearAllState()
       GV_CHAL_CASHFLOW_MSC, GV_CHAL_CASHFLOW_TICKET,
       GV_KILL_ENTRIES, GV_KILL_SYMBOL, GV_KILL_CANCEL, GV_KILL_FLATTEN,
       GV_KILL_STRAT_BO,
-      GV_KILL_STRAT_FBO, GV_KILL_STRAT_TP, GV_KILL_STRAT_MR,
+      GV_KILL_STRAT_FBO, GV_KILL_STRAT_TP, GV_KILL_STRAT_MR, GV_KILL_STRAT_TPV2,
       GV_EMERGENCY, GV_STATE_VERSION
    };
 

@@ -22,6 +22,27 @@ input bool     InpAcknowledgeLiveBrokerRisk = false; // Acknowledge Live Broker 
 input bool     InpAcknowledgeChallengeRisk = false; // Acknowledge Challenge Risk: Must be TRUE to enable Challenge Mode
 
 //+------------------------------------------------------------------+
+//| === GROUP: Strategy-Aware Demo/Live Allowlist ===                  |
+//| Per-strategy broker-submission authorization, separate from        |
+//| InpXX_Enabled. A strategy only reaches the broker in Conservative/ |
+//| Challenge modes if ALL SIX allowlist conditions hold:              |
+//|   StrategyEnabled AND StrategyMechanicallyReady (code-level, not   |
+//|   operator-settable -- see QBStrategyMechanicallyReady in          |
+//|   QuantBeastEA.mq5) AND StrategyDemoAuthorized (this group) AND    |
+//|   ModeAllowsStrategy (only the Conservative Demo tier -- Live mode |
+//|   connected to a verified DEMO account -- is currently sanctioned) |
+//|   AND GlobalLiveRiskAcknowledged (InpAcknowledgeLiveBrokerRisk)    |
+//|   AND BrokerPathAllowed (account/mode combination classifiable).  |
+//| TP V1 has no authorization input: it is permanently excluded from  |
+//| broker submission at the code level regardless of any flag here.   |
+//+------------------------------------------------------------------+
+input group "══════════ Strategy-Aware Demo/Live Allowlist ══════════"
+input bool     InpBO_DemoAuthorized   = false; // BO Demo/Live Authorized: separate from InpBO_Enabled, fail-closed default
+input bool     InpFBO_DemoAuthorized  = true;  // FBO Demo/Live Authorized: preserves the pre-existing FBO-only live candidate default
+input bool     InpMR_DemoAuthorized   = false; // MR Demo/Live Authorized: separate from InpMR_Enabled, fail-closed default
+input bool     InpTPV2_DemoAuthorized = false; // TP V2 Demo/Live Authorized: separate from InpTPV2_Enabled, fail-closed default
+
+//+------------------------------------------------------------------+
 //| === GROUP: Symbol and Broker ===                                  |
 //+------------------------------------------------------------------+
 input group "══════════ Symbol and Broker ══════════"
@@ -263,10 +284,10 @@ input double InpBreakevenTriggerR     = 0.5;     // Breakeven Trigger (R multipl
 input double InpBreakevenPlusPips     = 3.0;     // Breakeven Plus (points above entry)
 input bool   InpEnablePartialClose    = true;    // Enable Partial Close
 input double InpPartialClosePct       = 50.0;    // Partial Close (% of position)
-input double InpPartialCloseTriggerR  = 1.0;     // Partial Close Trigger (R multiple)
+input double InpPartialCloseTriggerR  = 0.7;     // Partial Close Trigger (R multiple) -- data-derived from measured MFE distribution (was 1.0, only reached by 22% of trades; 0.7 ~ p60)
 input bool   InpEnableATRTrail        = true;    // Enable ATR Trailing Stop
 input double InpATRTrailMultiplier    = 2.0;     // ATR Trail Multiplier
-input double InpATRTrailStartR        = 1.0;     // ATR Trail Start (R multiple)
+input double InpATRTrailStartR        = 0.7;     // ATR Trail Start (R multiple) -- data-derived from measured MFE distribution (was 1.0, only reached by 22% of trades; 0.7 ~ p60)
 input bool   InpEnableTimeStop        = false;   // Enable Time Stop
 input int    InpTimeStopMinutes       = 240;     // Time Stop (minutes)
 input bool   InpEnableMomentumExit    = false;   // Enable Momentum-Failure Exit

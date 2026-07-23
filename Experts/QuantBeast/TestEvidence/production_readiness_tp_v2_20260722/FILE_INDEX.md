@@ -51,6 +51,19 @@ runtime (vs. docs/tests/tooling only).
 | `TestEvidence/.../run_manifests/*.md` | Per-run manifests | No | self |
 | `TestEvidence/.../unified_strategy_matrix/*.md` | Per-window BO/FBO/MR/TPV1/TPV2 reports | No | self |
 
+## Follow-on sprint (`QuantBeast_Production_Readiness_Sprint.md`, HEAD `4ad4031`+)
+
+| File | Purpose | Runtime effect | Commit | Evidence |
+|---|---|---:|---|---|
+| `Include/QuantBeast/Execution/PositionManager.mqh` | `QBIsKnownStrategyId()` missing TPV2 case | Yes (fixes real-fill/restart comment-parsing for TPV2) | `27173da` | Phase 2 audit |
+| `Include/QuantBeast/Portfolio/SignalArbitrator.mqh` | `ARBITRATION_REGIME_PRIORITY` compatibility bonus missing TPV2 | Yes, only if operator switches arbitration mode (default unaffected) | `27173da` | Test 94 |
+| `Include/QuantBeast/Testing/SafetyTests.mqh` | Tests 94-101 added (regime-priority tie, five/ten-candidate arbitration, one-position-limit, equal-score tie, allocation-engine inclusion, TPV2 risk-engine acceptance, restart-persistence round-trip) | No (test-only) | `27173da`,`76f8564`,`75928c1`,+pending | self, `102+` passed |
+| `Experts/QuantBeast/QuantBeastEA.mq5` | Wire Tests 94-101 into `RunSelfTests()` | No (test-wiring only) | as above | self |
+| `Include/QuantBeast/Core/StateStore.mqh` | **Real defect fix**: `SaveKillSwitchState`/`LoadKillSwitchState` and `SaveStrategyTradeCounters`/`LoadStrategyTradeCounters` only round-tripped 4 of 5 strategies -- TP V2's kill flag and daily trade count were silently lost across every restart | **Yes** -- fixes a genuine restart-safety gap (a killed TP V2 would silently un-kill on restart) | pending | Test 101, `PHASE9_RESTART_RECOVERY_FIVE_STRATEGIES.md` |
+| `TestEvidence/.../run_manifests/run_ce01_20260723_broker_fixture.md` | First real Coinexx-Demo broker-order controlled execution fixture | No (evidence doc) | `2a4746d` | self |
+| `TestEvidence/.../final_readiness/PHASE4_BO_MR_LIFECYCLE_PROOF.md`, `PHASE5_ALL_STRATEGY_SHADOW_MATRIX.md` | Phase 4/5 evidence, extracted/re-analyzed from existing runs, no new tester runs | No | `d8e018d`, `cb916a7` | self |
+| `TestEvidence/.../infrastructure_audit/PHASE6_ARBITRATION_ALLOCATION_VERIFICATION.md`, `PHASE7_8_RISK_AND_MANAGEMENT_COVERAGE.md`, `PHASE9_RESTART_RECOVERY_FIVE_STRATEGIES.md`, `PHASE10_11_ANALYTICS_AND_EVIDENCE_GAPS.md` | Phase 6-11 audit/test documentation | No | `75928c1`+pending | self |
+
 Two live (untracked, non-evidence) runtime journal files were rotated as
 part of this phase, not edited, after confirming their full byte ranges were
 already captured in committed evidence (see Decision D002):

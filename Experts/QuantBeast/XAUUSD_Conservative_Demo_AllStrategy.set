@@ -1,39 +1,69 @@
 ;+------------------------------------------------------------------+
 ;|                     XAUUSD_Conservative_Demo_AllStrategy.set      |
 ;| QuantBeast EA - Restricted All-Strategy Conservative Demo         |
-;| candidate (Part G, production-readiness sprint 2026-07-22).       |
+;| candidate. Originally prepared 2026-07-22 (Part G); updated       |
+;| 2026-07-23 (Phase 14, follow-on sprint) for the new strategy-aware |
+;| allowlist architecture (Phase 13).                                 |
 ;|                                                                    |
 ;| NOT APPROVED FOR USE. PREPARED, NOT ACTIVATED.                    |
 ;|                                                                    |
-;| This preset currently CANNOT initialize in InpMode=2 (Conservative |
-;| Live): QBLiveStrategySetAllowed() in QuantBeastEA.mq5 hard-gates   |
-;| any live-armed mode to FBO-only until BO/TP/MR/TPV2 accepted-entry |
-;| evidence is complete. That gate was deliberately NOT weakened to   |
-;| make this preset load -- see DECISION_LOG.md D001-D005 and the     |
-;| final production-readiness report for the exact remaining blocker. |
-;| Loading this preset today reproduces the same                     |
-;| "Live strategy gate blocked initialization" failure as loading any |
-;| non-FBO-only config -- this is intentional, correct, fail-closed   |
-;| behavior, not a bug in this preset.                                |
+;| WHAT STILL BLOCKS ACTIVATION: exactly one remaining gate --        |
+;| InpAcknowledgeLiveBrokerRisk=false below. Every other allowlist    |
+;| condition in this preset is already satisfied for BO/FBO/MR/TPV2:  |
+;| StrategyEnabled=true (all four), StrategyMechanicallyReady=true    |
+;| (code-level, see QBStrategyMechanicallyReady in QuantBeastEA.mq5 -- |
+;| true for BO/FBO/MR/TPV2 per this sprint's Phase 3/4/5/6 evidence), |
+;| StrategyDemoAuthorized=true (all four, set explicitly below),      |
+;| GlobalLiveRiskAcknowledged=false (THE remaining blocker). Loading  |
+;| this preset today still fails "Live broker-transmission gate       |
+;| blocked initialization" via QBLiveBrokerTransmissionAllowed()      |
+;| (checked before the per-strategy allowlist in OnInit) -- this is   |
+;| intentional, correct, fail-closed behavior, not a bug in this      |
+;| preset.                                                             |
 ;|                                                                    |
-;| Activation requires: (1) organic BO/TP-family/MR/TPV2 accepted-    |
-;| entry evidence (see unified_strategy_matrix/, gathered last in     |
-;| this sprint per the user's build-then-test sequencing), (2) a      |
-;| DECISION_LOG-recorded, evidence-justified update to                |
-;| QBLiveStrategySetAllowed() itself, and (3) explicit operator        |
-;| authorization, exactly as the 2026-07-16 FBO-only Conservative Live |
-;| activation required (see HANDOFF.md "Operator authorization").     |
+;| ModeAllowsStrategy ALSO depends on which account is connected when |
+;| this preset is loaded: InpMode=2 (Conservative Live) maps to the   |
+;| sanctioned "Conservative Demo" broker tier only if the connected    |
+;| account's ACCOUNT_TRADE_MODE is DEMO (see QBCurrentBrokerTier in    |
+;| QuantBeastEA.mq5). Loading this preset against a REAL account would |
+;| classify as the Conservative Live tier, which ModeAllowsStrategy    |
+;| does not yet sanction for ANY strategy -- init would fail closed    |
+;| the same way, for a different, equally correct reason.             |
+;|                                                                    |
+;| EXACT CHANGE THAT WOULD PERMIT ACTIVATION: an operator setting      |
+;| InpAcknowledgeLiveBrokerRisk=true below (a single line), while      |
+;| connected to the intended Coinexx-Demo account, with no other      |
+;| change to this file or to QuantBeastEA.mq5/StateStore.mqh/         |
+;| SignalArbitrator.mqh required. This is a deliberate one-line        |
+;| activation surface, not a rewrite.                                 |
+;|                                                                    |
+;| OPERATOR ACKNOWLEDGEMENTS REQUIRED: explicit, informed authorization|
+;| to flip InpAcknowledgeLiveBrokerRisk=true for THIS preset, THIS     |
+;| account (verified Coinexx-Demo, not a real account), and THIS       |
+;| strategy roster -- matching the same bar the original FBO-only      |
+;| 2026-07-16 Conservative Live activation required (see HANDOFF.md    |
+;| "Operator authorization").                                         |
+;|                                                                    |
+;| HOW TO REVERT IMMEDIATELY: set InpAcknowledgeLiveBrokerRisk=false   |
+;| (this single line) and reload/reinitialize -- every enabled         |
+;| strategy immediately fails the allowlist again, fail-closed, with   |
+;| no other file or code change needed.                                |
+;|                                                                    |
+;| HOW TO DISABLE ONE STRATEGY WITHOUT CHANGING CODE: set that         |
+;| strategy's own InpXX_Enabled=false OR its InpXX_DemoAuthorized=false|
+;| below (either one alone is sufficient, since the allowlist requires |
+;| both) -- e.g. InpMR_DemoAuthorized=false removes MR from this       |
+;| candidate while leaving BO/FBO/TPV2 unaffected.                     |
 ;|                                                                    |
 ;| Roster: BO + FBO + MR + TP V2 (experimental gate still OFF).       |
-;| TP V1 explicitly excluded from this roster (InpTP_Enabled=false)   |
-;| -- it remains wired for research/observation in Shadow-mode runs   |
-;| (see tp_v1_freeze/README.md) but is not part of this trading       |
-;| candidate; V1's own evidence found no reliable directional         |
-;| information. TP V2 (InpTPV2_Enabled=true) keeps its lifecycle       |
-;| observing bars, but InpEnableTPV2Experimental=false means it can    |
-;| still never produce a tradeable signal until organic reachability   |
-;| evidence supports enabling it -- do not flip that flag without a    |
-;| DECISION_LOG entry citing that evidence.                           |
+;| TP V1 explicitly excluded (InpTP_Enabled=false) and permanently     |
+;| unauthorizable at the code level regardless of any flag in this     |
+;| file -- see tp_v1_freeze/README.md. TP V2 (InpTPV2_Enabled=true)    |
+;| keeps its lifecycle observing bars, but                             |
+;| InpEnableTPV2Experimental=false means it can still never produce a  |
+;| tradeable signal until organic reachability evidence supports       |
+;| enabling it -- do not flip that flag without a DECISION_LOG entry   |
+;| citing that evidence.                                               |
 ;+------------------------------------------------------------------+
 InpMode=2
 InpAcknowledgeLiveBrokerRisk=false
@@ -44,6 +74,10 @@ InpTP_Enabled=false
 InpMR_Enabled=true
 InpTPV2_Enabled=true
 InpEnableTPV2Experimental=false
+InpBO_DemoAuthorized=true
+InpFBO_DemoAuthorized=true
+InpMR_DemoAuthorized=true
+InpTPV2_DemoAuthorized=true
 InpRiskPercent=0.10
 InpMaxRiskPerTrade=0.25
 InpMinRewardRisk=1.5

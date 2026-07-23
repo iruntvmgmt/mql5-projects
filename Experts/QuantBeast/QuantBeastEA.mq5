@@ -573,30 +573,141 @@ void QBLogResolvedProductionConfiguration()
              " TP=" + (InpTP_Enabled ? "on" : "off") + " MR=" + (InpMR_Enabled ? "on" : "off") +
              " TPV2=" + (InpTPV2_Enabled ? "on" : "off") +
              " TPV2Experimental=" + (InpEnableTPV2Experimental ? "on" : "off"));
+   QBLogInfo("  DemoAuthorized: BO=" + (InpBO_DemoAuthorized ? "yes" : "no") +
+             " FBO=" + (InpFBO_DemoAuthorized ? "yes" : "no") +
+             " MR=" + (InpMR_DemoAuthorized ? "yes" : "no") +
+             " TPV2=" + (InpTPV2_DemoAuthorized ? "yes" : "no") +
+             " TP(V1)=permanently excluded, no authorization possible" +
+             " BrokerTier=" + EnumToString(QBCurrentBrokerTier(g_EffectiveMode)));
    QBLogInfo("  UnknownPosPolicy=" + EnumToString(InpUnknownPosPolicy) +
              " UseMarketOrders=" + (InpUseMarketOrders ? "yes" : "no") +
              " UseStopOrders=" + (InpUseStopOrders ? "yes" : "no") +
              " UseLimitOrders=" + (InpUseLimitOrders ? "yes" : "no"));
 }
 
+//+------------------------------------------------------------------+
+//| Phase 13 (follow-on sprint): strategy-aware demo/live allowlist.  |
+//| Three tiers reachable by (mode, connected account) alone -- this   |
+//| EA has no separate "Conservative Demo" mode value; demo vs. live   |
+//| is determined entirely by which account happens to be connected.  |
+//+------------------------------------------------------------------+
+enum ENUM_QB_BROKER_TIER
+{
+   QB_BROKER_TIER_SHADOW             = 0,
+   QB_BROKER_TIER_CONSERVATIVE_DEMO  = 1,
+   QB_BROKER_TIER_CONSERVATIVE_LIVE  = 2,
+   QB_BROKER_TIER_CHALLENGE_LIVE     = 3,
+   QB_BROKER_TIER_UNKNOWN            = -1
+};
+
+ENUM_QB_BROKER_TIER QBCurrentBrokerTier(ENUM_QB_MODE mode)
+{
+   if(mode == QB_MODE_SHADOW || mode == QB_MODE_DIAGNOSTIC)
+      return QB_BROKER_TIER_SHADOW;
+   if(mode == QB_MODE_CHALLENGE_LIVE)
+      return QB_BROKER_TIER_CHALLENGE_LIVE;
+   if(mode == QB_MODE_CONSERVATIVE_LIVE)
+   {
+      long tradeMode = AccountInfoInteger(ACCOUNT_TRADE_MODE);
+      return (tradeMode == ACCOUNT_TRADE_MODE_DEMO) ?
+             QB_BROKER_TIER_CONSERVATIVE_DEMO : QB_BROKER_TIER_CONSERVATIVE_LIVE;
+   }
+   return QB_BROKER_TIER_UNKNOWN;
+}
+
+// StrategyMechanicallyReady: code-level truth reflecting this sprint's own
+// readiness conclusions (final_readiness/ -- not operator-settable, since
+// it is a claim about evidence completeness, not a risk preference). TP V1
+// is permanently excluded -- frozen, negative research result.
+bool QBStrategyMechanicallyReady(string strategyId)
+{
+   if(strategyId == STRATEGY_ID_TREND_PULLBACK) return false;
+   return strategyId == STRATEGY_ID_BREAKOUT ||
+          strategyId == STRATEGY_ID_FAILED_BREAKOUT ||
+          strategyId == STRATEGY_ID_MEAN_REVERSION ||
+          strategyId == STRATEGY_ID_TREND_PULLBACK_V2;
+}
+
+// The six-condition fail-closed contract:
+//   StrategyEnabled AND StrategyMechanicallyReady AND StrategyDemoAuthorized
+//   AND ModeAllowsStrategy AND GlobalLiveRiskAcknowledged AND BrokerPathAllowed
+// All six must be true, in this order, or the strategy is blocked. Only the
+// Conservative Demo tier is currently sanctioned -- Conservative Live and
+// Challenge Live are structurally reachable by this same function once a
+// future decision extends ModeAllowsStrategy, but are not sanctioned today.
+bool QBStrategyAllowlistCheck(string strategyId, bool strategyEnabled,
+                              bool demoAuthorized, ENUM_QB_MODE mode,
+                              bool globalLiveRiskAck, string &reason)
+{
+   if(strategyId == STRATEGY_ID_TREND_PULLBACK)
+   {
+      reason = "TP V1 is permanently excluded from broker submission "
+               "(frozen, negative research result -- see tp_v1_freeze/README.md)";
+      return false;
+   }
+
+   if(!strategyEnabled)
+   { reason = "StrategyEnabled=false"; return false; }
+
+   if(!QBStrategyMechanicallyReady(strategyId))
+   { reason = "StrategyMechanicallyReady=false"; return false; }
+
+   if(!demoAuthorized)
+   { reason = "StrategyDemoAuthorized=false"; return false; }
+
+   ENUM_QB_BROKER_TIER tier = QBCurrentBrokerTier(mode);
+   if(tier != QB_BROKER_TIER_CONSERVATIVE_DEMO)
+   {
+      reason = "ModeAllowsStrategy=false (only the Conservative Demo tier -- "
+               "QB_MODE_CONSERVATIVE_LIVE while connected to a verified DEMO "
+               "account -- is currently sanctioned; Conservative Live and "
+               "Challenge Live require separate, not-yet-granted authorization)";
+      return false;
+   }
+
+   if(!globalLiveRiskAck)
+   { reason = "GlobalLiveRiskAcknowledged=false"; return false; }
+
+   reason = "allowed: Conservative Demo tier, all six allowlist conditions satisfied";
+   return true;
+}
+
 bool QBLiveStrategySetAllowed(bool boEnabled, bool fboEnabled,
                               bool tpEnabled, bool mrEnabled,
-                              string &reason)
+                              bool tpv2Enabled, ENUM_QB_MODE mode,
+                              bool globalLiveRiskAck, string &reason)
 {
-   if(!fboEnabled)
+   // Every enabled strategy must individually clear the allowlist, or
+   // initialization fails closed -- same fail-closed strictness as the
+   // prior hardcoded FBO-only gate, now driven by the general per-strategy
+   // contract instead of a special case. Do not hardcode a bypass: each
+   // strategy is evaluated on its own merits via QBStrategyAllowlistCheck.
+   string r = "";
+   if(tpEnabled)
    {
-      reason = "FBO must be enabled for the current live candidate scope";
+      reason = "TP (V1): TP V1 is permanently excluded from broker submission";
+      return false;
+   }
+   if(boEnabled && !QBStrategyAllowlistCheck(STRATEGY_ID_BREAKOUT, true,
+                                              InpBO_DemoAuthorized, mode, globalLiveRiskAck, r))
+   { reason = "BO: " + r; return false; }
+   if(fboEnabled && !QBStrategyAllowlistCheck(STRATEGY_ID_FAILED_BREAKOUT, true,
+                                               InpFBO_DemoAuthorized, mode, globalLiveRiskAck, r))
+   { reason = "FBO: " + r; return false; }
+   if(mrEnabled && !QBStrategyAllowlistCheck(STRATEGY_ID_MEAN_REVERSION, true,
+                                              InpMR_DemoAuthorized, mode, globalLiveRiskAck, r))
+   { reason = "MR: " + r; return false; }
+   if(tpv2Enabled && !QBStrategyAllowlistCheck(STRATEGY_ID_TREND_PULLBACK_V2, true,
+                                                InpTPV2_DemoAuthorized, mode, globalLiveRiskAck, r))
+   { reason = "TPV2: " + r; return false; }
+
+   if(!boEnabled && !fboEnabled && !mrEnabled && !tpv2Enabled)
+   {
+      reason = "No strategy enabled for live/demo submission";
       return false;
    }
 
-   if(boEnabled || tpEnabled || mrEnabled)
-   {
-      reason = "Live modes are currently restricted to FBO-only; "
-               "BO/TP/MR accepted-entry evidence is not complete";
-      return false;
-   }
-
-   reason = "FBO-only live candidate";
+   reason = "Allowlist satisfied for every enabled strategy";
    return true;
 }
 
@@ -754,6 +865,8 @@ int OnInit()
       string liveStrategyReason = "";
       if(!QBLiveStrategySetAllowed(InpBO_Enabled, InpFBO_Enabled,
                                    InpTP_Enabled, InpMR_Enabled,
+                                   InpTPV2_Enabled, g_EffectiveMode,
+                                   InpAcknowledgeLiveBrokerRisk,
                                    liveStrategyReason))
       {
          QBLogError("Live strategy gate blocked initialization: " +
@@ -2540,19 +2653,62 @@ void RunSelfTests()
       { g_SelfTestFailed++; QBLogError("TEST 36 FAIL: Performance without file journal " + detail); }
    }
 
-   // Test 37: live-mode strategy set remains restricted to current evidence.
+   // Test 37: live-mode strategy allowlist (Phase 13) -- default-authorized
+   // FBO-only behavior is preserved; TP V1 remains permanently excluded
+   // even if enabled; Shadow mode never satisfies ModeAllowsStrategy even
+   // when every other condition is met; a strategy that is enabled but not
+   // demo-authorized is rejected even though FBO alongside it is fine.
    {
       string reason = "";
-      bool fboOnlyAccepted = QBLiveStrategySetAllowed(false, true, false, false, reason);
-      bool allStrategiesRejected = !QBLiveStrategySetAllowed(true, true, true, true, reason);
-      bool fboDisabledRejected = !QBLiveStrategySetAllowed(false, false, false, false, reason);
-      bool boOnlyRejected = !QBLiveStrategySetAllowed(true, false, false, false, reason);
+      bool fboOnlyAccepted = QBLiveStrategySetAllowed(false, true, false, false, false,
+                                                       QB_MODE_CONSERVATIVE_LIVE,
+                                                       true, reason);
+      bool tpAlwaysRejected = !QBLiveStrategySetAllowed(false, true, true, false, false,
+                                                         QB_MODE_CONSERVATIVE_LIVE,
+                                                         true, reason);
+      bool fboDisabledRejected = !QBLiveStrategySetAllowed(false, false, false, false, false,
+                                                            QB_MODE_CONSERVATIVE_LIVE,
+                                                            true, reason);
+      // BO enabled but InpBO_DemoAuthorized defaults false -> rejected even
+      // though FBO alongside it would otherwise be fine.
+      bool boUnauthorizedRejected = !QBLiveStrategySetAllowed(true, true, false, false, false,
+                                                               QB_MODE_CONSERVATIVE_LIVE,
+                                                               true, reason);
+      // Shadow mode never satisfies ModeAllowsStrategy, even with every
+      // other condition (enabled, authorized, risk-acknowledged) true.
+      bool shadowModeRejected = !QBLiveStrategySetAllowed(false, true, false, false, false,
+                                                           QB_MODE_SHADOW,
+                                                           true, reason);
+      // Global risk ack missing -> rejected even though FBO is authorized.
+      bool noRiskAckRejected = !QBLiveStrategySetAllowed(false, true, false, false, false,
+                                                          QB_MODE_CONSERVATIVE_LIVE,
+                                                          false, reason);
+      // Direct allowlist-function proof that TP V2, once explicitly
+      // authorized via InpTPV2_DemoAuthorized, is structurally reachable
+      // through the same six-condition contract as any other strategy --
+      // proven with an explicit true flag (not the shared default) so this
+      // assertion is independent of the current default's fail-closed value.
+      string tpv2Reason = "";
+      bool tpv2AllowedWhenAuthorized = QBStrategyAllowlistCheck(
+         STRATEGY_ID_TREND_PULLBACK_V2, true, true,
+         QB_MODE_CONSERVATIVE_LIVE, true, tpv2Reason);
 
-      if(fboOnlyAccepted && allStrategiesRejected &&
-         fboDisabledRejected && boOnlyRejected)
-      { g_SelfTestPassed++; QBLogInfo("TEST 37 PASS: Live strategy gate FBO-only"); }
+      if(fboOnlyAccepted && tpAlwaysRejected && fboDisabledRejected &&
+         boUnauthorizedRejected && shadowModeRejected && noRiskAckRejected &&
+         tpv2AllowedWhenAuthorized)
+      { g_SelfTestPassed++; QBLogInfo("TEST 37 PASS: Live strategy allowlist"); }
       else
-      { g_SelfTestFailed++; QBLogError("TEST 37 FAIL: Live strategy gate"); }
+      {
+         g_SelfTestFailed++;
+         QBLogError("TEST 37 FAIL: Live strategy allowlist fboOnlyAccepted=" +
+                    (fboOnlyAccepted ? "yes" : "FAIL") +
+                    " tpAlwaysRejected=" + (tpAlwaysRejected ? "yes" : "FAIL") +
+                    " fboDisabledRejected=" + (fboDisabledRejected ? "yes" : "FAIL") +
+                    " boUnauthorizedRejected=" + (boUnauthorizedRejected ? "yes" : "FAIL") +
+                    " shadowModeRejected=" + (shadowModeRejected ? "yes" : "FAIL") +
+                    " noRiskAckRejected=" + (noRiskAckRejected ? "yes" : "FAIL") +
+                    " tpv2AllowedWhenAuthorized=" + (tpv2AllowedWhenAuthorized ? "yes" : "FAIL"));
+      }
    }
 
    // Test 38: live-mode execution remains market-only until pending evidence exists.
@@ -3033,6 +3189,38 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 99 PASS: Allocation engine includes TPV2 " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 99 FAIL: Allocation engine includes TPV2 " + detail); }
+
+      if(QBTestTPV2RiskEngineAcceptance(g_Adapter, g_Sizer, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 100 PASS: TPV2 risk engine acceptance " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 100 FAIL: TPV2 risk engine acceptance " + detail); }
+
+      if(QBTestTPV2RestartPersistence(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 101 PASS: TPV2 restart persistence " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 101 FAIL: TPV2 restart persistence " + detail); }
+
+      // Test 102: broker-tier classification and mechanical-readiness table
+      // (Phase 13) are correct in isolation, independent of any connected
+      // account -- Shadow/Diagnostic always map to the Shadow tier,
+      // Challenge Live always maps to the Challenge tier regardless of
+      // account, and TP V1 is the only strategy never mechanically ready.
+      {
+         bool shadowIsShadowTier = QBCurrentBrokerTier(QB_MODE_SHADOW) == QB_BROKER_TIER_SHADOW;
+         bool diagnosticIsShadowTier = QBCurrentBrokerTier(QB_MODE_DIAGNOSTIC) == QB_BROKER_TIER_SHADOW;
+         bool challengeIsChallengeTier = QBCurrentBrokerTier(QB_MODE_CHALLENGE_LIVE) == QB_BROKER_TIER_CHALLENGE_LIVE;
+         bool tpv1NeverReady = !QBStrategyMechanicallyReady(STRATEGY_ID_TREND_PULLBACK);
+         bool boReady = QBStrategyMechanicallyReady(STRATEGY_ID_BREAKOUT);
+         bool fboReady = QBStrategyMechanicallyReady(STRATEGY_ID_FAILED_BREAKOUT);
+         bool mrReady = QBStrategyMechanicallyReady(STRATEGY_ID_MEAN_REVERSION);
+         bool tpv2Ready = QBStrategyMechanicallyReady(STRATEGY_ID_TREND_PULLBACK_V2);
+
+         if(shadowIsShadowTier && diagnosticIsShadowTier && challengeIsChallengeTier &&
+            tpv1NeverReady && boReady && fboReady && mrReady && tpv2Ready)
+         { g_SelfTestPassed++; QBLogInfo("TEST 102 PASS: Broker tier and mechanical readiness table"); }
+         else
+         { g_SelfTestFailed++; QBLogError("TEST 102 FAIL: Broker tier and mechanical readiness table"); }
+      }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +
