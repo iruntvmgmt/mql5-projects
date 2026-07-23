@@ -372,3 +372,52 @@ Commit: (pending, Part E evidence commit)
 Follow-up: none -- this list is final for this sprint's Part E pass.
 
 ---
+
+Decision ID: D010
+Date/time: 2026-07-23, following the user's explicit demo-broker-order
+authorization ("Continue through all remaining phases now... I explicitly
+authorize broker-order transmission on the connected Coinexx demo
+account for bounded production-readiness testing")
+Question: How to use the granted authorization to accelerate Phases 7-10
+(real broker-path proof for submission, ack, fill, SL/TP, modification,
+close) without an established mechanism to programmatically attach a live
+EA instance to an MT5 chart (no precedent found this session; only
+generic indicator `.tpl` templates exist under `Profiles/Templates/`; the
+one historical live EA activation in this project was done manually by
+the operator via the GUI Inputs-tab Load button)?
+Evidence considered: the authorization's own text distinguishes
+`CONTROLLED_EXECUTION_FIXTURE` (bounded diagnostic signal exercising
+broker infrastructure) from `ORGANIC_DEMO_EVIDENCE` (a real strategy
+signal that naturally qualifies and is submitted by the running EA) and
+explicitly permits using controlled fixtures "for rare management
+branches... rather than waiting for an organic strategy trade." The
+authorized bounds (XAUUSD only, 0.01 lots max, one position max, market
+orders only, mandatory SL) match exactly what the direct MCP trade tools
+can safely exercise without any EA attachment.
+Options considered: (a) attempt to construct or modify a chart template
+to auto-attach the EA in a live-armed state programmatically, to also
+prove OnTradeTransaction/EA-side reconstruction; (b) scope this pass to
+direct-MCP-tool CONTROLLED_EXECUTION_FIXTURE proof only (order submit,
+ack, fill, SL/TP, modification, close), and explicitly document
+EA-attached-live proof as a separate open item.
+Decision: (b).
+Reason: (a) has no safe precedent in this project and risks an
+unintended live-armed EA state on a chart outside the pre-flight
+verification this sprint requires before every broker-sensitive action;
+(b) directly satisfies the authorization's own stated purpose ("use
+demo transmission to accelerate these phases") for every infrastructure
+item that does not require EA-side code to be running, while leaving
+the EA-attachment gap honestly reported rather than worked around.
+Trading behavior affected: One bounded fixture position opened and
+closed (see `run_manifests/run_ce01_20260723_broker_fixture.md`) --
+0.01 lots XAUUSD, protected throughout, flattened at the end. No
+strategy threshold, arbitration, or risk logic touched or exercised.
+Files affected: `run_manifests/run_ce01_20260723_broker_fixture.md` (new).
+Commit: (pending)
+Follow-up: EA-attached-live proof (OnTradeTransaction recognition,
+EA-side protection repair, restart+reconstruction against a real
+position, organic autonomous submission) remains open, pending either
+operator action to attach the EA to a live chart, or further explicit
+guidance on a safe programmatic attachment method.
+
+---
