@@ -133,7 +133,7 @@ semantics.
 Files affected: `Experts/QuantBeast/QuantBeastEA.mq5`,
 `Include/QuantBeast/Core/StateStore.mqh`,
 `Include/QuantBeast/Testing/SafetyTests.mqh`.
-Commit: (pending operator approval to commit)
+Commit: `f0a153e`
 Follow-up: D011 is now **partially resolved** -- the silent-restore
 observability gap is closed. The re-acknowledgment gate (D011's option
 (b)) remains open/deferred by deliberate choice, not oversight; revisit
