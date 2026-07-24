@@ -142,6 +142,49 @@ insufficient in practice.
 
 ---
 
+Decision ID: D013
+Date/time: 2026-07-24, deployment-automation system, first real deploy cycle
+Question: the new deployment-automation tool (`Tools/quantbeast_deploy.py`)
+needed a canonical roster spec to generate `.set` files from. The user's
+original request text specified "BO enabled and demo-authorized" among
+other strategies. But the project's own evidence-based readiness table
+(`FOLLOWON_SPRINT_FINAL_REPORT.md` section 24, 2026-07-23) rates BO as
+`SHADOW_READY`, not `DEMO_READY` -- only FBO and MR cleared that bar. The
+canonical roster was built following the user's literal request (BO
+included) and used for the first real deploy (`qb-live-20260724-01`,
+Coinexx-Demo, login 871221) before this gap against the project's own
+readiness gate was explicitly surfaced -- it was flagged to the user only
+after the real attach was already live-armed with BO authorized, not
+before. (Separately, `InpEnableTPV2Experimental` was shipped `false` in
+the canonical roster, deliberately deviating from the user's literal
+request of `true`, since that gate has never been live-armed before and
+TP V2 is also only `SHADOW_READY` -- this conservative deviation was
+disclosed alongside the BO gap.)
+Decision: user's explicit, informed choice after the gap was disclosed --
+**leave BO deployed as-is**, do not scale back to FBO+MR only.
+Reason: this is the user's own Coinexx-Demo account with bounded risk
+(0.01 lot cap, 1 position max, market-orders-only) -- their call to make
+once informed, not a decision this session should override. The process
+gap (surfacing the readiness mismatch after activation instead of before)
+is noted as a lesson for future deployments, not retroactively corrected
+here.
+Trading-behavior impact: BO is now live-armed on Coinexx-Demo alongside
+FBO/MR (TPV2 enabled but experimental-off, structurally cannot submit).
+This is the first time in this project's history BO has been
+demo-authorized for live/demo broker transmission. 0 positions/0 orders
+confirmed at time of writing.
+Files affected: none beyond `Tools/quantbeast_deploy.py`'s
+`CANONICAL_ROSTER` (already covered by the deployment-automation HANDOFF.md
+entry's file list).
+Commit: (pending, paired with the deployment-automation HANDOFF.md entry)
+Follow-up: decide whether future canonical-roster deployments should keep
+BO in, or scope it back out until organic BUY-side evidence (the open item
+from the follow-on sprint report) brings it up to FBO/MR's DEMO_READY bar.
+Also: surface readiness-table gaps like this BEFORE the manual attach step
+in future deploy cycles, not after.
+
+---
+
 Decision ID: D008
 Date/time: 2026-07-23, Phase 1 of the follow-on sprint (`QuantBeast_Production_Readiness_Sprint.md`)
 Question: Independently verify the prior sprint's documented final state

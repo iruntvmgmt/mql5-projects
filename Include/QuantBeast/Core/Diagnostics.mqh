@@ -12,6 +12,7 @@
 
 #include "Constants.mqh"
 #include "TimeUtils.mqh"
+#include "Types.mqh"
 
 //+------------------------------------------------------------------+
 //| Global debug flag (set from Configuration)                        |
@@ -172,6 +173,53 @@ int OpenJournalFile(string filename, string headers, bool isTester=false)
    }
 
    return handle;
+}
+
+//+------------------------------------------------------------------+
+//| Read the deployment lease (flat key=value text, FILE_COMMON,      |
+//| FILE_ANSI so a plain-ASCII writer -- e.g. the Python deploy tool  |
+//| -- needs no UTF-16 handling). Fails closed: any missing file or   |
+//| I/O problem leaves lease.found=false, never throws.               |
+//+------------------------------------------------------------------+
+void QBReadDeploymentLease(DeploymentLease &lease)
+{
+   ZeroMemory(lease);
+   lease.found = false;
+
+   string path = QB_LOG_DIR + QB_DEPLOYMENT_LEASE_FILE;
+   if(!FileIsExist(path, FILE_COMMON))
+      return;
+
+   int handle = FileOpen(path, FILE_COMMON|FILE_READ|FILE_TXT|FILE_ANSI|FILE_SHARE_READ);
+   if(handle == INVALID_HANDLE)
+   {
+      QBLogError("Cannot open deployment lease file: " + path +
+                 " error=" + IntegerToString(GetLastError()));
+      return;
+   }
+
+   while(!FileIsEnding(handle))
+   {
+      string line = FileReadString(handle);
+      int eq = StringFind(line, "=");
+      if(eq <= 0) continue;
+      string key = StringSubstr(line, 0, eq);
+      string value = StringSubstr(line, eq + 1);
+      StringTrimLeft(key);
+      StringTrimRight(key);
+      StringTrimLeft(value);
+      StringTrimRight(value);
+
+      if(key == "deployment_id") lease.deployment_id = value;
+      else if(key == "build_id") lease.build_id = value;
+      else if(key == "server") lease.server = value;
+      else if(key == "login") lease.login = StringToInteger(value);
+      else if(key == "symbol") lease.symbol = value;
+      else if(key == "authorized_mode") lease.authorized_mode = value;
+      else if(key == "expiry") lease.expiry = StringToInteger(value);
+   }
+   FileClose(handle);
+   lease.found = true;
 }
 
 //+------------------------------------------------------------------+

@@ -69,6 +69,10 @@
 #define QB_PERF_LOG            "Performance.csv"
 #define QB_COUNTERFACTUAL_LOG  "CounterfactualJournal.csv"
 #define QB_TP_OUTCOME_LOG      "TPOutcomeJournal.csv"
+// Flat key=value text, not JSON -- MQL5 has no built-in JSON parser and the
+// schema is a fixed handful of scalar fields, so a hand-rolled parser would
+// be unjustified complexity. See QBDeploymentLeaseValid() for the reader.
+#define QB_DEPLOYMENT_LEASE_FILE "DeploymentLease.cfg"
 
 //+------------------------------------------------------------------+
 //| Price/Volume Constants                                            |

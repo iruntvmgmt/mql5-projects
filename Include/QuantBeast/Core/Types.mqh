@@ -366,6 +366,22 @@ struct KillSwitchState
 };
 
 //+------------------------------------------------------------------+
+//| Deployment Lease - fail-closed deployment-identity authorization,  |
+//| written by Tools/quantbeast_deploy.py, read-only from the EA.      |
+//+------------------------------------------------------------------+
+struct DeploymentLease
+{
+   bool     found;               // File existed and parsed
+   string   deployment_id;       // Opaque deployment identifier
+   string   build_id;            // Expected QB_VERSION+QB_MAGIC_BASE stamp
+   string   server;              // Expected AccountInfoString(ACCOUNT_SERVER)
+   long     login;               // Expected AccountInfoInteger(ACCOUNT_LOGIN)
+   string   symbol;              // Expected trading symbol
+   string   authorized_mode;     // Expected EnumToString(g_EffectiveMode)
+   long     expiry;              // Unix timestamp; 0 = no file/unparseable
+};
+
+//+------------------------------------------------------------------+
 //| Execution Record - tracks an order through its lifecycle           |
 //+------------------------------------------------------------------+
 struct ExecutionRecord

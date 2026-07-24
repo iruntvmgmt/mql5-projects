@@ -748,6 +748,76 @@ bool QBLiveRecoveryPolicyAllowed(ENUM_UNKNOWN_POS_POLICY unknownPolicy,
    return true;
 }
 
+// Fail-closed deployment-identity gate: refuses to let a live/demo attach
+// proceed unless Tools/quantbeast_deploy.py has written a matching,
+// unexpired lease for this exact build/server/login/symbol/mode. Scoped to
+// requestedLiveMode only (like the other Live* gates below) -- Shadow and
+// Diagnostic self-test/evidence tester runs never write a lease file and
+// must keep working unmodified.
+bool QBDeploymentLeaseValid(const DeploymentLease &lease, string symbol,
+                            ENUM_QB_MODE mode, string &reason)
+{
+   if(!lease.found)
+   {
+      reason = "No deployment lease file found (Common\\Files\\" + QB_LOG_DIR +
+               QB_DEPLOYMENT_LEASE_FILE + ") -- live/demo attach requires a "
+               "lease written by Tools/quantbeast_deploy.py";
+      return false;
+   }
+
+   long nowUtc = (long)TimeGMT();
+   if(lease.expiry <= 0 || nowUtc >= lease.expiry)
+   {
+      reason = "Deployment lease expired or missing a valid expiry (expiry=" +
+               IntegerToString(lease.expiry) + " now=" + IntegerToString(nowUtc) + ")";
+      return false;
+   }
+
+   string expectedBuildId = QB_VERSION + "-" + IntegerToString(QB_MAGIC_BASE);
+   if(lease.build_id != expectedBuildId)
+   {
+      reason = "Deployment lease build_id mismatch: lease=" + lease.build_id +
+               " running=" + expectedBuildId;
+      return false;
+   }
+
+   string actualServer = AccountInfoString(ACCOUNT_SERVER);
+   if(lease.server != actualServer)
+   {
+      reason = "Deployment lease server mismatch: lease=" + lease.server +
+               " actual=" + actualServer;
+      return false;
+   }
+
+   long actualLogin = (long)AccountInfoInteger(ACCOUNT_LOGIN);
+   if(lease.login != actualLogin)
+   {
+      reason = "Deployment lease login mismatch: lease=" + IntegerToString(lease.login) +
+               " actual=" + IntegerToString(actualLogin);
+      return false;
+   }
+
+   if(lease.symbol != symbol)
+   {
+      reason = "Deployment lease symbol mismatch: lease=" + lease.symbol +
+               " actual=" + symbol;
+      return false;
+   }
+
+   string actualMode = EnumToString(mode);
+   if(lease.authorized_mode != actualMode)
+   {
+      reason = "Deployment lease mode mismatch: lease=" + lease.authorized_mode +
+               " actual=" + actualMode;
+      return false;
+   }
+
+   reason = "deployment lease valid: id=" + lease.deployment_id + " build=" +
+            lease.build_id + " expires=" +
+            TimeToString((datetime)lease.expiry, TIME_DATE|TIME_MINUTES);
+   return true;
+}
+
 bool QBLiveBrokerTransmissionAllowed(bool acknowledged, string &reason)
 {
    if(!acknowledged)
@@ -853,6 +923,29 @@ int OnInit()
                              g_EffectiveMode == QB_MODE_CHALLENGE_LIVE);
    if(requestedLiveMode)
    {
+      DeploymentLease deploymentLease;
+      QBReadDeploymentLease(deploymentLease);
+      string leaseSymbol = (InpPrimarySymbol != "") ? InpPrimarySymbol : _Symbol;
+      string leaseReason = "";
+      bool leaseValid = QBDeploymentLeaseValid(deploymentLease, leaseSymbol,
+                                               g_EffectiveMode, leaseReason);
+      QBLogInfo("── Resolved Deployment Lease ── found=" +
+                (deploymentLease.found ? "yes" : "no") +
+                " id=" + deploymentLease.deployment_id +
+                " build=" + deploymentLease.build_id +
+                " server=" + deploymentLease.server +
+                " login=" + IntegerToString(deploymentLease.login) +
+                " symbol=" + deploymentLease.symbol +
+                " mode=" + deploymentLease.authorized_mode +
+                " expiry=" + IntegerToString(deploymentLease.expiry) +
+                " valid=" + (leaseValid ? "yes" : "no") +
+                " reason=" + leaseReason);
+      if(!leaseValid)
+      {
+         QBLogError("Deployment lease gate blocked initialization: " + leaseReason);
+         return INIT_FAILED;
+      }
+
       string liveBrokerRiskReason = "";
       if(!QBLiveBrokerTransmissionAllowed(InpAcknowledgeLiveBrokerRisk,
                                           liveBrokerRiskReason))
@@ -3233,6 +3326,88 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 103 PASS: Kill-switch restore warning " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 103 FAIL: Kill-switch restore warning " + detail); }
+
+      // Test 104: QBDeploymentLeaseValid() rejects a missing lease, an
+      // expired lease, and every field mismatch (build/server/login/
+      // symbol/mode), and accepts a lease matching this run exactly.
+      // Inline (not a separate SafetyTests.mqh function) because
+      // QBDeploymentLeaseValid is defined in this file, after
+      // SafetyTests.mqh is #included -- same reason TEST 102 above is
+      // inline rather than a helper function.
+      {
+         string leaseTestSymbol = "XAUUSD";
+         ENUM_QB_MODE leaseTestMode = QB_MODE_SHADOW;
+         string expectedBuildId = QB_VERSION + "-" + IntegerToString(QB_MAGIC_BASE);
+         long leaseTestNow = (long)TimeGMT();
+         string r = "";
+
+         DeploymentLease notFound;
+         ZeroMemory(notFound);
+         bool notFoundRejected = !QBDeploymentLeaseValid(notFound, leaseTestSymbol, leaseTestMode, r);
+         bool notFoundReasonOk = StringFind(r, "No deployment lease file found") >= 0;
+
+         DeploymentLease baseValid;
+         ZeroMemory(baseValid);
+         baseValid.found = true;
+         baseValid.deployment_id = "test-deploy";
+         baseValid.build_id = expectedBuildId;
+         baseValid.server = AccountInfoString(ACCOUNT_SERVER);
+         baseValid.login = (long)AccountInfoInteger(ACCOUNT_LOGIN);
+         baseValid.symbol = leaseTestSymbol;
+         baseValid.authorized_mode = EnumToString(leaseTestMode);
+         baseValid.expiry = leaseTestNow + 3600;
+         bool acceptsValid = QBDeploymentLeaseValid(baseValid, leaseTestSymbol, leaseTestMode, r);
+
+         DeploymentLease expired = baseValid;
+         expired.expiry = leaseTestNow - 3600;
+         bool expiredRejected = !QBDeploymentLeaseValid(expired, leaseTestSymbol, leaseTestMode, r);
+         bool expiredReasonOk = StringFind(r, "expired") >= 0;
+
+         DeploymentLease badBuild = baseValid;
+         badBuild.build_id = "wrong-build";
+         bool badBuildRejected = !QBDeploymentLeaseValid(badBuild, leaseTestSymbol, leaseTestMode, r);
+         bool badBuildReasonOk = StringFind(r, "build_id mismatch") >= 0;
+
+         DeploymentLease badServer = baseValid;
+         badServer.server = "Wrong-Server";
+         bool badServerRejected = !QBDeploymentLeaseValid(badServer, leaseTestSymbol, leaseTestMode, r);
+         bool badServerReasonOk = StringFind(r, "server mismatch") >= 0;
+
+         DeploymentLease badLogin = baseValid;
+         badLogin.login = baseValid.login + 1;
+         bool badLoginRejected = !QBDeploymentLeaseValid(badLogin, leaseTestSymbol, leaseTestMode, r);
+         bool badLoginReasonOk = StringFind(r, "login mismatch") >= 0;
+
+         DeploymentLease badSymbol = baseValid;
+         badSymbol.symbol = "EURUSD";
+         bool badSymbolRejected = !QBDeploymentLeaseValid(badSymbol, leaseTestSymbol, leaseTestMode, r);
+         bool badSymbolReasonOk = StringFind(r, "symbol mismatch") >= 0;
+
+         DeploymentLease badMode = baseValid;
+         badMode.authorized_mode = EnumToString(QB_MODE_DIAGNOSTIC);
+         bool badModeRejected = !QBDeploymentLeaseValid(badMode, leaseTestSymbol, leaseTestMode, r);
+         bool badModeReasonOk = StringFind(r, "mode mismatch") >= 0;
+
+         detail = "notFound=" + (notFoundRejected && notFoundReasonOk ? "yes" : "FAIL") +
+                  " acceptsValid=" + (acceptsValid ? "yes" : "FAIL") +
+                  " expired=" + (expiredRejected && expiredReasonOk ? "yes" : "FAIL") +
+                  " badBuild=" + (badBuildRejected && badBuildReasonOk ? "yes" : "FAIL") +
+                  " badServer=" + (badServerRejected && badServerReasonOk ? "yes" : "FAIL") +
+                  " badLogin=" + (badLoginRejected && badLoginReasonOk ? "yes" : "FAIL") +
+                  " badSymbol=" + (badSymbolRejected && badSymbolReasonOk ? "yes" : "FAIL") +
+                  " badMode=" + (badModeRejected && badModeReasonOk ? "yes" : "FAIL");
+         bool leaseTestPassed = notFoundRejected && notFoundReasonOk && acceptsValid &&
+                                expiredRejected && expiredReasonOk &&
+                                badBuildRejected && badBuildReasonOk &&
+                                badServerRejected && badServerReasonOk &&
+                                badLoginRejected && badLoginReasonOk &&
+                                badSymbolRejected && badSymbolReasonOk &&
+                                badModeRejected && badModeReasonOk;
+         if(leaseTestPassed)
+         { g_SelfTestPassed++; QBLogInfo("TEST 104 PASS: Deployment lease validation " + detail); }
+         else
+         { g_SelfTestFailed++; QBLogError("TEST 104 FAIL: Deployment lease validation " + detail); }
+      }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

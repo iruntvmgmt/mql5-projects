@@ -1,0 +1,13 @@
+{
+  "deployment_id": "dryrun-test-001",
+  "build_id": "1.00-20260701",
+  "ex5_sha256": "98c8b9da4aa1e9626c31f5b55e87a3f33234fca88cfa2f4e7ca5caff9746a44a",
+  "source_tree_sha256": "c1692394e1430ee8fe8a255a5c9b580a34f63a7b659e5bbd74fe965f7813f798",
+  "source_file_count": 48,
+  "self_test_passed": 107,
+  "self_test_failed": 0,
+  "self_test_source": "/Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/Tester/Agent-127.0.0.1-3000/logs/20260724.log",
+  "set_file": "MQL5/Experts/QuantBeast/Tools/deployments/dryrun-test-001/dryrun-test-001.set",
+  "created_unix": 1784869602.3259258,
+  "git_commit": "70a0c4c"
+}
