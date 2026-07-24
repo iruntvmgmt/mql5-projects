@@ -472,4 +472,47 @@ public:
    void SetHighWaterMark(double eq)     { m_highWaterMark = eq; }
 };
 
+//+------------------------------------------------------------------+
+//| Build a loud restore-time warning when persisted risk-lock state  |
+//| carries any latched flag from a prior session. Returns "" when    |
+//| nothing is latched. Found 2026-07-24: the drawdown lock and       |
+//| consecutive-loss count have NO automatic clear anywhere in this   |
+//| codebase (unlike daily/weekly locks, which reset on period        |
+//| rollover in UpdateEquityState()) -- CRiskEngine::ResetState()      |
+//| exists but is never called in production, and no operator-facing  |
+//| clear command exists either (unlike the kill-switch's fixture-     |
+//| script CMD_CLEAR_KILL_STATE). InitDailyTracking() restores         |
+//| savedDrawdownLock/savedConsecLosses unconditionally (no date/      |
+//| period gating the way daily/weekly locks get), so a drawdown lock  |
+//| latched once can silently block every future signal indefinitely  |
+//| across every restart -- exactly what happened on the real          |
+//| Coinexx-Demo account (login 871221): 7 real "Drawdown lock active" |
+//| rejections from 2026-07-23 23:20 through 2026-07-24 11:25, zero   |
+//| trades, with no restore-time log line explaining why until this   |
+//| fix. Pure/stateless so it can be logged at OnInit and unit-tested  |
+//| without a live account.                                            |
+//+------------------------------------------------------------------+
+string QBRiskLockRestoreWarning(bool dailyLock, bool weeklyLock, bool drawdownLock,
+                                int consecLosses, int maxConsecLosses,
+                                double dailyStart, double weeklyStart, double hwm)
+{
+   if(!dailyLock && !weeklyLock && !drawdownLock && consecLosses < maxConsecLosses)
+      return "";
+
+   return "RISK LOCK STATE RESTORED FROM PRIOR SESSION -- dailyLock=" +
+          (dailyLock ? "true" : "false") +
+          " weeklyLock=" + (weeklyLock ? "true" : "false") +
+          " drawdownLock=" + (drawdownLock ? "true" : "false") +
+          " consecLosses=" + IntegerToString(consecLosses) + "/" + IntegerToString(maxConsecLosses) +
+          " dailyStart=" + DoubleToString(dailyStart, 2) +
+          " weeklyStart=" + DoubleToString(weeklyStart, 2) +
+          " HWM=" + DoubleToString(hwm, 2) +
+          " -- new entries will be silently rejected by ValidateTrade() until this clears. " +
+          "Daily/weekly locks clear automatically at the next period rollover; the drawdown " +
+          "lock and consecutive-loss count do NOT -- they require manually clearing the " +
+          "QB_DrawdownLock_<login>_<symbol>/QB_ConsecLosses_<login>_<symbol> GlobalVariables " +
+          "(MT5 Tools -> Global Variables) if this state is stale rather than a live, still-" +
+          "valid risk condition. Verify current equity/drawdown before assuming it's stale.";
+}
+
 #endif // QB_RISKENGINE_MQH

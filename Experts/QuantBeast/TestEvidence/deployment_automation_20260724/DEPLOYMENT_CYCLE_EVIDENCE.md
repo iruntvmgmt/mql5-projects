@@ -148,10 +148,129 @@ made unilaterally by the tool's author (this session) as the more
 conservative default, and was disclosed to the user alongside the BO gap
 above.
 
-## Current live state as of this evidence pack
+## Current live state as of this evidence pack (superseded -- see addendum below)
 
 Roster: BO=on/authorized, FBO=on/authorized, MR=on/authorized,
 TPV2=on/authorized/experimental-off (observes only, cannot submit), TP
 V1=permanently excluded. 0.01 lot cap, 1 position max, market-orders-only,
 no pending orders. Lease expires 2026-07-24 09:10 UTC (4-hour window from
 deploy time). 0 positions, 0 orders at time of writing.
+
+## Addendum -- follow-on session, blanket demo-only authorization
+
+The user granted standing, global authorization to proceed with every open
+item across the docs (KNOWN_LIMITATIONS.md gaps, HANDOFF.md next-tasks,
+DECISION_LOG.md follow-ups), explicitly citing that Coinexx-Demo carries no
+real-money risk. This produced a second, larger batch of code changes and
+a second real deploy cycle, `qb-live-20260724-02`.
+
+### Code changes this batch
+
+1. **TEST 37 made hermetic** -- its `boUnauthorizedRejected` sub-check now
+   calls `QBStrategyAllowlistCheck()` directly with an explicit
+   `demoAuthorized=false`, instead of `QBLiveStrategySetAllowed()` (which
+   read the live `InpBO_DemoAuthorized` input and silently assumed its
+   shipped default of `false` -- broke the moment BO was deliberately
+   authorized, exactly as seen in `qb-live-20260724-01`'s real attach).
+2. **`AllocationEngine::RecordOutcome()` wired in** -- was never called
+   anywhere, so `ALLOC_PERFORMANCE` silently degenerated to equal-weight.
+   `CTradeJournal::LogTrade()` now returns the `rMultiple` it already
+   computes internally; both close paths (`ProcessShadowCloseEvents` and
+   the real `OnTradeTransaction` close handler) feed it to
+   `g_Allocator.RecordOutcome()`. New TEST 105 proves the wiring end-to-end
+   with fresh, unconfigured instances (no file I/O, no production-state
+   pollution): `returnedR=2.000`, `boWeight=1.500` vs `fboWeight=0.500`
+   after recording a +2R BO outcome against a 0R FBO baseline.
+3. **New `InpAcknowledgePendingOrderRisk` gate** -- pending orders
+   (`InpUseStopOrders`/`InpUseLimitOrders`/`InpMaxPendingOrders>0`, or
+   `InpUseMarketOrders=false`) were unconditionally blocked at `OnInit`
+   with no way to unlock them. Added a new explicit acknowledgment input
+   (`Configuration.mqh`), following the exact same pattern as
+   `InpAcknowledgeLiveBrokerRisk`/`InpAcknowledgeChallengeRisk` --
+   `QBLiveExecutionSetAllowed()` now permits a pending-order configuration
+   when explicitly acknowledged, still fails closed by default. TEST 38
+   rewritten to cover both the without-ack-rejected and with-ack-accepted
+   paths for stop/limit/no-market configurations.
+4. **New `QB_BROKER_TIER_CHALLENGE_DEMO` tier** -- `QB_MODE_CHALLENGE_LIVE`
+   previously mapped to `QB_BROKER_TIER_CHALLENGE_LIVE` unconditionally
+   regardless of connected account, which meant `QBStrategyAllowlistCheck`'s
+   `ModeAllowsStrategy` condition (only ever sanctioned
+   `CONSERVATIVE_DEMO`) made Challenge Mode structurally untestable even
+   against a verified demo account. `QBCurrentBrokerTier()` now classifies
+   Challenge Live by connected account exactly like Conservative Live
+   already does -- a real account still always maps to the never-sanctioned
+   `CHALLENGE_LIVE` tier (AGENTS.md's absolute real-account prohibition is
+   unchanged), a verified demo account now maps to the new
+   `CHALLENGE_DEMO` tier, which `QBStrategyAllowlistCheck` now sanctions
+   alongside `CONSERVATIVE_DEMO`. TEST 102 fixed (its `challengeIsChallengeTier`
+   assertion hardcoded the old unconditional behavior -- now computes the
+   expected tier from the actual connected account, same hermeticity
+   lesson as TEST 37). New TEST 106 proves the Challenge-Demo allowlist
+   path directly.
+5. **`Tools/quantbeast_deploy.py` roster presets** -- `CANONICAL_ROSTER`,
+   `PENDING_ORDER_ROSTER` (`InpUseMarketOrders=false`, stop+limit true,
+   `InpAcknowledgePendingOrderRisk=true`), `CHALLENGE_ROSTER`
+   (`InpMode=3`, `InpAcknowledgeChallengeRisk=true`), selectable via
+   `prepare --roster {canonical,pending-orders,challenge}`. Canonical also
+   flips `InpEnableTPV2Experimental` to `true` (was conservatively shipped
+   `false` in the first batch; the user's original spec always wanted
+   `true`, and TP V2's experimental gate had never been live-armed before
+   today).
+
+Compile: `0 errors, 0 warnings` (11:52:09). Self-tests: **109 passed, 0
+failed** (up from 107) via the `SelfTestDetail` Diagnostic tester run,
+confirming all of the above in isolation.
+
+### Second real deploy: `qb-live-20260724-02` -- stale-binary finding
+
+`prepare --roster canonical` (skipped recompile, source unchanged) ->
+`preflight` (one warning, stale attach-state read, non-blocking) ->
+`deploy --server Coinexx-Demo --login 871221 --symbol XAUUSD --mode
+QB_MODE_CONSERVATIVE_LIVE --minutes 720` -> operator manually
+detached/reattached QuantBeastEA with the new `.set` and
+`InpAcknowledgeLiveBrokerRisk=true` -> `verify qb-live-20260724-02`.
+
+**`verify` initially reported a false pass.** Investigation found two real
+bugs in `cmd_verify`, both from the same root cause: every check searched
+the *entire* concatenated day's log text rather than scoping to this
+deployment's own attach event. (1) `re.search` for the self-test summary
+returns the *first* match in the file, not the latest -- on a busy day
+with many prior runs, that is almost always a stale, unrelated result. (2)
+The lease-acceptance check (`has(f"id=...") and "valid=yes" in text`)
+checked two substrings' presence *anywhere*, not that they came from the
+same log line -- a different, unrelated deployment's `valid=yes` could
+satisfy it. Fixed: `cmd_verify` now finds this exact `deployment_id`'s own
+`── Resolved Deployment Lease ──` line, takes the *last* such match, and
+scopes every subsequent check (self-test summary, kill-switch warning,
+reconciliation) to log text *after* that point only.
+
+**With the scoping fix, verify correctly showed the deeper problem**: even
+properly scoped to `qb-live-20260724-02`'s own real attach (17:56:40),
+self-tests reported **106 passed, 1 failed** -- the *old*, pre-fix count
+and the *old* TEST 37 failure signature, not the expected 109/0. The
+`.ex5` file on disk had been the fresh 11:52:09 build the entire time
+(confirmed via file mtime) -- the terminal loaded a stale, previously
+cached binary despite the file changing on disk and the EA being detached
+and reattached in between. `.set` *input values* (e.g.
+`InpEnableTPV2Experimental=true`) still applied correctly, since those are
+read fresh from the loaded `.set` file independent of which `.ex5` binary
+is running -- only the *compiled code itself* was stale.
+
+**This means chart detach/reattach is not sufficient to guarantee fresh
+code is running after a recompile, even though it has been sufficient in
+this project's history to re-run `OnInit()` for restart-equivalence
+testing purposes (`TESTING_GUIDE.md` Stage 7).** Those are two different
+guarantees: re-executing `OnInit()` against an already-loaded binary vs.
+loading a genuinely new binary from disk. A full terminal restart (not
+just chart-level detach/reattach) appears to be required to force a fresh
+`.ex5` load. User chose to restart the terminal and redo the manual attach
+step; outcome recorded in a follow-up entry once confirmed.
+
+**Action item for `Tools/quantbeast_deploy.py`**: `verify` should
+ideally also cross-check the *loaded* binary identity against the
+manifest's `ex5_sha256`, not just trust that a reattach picked up the
+right one -- but MQL5 has no runtime API to hash or fingerprint its own
+already-loaded compiled bytecode from inside a running EA, so the only
+available signal remains indirect (self-test count/behavior proving which
+source version is active). Documented as a known limitation of this
+verification approach, not fixed this session.

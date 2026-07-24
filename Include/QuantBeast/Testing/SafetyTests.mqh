@@ -3731,4 +3731,94 @@ bool QBTestKillSwitchRestoreWarning(string &detail)
    return cleanIsSilent && emergencyWarns && entryOnlyWarns;
 }
 
+//+------------------------------------------------------------------+
+//| Defect: CAllocationEngine::RecordOutcome() was never called from   |
+//| either trade-close path (Shadow or real broker), so ALLOC_PERFORMANCE |
+//| silently degenerated to equal-weight despite being a selectable    |
+//| mode -- found 2026-07-24 while auditing open follow-on-sprint      |
+//| items. Fixed by having CTradeJournal::LogTrade() return the         |
+//| rMultiple it already computes internally, and wiring both call     |
+//| sites in QuantBeastEA.mq5 (ProcessShadowCloseEvents and the real   |
+//| OnTradeTransaction close path) to feed it into                     |
+//| g_Allocator.RecordOutcome(). This test proves the new return-value |
+//| contract is correct and that RecordOutcome measurably changes      |
+//| GetWeight() for ALLOC_PERFORMANCE -- using fresh, unconfigured      |
+//| CTradeJournal/CAllocationEngine instances (not the live globals),  |
+//| so it needs no file I/O and cannot pollute production state.       |
+//+------------------------------------------------------------------+
+bool QBTestAllocationRecordOutcomeWiring(string &detail)
+{
+   CTradeJournal journal;   // default ctor -> m_enabledTrade=false, no file I/O
+   CAllocationEngine alloc;
+   alloc.Init(ALLOC_PERFORMANCE);
+
+   PositionContext ctx;
+   ZeroMemory(ctx);
+   ctx.strategy_id = "BO";
+   ctx.position_type = POSITION_TYPE_BUY;
+   ctx.original_entry = 2000.0;
+   ctx.original_stop = 1990.0;   // risk = 10
+   ctx.initial_target = 2020.0;
+   ctx.initial_volume = 0.01;
+   ctx.entry_time = TimeCurrent();
+
+   double exitPrice = 2020.0;    // +20 move on 10 risk -> rMultiple = 2.0
+   double returnedR = journal.LogTrade(ctx, exitPrice, 20.0, 0.0, 0.0,
+                                        EXIT_TARGET_HIT, TREND_STRONG_UP, VOL_NORMAL);
+   bool returnMatches = MathAbs(returnedR - 2.0) < 0.0001;
+
+   alloc.RecordOutcome(ctx.strategy_id, returnedR);
+   alloc.RecordOutcome("FBO", 0.0);   // baseline strategy at 0 R for comparison
+
+   double boWeight = alloc.GetWeight("BO");
+   double fboWeight = alloc.GetWeight("FBO");
+   bool boWeighsMore = boWeight > fboWeight;
+
+   detail = "returnedR=" + DoubleToString(returnedR, 3) +
+            " returnMatches=" + (returnMatches ? "yes" : "FAIL") +
+            " boWeight=" + DoubleToString(boWeight, 3) +
+            " fboWeight=" + DoubleToString(fboWeight, 3) +
+            " boWeighsMore=" + (boWeighsMore ? "yes" : "FAIL");
+   return returnMatches && boWeighsMore;
+}
+
+//+------------------------------------------------------------------+
+//| Defect: persisted risk-lock state (daily/weekly/drawdown locks,   |
+//| consecutive-loss count) restores silently at OnInit with no log   |
+//| line explaining it -- found 2026-07-24 via 7 real "Drawdown lock  |
+//| active" rejections on the live Coinexx-Demo account (login        |
+//| 871221) spanning 2026-07-23 23:20 through 2026-07-24 11:25, zero  |
+//| trades, and no restore-time diagnostic anywhere in the log.       |
+//| QBRiskLockRestoreWarning() (RiskEngine.mqh) is the fix -- a pure   |
+//| formatter OnInit now calls right after                            |
+//| g_RiskEngine.InitDailyTracking() and logs via QBLogError() when    |
+//| any lock/count is restored latched. This test exercises the       |
+//| formatter directly -- no live account or GlobalVariable            |
+//| persistence needed.                                                |
+//+------------------------------------------------------------------+
+bool QBTestRiskLockRestoreWarning(string &detail)
+{
+   bool cleanIsSilent = QBRiskLockRestoreWarning(
+      false, false, false, 0, 1, 10000.0, 10000.0, 10000.0) == "";
+
+   string drawdownMsg = QBRiskLockRestoreWarning(
+      false, false, true, 0, 1, 999.64, 997.71, 1022.40);
+   bool drawdownWarns = StringFind(drawdownMsg, "RESTORED FROM PRIOR SESSION") >= 0 &&
+                        StringFind(drawdownMsg, "drawdownLock=true") >= 0 &&
+                        StringFind(drawdownMsg, "1022.40") >= 0;
+
+   // consecLosses alone (no lock flags at all) is the other half of the
+   // same silent-failure mode -- entries were blocked even without any
+   // daily/weekly/drawdown lock latched.
+   string consecMsg = QBRiskLockRestoreWarning(
+      false, false, false, 1, 1, 10000.0, 10000.0, 10000.0);
+   bool consecWarns = StringFind(consecMsg, "RESTORED FROM PRIOR SESSION") >= 0 &&
+                      StringFind(consecMsg, "consecLosses=1/1") >= 0;
+
+   detail = "cleanIsSilent=" + (cleanIsSilent ? "yes" : "FAIL") +
+            " drawdownWarns=" + (drawdownWarns ? "yes" : "FAIL") +
+            " consecWarns=" + (consecWarns ? "yes" : "FAIL");
+   return cleanIsSilent && drawdownWarns && consecWarns;
+}
+
 #endif // QB_SAFETYTESTS_MQH

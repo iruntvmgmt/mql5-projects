@@ -185,6 +185,165 @@ in future deploy cycles, not after.
 
 ---
 
+Decision ID: D014
+Date/time: 2026-07-24, blanket demo-only authorization -- full activation batch
+Question: the user granted standing, global authorization to proceed with
+every open item across HANDOFF.md/KNOWN_LIMITATIONS.md/DECISION_LOG.md,
+explicitly citing that Coinexx-Demo carries no real-money risk. This
+included several items previously gated behind code-level restrictions
+with no unlock path: BO's non-hermetic TEST 37, `AllocationEngine::
+RecordOutcome()` never being called, pending orders being unconditionally
+blocked at `OnInit`, and Challenge Mode always mapping to the never-
+sanctioned `CHALLENGE_LIVE` tier regardless of connected account. How to
+implement each without weakening any control for a real account?
+Decision: for each capability, added an explicit, auditable unlock rather
+than removing or bypassing the underlying check:
+- TEST 37: made hermetic by testing `QBStrategyAllowlistCheck()` directly
+  with an explicit `demoAuthorized=false`, instead of reading the live
+  `InpBO_DemoAuthorized` input and assuming its shipped default.
+- `AllocationEngine::RecordOutcome()`: `CTradeJournal::LogTrade()` now
+  returns the `rMultiple` it already computes; both close paths feed it
+  to the allocator. Pure wiring fix, no new gate needed.
+- Pending orders: new `InpAcknowledgePendingOrderRisk` input, following
+  the exact same pattern as `InpAcknowledgeLiveBrokerRisk`/
+  `InpAcknowledgeChallengeRisk` -- `QBLiveExecutionSetAllowed()` permits a
+  pending-order configuration only when explicitly acknowledged, still
+  fails closed by default.
+- Challenge Mode: new `QB_BROKER_TIER_CHALLENGE_DEMO` tier --
+  `QBCurrentBrokerTier()` now classifies `QB_MODE_CHALLENGE_LIVE` by
+  connected account exactly like Conservative Live already does. A real
+  account still always maps to `CHALLENGE_LIVE`, which
+  `QBStrategyAllowlistCheck` still never sanctions -- AGENTS.md's
+  real-account prohibition is completely unchanged. Only a verified demo
+  account newly reaches `CHALLENGE_DEMO`, which is sanctioned alongside
+  `CONSERVATIVE_DEMO`.
+All four compiled clean (0/0), self-tests 109/0 (TEST 105-106 new),
+110/0 after the follow-on risk-lock fix (D015, TEST 107 new).
+Reason: "explicit acknowledgment input" and "account-type-derived tier"
+are this codebase's own established patterns for exactly this class of
+decision (see `InpAcknowledgeLiveBrokerRisk` itself). Reusing them here
+keeps every new capability auditable and reversible (flip the input back,
+or the account type changes) rather than a one-way code deletion, and
+keeps the real-account prohibition structurally impossible to accidentally
+weaken -- it was never touched by any of these four changes.
+Trading-behavior impact: three real deployments made and verified live on
+Coinexx-Demo this session -- `qb-live-20260724-02` (canonical roster,
+`InpEnableTPV2Experimental=true`, first time TP V2 has ever been
+live-armed), `qb-live-20260724-03-pending` (`InpUseMarketOrders=false`,
+stop+limit true, first time pending orders have ever been live-armed),
+`qb-live-20260724-04-challenge` (`InpMode=3`, first time Challenge Mode
+has ever been live-armed). All verified via real terminal log inspection,
+not just self-test evidence. Zero broker orders transmitted by any of the
+three (all windows ended flat, 0 positions/0 orders).
+Files affected: `Experts/QuantBeast/QuantBeastEA.mq5`,
+`Include/QuantBeast/Core/Configuration.mqh`,
+`Include/QuantBeast/Analytics/TradeJournal.mqh`,
+`Include/QuantBeast/Testing/SafetyTests.mqh`,
+`Experts/QuantBeast/Tools/quantbeast_deploy.py` (roster presets).
+Commit: (pending)
+Follow-up: BO and TP V2 remain `SHADOW_READY` not `DEMO_READY` per the
+readiness table (D013) -- this activation is an informed authorization
+decision, not new evidence that changes those labels. Revisit whether
+these three capabilities stay in the standing canonical/preset rosters
+once genuine organic evidence exists, independent of this authorization.
+
+---
+
+Decision ID: D015
+Date/time: 2026-07-24, silent risk-lock restore on the live account
+Question: user shared external analysis (from manually reading the
+Experts log) flagging 7 real "Signal rejected by risk engine: Drawdown
+lock active" rejections on the live Coinexx-Demo account (login 871221,
+XAUUSD) spanning 2026-07-23 23:20 through 2026-07-24 11:25, with zero
+trades in that entire window, and asked whether the lock was legitimately
+active or stale/persisted state silently suppressing valid trades.
+Investigation (direct log inspection + `RiskEngine.mqh` code read):
+`m_drawdownLockActive` is restored unconditionally from the persisted
+`QB_DrawdownLock_<login>_<symbol>` GlobalVariable at every `OnInit`
+(`InitDailyTracking()`), with no date/period gating the way daily/weekly
+locks get (`UpdateEquityState()` clears those automatically at the next
+day/week rollover -- there is no equivalent for the drawdown lock).
+`CRiskEngine::ResetState()` is the only code that clears it, and is never
+called anywhere in production. No operator-facing clear command exists
+either (unlike the kill-switch's fixture-script `CMD_CLEAR_KILL_STATE`).
+Current computed drawdown from the restored state (HWM=1022.40,
+equity~999.64, ~2.2%) was under the 3% threshold, meaning the lock was
+almost certainly latched by a deeper dip at some earlier, unlogged point
+and has persisted ever since across every restart -- the log contains no
+explicit "lock cleared" message anywhere, ever.
+Decision: added `QBRiskLockRestoreWarning()` (`RiskEngine.mqh`), logged
+via `QBLogError()` immediately after `InitDailyTracking()` in `OnInit`,
+whenever any daily/weekly/drawdown lock or the consecutive-loss count
+restores in a latched/at-limit state. TEST 107 proves it. Did NOT add an
+automatic clear or a new in-EA clear command -- purely additive
+observability, exactly the same reasoning as the kill-switch fix (D012):
+never weaken a risk control, only make its restored state visible.
+Reason: this is functionally the same defect class as D011/D012 (silent
+persisted-state restore blocking all trading with zero diagnostic), just
+in the risk engine instead of the kill switch, and deserves the identical
+fix shape for the identical reason.
+Trading-behavior impact: none from the fix itself (purely additive log).
+Real impact from the underlying bug: an unknown, unlogged number of
+genuine BO/FBO/MR/TPV2 organic signals were silently rejected across at
+least a 12-hour window on the live account before being noticed.
+Files affected: `Include/QuantBeast/Risk/RiskEngine.mqh`,
+`Experts/QuantBeast/QuantBeastEA.mq5`,
+`Include/QuantBeast/Testing/SafetyTests.mqh`.
+Commit: (pending)
+Follow-up: consider whether `ResetState()` should be wired into an
+operator-facing command (mirroring `CMD_CLEAR_KILL_STATE`) in a future
+pass, so clearing a stale drawdown lock doesn't require manual
+GlobalVariable surgery -- deliberately not done this session (scope
+control, and the manual-GUI-clear path was already proven to work once
+the correct operational sequence, D016, is followed).
+
+---
+
+Decision ID: D016
+Date/time: 2026-07-24, GlobalVariable persist-on-detach discovery
+Question: user reported that clearing `QB_KillEntries_871221_XAUUSD` to
+0.0 via MT5's Global Variables dialog -- confirmed cleared by reopening
+the dialog -- did not stick: after detaching and reattaching the EA, the
+value read back as 1.0 again. Was this a new bug?
+Investigation: `QuantBeastEA.mq5` reads kill-switch/risk GlobalVariables
+exactly once, at `OnInit` (`LoadKillSwitchState()`/`InitDailyTracking()`),
+and holds them in memory (`g_KillSwitch`/`g_RiskEngine`) for the rest of
+the session -- it never re-reads them. `OnDeinit()` unconditionally calls
+`PersistRuntimeState()` (when persistence is enabled and startup
+reconciled), which calls `SaveKillSwitchState(g_KillSwitch.GetState())`
+-- writing the in-memory state back to the GlobalVariable. If an operator
+edits the GlobalVariable directly while the EA is still attached, the
+in-memory copy is completely unaware of the edit; the next detach
+(`OnDeinit`) blindly re-persists the stale in-memory value, silently
+overwriting the manual edit before the EA is even removed from the chart.
+Decision: not a new bug to fix in code this session -- documented as a
+required operational sequence instead: **detach the EA fully first, then
+edit the GlobalVariable, then reattach.** Editing while attached is a
+race that always loses to the next persist. This also retroactively
+explains why D011's original fix worked: the operator removed the EA
+*before* clearing the GlobalVariable that time, by coincidence of how the
+instruction was phrased ("remove the EA from the chart immediately... operator
+manually cleared the stale... GlobalVariable... afterward"), not because
+anyone understood this mechanism at the time.
+Reason: this is arguably correct-by-design behavior for a stateful
+process (an EA's job on detach is to persist what it currently believes),
+not a defect -- the real problem was that nobody knew the correct
+operational order, because nothing documented it. A code fix (e.g.
+re-reading the GlobalVariable before persisting on detach, to detect and
+respect an external edit) would add real complexity and a new class of
+race condition of its own for a rare, now-documented, avoidable
+operator error. Documentation is the right-sized fix.
+Trading-behavior impact: none -- this is a manual-intervention procedure
+question, not a code or control-flow change.
+Files affected: none (documentation only --
+`KNOWN_LIMITATIONS.md`, this entry).
+Commit: (pending)
+Follow-up: if this trips up a future session again, reconsider the
+code-level fix (re-read-before-persist-on-detach) as a real, scoped
+change rather than documentation alone.
+
+---
+
 Decision ID: D008
 Date/time: 2026-07-23, Phase 1 of the follow-on sprint (`QuantBeast_Production_Readiness_Sprint.md`)
 Question: Independently verify the prior sprint's documented final state

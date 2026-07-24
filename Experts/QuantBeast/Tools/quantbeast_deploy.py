@@ -97,13 +97,18 @@ CANONICAL_ROSTER: Dict[str, str] = {
     "InpMode": "2",
     "InpAcknowledgeLiveBrokerRisk": "false",  # operator flips this manually, by design
     "InpAcknowledgeChallengeRisk": "false",
+    "InpAcknowledgePendingOrderRisk": "false",
     "InpPrimarySymbol": "XAUUSD",
     "InpBO_Enabled": "true",
     "InpFBO_Enabled": "true",
     "InpTP_Enabled": "false",  # TP V1 permanently excluded
     "InpMR_Enabled": "true",
     "InpTPV2_Enabled": "true",
-    "InpEnableTPV2Experimental": "false",
+    # 2026-07-24: flipped true per the user's original spec and blanket
+    # demo-only authorization -- previously shipped false as a conservative
+    # deviation (TP V2's experimental gate had never been live-armed
+    # before). See DECISION_LOG.md.
+    "InpEnableTPV2Experimental": "true",
     "InpBO_DemoAuthorized": "true",
     "InpFBO_DemoAuthorized": "true",
     "InpMR_DemoAuthorized": "true",
@@ -144,6 +149,43 @@ CANONICAL_ROSTER: Dict[str, str] = {
     "InpAlertKillSwitch": "true",
     "InpAlertReconFailure": "true",
     "InpAlertUnprotectedPos": "true",
+}
+
+
+def _roster_with(overrides: Dict[str, str]) -> Dict[str, str]:
+    merged = dict(CANONICAL_ROSTER)
+    merged.update(overrides)
+    return merged
+
+
+# Pending-order evidence-gathering variant: InpUseMarketOrders is a global
+# switch (not per-signal), so turning pending orders on for real evidence
+# means every accepted signal routes through the stop/limit path instead of
+# market execution, not "market plus occasional pending." Requires the new
+# InpAcknowledgePendingOrderRisk gate (QuantBeastEA.mq5, 2026-07-24).
+PENDING_ORDER_ROSTER: Dict[str, str] = _roster_with({
+    "InpAcknowledgePendingOrderRisk": "true",
+    "InpUseMarketOrders": "false",
+    "InpUseStopOrders": "true",
+    "InpUseLimitOrders": "true",
+    "InpMaxPendingOrders": "3",
+})
+
+# Challenge Mode evidence-gathering variant: InpMode=3 (QB_MODE_CHALLENGE_LIVE)
+# is mutually exclusive with Conservative Live, and requires
+# InpAcknowledgeChallengeRisk=true just to reach that effective mode at all
+# (QuantBeastEA.mq5 OnInit falls back to Shadow otherwise). Requires the new
+# Challenge-Demo broker tier (QuantBeastEA.mq5, 2026-07-24) to pass the
+# per-strategy allowlist on a verified demo account.
+CHALLENGE_ROSTER: Dict[str, str] = _roster_with({
+    "InpMode": "3",
+    "InpAcknowledgeChallengeRisk": "true",
+})
+
+ROSTER_PRESETS: Dict[str, Dict[str, str]] = {
+    "canonical": CANONICAL_ROSTER,
+    "pending-orders": PENDING_ORDER_ROSTER,
+    "challenge": CHALLENGE_ROSTER,
 }
 
 
@@ -420,6 +462,7 @@ class Manifest:
     set_file: str
     created_unix: float
     git_commit: str = ""
+    roster_preset: str = "canonical"
 
     def to_dict(self) -> dict:
         return dict(self.__dict__)
@@ -451,11 +494,12 @@ def manifest_markdown(m: Manifest) -> str:
         f"- Self-test evidence: {m.self_test_passed} passed, {m.self_test_failed} failed "
         f"(source: `{m.self_test_source}`)",
         f"- Generated `.set`: `{m.set_file}`",
+        f"- Roster preset: `{m.roster_preset}`",
         "",
         "## Roster",
         "",
     ]
-    for key, value in CANONICAL_ROSTER.items():
+    for key, value in ROSTER_PRESETS[m.roster_preset].items():
         lines.append(f"- `{key}` = `{value}`")
     lines.append("")
     return "\n".join(lines)
@@ -502,12 +546,17 @@ def cmd_prepare(args: argparse.Namespace) -> int:
     print(f"Self-test evidence OK: {evidence.passed} passed, {evidence.failed} failed "
           f"({evidence.source})")
 
+    roster_name = args.roster
+    if roster_name not in ROSTER_PRESETS:
+        raise SystemExit(f"Unknown roster preset {roster_name!r}; choices: {sorted(ROSTER_PRESETS)}")
+    roster = ROSTER_PRESETS[roster_name]
+
     deployment_id = args.deployment_id or f"deploy-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}"
     out_dir = mt5_root / DEPLOYMENTS_DIR_RELPATH / deployment_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
     set_path = out_dir / f"{deployment_id}.set"
-    write_set_file(set_path, CANONICAL_ROSTER, deployment_id)
+    write_set_file(set_path, roster, deployment_id)
 
     manifest = Manifest(
         deployment_id=deployment_id,
@@ -521,6 +570,7 @@ def cmd_prepare(args: argparse.Namespace) -> int:
         set_file=str(set_path.relative_to(mt5_root)),
         created_unix=time.time(),
         git_commit=current_git_commit(mt5_root),
+        roster_preset=roster_name,
     )
     (out_dir / "manifest.json").write_text(json.dumps(manifest.to_dict(), indent=2), encoding="utf-8")
     (out_dir / "manifest.md").write_text(manifest_markdown(manifest), encoding="utf-8")
@@ -543,8 +593,10 @@ def cmd_preflight(args: argparse.Namespace) -> int:
     problems: List[str] = []
     warnings: List[str] = []
 
+    roster_preset = manifest.get("roster_preset", "canonical")
+    expected_roster = ROSTER_PRESETS.get(roster_preset, CANONICAL_ROSTER)
     roster = parse_set_file(set_path)
-    problems.extend(diff_roster(roster, CANONICAL_ROSTER))
+    problems.extend(diff_roster(roster, expected_roster))
 
     attach_state = detect_attached_ea(mt5_root)
     if attach_state == "attached":
@@ -674,11 +726,26 @@ def cmd_verify(args: argparse.Namespace) -> int:
     def has(needle: str) -> bool:
         return needle in text
 
-    lease_line_present = "Resolved Deployment Lease" in text
-    lease_valid_present = has(f"id={args.deployment_id}") and "valid=yes" in text
+    # Scope everything to THIS deployment's actual attach event, not the
+    # whole day's cumulative log -- a naive whole-text scan would happily
+    # match an unrelated EARLIER deployment's lease line, an OLDER self-test
+    # run from before a later recompile, or a stale kill-switch warning from
+    # hours before this attach. Found empirically 2026-07-24: verify
+    # originally reported a deployment as passing based on a DIFFERENT,
+    # earlier attach's log lines still present in the same day's file.
+    lease_line_pattern = re.compile(
+        r"── Resolved Deployment Lease ── .*?id=" + re.escape(args.deployment_id) +
+        r"\b.*"
+    )
+    lease_matches = list(lease_line_pattern.finditer(text))
+    lease_line_present = bool(lease_matches)
+    scoped_text = text[lease_matches[-1].start():] if lease_matches else ""
+
+    lease_valid_present = lease_line_present and "valid=yes" in lease_matches[-1].group(0)
+    build_id_present = lease_line_present and f"build={manifest['build_id']}" in lease_matches[-1].group(0)
     checks.append(("Deployment lease log line present", lease_line_present))
     checks.append(("Deployment lease accepted (valid=yes) for this deployment_id", lease_valid_present))
-    checks.append(("Build ID present in lease log", has(f"build={manifest['build_id']}")))
+    checks.append(("Build ID present in lease log", build_id_present))
 
     # TEST 37 ("Live strategy allowlist") has one sub-assertion,
     # boUnauthorizedRejected, that is not hermetic -- it hardcodes an
@@ -688,12 +755,15 @@ def cmd_verify(args: argparse.Namespace) -> int:
     # 2026-07-24: every other sub-assertion in that test still passes.
     # Treat exactly that single-failure signature as expected, not a defect
     # -- any OTHER failing test, or TEST 37 failing for a different reason,
-    # still fails verify.
-    self_test_match = re.search(r"Self-tests complete: (\d+) passed, (\d+) failed", text)
+    # still fails verify. Matched against scoped_text (this attach only) so
+    # an OLDER attach's already-fixed or already-broken run can't leak in.
+    self_test_matches = list(re.finditer(
+        r"Self-tests complete: (\d+) passed, (\d+) failed", scoped_text))
     self_test_ok = False
-    self_test_note = "no self-test summary found"
-    if self_test_match:
-        failed = int(self_test_match.group(2))
+    self_test_note = "no self-test summary found after this deployment's lease line"
+    if self_test_matches:
+        m = self_test_matches[0]  # first summary AFTER the lease line = this attach's own
+        failed = int(m.group(2))
         if failed == 0:
             self_test_ok = True
             self_test_note = "0 failed"
@@ -701,7 +771,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
             r"TEST 37 FAIL: Live strategy allowlist fboOnlyAccepted=yes "
             r"tpAlwaysRejected=yes fboDisabledRejected=yes boUnauthorizedRejected=FAIL "
             r"shadowModeRejected=yes noRiskAckRejected=yes tpv2AllowedWhenAuthorized=yes",
-            text,
+            scoped_text[:m.end()],
         ):
             self_test_ok = True
             self_test_note = "1 failed, but it's the known TEST 37 default-config artifact (BO deliberately demo-authorized)"
@@ -709,10 +779,10 @@ def cmd_verify(args: argparse.Namespace) -> int:
             self_test_note = f"{failed} failed, not the known TEST 37 artifact -- treat as real"
     checks.append((f"Self-tests OK ({self_test_note})", self_test_ok))
 
-    checks.append(("No kill-switch restore warning (or, if present, was reviewed)",
-                    "KILL-SWITCH STATE RESTORED" not in text or args.acknowledge_restored_kill_state))
-    checks.append(("0 startup reconciliation surprises ('0 positions reconstructed')",
-                    "0 positions reconstructed" in text or "reconstructed" not in text))
+    checks.append(("No kill-switch restore warning since this attach (or, if present, was reviewed)",
+                    "KILL-SWITCH STATE RESTORED" not in scoped_text or args.acknowledge_restored_kill_state))
+    checks.append(("0 startup reconciliation surprises since this attach ('0 positions reconstructed')",
+                    "0 positions reconstructed" in scoped_text or "reconstructed" not in scoped_text))
 
     print(f"Verify {args.deployment_id}:")
     all_ok = True
@@ -793,6 +863,8 @@ def main() -> int:
     p = sub.add_parser("prepare", help="Compile, verify self-test evidence, hash, package")
     p.add_argument("--deployment-id", dest="deployment_id", default=None)
     p.add_argument("--force", action="store_true", help="Compile even if EA appears attached")
+    p.add_argument("--roster", choices=sorted(ROSTER_PRESETS), default="canonical",
+                    help="Which roster preset to package (default: canonical)")
     p.set_defaults(func=cmd_prepare)
 
     p = sub.add_parser("preflight", help="Read-only checks against a prepared deployment")

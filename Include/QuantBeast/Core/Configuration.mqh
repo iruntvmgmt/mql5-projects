@@ -20,6 +20,7 @@ input group "══════════ General ═════════�
 input ENUM_QB_MODE InpMode = QB_MODE_SHADOW;  // Operating Mode: Diagnostic|Shadow|Conservative Live|Challenge Live
 input bool     InpAcknowledgeLiveBrokerRisk = false; // Acknowledge Live Broker Risk: Must be TRUE before Conservative/Challenge broker transmission
 input bool     InpAcknowledgeChallengeRisk = false; // Acknowledge Challenge Risk: Must be TRUE to enable Challenge Mode
+input bool     InpAcknowledgePendingOrderRisk = false; // Acknowledge Pending Order Risk: Must be TRUE before live InpUseStopOrders/InpUseLimitOrders can activate -- activation/cancellation/fill-race/restart evidence is still incomplete (2026-07-24)
 
 //+------------------------------------------------------------------+
 //| === GROUP: Strategy-Aware Demo/Live Allowlist ===                  |

@@ -180,9 +180,11 @@ public:
    }
 
    //+------------------------------------------------------------------+
-   //| Log a completed trade                                             |
+   //| Log a completed trade. Returns the realized R multiple so callers |
+   //| can feed CAllocationEngine::RecordOutcome() without recomputing   |
+   //| the same risk-distance/direction math a second time.              |
    //+------------------------------------------------------------------+
-   void LogTrade(const PositionContext &ctx, double exitPrice,
+   double LogTrade(const PositionContext &ctx, double exitPrice,
                   double grossPnL, double commission, double swap,
                   ENUM_EXIT_REASON exitReason, ENUM_TREND_REGIME exitRegimeTrend,
                   ENUM_VOLATILITY_REGIME exitRegimeVol)
@@ -227,6 +229,7 @@ public:
 
       // Tester/performance accounting is independent of optional file output.
       UpdatePerformance(netPnL, rMultiple);
+      return rMultiple;
    }
 
    //+------------------------------------------------------------------+

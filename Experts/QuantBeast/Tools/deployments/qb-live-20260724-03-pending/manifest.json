@@ -1,0 +1,14 @@
+{
+  "deployment_id": "qb-live-20260724-03-pending",
+  "build_id": "1.00-20260701",
+  "ex5_sha256": "d3c09660d98504e274cfcbf52cdaba84556c0a8e055155a5354171d7f2a2b541",
+  "source_tree_sha256": "8965aab772c5a7a7c854cedd490360f870c7521d2403ffc9ab4af8fcedb35655",
+  "source_file_count": 48,
+  "self_test_passed": 109,
+  "self_test_failed": 0,
+  "self_test_source": "/Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/Tester/Agent-127.0.0.1-3000/logs/20260724.log",
+  "set_file": "MQL5/Experts/QuantBeast/Tools/deployments/qb-live-20260724-03-pending/qb-live-20260724-03-pending.set",
+  "created_unix": 1784931674.202933,
+  "git_commit": "a71af41",
+  "roster_preset": "pending-orders"
+}

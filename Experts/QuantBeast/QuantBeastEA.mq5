@@ -184,10 +184,11 @@ void ProcessShadowCloseEvents(ShadowCloseEvent &events[])
       ctx.entry_spread = events[i].entry_spread;
       ctx.entry_slippage = events[i].entry_slippage;
       ctx.entry_time = events[i].entry_time;
-      g_Journal.LogTrade(ctx, events[i].exit_price,
+      double shadowRMultiple = g_Journal.LogTrade(ctx, events[i].exit_price,
                          events[i].gross_pnl, events[i].commission,
                          events[i].swap, events[i].exit_reason,
                          g_CurrentRegime.trend, g_CurrentRegime.volatility);
+      g_Allocator.RecordOutcome(ctx.strategy_id, shadowRMultiple);
       g_RiskEngine.UpdateAfterClose(events[i].net_pnl, g_Shadow.GetEquity(g_CurrentSnap));
       QBLogInfo("SHADOW CLOSED: " + events[i].strategy_id +
                 " net=" + DoubleToString(events[i].net_pnl, 2) +
@@ -447,8 +448,9 @@ void ProcessPendingCloseReconciliation()
       else if(dealReason == DEAL_REASON_EXPERT) exitReason = EXIT_MANUAL;
 
       double exitPrice = HistoryDealGetDouble(candidate.exit_deal, DEAL_PRICE);
-      g_Journal.LogTrade(ctx, exitPrice, grossPnL, commission, swap,
+      double liveRMultiple = g_Journal.LogTrade(ctx, exitPrice, grossPnL, commission, swap,
                          exitReason, g_CurrentRegime.trend, g_CurrentRegime.volatility);
+      g_Allocator.RecordOutcome(ctx.strategy_id, liveRMultiple);
       g_RiskEngine.UpdateAfterClose(grossPnL + commission + swap,
                                     AccountInfoDouble(ACCOUNT_EQUITY));
       g_PosManager.RemoveByIdentifier(candidate.position_identifier);
@@ -597,15 +599,31 @@ enum ENUM_QB_BROKER_TIER
    QB_BROKER_TIER_CONSERVATIVE_DEMO  = 1,
    QB_BROKER_TIER_CONSERVATIVE_LIVE  = 2,
    QB_BROKER_TIER_CHALLENGE_LIVE     = 3,
+   QB_BROKER_TIER_CHALLENGE_DEMO     = 4,
    QB_BROKER_TIER_UNKNOWN            = -1
 };
 
+// 2026-07-24: Challenge Live used to map to QB_BROKER_TIER_CHALLENGE_LIVE
+// unconditionally, regardless of connected account -- meaning
+// QBStrategyAllowlistCheck's ModeAllowsStrategy check (only
+// CONSERVATIVE_DEMO was ever sanctioned) made Challenge Mode
+// structurally untestable even against a verified demo account. Per the
+// user's blanket demo-only authorization, Challenge Live now classifies
+// by connected account exactly like Conservative Live already does --
+// QB_BROKER_TIER_CHALLENGE_LIVE (never sanctioned, per AGENTS.md's "never
+// enable Conservative Live or Challenge Live on a real account") is
+// unchanged for a real account; a verified DEMO account now gets the new
+// QB_BROKER_TIER_CHALLENGE_DEMO tier instead.
 ENUM_QB_BROKER_TIER QBCurrentBrokerTier(ENUM_QB_MODE mode)
 {
    if(mode == QB_MODE_SHADOW || mode == QB_MODE_DIAGNOSTIC)
       return QB_BROKER_TIER_SHADOW;
    if(mode == QB_MODE_CHALLENGE_LIVE)
-      return QB_BROKER_TIER_CHALLENGE_LIVE;
+   {
+      long tradeMode = AccountInfoInteger(ACCOUNT_TRADE_MODE);
+      return (tradeMode == ACCOUNT_TRADE_MODE_DEMO) ?
+             QB_BROKER_TIER_CHALLENGE_DEMO : QB_BROKER_TIER_CHALLENGE_LIVE;
+   }
    if(mode == QB_MODE_CONSERVATIVE_LIVE)
    {
       long tradeMode = AccountInfoInteger(ACCOUNT_TRADE_MODE);
@@ -656,12 +674,14 @@ bool QBStrategyAllowlistCheck(string strategyId, bool strategyEnabled,
    { reason = "StrategyDemoAuthorized=false"; return false; }
 
    ENUM_QB_BROKER_TIER tier = QBCurrentBrokerTier(mode);
-   if(tier != QB_BROKER_TIER_CONSERVATIVE_DEMO)
+   if(tier != QB_BROKER_TIER_CONSERVATIVE_DEMO && tier != QB_BROKER_TIER_CHALLENGE_DEMO)
    {
-      reason = "ModeAllowsStrategy=false (only the Conservative Demo tier -- "
-               "QB_MODE_CONSERVATIVE_LIVE while connected to a verified DEMO "
-               "account -- is currently sanctioned; Conservative Live and "
-               "Challenge Live require separate, not-yet-granted authorization)";
+      reason = "ModeAllowsStrategy=false (only the Conservative Demo and "
+               "Challenge Demo tiers -- QB_MODE_CONSERVATIVE_LIVE/"
+               "QB_MODE_CHALLENGE_LIVE while connected to a verified DEMO "
+               "account -- are currently sanctioned; real-account Conservative "
+               "Live and Challenge Live remain permanently unsanctioned per "
+               "AGENTS.md's live-account prohibition)";
       return false;
    }
 
@@ -711,25 +731,44 @@ bool QBLiveStrategySetAllowed(bool boEnabled, bool fboEnabled,
    return true;
 }
 
+// Pending-order activation, expiry, cancellation, fill-race, and (broker-
+// side) restart-reconstruction all have deterministic + real-terminal
+// evidence (TestEvidence/pending_order_reconstruction_20260720/), but
+// ordinary (non-restart) organic live activation/cancellation/fill-race
+// behavior against a real broker has never been observed. Per the user's
+// 2026-07-24 blanket demo-only authorization, this gate now permits
+// pending-order configurations when InpAcknowledgePendingOrderRisk is
+// explicitly true, following the same explicit-acknowledgment pattern as
+// InpAcknowledgeLiveBrokerRisk/InpAcknowledgeChallengeRisk -- not a removed
+// safety rail, a re-armed one requiring a deliberate, auditable opt-in.
 bool QBLiveExecutionSetAllowed(bool useMarketOrders, bool useStopOrders,
                                bool useLimitOrders, int maxPendingOrders,
+                               bool pendingOrderRiskAcknowledged,
                                string &reason)
 {
-   if(!useMarketOrders)
+   if(!useMarketOrders && !useStopOrders && !useLimitOrders)
    {
-      reason = "Live modes require market orders until pending lifecycle "
-               "and restart evidence is complete";
+      reason = "No order type enabled (market/stop/limit all false)";
       return false;
    }
 
-   if(useStopOrders || useLimitOrders || maxPendingOrders > 0)
+   bool pendingRequested = !useMarketOrders || useStopOrders ||
+                           useLimitOrders || maxPendingOrders > 0;
+   if(!pendingRequested)
    {
-      reason = "Live pending orders are disabled until activation, expiry, "
-               "cancellation, fill-race, and restart evidence is complete";
+      reason = "market-order-only live candidate";
+      return true;
+   }
+
+   if(!pendingOrderRiskAcknowledged)
+   {
+      reason = "Live pending-order configuration (useMarketOrders=false and/or "
+               "useStopOrders/useLimitOrders/maxPendingOrders>0) requires "
+               "explicit InpAcknowledgePendingOrderRisk=true";
       return false;
    }
 
-   reason = "market-order-only live candidate";
+   reason = "pending-order configuration explicitly acknowledged";
    return true;
 }
 
@@ -970,6 +1009,7 @@ int OnInit()
       string liveExecutionReason = "";
       if(!QBLiveExecutionSetAllowed(InpUseMarketOrders, InpUseStopOrders,
                                     InpUseLimitOrders, InpMaxPendingOrders,
+                                    InpAcknowledgePendingOrderRisk,
                                     liveExecutionReason))
       {
          QBLogError("Live execution gate blocked initialization: " +
@@ -1244,6 +1284,13 @@ int OnInit()
                                      savedWeeklyStart, savedWeeklyDate,
                                      savedHWM, savedDailyLock, savedWeeklyLock,
                                      savedDrawdownLock, savedConsecLosses);
+      string riskLockWarning = QBRiskLockRestoreWarning(
+         g_RiskEngine.IsDailyLock(), g_RiskEngine.IsWeeklyLock(), g_RiskEngine.IsDrawdownLock(),
+         MathMax(0, savedConsecLosses), InpMaxConsecLosses,
+         g_RiskEngine.GetDailyStartEquity(), g_RiskEngine.GetWeeklyStartEquity(),
+         g_RiskEngine.GetHighWaterMark());
+      if(riskLockWarning != "")
+         QBLogError(riskLockWarning);
 
       // Load kill switch state
       if(persist)
@@ -2765,11 +2812,18 @@ void RunSelfTests()
       bool fboDisabledRejected = !QBLiveStrategySetAllowed(false, false, false, false, false,
                                                             QB_MODE_CONSERVATIVE_LIVE,
                                                             true, reason);
-      // BO enabled but InpBO_DemoAuthorized defaults false -> rejected even
-      // though FBO alongside it would otherwise be fine.
-      bool boUnauthorizedRejected = !QBLiveStrategySetAllowed(true, true, false, false, false,
-                                                               QB_MODE_CONSERVATIVE_LIVE,
-                                                               true, reason);
+      // BO enabled but explicitly NOT demo-authorized -> rejected. Tests
+      // QBStrategyAllowlistCheck() directly with a literal false, not
+      // QBLiveStrategySetAllowed() (which would read the live
+      // InpBO_DemoAuthorized input) -- matches the tpv2AllowedWhenAuthorized
+      // check below, so this assertion is independent of whichever roster
+      // is actually loaded (found non-hermetic 2026-07-24: this used to
+      // read InpBO_DemoAuthorized's shipped default of false implicitly,
+      // which broke the moment a deployment deliberately authorized BO).
+      string boReason = "";
+      bool boUnauthorizedRejected = !QBStrategyAllowlistCheck(
+         STRATEGY_ID_BREAKOUT, true, false,
+         QB_MODE_CONSERVATIVE_LIVE, true, boReason);
       // Shadow mode never satisfies ModeAllowsStrategy, even with every
       // other condition (enabled, authorized, risk-acknowledged) true.
       bool shadowModeRejected = !QBLiveStrategySetAllowed(false, true, false, false, false,
@@ -2807,18 +2861,27 @@ void RunSelfTests()
       }
    }
 
-   // Test 38: live-mode execution remains market-only until pending evidence exists.
+   // Test 38: live-mode execution stays market-only by default; pending
+   // configurations require explicit InpAcknowledgePendingOrderRisk=true
+   // (added 2026-07-24 -- see QBLiveExecutionSetAllowed's own comment).
    {
       string reason = "";
-      bool marketOnlyAccepted = QBLiveExecutionSetAllowed(true, false, false, 0, reason);
-      bool noMarketRejected = !QBLiveExecutionSetAllowed(false, false, false, 0, reason);
-      bool stopRejected = !QBLiveExecutionSetAllowed(true, true, false, 0, reason);
-      bool limitRejected = !QBLiveExecutionSetAllowed(true, false, true, 0, reason);
-      bool pendingCapacityRejected = !QBLiveExecutionSetAllowed(true, false, false, 1, reason);
+      bool marketOnlyAccepted = QBLiveExecutionSetAllowed(true, false, false, 0, false, reason);
+      bool noOrderTypeRejected = !QBLiveExecutionSetAllowed(false, false, false, 0, true, reason);
+      bool stopWithoutAckRejected = !QBLiveExecutionSetAllowed(true, true, false, 0, false, reason);
+      bool limitWithoutAckRejected = !QBLiveExecutionSetAllowed(true, false, true, 0, false, reason);
+      bool pendingCapacityWithoutAckRejected = !QBLiveExecutionSetAllowed(true, false, false, 1, false, reason);
+      bool noMarketWithoutAckRejected = !QBLiveExecutionSetAllowed(false, true, false, 0, false, reason);
+      // Explicit acknowledgment permits every pending configuration above.
+      bool stopWithAckAccepted = QBLiveExecutionSetAllowed(true, true, false, 0, true, reason);
+      bool limitWithAckAccepted = QBLiveExecutionSetAllowed(true, false, true, 0, true, reason);
+      bool noMarketWithAckAccepted = QBLiveExecutionSetAllowed(false, true, false, 0, true, reason);
 
-      if(marketOnlyAccepted && noMarketRejected && stopRejected &&
-         limitRejected && pendingCapacityRejected)
-      { g_SelfTestPassed++; QBLogInfo("TEST 38 PASS: Live execution gate market-only"); }
+      if(marketOnlyAccepted && noOrderTypeRejected && stopWithoutAckRejected &&
+         limitWithoutAckRejected && pendingCapacityWithoutAckRejected &&
+         noMarketWithoutAckRejected && stopWithAckAccepted &&
+         limitWithAckAccepted && noMarketWithAckAccepted)
+      { g_SelfTestPassed++; QBLogInfo("TEST 38 PASS: Live execution gate market-only-by-default, pending-with-ack"); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 38 FAIL: Live execution gate"); }
    }
@@ -3297,21 +3360,29 @@ void RunSelfTests()
       { g_SelfTestFailed++; QBLogError("TEST 101 FAIL: TPV2 restart persistence " + detail); }
 
       // Test 102: broker-tier classification and mechanical-readiness table
-      // (Phase 13) are correct in isolation, independent of any connected
-      // account -- Shadow/Diagnostic always map to the Shadow tier,
-      // Challenge Live always maps to the Challenge tier regardless of
-      // account, and TP V1 is the only strategy never mechanically ready.
+      // (Phase 13) are correct -- Shadow/Diagnostic always map to the Shadow
+      // tier regardless of account, and TP V1 is the only strategy never
+      // mechanically ready. Challenge Live's tier now depends on the
+      // connected account (2026-07-24, mirrors Conservative Live) --
+      // tested against whichever account this run is actually connected
+      // to, not a hardcoded assumption, matching the TEST 37 hermeticity
+      // lesson from the same session (a test must exercise the real
+      // account-dependent contract, not assume a fixed environment).
       {
          bool shadowIsShadowTier = QBCurrentBrokerTier(QB_MODE_SHADOW) == QB_BROKER_TIER_SHADOW;
          bool diagnosticIsShadowTier = QBCurrentBrokerTier(QB_MODE_DIAGNOSTIC) == QB_BROKER_TIER_SHADOW;
-         bool challengeIsChallengeTier = QBCurrentBrokerTier(QB_MODE_CHALLENGE_LIVE) == QB_BROKER_TIER_CHALLENGE_LIVE;
+         bool onDemoAccountNow = AccountInfoInteger(ACCOUNT_TRADE_MODE) == ACCOUNT_TRADE_MODE_DEMO;
+         ENUM_QB_BROKER_TIER expectedChallengeTier = onDemoAccountNow ?
+            QB_BROKER_TIER_CHALLENGE_DEMO : QB_BROKER_TIER_CHALLENGE_LIVE;
+         bool challengeMatchesAccountType =
+            QBCurrentBrokerTier(QB_MODE_CHALLENGE_LIVE) == expectedChallengeTier;
          bool tpv1NeverReady = !QBStrategyMechanicallyReady(STRATEGY_ID_TREND_PULLBACK);
          bool boReady = QBStrategyMechanicallyReady(STRATEGY_ID_BREAKOUT);
          bool fboReady = QBStrategyMechanicallyReady(STRATEGY_ID_FAILED_BREAKOUT);
          bool mrReady = QBStrategyMechanicallyReady(STRATEGY_ID_MEAN_REVERSION);
          bool tpv2Ready = QBStrategyMechanicallyReady(STRATEGY_ID_TREND_PULLBACK_V2);
 
-         if(shadowIsShadowTier && diagnosticIsShadowTier && challengeIsChallengeTier &&
+         if(shadowIsShadowTier && diagnosticIsShadowTier && challengeMatchesAccountType &&
             tpv1NeverReady && boReady && fboReady && mrReady && tpv2Ready)
          { g_SelfTestPassed++; QBLogInfo("TEST 102 PASS: Broker tier and mechanical readiness table"); }
          else
@@ -3408,6 +3479,49 @@ void RunSelfTests()
          else
          { g_SelfTestFailed++; QBLogError("TEST 104 FAIL: Deployment lease validation " + detail); }
       }
+
+      // Test 105: AllocationEngine::RecordOutcome() wiring (2026-07-24 defect fix).
+      if(QBTestAllocationRecordOutcomeWiring(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 105 PASS: Allocation RecordOutcome wiring " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 105 FAIL: Allocation RecordOutcome wiring " + detail); }
+
+      // Test 106: Challenge-Demo tier is now sanctioned exactly like
+      // Conservative-Demo (2026-07-24, blanket demo-only authorization).
+      // QBStrategyAllowlistCheck derives tier from the live connected
+      // account internally (no injection point), so this -- like TEST 102's
+      // challengeMatchesAccountType -- is conditioned on the real account
+      // this run is connected to rather than asserting unconditionally.
+      {
+         bool onDemoAccount106 = AccountInfoInteger(ACCOUNT_TRADE_MODE) == ACCOUNT_TRADE_MODE_DEMO;
+         string challengeReason = "";
+         bool challengeDemoResult = QBStrategyAllowlistCheck(
+            STRATEGY_ID_FAILED_BREAKOUT, true, true,
+            QB_MODE_CHALLENGE_LIVE, true, challengeReason);
+         // Expected: sanctioned (true) on a demo account, still rejected on
+         // a real account -- either outcome is correct depending on context,
+         // so the test asserts the outcome MATCHES onDemoAccount106, not
+         // that it's unconditionally true.
+         bool challengeDemoMatchesAccount = (challengeDemoResult == onDemoAccount106);
+
+         detail = "onDemoAccount=" + (onDemoAccount106 ? "yes" : "no") +
+                  " challengeDemoResult=" + (challengeDemoResult ? "allowed" : "rejected") +
+                  " matches=" + (challengeDemoMatchesAccount ? "yes" : "FAIL") +
+                  " reason=" + challengeReason;
+         if(challengeDemoMatchesAccount)
+         { g_SelfTestPassed++; QBLogInfo("TEST 106 PASS: Challenge-Demo allowlist tier " + detail); }
+         else
+         { g_SelfTestFailed++; QBLogError("TEST 106 FAIL: Challenge-Demo allowlist tier " + detail); }
+      }
+
+      // Test 107: risk-lock restore-time warning fires whenever any
+      // persisted daily/weekly/drawdown lock or consecutive-loss count is
+      // restored latched, closing the silent-restore defect found via 7
+      // real "Drawdown lock active" rejections on 2026-07-23/24.
+      if(QBTestRiskLockRestoreWarning(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 107 PASS: Risk lock restore warning " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 107 FAIL: Risk lock restore warning " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +
