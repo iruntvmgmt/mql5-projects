@@ -263,6 +263,32 @@ void LoadKillSwitchState(KillSwitchState &state)
    if(state.emergency) state.emergency_reason = "Restored persisted emergency lock";
 }
 
+//+------------------------------------------------------------------+
+//| Build a loud restore-time warning when persisted kill-switch      |
+//| state carries any latched flag from a prior session. Returns ""   |
+//| when nothing is latched. Pure/stateless so OnInit can log it and  |
+//| a self-test can exercise it directly, without needing a live      |
+//| account or GlobalVariable persistence context.                    |
+//+------------------------------------------------------------------+
+string QBKillSwitchRestoreWarning(const KillSwitchState &state)
+{
+   if(!state.emergency && !state.entry_kill && !state.symbol_kill &&
+      !state.cancel_all && !state.flatten_all)
+      return "";
+
+   return "KILL-SWITCH STATE RESTORED FROM PRIOR SESSION -- emergency=" +
+          (state.emergency ? "true" : "false") +
+          " entry_kill=" + (state.entry_kill ? "true" : "false") +
+          " symbol_kill=" + (state.symbol_kill ? "true" : "false") +
+          " cancel_all=" + (state.cancel_all ? "true" : "false") +
+          " flatten_all=" + (state.flatten_all ? "true" : "false") +
+          " reason=\"" + state.emergency_reason + "\"" +
+          " -- entries may be blocked and/or cancel/flatten broker actions may " +
+          "execute immediately on this attach. If unexpected, check the " +
+          "QB_Emergency/QB_Kill* GlobalVariables for this account/symbol " +
+          "before assuming a fresh trigger.";
+}
+
 void SaveStrategyTradeCounters(datetime tradeDay, const int &counts[])
 {
    GV_WriteDatetime(GV_STRAT_TRADE_DAY, tradeDay);

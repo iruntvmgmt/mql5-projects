@@ -1158,6 +1158,9 @@ int OnInit()
          KillSwitchState savedKill;
          LoadKillSwitchState(savedKill);
          g_KillSwitch.RestoreState(savedKill);
+         string killRestoreWarning = QBKillSwitchRestoreWarning(savedKill);
+         if(killRestoreWarning != "")
+            QBLogError(killRestoreWarning);
       }
 
       // Load challenge state
@@ -3221,6 +3224,15 @@ void RunSelfTests()
          else
          { g_SelfTestFailed++; QBLogError("TEST 102 FAIL: Broker tier and mechanical readiness table"); }
       }
+
+      // Test 103: kill-switch restore-time warning fires whenever any
+      // latched flag (emergency and/or entry/symbol/cancel/flatten kill)
+      // is restored from persisted GlobalVariable state, closing the
+      // silent-restore defect from DECISION_LOG.md D011 (2026-07-23).
+      if(QBTestKillSwitchRestoreWarning(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 103 PASS: Kill-switch restore warning " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 103 FAIL: Kill-switch restore warning " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

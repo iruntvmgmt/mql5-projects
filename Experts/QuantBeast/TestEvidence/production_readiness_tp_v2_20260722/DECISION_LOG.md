@@ -73,6 +73,75 @@ actions on a live attach.
 
 ---
 
+Decision ID: D012
+Date/time: 2026-07-23, kill-switch restore-warning hardening (follow-up to D011)
+Question: D011 documented a known, deliberately-deferred defect --
+`LoadKillSwitchState()` restoring a stale `emergency`/`entry_kill`/
+`symbol_kill`/`cancel_all`/`flatten_all` latch from a prior session's
+GlobalVariable silently blocked all entries and made
+`ProcessKillSwitchActions()` loop `CancelAllPending()`/
+`CloseAllPositions()` indefinitely, with zero log output explaining why.
+Should this session (a) add loud `OnInit` logging of a restored latch,
+(b) add an explicit operator re-acknowledgment gate before a restored
+latch is allowed to execute broker actions, or (c) both?
+Decision: Implemented (a) only -- a new pure formatter
+`QBKillSwitchRestoreWarning(const KillSwitchState &state)`
+(`Include/QuantBeast/Core/StateStore.mqh`, immediately after
+`LoadKillSwitchState()`) returns a detailed, non-empty warning string
+whenever any of `emergency`/`entry_kill`/`symbol_kill`/`cancel_all`/
+`flatten_all` is set on the state just loaded from persistence, quoting
+`emergency_reason` and pointing the operator at the `QB_Emergency`/
+`QB_Kill*` GlobalVariables to check. `OnInit()`
+(`Experts/QuantBeast/QuantBeastEA.mq5`, right after
+`g_KillSwitch.RestoreState(savedKill)`) now calls it and logs the result
+via `QBLogError()` when non-empty. New self-test
+`QBTestKillSwitchRestoreWarning` (`Include/QuantBeast/Testing/
+SafetyTests.mqh`), registered as TEST 103, proves: a clean state stays
+silent, an emergency-latched state warns and includes the reason string,
+and an entry-kill-only state (no emergency) also warns -- covering both
+halves of the original silent-failure mode. (b), the re-acknowledgment
+gate, was deliberately NOT implemented this pass -- see Reason.
+Reason: (a) is a strictly additive observability fix with zero change to
+any control-flow/safety decision, directly matching AGENTS.md's "never
+weaken... kill-switch controls" rule and the "smallest coherent fix"
+change-discipline. (b) would change real trading behavior: gating a
+restored latch's cancel/flatten actions behind a fresh operator
+acknowledgment could, in a genuine restart-during-a-real-emergency
+scenario (e.g., terminal crash while equity-floor emergency was active
+and positions were still open), delay or block the exact flatten action
+the kill switch exists to guarantee -- an unacceptable safety regression
+for an unconfirmed benefit, since D011's own incident caused no trading
+harm (0 positions/orders throughout) and was already fully addressed by
+making the state visible. (b) remains a candidate for a future pass if a
+restored-latch incident recurs and loud logging alone proves
+insufficient.
+Verification: compile via `wine start /Unix metaeditor64.exe
+/compile:"MQL5\Experts\QuantBeast\QuantBeastEA.mq5"` -- `0 errors, 0
+warnings` (metaeditor.log, 2026.07.23 23:11:24). Self-test-only tester
+run (`Profiles/Tester/QuantBeast.SelfTestDetail.20260722.ini` --
+Diagnostic mode, `InpPersistState=false`, `InpUseGlobalVars=false`, no
+journals, unmodified from its prior use) --
+`Tester/Agent-127.0.0.1-3000/logs/20260723.log`: `Self-tests complete:
+106 passed, 0 failed` (up from the pre-existing 105), `TEST 103 PASS:
+Kill-switch restore warning cleanIsSilent=yes emergencyWarns=yes
+entryOnlyWarns=yes`, zero `FAIL` lines anywhere in the run, `TEST 102`
+and all prior tests still pass -- no regression. No broker orders
+possible or attempted (Diagnostic mode, no persistence).
+Trading-behavior impact: none -- purely additive logging; no change to
+`IsEntryKill()`/`IsFlattenAll()`/`IsCancelAll()`/`ProcessKillSwitchActions()`
+semantics.
+Files affected: `Experts/QuantBeast/QuantBeastEA.mq5`,
+`Include/QuantBeast/Core/StateStore.mqh`,
+`Include/QuantBeast/Testing/SafetyTests.mqh`.
+Commit: (pending operator approval to commit)
+Follow-up: D011 is now **partially resolved** -- the silent-restore
+observability gap is closed. The re-acknowledgment gate (D011's option
+(b)) remains open/deferred by deliberate choice, not oversight; revisit
+only if a restored-latch incident recurs and the loud `OnInit` log proves
+insufficient in practice.
+
+---
+
 Decision ID: D008
 Date/time: 2026-07-23, Phase 1 of the follow-on sprint (`QuantBeast_Production_Readiness_Sprint.md`)
 Question: Independently verify the prior sprint's documented final state

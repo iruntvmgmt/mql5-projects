@@ -3688,4 +3688,47 @@ bool QBTestTPV2RestartPersistence(string &detail)
    return tpv2KillSurvived && othersStillFalse && tpv2CountSurvived && othersCountCorrect;
 }
 
+//+------------------------------------------------------------------+
+//| Defect: a stale QB_Emergency_<acct>_<symbol> GlobalVariable from a |
+//| prior session made LoadKillSwitchState() restore emergency=true    |
+//| silently -- OnInit never logged it, so an operator attaching the   |
+//| EA had no visibility that entries were blocked and                 |
+//| ProcessKillSwitchActions() would loop CancelAll/CloseAll (see       |
+//| DECISION_LOG.md D011, 2026-07-23). QBKillSwitchRestoreWarning()     |
+//| (StateStore.mqh) is the fix: a pure formatter OnInit now calls      |
+//| right after RestoreState() and logs via QBLogError() whenever any   |
+//| latched flag was restored. This test exercises the formatter        |
+//| directly -- no live account or GlobalVariable persistence needed.   |
+//+------------------------------------------------------------------+
+bool QBTestKillSwitchRestoreWarning(string &detail)
+{
+   KillSwitchState clean;
+   ZeroMemory(clean);
+   bool cleanIsSilent = QBKillSwitchRestoreWarning(clean) == "";
+
+   KillSwitchState emergency;
+   ZeroMemory(emergency);
+   emergency.emergency = true;
+   emergency.entry_kill = true;
+   emergency.cancel_all = true;
+   emergency.flatten_all = true;
+   emergency.emergency_reason = "Restored persisted emergency lock";
+   string emergencyMsg = QBKillSwitchRestoreWarning(emergency);
+   bool emergencyWarns = StringFind(emergencyMsg, "RESTORED FROM PRIOR SESSION") >= 0 &&
+                         StringFind(emergencyMsg, "Restored persisted emergency lock") >= 0;
+
+   // entry_kill alone (no emergency) is the other half of the same silent
+   // failure mode -- entries were blocked even before emergency latched.
+   KillSwitchState entryOnly;
+   ZeroMemory(entryOnly);
+   entryOnly.entry_kill = true;
+   string entryOnlyMsg = QBKillSwitchRestoreWarning(entryOnly);
+   bool entryOnlyWarns = StringFind(entryOnlyMsg, "RESTORED FROM PRIOR SESSION") >= 0;
+
+   detail = "cleanIsSilent=" + (cleanIsSilent ? "yes" : "FAIL") +
+            " emergencyWarns=" + (emergencyWarns ? "yes" : "FAIL") +
+            " entryOnlyWarns=" + (entryOnlyWarns ? "yes" : "FAIL");
+   return cleanIsSilent && emergencyWarns && entryOnlyWarns;
+}
+
 #endif // QB_SAFETYTESTS_MQH
