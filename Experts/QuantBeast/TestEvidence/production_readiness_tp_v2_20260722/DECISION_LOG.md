@@ -176,7 +176,7 @@ confirmed at time of writing.
 Files affected: none beyond `Tools/quantbeast_deploy.py`'s
 `CANONICAL_ROSTER` (already covered by the deployment-automation HANDOFF.md
 entry's file list).
-Commit: (pending, paired with the deployment-automation HANDOFF.md entry)
+Commit: `61441eb`
 Follow-up: decide whether future canonical-roster deployments should keep
 BO in, or scope it back out until organic BUY-side evidence (the open item
 from the follow-on sprint report) brings it up to FBO/MR's DEMO_READY bar.
