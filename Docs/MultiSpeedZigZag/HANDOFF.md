@@ -21,6 +21,14 @@ Claude is actively working on Quant Beast on `main`. This branch intentionally a
 
 The engine rebuilds three ATR-reversal ZigZags from closed-bar history. It records candidate extremes internally, immutable confirmed pivots, original pivot time, confirmation time, HH/HL/LH/LL classification, projected lines, close-confirmed breakouts, and stable identities.
 
+Core types now include:
+
+- structural origin types
+- cluster lifecycle states
+- evidence-family masks
+- expanded candidate origin metadata
+- first-class cluster fields
+
 ### Strategy suite
 
 - `Include/MultiSpeedZigZag/Strategies/StrategySuite.mqh`
@@ -36,7 +44,7 @@ Implemented and independently configurable:
 - Nested pullback continuation
 - Weighted three-speed ensemble
 
-Reserved in code, now fully specified as state machines:
+Reserved in code and fully specified as state machines:
 
 - Sequential confirmation
 - Breakout retest
@@ -44,19 +52,37 @@ Reserved in code, now fully specified as state machines:
 - Compression breakout
 - Structure transition
 
-Invalid candidates without usable event, entry, or stop data are rejected before entering the candidate array.
+### Opportunity clustering implementation
+
+- `Include/MultiSpeedZigZag/Arbitration/OpportunityClusterEngine.mqh`
+- `Tests/MultiSpeedZigZag/Test_MSZZ_Clusters.mq5`
+
+The cluster engine now:
+
+- groups candidates by structural origin and direction
+- creates stable cluster IDs
+- merges evidence masks
+- tracks supporting strategies
+- measures stop disagreement
+- applies capped support bonuses
+- assigns a canonical owner using strategy specificity priority
+- selects the strongest cluster
+
+The cluster test defines three related fast-origin candidates plus one independent medium-origin candidate. Expected output is two clusters with nested pullback owning the related cluster.
+
+The standalone EA is not yet wired to execute clusters; it still selects raw candidates. Cluster integration should occur only after compile and test verification.
 
 ### Persistent event store
 
 - `Include/MultiSpeedZigZag/Execution/EventStore.mqh`
 
-Consumed structural event IDs are stored in a symbol/timeframe/magic-scoped file and reloaded on initialization. The store is bounded and rewritten after additions. Runtime verification remains pending.
+Consumed structural event IDs are stored in a symbol/timeframe/magic-scoped file and reloaded on initialization. Runtime verification remains pending.
 
 ### Execution guard
 
 - `Include/MultiSpeedZigZag/Execution/ExecutionGuard.mqh`
 
-Added symbol execution-property loading, volume normalization, terminal/EA/symbol permission checks, spread gate, stop/freeze-distance validation, and stop/target orientation validation.
+Added symbol execution-property loading, volume normalization, permission checks, spread gate, stop/freeze-distance validation, and stop/target orientation validation.
 
 ### Standalone EA
 
@@ -64,46 +90,45 @@ Added symbol execution-property loading, volume normalization, terminal/EA/symbo
 
 Features include closed-bar processing, three execution authorization gates, per-strategy toggles, persistent deduplication, journaling, spread rejection, normalized volume, broker stop validation, market-entry target recalculation, opposite-position close verification, and one-position-per-symbol control.
 
-The three live gates are:
-
-1. `InpShadowOnly=false`
-2. `InpAllowLiveExecution=true`
-3. `InpAcknowledgeRisk=true`
-
 The EA remains not production-authorized.
 
-### Tests and deterministic specifications
+### Deterministic specifications and tests
 
 - `Tests/MultiSpeedZigZag/Test_MSZZ_Determinism.mq5`
+- `Tests/MultiSpeedZigZag/Test_MSZZ_Clusters.mq5`
 - `Docs/MultiSpeedZigZag/SYNTHETIC_FIXTURES.md`
 
-Twelve canonical fixtures now define candidate replacement, pivot confirmation timing, equal-high/equal-low tie rules, minimum spacing, structure labels, close-only breakouts, forming-bar exclusion, history-extension stability, and data-gap behavior.
+Twelve canonical structural fixtures define candidate replacement, confirmation timing, tie rules, minimum spacing, structure labels, close-only breakouts, forming-bar exclusion, history extension, and gap behavior.
 
-Important discovery: the current engine projects lines using elapsed seconds, while Pine commonly projects using bar indices. This can create parity failures across gaps or irregular sessions. The parity test must determine whether the engine should move to bar-index geometry.
+### Parity exporter
 
-### Reserved-strategy contracts
+- `Include/MultiSpeedZigZag/Diagnostics/ParityExporter.mqh`
+- `Tests/MultiSpeedZigZag/Export_MSZZ_Parity.mq5`
 
-- `Docs/MultiSpeedZigZag/STATE_MACHINES.md`
+The exporter writes:
 
-The five reserved strategies now have explicit states, transitions, invalidations, expirations, deduplication rules, and persistence requirements.
+- manifest
+- bars
+- pivots
+- per-bar speed snapshots
+- candidates
+- clusters
 
-### Opportunity clustering contract
+The export script rebuilds the engine at every historical closed-bar prefix, emits structural state, runs the strategy suite, forms clusters, and writes machine-comparable CSV files.
 
-- `Docs/MultiSpeedZigZag/OPPORTUNITY_CLUSTERING.md`
+Important caveat: the exporter currently records the engine's elapsed-seconds geometry. Pine comparison may prove bar-index geometry is required.
 
-Defined immutable cluster IDs, compatibility rules, parent-child structural origins, evidence families, cluster lifecycle, canonical owner selection, conflict arbitration, and staged-entry restrictions.
+### Behavioral documentation
 
-### Pine/MQL5 parity contract
-
-- `Docs/MultiSpeedZigZag/PARITY_EXPORT_SCHEMA.md`
-
-Defined run manifests and CSV schemas for bars, pivots, trendlines, line values, breakouts, candidates, and clusters, plus mismatch categories and acceptance tolerances.
-
-### Research journal contract
-
-- `Docs/MultiSpeedZigZag/RESEARCH_JOURNAL_SCHEMA.md`
-
-Defined bar-state, raw-candidate, cluster, execution, fixed-horizon, excursion, barrier, and structural outcome records. Features must be frozen at decision time; future bars may only populate outcome fields.
+- `STATE_MACHINES.md`
+- `OPPORTUNITY_CLUSTERING.md`
+- `PARITY_EXPORT_SCHEMA.md`
+- `RESEARCH_JOURNAL_SCHEMA.md`
+- `NON_REPAINTING_CONTRACT.md`
+- `STRATEGY_CATALOG.md`
+- `TEST_PLAN.md`
+- `PARITY_AUDIT.md`
+- `KNOWN_ISSUES.md`
 
 ## Canonical behavior
 
@@ -119,29 +144,33 @@ Defined bar-state, raw-candidate, cluster, execution, fixed-horizon, excursion, 
 ## Known limitations and risks
 
 1. MetaEditor compile remains unverified.
-2. The deterministic test has not been executed.
-3. Full-history rebuild performance has not been measured.
-4. Event-store behavior has not been runtime-tested.
-5. Position ownership reconstruction is absent.
-6. No account-risk sizing, daily limits, trade-count gate, margin preflight, or kill switch exists.
-7. Fixed strategy scores are placeholders rather than edge estimates.
-8. Advanced Pine features remain unported.
-9. Current code still uses best-candidate selection rather than first-class cluster objects.
-10. Bar-for-bar Pine parity has not been run.
-11. Time-based versus bar-index trendline geometry is unresolved and potentially material.
+2. Determinism, cluster, persistence, and parity scripts have not been executed.
+3. Candidate origin metadata is now available, but existing strategy emitters still need to populate it consistently.
+4. The standalone EA still executes raw selected candidates rather than selected clusters.
+5. Full-history rebuild performance has not been measured.
+6. Event-store behavior has not been runtime-tested.
+7. Position ownership reconstruction is absent.
+8. No account-risk sizing, daily limits, trade-count gate, margin preflight, or kill switch exists.
+9. Fixed strategy scores are placeholders rather than edge estimates.
+10. Advanced Pine features remain unported.
+11. Bar-for-bar Pine parity has not been run.
+12. Time-based versus bar-index trendline geometry remains unresolved.
+13. Pivot export may emit repeated rows when rebuilding each history prefix; comparison tooling must deduplicate by semantic pivot identity or the exporter must maintain an emitted-ID set.
 
 ## Required next actions
 
-1. Compile the EA, headers, and tests in MetaEditor; fix every error and warning.
-2. Convert the synthetic fixture specification into executable fixture tests.
-3. Run deterministic and event-store tests and save evidence.
-4. Implement the parity exporters and compare Pine against MQL5.
-5. Resolve bar-index versus elapsed-time line geometry through parity evidence.
-6. Add first-class cluster types and aggregation based on the clustering contract.
-7. Implement position and order ownership reconstruction.
-8. Add account-risk sizing, margin preflight, daily limits, and emergency controls.
-9. Implement reserved strategies one at a time from `STATE_MACHINES.md`.
-10. Collect shadow evidence before demo execution.
+1. Compile all EA, headers, and test scripts in MetaEditor; fix every error and warning.
+2. Update strategy emitters to populate `origin_type`, `origin_id`, and `evidence_mask` consistently.
+3. Run cluster tests and verify owner priority, grouping, and stop-disagreement behavior.
+4. Add emitted-ID deduplication to parity exports.
+5. Run parity export on a fixed XAUUSD interval and produce the corresponding Pine export.
+6. Resolve bar-index versus elapsed-time line geometry through evidence.
+7. Wire the standalone EA to select and persist clusters instead of raw candidates.
+8. Convert remaining synthetic fixtures into executable tests.
+9. Implement position and order ownership reconstruction.
+10. Add account-risk sizing, margin preflight, daily limits, and emergency controls.
+11. Implement reserved strategies one at a time.
+12. Collect shadow evidence before demo execution.
 
 ## Agent start procedure
 
