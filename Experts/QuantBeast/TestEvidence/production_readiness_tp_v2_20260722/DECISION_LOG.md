@@ -572,6 +572,86 @@ running), so not fixed further this pass.
 
 ---
 
+Decision ID: D020
+Date/time: 2026-07-25, Level-1 Edge Certification Sprint -- Tier C real-tick
+test and final ticket verdict
+Question: with Tier A (Model=1) invalidated (D019/Tier B,
+`MODEL1_PROXY_UNRELIABLE`) and Tier B complete, run the user's revised plan:
+Tier C real-tick test across the ~10 genuinely clean trading weekdays
+(2026.07.06-07.17), combined roster plus BO/FBO/MR/TPV2 individually, no
+weakened gates, descriptive statistics only, DSR/PBO/walk-forward/Monte
+Carlo explicitly deferred, then close the ticket with a signed verdict.
+Decision: ran all five configurations once each against the full
+2026.07.06-2026.07.18 window (real ticks, frozen post-D018/D019 build).
+Result: 5 distinct real trades total (BO 3, FBO 1, MR 1, TPV2 0; the
+combined config's 1 trade duplicates the FBO-only trade, not new
+information) -- see `TestEvidence/level1_edge_certification_20260724/
+TIER_C_REAL_TICK_TEST.md` for full trade-level detail, rejection
+attribution, and analysis strictly scoped to execution-pipeline
+correctness, strategy reachability, rejection distribution, descriptive
+expectancy/R, per-strategy contribution, long/short behavior, catastrophic-
+behavior check, and consistency with prior evidence -- explicitly no edge
+claim drawn from n=1-3 samples. `InpMaxConsecLosses=1` was confirmed as the
+dominant sample-size constraint within any single continuous run (not the
+calendar-day count alone): each config's first loss locks out the rest of
+its 12-day window, capping observable trades regardless of what the market
+offered afterward. This is real, frozen, correct behavior of this build,
+left unweakened.
+Also found, mid-run: the D019 journal-isolation fix is only partially
+reliable in practice -- 5 of 7 real Tester invocations against this build
+resolved an empty auto-tag at runtime despite `MQLInfoInteger(MQL_TESTER)`
+being unconditionally true and TEST 109 proving the underlying logic
+correct in-process. Not a new collision risk in this specific run sequence
+(each affected run was a different single-strategy config, so the
+`Strategy` CSV column still separates their rows), but the mechanism is
+not yet trustworthy for a scenario where two runs of the *same*
+configuration might land back-to-back. Text-log parsing (already
+established as reliable in Tier B) was used as the primary source for
+every Tier C number instead of relying on the CSVs; disclosed in
+`TIER_C_REAL_TICK_TEST.md` as an open item, not swept under the rug.
+Evidence classification recorded: original Tier A plan
+`INVALIDATED_MODEL1_PROXY_FAILURE`; `qb-live-20260724-02`/
+`qb-live-20260724-05-longrun` `INVALID_FOR_EDGE_PENDING_CAP_DEFECT` (ran
+with the D018 bug, "0 trades" reflects the defect, not market absence);
+`qb-live-20260724-06-pendingcapfix` is the first valid forward-evidence
+deployment.
+Final ticket verdict: **`LEVEL1_EDGE_CERTIFICATION_INCONCLUSIVE_DATA_CONSTRAINT`**
+-- not `PROVISIONAL_EDGE_FAILED`, since nothing in the sample is
+catastrophic or clearly negative (BO net positive, FBO/MR single
+unremarkable losses), but far too small in every dimension the sprint's
+own predeclared gates require (>=100 trades, 3+ regimes, many months) to
+support any edge claim either way. Separately:
+`EXECUTION_PIPELINE_STATUS=VERIFIED_CORRECT`,
+`MODEL1_PROXY_STATUS=UNRELIABLE`,
+`REAL_TICK_SAMPLE_STATUS=SEVERELY_UNDERPOWERED`,
+`DEMO_FORWARD_STATUS=IN_PROGRESS_NOT_YET_SUFFICIENT`.
+Reason: an honest INCONCLUSIVE closes the ticket the sprint was scoped to
+answer ("is there a defensible, auditable verdict on this build's
+historical edge, under a frozen configuration and un-weakened gates") --
+the answer is "not yet enough data exists to say," which is itself a
+complete, defensible answer, not a failure of the sprint. Manufacturing
+DSR/PBO/Monte Carlo results from a 5-trade sample would have produced a
+false sense of statistical rigor without the sample size those techniques
+require to mean anything -- deferring them is the epistemically honest
+choice, not a shortcut.
+Trading-behavior impact: none -- Tier C was Shadow-mode only, zero broker
+orders transmitted, and does not touch the live `qb-live-20260724-06-
+pendingcapfix` deployment, which continues accumulating independent
+Level-2 (demo-forward) evidence.
+Files affected: `TestEvidence/level1_edge_certification_20260724/
+TIER_C_REAL_TICK_TEST.md` (new), `TestEvidence/level1_edge_certification_
+20260724/FOLLOWUP_HISTORICAL_DATA_ACQUISITION.md` (new, separate
+engineering ticket, not part of this verdict), this entry, `HANDOFF.md`.
+Commit: (pending)
+Follow-up: (1) investigate the journal auto-tag intermittency found above
+in a future pass. (2) Continue `qb-live-20260724-06-pendingcapfix`'s
+demo-forward accumulation toward the sprint's own Level-2 sample
+requirement (>=50 overall, >=10 per active strategy). (3) The historical-
+data-acquisition follow-up ticket remains proposed-only, not started, not
+authorized to proceed without further explicit direction.
+
+---
+
 Decision ID: D008
 Date/time: 2026-07-23, Phase 1 of the follow-on sprint (`QuantBeast_Production_Readiness_Sprint.md`)
 Question: Independently verify the prior sprint's documented final state
