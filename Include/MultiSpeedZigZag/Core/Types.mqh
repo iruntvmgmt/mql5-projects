@@ -49,6 +49,40 @@ enum ENUM_MSZZ_STRATEGY_ID
    MSZZ_STRAT_WEIGHTED_ENSEMBLE = 1080
 };
 
+enum ENUM_MSZZ_ORIGIN_TYPE
+{
+   MSZZ_ORIGIN_UNKNOWN = 0,
+   MSZZ_ORIGIN_FAST_BREAK,
+   MSZZ_ORIGIN_MEDIUM_BREAK,
+   MSZZ_ORIGIN_SLOW_BREAK,
+   MSZZ_ORIGIN_PIVOT_SWEEP,
+   MSZZ_ORIGIN_STRUCTURE_TRANSITION,
+   MSZZ_ORIGIN_COMPRESSION_RELEASE
+};
+
+enum ENUM_MSZZ_CLUSTER_STATE
+{
+   MSZZ_CLUSTER_OPEN = 0,
+   MSZZ_CLUSTER_STRENGTHENED,
+   MSZZ_CLUSTER_SELECTED,
+   MSZZ_CLUSTER_EXECUTED,
+   MSZZ_CLUSTER_MANAGED,
+   MSZZ_CLUSTER_CLOSED,
+   MSZZ_CLUSTER_EXPIRED,
+   MSZZ_CLUSTER_INVALIDATED,
+   MSZZ_CLUSTER_CANCELLED_CONFLICT
+};
+
+enum ENUM_MSZZ_EVIDENCE_MASK
+{
+   MSZZ_EVIDENCE_NONE       = 0,
+   MSZZ_EVIDENCE_TRIGGER    = 1,
+   MSZZ_EVIDENCE_CONTEXT    = 2,
+   MSZZ_EVIDENCE_STRUCTURE  = 4,
+   MSZZ_EVIDENCE_QUALITY    = 8,
+   MSZZ_EVIDENCE_RETEST     = 16
+};
+
 struct MSZZPivot
 {
    bool                      valid;
@@ -88,6 +122,7 @@ struct MSZZCandidate
    bool                    valid;
    ENUM_MSZZ_STRATEGY_ID   strategy_id;
    ENUM_MSZZ_DIRECTION     direction;
+   ENUM_MSZZ_ORIGIN_TYPE   origin_type;
    datetime                signal_time;
    datetime                expiry_time;
    double                  entry;
@@ -95,20 +130,32 @@ struct MSZZCandidate
    double                  target;
    double                  score;
    int                     supporting_models;
+   int                     evidence_mask;
    string                  setup_name;
+   string                  origin_id;
    string                  event_id;
    string                  reason;
 };
 
 struct MSZZOpportunityCluster
 {
-   bool                valid;
-   string              event_id;
-   ENUM_MSZZ_DIRECTION direction;
-   datetime            origin_time;
-   double              score;
-   int                 support_count;
-   int                 preferred_index;
+   bool                    valid;
+   string                  cluster_id;
+   string                  origin_id;
+   ENUM_MSZZ_ORIGIN_TYPE   origin_type;
+   ENUM_MSZZ_DIRECTION     direction;
+   ENUM_MSZZ_CLUSTER_STATE state;
+   datetime                origin_time;
+   datetime                latest_time;
+   datetime                expiry_time;
+   double                  canonical_stop;
+   double                  combined_score;
+   double                  stop_disagreement;
+   int                     support_count;
+   int                     evidence_mask;
+   int                     preferred_index;
+   ENUM_MSZZ_STRATEGY_ID   owner_strategy_id;
+   string                  supporting_strategy_ids;
 };
 
 string MSZZDirectionText(const ENUM_MSZZ_DIRECTION dir)
