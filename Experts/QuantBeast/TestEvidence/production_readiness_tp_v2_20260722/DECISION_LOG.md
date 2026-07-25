@@ -562,7 +562,7 @@ Files affected: `Include/QuantBeast/Core/Diagnostics.mqh`,
 `Include/QuantBeast/Analytics/CounterfactualTracker.mqh`,
 `Experts/QuantBeast/QuantBeastEA.mq5`,
 `Include/QuantBeast/Testing/SafetyTests.mqh`.
-Commit: (pending)
+Commit: `1d5e90a`
 Follow-up: the underlying `FILE_SHARE_READ`-only opening mode is unchanged
 and could theoretically still collide if the Tester harness ever ran
 genuinely concurrent (not just rapid-sequential) jobs against the same tag
