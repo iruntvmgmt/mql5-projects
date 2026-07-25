@@ -6,8 +6,14 @@
 class CMSZZStrategySuite
 {
 private:
-   bool m_enabled[13];
-   int  m_sequence_window_bars;
+   bool m_fast_breakout;
+   bool m_medium_breakout;
+   bool m_slow_breakout;
+   bool m_fast_medium_confluence;
+   bool m_fast_medium_context;
+   bool m_medium_slow_context;
+   bool m_nested_pullback;
+   bool m_weighted_ensemble;
    double m_rr;
 
    void ClearCandidate(MSZZCandidate &c) const { ZeroMemory(c); c.strategy_id=MSZZ_STRAT_NONE; }
@@ -17,13 +23,14 @@ private:
                      const double stop,const double score,const int models,const string name,
                      const string event_id,const string reason) const
    {
+      if(event_id=="" || entry<=0.0 || stop<=0.0 || entry==stop) return;
       if(count>=ArraySize(out)) ArrayResize(out,count+16);
       MSZZCandidate c; ClearCandidate(c);
       c.valid=true; c.strategy_id=id; c.direction=dir; c.signal_time=t;
       c.entry=entry; c.stop=stop; c.score=score; c.supporting_models=models;
       c.setup_name=name; c.event_id=event_id; c.reason=reason;
       double risk=MathAbs(entry-stop);
-      if(risk>0.0) c.target=(dir==MSZZ_DIR_LONG ? entry+risk*m_rr : entry-risk*m_rr);
+      c.target=(dir==MSZZ_DIR_LONG ? entry+risk*m_rr : entry-risk*m_rr);
       out[count++]=c;
    }
 
@@ -56,9 +63,30 @@ private:
 public:
    CMSZZStrategySuite(void)
    {
-      for(int i=0;i<13;i++) m_enabled[i]=true;
-      m_sequence_window_bars=5;
+      m_fast_breakout=true;
+      m_medium_breakout=true;
+      m_slow_breakout=true;
+      m_fast_medium_confluence=true;
+      m_fast_medium_context=true;
+      m_medium_slow_context=true;
+      m_nested_pullback=true;
+      m_weighted_ensemble=true;
       m_rr=1.5;
+   }
+
+   void ConfigureStrategies(const bool fast_breakout,const bool medium_breakout,const bool slow_breakout,
+                            const bool fast_medium_confluence,const bool fast_medium_context,
+                            const bool medium_slow_context,const bool nested_pullback,
+                            const bool weighted_ensemble)
+   {
+      m_fast_breakout=fast_breakout;
+      m_medium_breakout=medium_breakout;
+      m_slow_breakout=slow_breakout;
+      m_fast_medium_confluence=fast_medium_confluence;
+      m_fast_medium_context=fast_medium_context;
+      m_medium_slow_context=medium_slow_context;
+      m_nested_pullback=nested_pullback;
+      m_weighted_ensemble=weighted_ensemble;
    }
 
    void SetRiskReward(const double rr) { m_rr=MathMax(0.1,rr); }
@@ -70,64 +98,64 @@ public:
       int n=0;
       double long_stop=LongStop(f,m), short_stop=ShortStop(f,m);
 
-      if(f.bullish_break)
+      if(m_fast_breakout && f.bullish_break)
          AddCandidate(out,n,MSZZ_STRAT_FAST_BREAKOUT,MSZZ_DIR_LONG,signal_time,close_price,long_stop,4.0,1,
                       "Fast Breakout",f.bullish_event_id,"Fast resistance projection broken on close");
-      if(f.bearish_break)
+      if(m_fast_breakout && f.bearish_break)
          AddCandidate(out,n,MSZZ_STRAT_FAST_BREAKOUT,MSZZ_DIR_SHORT,signal_time,close_price,short_stop,4.0,1,
                       "Fast Breakout",f.bearish_event_id,"Fast support projection broken on close");
 
-      if(m.bullish_break)
+      if(m_medium_breakout && m.bullish_break)
          AddCandidate(out,n,MSZZ_STRAT_MEDIUM_BREAKOUT,MSZZ_DIR_LONG,signal_time,close_price,long_stop,5.5,1,
                       "Medium Breakout",m.bullish_event_id,"Medium resistance projection broken on close");
-      if(m.bearish_break)
+      if(m_medium_breakout && m.bearish_break)
          AddCandidate(out,n,MSZZ_STRAT_MEDIUM_BREAKOUT,MSZZ_DIR_SHORT,signal_time,close_price,short_stop,5.5,1,
                       "Medium Breakout",m.bearish_event_id,"Medium support projection broken on close");
 
-      if(s.bullish_break)
+      if(m_slow_breakout && s.bullish_break)
          AddCandidate(out,n,MSZZ_STRAT_SLOW_BREAKOUT,MSZZ_DIR_LONG,signal_time,close_price,long_stop,7.0,1,
                       "Slow Breakout",s.bullish_event_id,"Slow resistance projection broken on close");
-      if(s.bearish_break)
+      if(m_slow_breakout && s.bearish_break)
          AddCandidate(out,n,MSZZ_STRAT_SLOW_BREAKOUT,MSZZ_DIR_SHORT,signal_time,close_price,short_stop,7.0,1,
                       "Slow Breakout",s.bearish_event_id,"Slow support projection broken on close");
 
-      if(f.bullish_break && (m.bullish_break || BullContext(m)) && BullContext(s))
+      if(m_fast_medium_confluence && f.bullish_break && (m.bullish_break || BullContext(m)) && BullContext(s))
          AddCandidate(out,n,MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,MSZZ_DIR_LONG,signal_time,close_price,long_stop,8.0,
                       (m.bullish_break?3:2),"Fast + Medium Confluence / Slow Alignment",
                       "CLUSTER|"+f.bullish_event_id,"Fast trigger, medium confirmation/context, slow bullish alignment");
-      if(f.bearish_break && (m.bearish_break || BearContext(m)) && BearContext(s))
+      if(m_fast_medium_confluence && f.bearish_break && (m.bearish_break || BearContext(m)) && BearContext(s))
          AddCandidate(out,n,MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,MSZZ_DIR_SHORT,signal_time,close_price,short_stop,8.0,
                       (m.bearish_break?3:2),"Fast + Medium Confluence / Slow Alignment",
                       "CLUSTER|"+f.bearish_event_id,"Fast trigger, medium confirmation/context, slow bearish alignment");
 
-      if(f.bullish_break && BullContext(m))
+      if(m_fast_medium_context && f.bullish_break && BullContext(m))
          AddCandidate(out,n,MSZZ_STRAT_FAST_WITH_MEDIUM_CONTEXT,MSZZ_DIR_LONG,signal_time,close_price,long_stop,6.3,2,
                       "Fast Breakout with Medium Context","CLUSTER|"+f.bullish_event_id,"Fast break supported by medium structure");
-      if(f.bearish_break && BearContext(m))
+      if(m_fast_medium_context && f.bearish_break && BearContext(m))
          AddCandidate(out,n,MSZZ_STRAT_FAST_WITH_MEDIUM_CONTEXT,MSZZ_DIR_SHORT,signal_time,close_price,short_stop,6.3,2,
                       "Fast Breakout with Medium Context","CLUSTER|"+f.bearish_event_id,"Fast break supported by medium structure");
 
-      if(m.bullish_break && BullContext(s))
+      if(m_medium_slow_context && m.bullish_break && BullContext(s))
          AddCandidate(out,n,MSZZ_STRAT_MEDIUM_WITH_SLOW_CONTEXT,MSZZ_DIR_LONG,signal_time,close_price,long_stop,7.2,2,
                       "Medium Breakout with Slow Context","CLUSTER|"+m.bullish_event_id,"Medium break aligned with slow structure");
-      if(m.bearish_break && BearContext(s))
+      if(m_medium_slow_context && m.bearish_break && BearContext(s))
          AddCandidate(out,n,MSZZ_STRAT_MEDIUM_WITH_SLOW_CONTEXT,MSZZ_DIR_SHORT,signal_time,close_price,short_stop,7.2,2,
                       "Medium Breakout with Slow Context","CLUSTER|"+m.bearish_event_id,"Medium break aligned with slow structure");
 
-      if(BullContext(s) && m.leg_direction==MSZZ_DIR_SHORT && f.bullish_break)
+      if(m_nested_pullback && BullContext(s) && m.leg_direction==MSZZ_DIR_SHORT && f.bullish_break)
          AddCandidate(out,n,MSZZ_STRAT_NESTED_PULLBACK,MSZZ_DIR_LONG,signal_time,close_price,long_stop,8.4,3,
                       "Nested Pullback Continuation","CLUSTER|"+f.bullish_event_id,"Slow uptrend, medium correction, fast bullish reversal");
-      if(BearContext(s) && m.leg_direction==MSZZ_DIR_LONG && f.bearish_break)
+      if(m_nested_pullback && BearContext(s) && m.leg_direction==MSZZ_DIR_LONG && f.bearish_break)
          AddCandidate(out,n,MSZZ_STRAT_NESTED_PULLBACK,MSZZ_DIR_SHORT,signal_time,close_price,short_stop,8.4,3,
                       "Nested Pullback Continuation","CLUSTER|"+f.bearish_event_id,"Slow downtrend, medium correction, fast bearish reversal");
 
       int bull_votes=(f.bullish_break?1:0)+(BullContext(m)?1:0)+(BullContext(s)?1:0);
       int bear_votes=(f.bearish_break?1:0)+(BearContext(m)?1:0)+(BearContext(s)?1:0);
-      if(bull_votes>=2 && f.bullish_break)
+      if(m_weighted_ensemble && bull_votes>=2 && f.bullish_break)
          AddCandidate(out,n,MSZZ_STRAT_WEIGHTED_ENSEMBLE,MSZZ_DIR_LONG,signal_time,close_price,long_stop,
                       3.0+1.4*bull_votes,bull_votes,"Weighted Three-Speed Ensemble","CLUSTER|"+f.bullish_event_id,
                       StringFormat("Bullish vote score %d/3",bull_votes));
-      if(bear_votes>=2 && f.bearish_break)
+      if(m_weighted_ensemble && bear_votes>=2 && f.bearish_break)
          AddCandidate(out,n,MSZZ_STRAT_WEIGHTED_ENSEMBLE,MSZZ_DIR_SHORT,signal_time,close_price,short_stop,
                       3.0+1.4*bear_votes,bear_votes,"Weighted Three-Speed Ensemble","CLUSTER|"+f.bearish_event_id,
                       StringFormat("Bearish vote score %d/3",bear_votes));
@@ -139,14 +167,15 @@ public:
       ZeroMemory(selected);
       if(count<=0) return -1;
       int best=-1;
-      double best_score=-DBL_MAX;
+      double best_score=-1.0e100;
       for(int i=0;i<count;i++)
       {
          if(!in[i].valid || in[i].stop<=0.0 || in[i].entry==in[i].stop) continue;
          double composite=in[i].score+0.25*(double)MathMax(0,in[i].supporting_models-1);
          if(composite>best_score)
          {
-            best_score=composite; best=i;
+            best_score=composite;
+            best=i;
          }
       }
       if(best>=0) selected=in[best];
