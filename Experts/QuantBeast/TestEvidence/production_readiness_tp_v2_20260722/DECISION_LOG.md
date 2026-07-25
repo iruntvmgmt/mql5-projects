@@ -396,7 +396,7 @@ Files affected: `HANDOFF.md`, `TestEvidence/deployment_automation_20260724/
 DEPLOYMENT_CYCLE_EVIDENCE.md`, `KNOWN_LIMITATIONS.md`, this entry,
 `Experts/QuantBeast/Tools/quantbeast_deploy.py` (manual-step instructions
 annotated with the corrected refresh-procedure guidance).
-Commit: (pending)
+Commit: `996a799`
 Follow-up: if a future session needs to know whether genuine
 `EA_REMOVE_REATTACH` refreshes a stale binary, run it as a bounded,
 disposable-target experiment (mirroring Phase 0's methodology) before
@@ -479,7 +479,7 @@ market-orders-only-false configurations were not their failure mode).
 Files affected: `Include/QuantBeast/Risk/RiskEngine.mqh`,
 `Experts/QuantBeast/QuantBeastEA.mq5`,
 `Include/QuantBeast/Testing/SafetyTests.mqh`.
-Commit: (pending)
+Commit: `996a799`
 Follow-up: consider whether `Tools/quantbeast_deploy.py`'s `verify` should
 gain a check that at least attempts to distinguish "zero organic signals
 yet" from "structurally blocked" (e.g. cross-referencing self-test TEST 108
