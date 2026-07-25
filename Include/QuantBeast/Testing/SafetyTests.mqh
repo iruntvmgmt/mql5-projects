@@ -3624,6 +3624,55 @@ bool QBTestTPV2RiskEngineAcceptance(CSymbolAdapter &adapter, CPositionSizer &siz
 }
 
 //+------------------------------------------------------------------+
+//| 2026-07-24: ValidateTrade()'s "Max pending orders" check used to   |
+//| fire unconditionally (currentPending>=m_maxPendingOrders), so       |
+//| InpMaxPendingOrders=0 -- a legitimate "we only ever use market      |
+//| orders" value, e.g. the canonical roster live on                    |
+//| qb-live-20260724-05-longrun -- rejected 0>=0 permanently, silently  |
+//| blocking every signal regardless of order type. Fixed by adding a   |
+//| marketOrdersOnly parameter that skips this check when the account   |
+//| can only ever route market orders. This proves both halves: the     |
+//| bug is fixed for the market-orders-only case, and the cap still     |
+//| genuinely protects when pending routing is actually possible.       |
+//+------------------------------------------------------------------+
+bool QBTestPendingCapMarketOrdersOnly(CSymbolAdapter &adapter, CPositionSizer &sizer, string &detail)
+{
+   CRiskEngine risk;
+   risk.Init(adapter, sizer, 2.0, 1.0, 1, 100000, 1440, 60,
+             5.0, 10.0, 20.0, 5, 0.0, 1.0,
+             20, 0, 100.0, 20, 100); // maxPending=0
+   risk.InitDailyTracking(10000.0, 10000.0, TimeCurrent(),
+                          10000.0, TimeCurrent(), 10000.0,
+                          false, false, false, 0);
+
+   StrategySignal sig;
+   ZeroMemory(sig);
+   sig.valid = true;
+   sig.strategy_id = STRATEGY_ID_BREAKOUT;
+   sig.direction = ORDER_TYPE_BUY;
+   sig.proposed_entry = 2700.0;
+   sig.proposed_stop = 2694.0;
+   sig.proposed_target = 2712.0;
+   sig.expected_reward_r = 2.0;
+   sig.confidence = 0.60;
+
+   string reasonMarketOnly = "";
+   bool acceptedWhenMarketOnly = risk.ValidateTrade(sig, 10000.0, 10000.0, 500.0,
+                                                     0, 0, 0.0, 0, 0,
+                                                     reasonMarketOnly, true);
+
+   string reasonPendingCapable = "";
+   bool rejectedWhenPendingCapable = !risk.ValidateTrade(sig, 10000.0, 10000.0, 500.0,
+                                                          0, 0, 0.0, 0, 0,
+                                                          reasonPendingCapable, false);
+   bool rejectReasonCorrect = (StringFind(reasonPendingCapable, "Max pending orders") >= 0);
+
+   detail = "acceptedWhenMarketOnly=" + (acceptedWhenMarketOnly ? "yes" : "FAIL(" + reasonMarketOnly + ")") +
+            " rejectedWhenPendingCapable=" + (rejectedWhenPendingCapable && rejectReasonCorrect ? "yes" : "FAIL");
+   return acceptedWhenMarketOnly && rejectedWhenPendingCapable && rejectReasonCorrect;
+}
+
+//+------------------------------------------------------------------+
 //| Phase 9 (follow-on sprint): restart-persistence round-trip for TP  |
 //| V2's kill-switch flag and daily trade counter. Both               |
 //| Save/LoadKillSwitchState and Save/LoadStrategyTradeCounters wrote  |

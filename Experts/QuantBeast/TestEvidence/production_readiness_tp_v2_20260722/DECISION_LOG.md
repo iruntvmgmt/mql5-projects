@@ -406,6 +406,90 @@ Follow-up, elevated to a tracked item this same pass).
 
 ---
 
+Decision ID: D018
+Date/time: 2026-07-24, `CRiskEngine::ValidateTrade()` pending-orders-cap
+bug -- discovered live-blocking, fixed, redeployed
+Question: while running Level-1 Edge Certification probe backtests (two
+1-day Shadow-mode Tester runs against the frozen canonical roster), every
+single signal was rejected with "Signal rejected by risk engine: Max
+pending orders: 0". Was this a probe-config mistake, or a real defect?
+Investigation: `RiskEngine.mqh:308` read
+`if(currentPending >= m_maxPendingOrders) reject`, applied unconditionally
+to every signal regardless of order-type routing. With
+`InpMaxPendingOrders=0` -- the canonical roster's own value, since it is
+market-orders-only and was never meant to need pending capacity --
+`currentPending` starts at 0 and `0 >= 0` is permanently true, rejecting
+every signal forever. `QuantBeastEA.mq5`'s execution routing confirmed
+`InpUseMarketOrders` is a single global switch: when true, every signal
+executes as a market order regardless of geometry, so the pending-orders
+cap is structurally irrelevant in that configuration. No self-test covered
+this exact combination (zero cap + a market-order signal). Critically,
+`InpMaxPendingOrders=0` is the exact value in the live canonical roster
+`Tools/quantbeast_deploy.py` has shipped all day, including the standing
+`qb-live-20260724-05-longrun` deployment -- meaning that deployment was
+very likely structurally unable to place a single trade since its own
+attach, independent of any strategy having edge. Confirmed via two
+independent Shadow-mode Tester probes (100% rejection both times) and the
+live deployment's own Experts log showing zero signals reaching the
+risk-validation stage in ~3.5 hours (consistent with signal rarity, not
+proof by itself, but corroborating).
+Decision: added a `marketOrdersOnly` parameter to `ValidateTrade()`
+(default `false`, preserving old behavior for any other caller); the
+pending-cap check now only fires when `!marketOrdersOnly`. Call site in
+`QuantBeastEA.mq5` passes `InpUseMarketOrders`. New self-test (TEST 108,
+`QBTestPendingCapMarketOrdersOnly` in `SafetyTests.mqh`) proves both
+halves: a market-orders-only account with `maxPendingOrders=0` now accepts
+a valid signal on this basis, while an account that could actually route
+pending orders still gets rejected at cap -- the control genuinely still
+protects when it's structurally possible to need it.
+Verification: compiled 0 errors/0 warnings. Diagnostic-mode self-test-only
+run: 111 passed, 0 failed (up from 110), TEST 108 passing. Re-ran the exact
+probe that first surfaced the bug (2026.06.01 Shadow, canonical roster,
+post-fix binary): a real FBO signal was accepted and executed
+("SHADOW: FBO ORDER_TYPE_BUY lots=0.01 entry=4519.16 sl=4511.26
+tp=4533.38"), hit its stop loss, and the account's own `InpMaxConsecLosses=1`
+cap then correctly blocked further entries for the rest of the day --
+proving the fix works and that the *other* risk controls behave exactly as
+designed once this one defect is out of the way. Redeployed live:
+`qb-live-20260724-06-pendingcapfix` (Coinexx-Demo, 871221, XAUUSD,
+`QB_MODE_CONSERVATIVE_LIVE`, 14-day lease matching the superseded
+`-05-longrun`'s intent). Per D017's lesson, a full terminal restart (not
+just reattach) was used before the manual attach; `verify` confirmed lease
+valid, self-tests 0 failed, no kill-switch/risk-lock restore warning, 0
+reconciliation surprises. Directly confirmed on this exact live attach's
+own Experts log: `TEST 108 PASS` and `Self-tests complete: 111 passed, 0
+failed`.
+Reason: this is a load-bearing defect, not a style issue -- it silently
+made every live/demo deployment of the canonical roster since its
+creation this session incapable of trading at all, for a reason completely
+unrelated to whether any strategy has edge. It was found only as a side
+effect of the Level-1 Edge Certification Sprint's probe runs, not by
+design -- underscoring why that sprint's own bridge-validation step
+(comparing Model=1 vs Model=4 trade-level output before trusting either)
+is the right level of paranoia for this codebase.
+Trading-behavior impact: `qb-live-20260724-02` and `qb-live-20260724-05-longrun`
+(both canonical roster, `InpMaxPendingOrders=0`) were very likely unable to
+place any trade for their entire runtime prior to this fix -- their "0
+positions/0 orders" status, previously read as "no organic signal has
+fired yet," should be reread as "structurally blocked," though the two
+explanations are observationally identical from the verify-level evidence
+gathered at the time. `qb-live-20260724-03-pending` and
+`-04-challenge` are unaffected (non-zero `InpMaxPendingOrders` or
+market-orders-only-false configurations were not their failure mode).
+Files affected: `Include/QuantBeast/Risk/RiskEngine.mqh`,
+`Experts/QuantBeast/QuantBeastEA.mq5`,
+`Include/QuantBeast/Testing/SafetyTests.mqh`.
+Commit: (pending)
+Follow-up: consider whether `Tools/quantbeast_deploy.py`'s `verify` should
+gain a check that at least attempts to distinguish "zero organic signals
+yet" from "structurally blocked" (e.g. cross-referencing self-test TEST 108
+presence, or flagging `InpMaxPendingOrders=0` combinations explicitly) --
+this defect could have been caught days earlier if `verify` had any signal
+beyond self-test pass/fail and lease validity. Not done this pass (scope
+control).
+
+---
+
 Decision ID: D008
 Date/time: 2026-07-23, Phase 1 of the follow-on sprint (`QuantBeast_Production_Readiness_Sprint.md`)
 Question: Independently verify the prior sprint's documented final state

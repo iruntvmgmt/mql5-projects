@@ -1743,7 +1743,7 @@ void EvaluateAndTrade()
                                         AccountInfoDouble(ACCOUNT_MARGIN_LEVEL),
                                         totalPositions, pendingOrders, totalExposure,
                                         stratPosCount, stratTradesToday,
-                                        rejectReason))
+                                        rejectReason, InpUseMarketOrders))
          {
             ExecuteSignal(best);
          }
@@ -3522,6 +3522,16 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 107 PASS: Risk lock restore warning " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 107 FAIL: Risk lock restore warning " + detail); }
+
+      // Test 108: ValidateTrade()'s pending-orders cap must not reject a
+      // market-orders-only account's signals just because
+      // InpMaxPendingOrders=0 -- found blocking the live canonical roster
+      // (qb-live-20260724-05-longrun) 2026-07-24, discovered via Level-1
+      // Edge Certification probe runs that showed 100% signal rejection.
+      if(QBTestPendingCapMarketOrdersOnly(g_Adapter, g_Sizer, detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 108 PASS: Pending-cap market-orders-only fix " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 108 FAIL: Pending-cap market-orders-only fix " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

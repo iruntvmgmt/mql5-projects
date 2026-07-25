@@ -1,0 +1,14 @@
+{
+  "deployment_id": "qb-live-20260724-06-pendingcapfix",
+  "build_id": "1.00-20260701",
+  "ex5_sha256": "674d2f3f750dbfdcf71176edd4c438aab5bbd766c1a1f3c51102036e538fe0ef",
+  "source_tree_sha256": "d07af245f37d129ee5ee5eecd4e90e8fbd8d8b3fe8088e148632fa2dd5d3108a",
+  "source_file_count": 48,
+  "self_test_passed": 111,
+  "self_test_failed": 0,
+  "self_test_source": "/Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/Tester/Agent-127.0.0.1-3000/logs/20260724.log",
+  "set_file": "MQL5/Experts/QuantBeast/Tools/deployments/qb-live-20260724-06-pendingcapfix/qb-live-20260724-06-pendingcapfix.set",
+  "created_unix": 1784948261.8126159,
+  "git_commit": "44946f2",
+  "roster_preset": "canonical"
+}

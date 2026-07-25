@@ -220,7 +220,8 @@ public:
                        int currentPositions, int currentPending,
                        double totalExposure, int stratPosCount,
                        int stratTradesToday,
-                       string &rejectReason)
+                       string &rejectReason,
+                       bool marketOrdersOnly=false)
    {
       UpdateEquityState(equity, TimeCurrent());
 
@@ -304,8 +305,15 @@ public:
          return false;
       }
 
-      // Max pending
-      if(currentPending >= m_maxPendingOrders)
+      // Max pending -- only meaningful when this signal could actually route
+      // as a pending order. InpUseMarketOrders is a single global routing
+      // switch (QuantBeastEA.mq5): when true, every signal executes as a
+      // market order regardless of geometry, so InpMaxPendingOrders=0 (a
+      // legitimate "we never place pending orders" value, e.g. the canonical
+      // market-orders-only roster) must not reject on this basis -- 0>=0 is
+      // otherwise permanently true and silently rejects every signal
+      // (found 2026-07-24 blocking the live canonical roster; see D018).
+      if(!marketOrdersOnly && currentPending >= m_maxPendingOrders)
       {
          rejectReason = "Max pending orders: " + IntegerToString(currentPending);
          return false;
