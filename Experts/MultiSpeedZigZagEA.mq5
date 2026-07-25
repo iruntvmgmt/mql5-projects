@@ -3,70 +3,76 @@
 //| Standalone multi-strategy ATR ZigZag research/execution EA       |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.10"
+#property version   "0.20"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
 #include <MultiSpeedZigZag/Core/TripleZigZagEngine.mqh>
 #include <MultiSpeedZigZag/Strategies/StrategySuite.mqh>
+#include <MultiSpeedZigZag/Execution/EventStore.mqh>
+#include <MultiSpeedZigZag/Execution/ExecutionGuard.mqh>
 
 input group "═══ Operating Mode ═══"
-input bool   InpShadowOnly          = true;
-input bool   InpAllowLiveExecution  = false;
-input long   InpMagic               = 26072501;
-input int    InpHistoryBars         = 1500;
+input bool   InpShadowOnly           = true;
+input bool   InpAllowLiveExecution   = false;
+input bool   InpAcknowledgeRisk      = false;
+input long   InpMagic                = 26072501;
+input int    InpHistoryBars          = 1500;
 
 input group "═══ Fast Speed ═══"
-input int    InpFastATRLen          = 14;
-input double InpFastATRMult         = 1.0;
+input int    InpFastATRLen           = 14;
+input double InpFastATRMult          = 1.0;
 
 input group "═══ Medium Speed ═══"
-input int    InpMedATRLen           = 14;
-input double InpMedATRMult          = 2.0;
+input int    InpMedATRLen            = 14;
+input double InpMedATRMult           = 2.0;
 
 input group "═══ Slow Speed ═══"
-input int    InpSlowATRLen          = 14;
-input double InpSlowATRMult         = 3.5;
+input int    InpSlowATRLen           = 14;
+input double InpSlowATRMult          = 3.5;
+
+input group "═══ Strategy Enablement ═══"
+input bool   InpEnableFastBreakout       = true;
+input bool   InpEnableMediumBreakout     = true;
+input bool   InpEnableSlowBreakout       = true;
+input bool   InpEnableFastMedConfluence  = true;
+input bool   InpEnableFastMedContext     = true;
+input bool   InpEnableMedSlowContext     = true;
+input bool   InpEnableNestedPullback     = true;
+input bool   InpEnableWeightedEnsemble   = true;
 
 input group "═══ Structure & Signal ═══"
-input int    InpMinBarsBetween      = 3;
-input double InpMinScore            = 5.0;
-input double InpRiskReward          = 1.5;
+input int    InpMinBarsBetween       = 3;
+input double InpMinScore             = 5.0;
+input double InpRiskReward           = 1.5;
 input bool   InpOnePositionPerSymbol = true;
 
 input group "═══ Standalone Execution ═══"
-input double InpFixedLots           = 0.01;
-input int    InpDeviationPoints     = 30;
-input bool   InpExitOnOpposite      = true;
+input double InpFixedLots            = 0.01;
+input double InpMaxSpreadPoints      = 80.0;
+input int    InpDeviationPoints      = 30;
+input bool   InpExitOnOpposite       = true;
+input int    InpMaxPersistentEvents  = 2000;
 
 input group "═══ Diagnostics ═══"
-input bool   InpWriteCSV            = true;
-input bool   InpVerboseLog          = true;
+input bool   InpWriteCSV             = true;
+input bool   InpVerboseLog           = true;
 
 CMSZZTripleZigZagEngine g_engine;
 CMSZZStrategySuite      g_suite;
+CMSZZEventStore         g_event_store;
+CMSZZExecutionGuard     g_execution_guard;
 CTrade                  g_trade;
 datetime                g_last_bar=0;
-string                  g_consumed_events[];
 
 bool EventConsumed(const string event_id)
 {
-   for(int i=0;i<ArraySize(g_consumed_events);i++)
-      if(g_consumed_events[i]==event_id) return true;
-   return false;
+   return g_event_store.Contains(event_id);
 }
 
-void ConsumeEvent(const string event_id)
+bool ConsumeEvent(const string event_id)
 {
-   if(event_id=="" || EventConsumed(event_id)) return;
-   int n=ArraySize(g_consumed_events);
-   ArrayResize(g_consumed_events,n+1);
-   g_consumed_events[n]=event_id;
-   if(ArraySize(g_consumed_events)>1000)
-   {
-      for(int i=1;i<ArraySize(g_consumed_events);i++) g_consumed_events[i-1]=g_consumed_events[i];
-      ArrayResize(g_consumed_events,1000);
-   }
+   return g_event_store.Add(event_id);
 }
 
 void Journal(const MSZZCandidate &c,const string status)
@@ -89,6 +95,7 @@ void Journal(const MSZZCandidate &c,const string status)
              (int)c.strategy_id,c.setup_name,MSZZDirectionText(c.direction),DoubleToString(c.score,2),
              DoubleToString(c.entry,_Digits),DoubleToString(c.stop,_Digits),DoubleToString(c.target,_Digits),
              c.event_id,c.reason);
+   FileFlush(h);
    FileClose(h);
 }
 
@@ -97,48 +104,120 @@ bool HasSymbolPosition()
    return PositionSelect(_Symbol);
 }
 
-void CloseOppositeIfNeeded(const MSZZCandidate &c)
+bool LiveExecutionAuthorized()
 {
-   if(!InpExitOnOpposite || !PositionSelect(_Symbol)) return;
+   return (!InpShadowOnly && InpAllowLiveExecution && InpAcknowledgeRisk);
+}
+
+bool CloseOppositeIfNeeded(const MSZZCandidate &c)
+{
+   if(!InpExitOnOpposite || !PositionSelect(_Symbol)) return true;
    long type=PositionGetInteger(POSITION_TYPE);
    bool opposite=(c.direction==MSZZ_DIR_LONG && type==POSITION_TYPE_SELL) ||
                  (c.direction==MSZZ_DIR_SHORT && type==POSITION_TYPE_BUY);
-   if(opposite) g_trade.PositionClose(_Symbol);
+   if(!opposite) return true;
+   if(!g_trade.PositionClose(_Symbol))
+   {
+      PrintFormat("MSZZ opposite close failed retcode=%u %s",g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
+      return false;
+   }
+   return true;
 }
 
-bool ExecuteCandidate(const MSZZCandidate &c)
+bool PrepareMarketCandidate(const MSZZCandidate &source,MSZZCandidate &prepared,string &reason)
 {
-   if(InpShadowOnly || !InpAllowLiveExecution)
+   prepared=source;
+   MqlTick tick;
+   if(!SymbolInfoTick(_Symbol,tick))
    {
-      Journal(c,"SHADOW");
+      reason="no current tick";
+      return false;
+   }
+   prepared.entry=(source.direction==MSZZ_DIR_LONG ? tick.ask : tick.bid);
+   double risk=MathAbs(prepared.entry-source.stop);
+   if(risk<=0.0)
+   {
+      reason="market entry equals structural stop";
+      return false;
+   }
+   prepared.target=(source.direction==MSZZ_DIR_LONG ? prepared.entry+risk*InpRiskReward
+                                                    : prepared.entry-risk*InpRiskReward);
+   return g_execution_guard.ValidateStops(prepared,prepared.stop,prepared.target,reason);
+}
+
+bool ExecuteCandidate(const MSZZCandidate &source)
+{
+   if(!LiveExecutionAuthorized())
+   {
+      Journal(source,"SHADOW");
       return true;
    }
-   if(c.score<InpMinScore) { Journal(c,"REJECT_SCORE"); return false; }
-   if(EventConsumed(c.event_id)) { Journal(c,"REJECT_DUPLICATE"); return false; }
+   if(source.score<InpMinScore) { Journal(source,"REJECT_SCORE"); return false; }
+   if(EventConsumed(source.event_id)) { Journal(source,"REJECT_DUPLICATE"); return false; }
 
-   CloseOppositeIfNeeded(c);
+   string reason;
+   if(!g_execution_guard.TradingAllowed(reason))
+   {
+      MSZZCandidate rejected=source; rejected.reason=reason;
+      Journal(rejected,"REJECT_TRADING_DISABLED");
+      return false;
+   }
+
+   double spread_points=0.0;
+   if(!g_execution_guard.SpreadAllowed(InpMaxSpreadPoints,spread_points))
+   {
+      MSZZCandidate rejected=source;
+      rejected.reason=StringFormat("spread %.1f exceeds maximum %.1f points",spread_points,InpMaxSpreadPoints);
+      Journal(rejected,"REJECT_SPREAD");
+      return false;
+   }
+
+   MSZZCandidate prepared;
+   if(!PrepareMarketCandidate(source,prepared,reason))
+   {
+      MSZZCandidate rejected=source; rejected.reason=reason;
+      Journal(rejected,"REJECT_STOPS");
+      return false;
+   }
+
+   double volume=g_execution_guard.NormalizeVolume(InpFixedLots);
+   if(volume<=0.0)
+   {
+      prepared.reason="volume normalization failed";
+      Journal(prepared,"REJECT_VOLUME");
+      return false;
+   }
+
+   if(!CloseOppositeIfNeeded(prepared))
+   {
+      Journal(prepared,"REJECT_OPPOSITE_CLOSE_FAILED");
+      return false;
+   }
    if(InpOnePositionPerSymbol && HasSymbolPosition())
    {
-      Journal(c,"REJECT_POSITION_EXISTS");
+      Journal(prepared,"REJECT_POSITION_EXISTS");
       return false;
    }
 
    g_trade.SetExpertMagicNumber(InpMagic);
    g_trade.SetDeviationInPoints(InpDeviationPoints);
    bool ok=false;
-   if(c.direction==MSZZ_DIR_LONG)
-      ok=g_trade.Buy(InpFixedLots,_Symbol,0.0,c.stop,c.target,"MSZZ|"+IntegerToString((int)c.strategy_id));
-   else if(c.direction==MSZZ_DIR_SHORT)
-      ok=g_trade.Sell(InpFixedLots,_Symbol,0.0,c.stop,c.target,"MSZZ|"+IntegerToString((int)c.strategy_id));
+   string comment="MSZZ|"+IntegerToString((int)prepared.strategy_id);
+   if(prepared.direction==MSZZ_DIR_LONG)
+      ok=g_trade.Buy(volume,_Symbol,0.0,prepared.stop,prepared.target,comment);
+   else if(prepared.direction==MSZZ_DIR_SHORT)
+      ok=g_trade.Sell(volume,_Symbol,0.0,prepared.stop,prepared.target,comment);
 
    if(ok)
    {
-      ConsumeEvent(c.event_id);
-      Journal(c,"EXECUTED");
+      if(!ConsumeEvent(prepared.event_id))
+         Print("MSZZ WARNING: order executed but event persistence failed; duplicate risk exists after restart.");
+      Journal(prepared,"EXECUTED");
    }
    else
    {
-      Journal(c,"ORDER_FAILED_"+IntegerToString((int)g_trade.ResultRetcode()));
+      prepared.reason=StringFormat("retcode=%u %s",g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
+      Journal(prepared,"ORDER_FAILED");
    }
    return ok;
 }
@@ -155,7 +234,6 @@ void ProcessClosedBar()
       return;
    }
 
-   // Exclude the currently forming bar. Structural decisions use closed bars only.
    int closed_count=copied-1;
    if(closed_count<100) return;
 
@@ -169,11 +247,14 @@ void ProcessClosedBar()
 
    MSZZCandidate candidates[];
    g_suite.SetRiskReward(InpRiskReward);
+   g_suite.ConfigureStrategies(InpEnableFastBreakout,InpEnableMediumBreakout,InpEnableSlowBreakout,
+                               InpEnableFastMedConfluence,InpEnableFastMedContext,InpEnableMedSlowContext,
+                               InpEnableNestedPullback,InpEnableWeightedEnsemble);
    int count=g_suite.Evaluate(fast,med,slow,rates[closed_count-1].time,rates[closed_count-1].close,candidates);
    if(count<=0) return;
 
    for(int i=0;i<count;i++)
-      if(candidates[i].valid && candidates[i].score>=InpMinScore) Journal(candidates[i],"RAW_CANDIDATE");
+      if(candidates[i].valid) Journal(candidates[i],"RAW_CANDIDATE");
 
    MSZZCandidate selected;
    int best=g_suite.SelectBestClustered(candidates,count,selected);
@@ -182,20 +263,45 @@ void ProcessClosedBar()
    if(EventConsumed(selected.event_id)) { Journal(selected,"REJECT_DUPLICATE"); return; }
 
    ExecuteCandidate(selected);
-   // Shadow events are also consumed in-memory to guarantee one decision per structural event per attach.
-   if(InpShadowOnly) ConsumeEvent(selected.event_id);
+   if(!LiveExecutionAuthorized())
+   {
+      if(!ConsumeEvent(selected.event_id))
+         Print("MSZZ WARNING: shadow event persistence failed.");
+   }
 }
 
 int OnInit()
 {
-   if(InpAllowLiveExecution && InpShadowOnly)
-      Print("MSZZ: live execution requested but ShadowOnly remains enabled; no orders will be sent.");
-   if(!InpShadowOnly && !InpAllowLiveExecution)
-      Print("MSZZ: ShadowOnly disabled without live authorization; no orders will be sent.");
+   if(InpFastATRLen<1 || InpMedATRLen<1 || InpSlowATRLen<1 ||
+      InpFastATRMult<=0.0 || InpMedATRMult<=0.0 || InpSlowATRMult<=0.0 ||
+      InpRiskReward<=0.0 || InpHistoryBars<300)
+   {
+      Print("MSZZ invalid inputs.");
+      return INIT_PARAMETERS_INCORRECT;
+   }
 
    g_trade.SetExpertMagicNumber(InpMagic);
    g_trade.SetDeviationInPoints(InpDeviationPoints);
-   Print("MSZZ standalone suite initialized. Default posture is SHADOW ONLY.");
+
+   if(!g_execution_guard.Load(_Symbol))
+   {
+      Print("MSZZ failed to load symbol execution properties.");
+      return INIT_FAILED;
+   }
+
+   g_event_store.Configure(_Symbol,_Period,InpMagic,InpMaxPersistentEvents);
+   if(!g_event_store.Load())
+   {
+      Print("MSZZ failed to load persistent event store.");
+      return INIT_FAILED;
+   }
+
+   if(!LiveExecutionAuthorized())
+      Print("MSZZ initialized in SHADOW posture. Orders require ShadowOnly=false, AllowLiveExecution=true, and AcknowledgeRisk=true.");
+   else
+      Print("MSZZ WARNING: LIVE EXECUTION AUTHORIZED by all three gates.");
+
+   PrintFormat("MSZZ event store loaded count=%d file=%s",g_event_store.Count(),g_event_store.Filename());
    return INIT_SUCCEEDED;
 }
 
