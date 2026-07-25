@@ -290,12 +290,14 @@ Files affected: `Include/QuantBeast/Risk/RiskEngine.mqh`,
 `Experts/QuantBeast/QuantBeastEA.mq5`,
 `Include/QuantBeast/Testing/SafetyTests.mqh`.
 Commit: `ea2add7`
-Follow-up: consider whether `ResetState()` should be wired into an
-operator-facing command (mirroring `CMD_CLEAR_KILL_STATE`) in a future
-pass, so clearing a stale drawdown lock doesn't require manual
-GlobalVariable surgery -- deliberately not done this session (scope
-control, and the manual-GUI-clear path was already proven to work once
-the correct operational sequence, D016, is followed).
+Follow-up: **elevated 2026-07-24 to a tracked engineering item**: build an
+audited, operator-facing risk-lock reset command wiring `ResetState()`
+behind it (mirroring `CMD_CLEAR_KILL_STATE`, with the clear action logged
+the same way kill-switch clears are). The manual detach -> edit
+GlobalVariables -> reattach sequence (D016) is an acceptable *emergency*
+procedure -- proven to work -- but is not production-grade administration:
+no audit trail, no confirmation step, and an easy-to-get-wrong ordering.
+Deliberately not built this session (scope control); see also D017.
 
 ---
 
@@ -341,6 +343,66 @@ Commit: `ea2add7`
 Follow-up: if this trips up a future session again, reconsider the
 code-level fix (re-read-before-persist-on-detach) as a real, scoped
 change rather than documentation alone.
+
+---
+
+Decision ID: D017
+Date/time: 2026-07-24, correction -- attach-method mischaracterization in
+the `qb-live-20260724-02` stale-binary finding
+Question: the user corrected the record: the step documented above (and
+in `HANDOFF.md`/`TestEvidence/deployment_automation_20260724/
+DEPLOYMENT_CYCLE_EVIDENCE.md`) as "operator manually detached/reattached
+QuantBeastEA" before the `qb-live-20260724-02` stale-binary discovery was
+inaccurate. They had loaded an MT5 **profile** containing QuantBeastEA,
+not performed a genuine chart-level Remove EA -> fresh manual
+reattachment. Does this change what the stale-binary finding actually
+proves?
+Investigation: re-examined the original claim against what evidence
+actually exists. The only directly observed facts are: (1) the `.ex5` on
+disk had already changed (confirmed via file mtime, the fresh 11:52:09
+build); (2) the terminal was still running the old, pre-fix compiled code
+after the profile load (confirmed via `verify`'s 106/1 self-test result,
+the old TEST 37 failure signature); (3) a full terminal restart,
+performed afterward, did load the fresh binary (confirmed via the
+follow-up `verify` pass showing 109/0). A genuine `EA_REMOVE_REATTACH`
+(Remove EA from the chart, then a fresh manual attach, without a terminal
+restart) was never actually tried in this incident.
+Decision: record the attach method for this incident as `PROFILE_LOAD`,
+not `EA_REMOVE_REATTACH`. Narrowed the conclusion in `HANDOFF.md` and
+`DEPLOYMENT_CYCLE_EVIDENCE.md` from "chart detach/reattach is not
+sufficient to guarantee fresh code is running after a recompile" (overly
+broad -- detach/reattach was never actually tested here) to "profile load
+is confirmed insufficient; a full terminal restart is the only refresh
+procedure proven reliable to date; it is not proven to be the only valid
+one." `TESTING_GUIDE.md` Stage 7's detach/reattach-based restart-
+equivalence testing is a separately-established, unaffected precedent
+(re-running `OnInit()` against an already-loaded, source-unchanged
+binary, not a post-recompile binary-refresh claim). Also used this pass
+to explicitly document `qb-live-20260724-05-longrun`'s exact resolved
+configuration (canonical roster only, market-orders-only, Challenge Mode
+not active) so the separately-verified pending-order and Challenge-Demo
+deployments are not mistaken for concurrently active standing state.
+Reason: an audit trail is only as good as its factual accuracy; a
+documented finding turning out to rest on a mischaracterized step needs a
+correction entry, not a silent edit, and the narrower conclusion is the
+one actually supported by the reproducible evidence (self-test counts,
+file mtimes, log lines) rather than by memory of which manual action was
+performed.
+Trading-behavior impact: none -- documentation-only. The operational
+guidance is, if anything, more conservative than before: fewer refresh
+procedures are proven reliable than the original (incorrect) writeup
+implied.
+Files affected: `HANDOFF.md`, `TestEvidence/deployment_automation_20260724/
+DEPLOYMENT_CYCLE_EVIDENCE.md`, `KNOWN_LIMITATIONS.md`, this entry,
+`Experts/QuantBeast/Tools/quantbeast_deploy.py` (manual-step instructions
+annotated with the corrected refresh-procedure guidance).
+Commit: (pending)
+Follow-up: if a future session needs to know whether genuine
+`EA_REMOVE_REATTACH` refreshes a stale binary, run it as a bounded,
+disposable-target experiment (mirroring Phase 0's methodology) before
+relying on it operationally. Separately, per the user's explicit request:
+build an audited, operator-facing risk-lock reset command (see D015's
+Follow-up, elevated to a tracked item this same pass).
 
 ---
 

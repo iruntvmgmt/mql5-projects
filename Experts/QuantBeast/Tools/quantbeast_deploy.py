@@ -701,6 +701,16 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     print(f"  3. In the Inputs tab, click Load, select: {set_path}")
     print(f"  4. Set InpAcknowledgeLiveBrokerRisk=true explicitly (not saved as true in the .set).")
     print(f"  5. Click OK. Then run: quantbeast_deploy.py verify {args.deployment_id}")
+    print()
+    print("CAUTION if the .ex5 was just recompiled (DECISION_LOG.md D017): loading an")
+    print("MT5 profile is CONFIRMED INSUFFICIENT to force the terminal to load the fresh")
+    print("binary -- it can silently keep running stale compiled code while .set input")
+    print("values still apply correctly, masking the problem. A full terminal restart is")
+    print("the only refresh procedure proven reliable to date. A genuine Remove EA from")
+    print("chart -> fresh manual attach (without a terminal restart) has never been")
+    print("tested, so do not assume it works either -- if in doubt, restart the terminal")
+    print("and re-attach, then let `verify` confirm the self-test count/signature matches")
+    print("this build before trusting the deployment.")
     return 0
 
 

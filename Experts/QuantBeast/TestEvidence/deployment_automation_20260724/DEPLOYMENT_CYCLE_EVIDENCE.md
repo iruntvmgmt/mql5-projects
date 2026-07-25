@@ -223,11 +223,15 @@ confirming all of the above in isolation.
 
 ### Second real deploy: `qb-live-20260724-02` -- stale-binary finding
 
+**Attach method: `PROFILE_LOAD` (corrected 2026-07-24; originally
+mislabeled `EA_REMOVE_REATTACH` below -- see the Correction subsection
+at the end of this section).**
+
 `prepare --roster canonical` (skipped recompile, source unchanged) ->
 `preflight` (one warning, stale attach-state read, non-blocking) ->
 `deploy --server Coinexx-Demo --login 871221 --symbol XAUUSD --mode
-QB_MODE_CONSERVATIVE_LIVE --minutes 720` -> operator manually
-detached/reattached QuantBeastEA with the new `.set` and
+QB_MODE_CONSERVATIVE_LIVE --minutes 720` -> operator loaded an MT5
+profile containing QuantBeastEA with the new `.set` and
 `InpAcknowledgeLiveBrokerRisk=true` -> `verify qb-live-20260724-02`.
 
 **`verify` initially reported a false pass.** Investigation found two real
@@ -250,21 +254,45 @@ self-tests reported **106 passed, 1 failed** -- the *old*, pre-fix count
 and the *old* TEST 37 failure signature, not the expected 109/0. The
 `.ex5` file on disk had been the fresh 11:52:09 build the entire time
 (confirmed via file mtime) -- the terminal loaded a stale, previously
-cached binary despite the file changing on disk and the EA being detached
-and reattached in between. `.set` *input values* (e.g.
+cached binary despite the file changing on disk and an MT5 profile load
+having occurred in between. `.set` *input values* (e.g.
 `InpEnableTPV2Experimental=true`) still applied correctly, since those are
 read fresh from the loaded `.set` file independent of which `.ex5` binary
 is running -- only the *compiled code itself* was stale.
 
-**This means chart detach/reattach is not sufficient to guarantee fresh
-code is running after a recompile, even though it has been sufficient in
-this project's history to re-run `OnInit()` for restart-equivalence
-testing purposes (`TESTING_GUIDE.md` Stage 7).** Those are two different
-guarantees: re-executing `OnInit()` against an already-loaded binary vs.
-loading a genuinely new binary from disk. A full terminal restart (not
-just chart-level detach/reattach) appears to be required to force a fresh
-`.ex5` load. User chose to restart the terminal and redo the manual attach
-step; outcome recorded in a follow-up entry once confirmed.
+**Correction (2026-07-24, later the same day):** this subsection
+originally described the intervening step as "operator manually
+detached/reattached QuantBeastEA" and concluded "chart detach/reattach is
+not sufficient to guarantee fresh code is running after a recompile." The
+operator subsequently corrected the record: the actual step performed was
+loading an MT5 **profile** containing QuantBeastEA (`PROFILE_LOAD`), not a
+genuine chart-level Remove EA -> fresh manual reattachment
+(`EA_REMOVE_REATTACH`). The empirically supported facts are narrower than
+originally stated:
+
+- The `.ex5` on disk had already changed (confirmed via file mtime, the
+  fresh 11:52:09 build).
+- Loading the MT5 profile did **not** replace the already-running, stale
+  compiled binary.
+- A full terminal restart, performed afterward, did load the fresh binary
+  (confirmed by the subsequent `verify` pass showing 109/0 self-tests and
+  the corrected TEST 37 behavior).
+- A genuine `EA_REMOVE_REATTACH` (explicit Remove from the chart, then a
+  fresh manual attach, without a terminal restart) was **never actually
+  tested** in this incident -- no conclusion can be drawn about whether
+  that specific procedure would also refresh the binary.
+
+**Revised conclusion**: `PROFILE_LOAD` is confirmed insufficient to force
+a fresh `.ex5` load. A full terminal restart is the only refresh procedure
+*proven* reliable to date -- it is **not** proven to be the *only* valid
+one; genuine `EA_REMOVE_REATTACH` remains untested. This is narrower than
+the original (incorrect) claim that chart-level detach/reattach itself had
+been tried and had failed. `TESTING_GUIDE.md` Stage 7's detach/reattach-
+based restart-equivalence testing describes a different, separately-
+established scenario (re-running `OnInit()` against an already-loaded,
+source-unchanged binary) and is unaffected by this correction. User chose
+to restart the terminal and redo the manual attach step; outcome recorded
+in a follow-up entry once confirmed.
 
 **Action item for `Tools/quantbeast_deploy.py`**: `verify` should
 ideally also cross-check the *loaded* binary identity against the
@@ -273,4 +301,7 @@ right one -- but MQL5 has no runtime API to hash or fingerprint its own
 already-loaded compiled bytecode from inside a running EA, so the only
 available signal remains indirect (self-test count/behavior proving which
 source version is active). Documented as a known limitation of this
-verification approach, not fixed this session.
+verification approach, not fixed this session. Given the correction above,
+the manual-step instructions printed by `cmd_deploy` now also flag that a
+profile load is confirmed insufficient after a recompile and a full
+terminal restart is the currently-proven refresh procedure.
