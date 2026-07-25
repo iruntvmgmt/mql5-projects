@@ -12,20 +12,20 @@ This is a strategy suite sharing one structural engine, not one entry rule.
 
 Claude is actively working on Quant Beast on `main`. This branch intentionally avoids Quant Beast implementation paths.
 
-## Implemented in this milestone
+## Implemented
 
-### Shared structural core
+### Structural core
 
 - `Include/MultiSpeedZigZag/Core/Types.mqh`
 - `Include/MultiSpeedZigZag/Core/TripleZigZagEngine.mqh`
 
-The engine rebuilds three ATR-reversal ZigZags from closed-bar history using the default fast/medium/slow multipliers 1.0, 2.0, and 3.5. It records candidate extremes internally, immutable confirmed pivots, original pivot time, confirmation time, HH/HL/LH/LL classification, projected lines, close-confirmed breakouts, and stable IDs.
+The engine rebuilds three ATR-reversal ZigZags from closed-bar history. It records candidate extremes internally, immutable confirmed pivots, original pivot time, confirmation time, HH/HL/LH/LL classification, projected lines, close-confirmed breakouts, and stable identities.
 
 ### Strategy suite
 
 - `Include/MultiSpeedZigZag/Strategies/StrategySuite.mqh`
 
-Implemented strategy IDs:
+Implemented and independently configurable:
 
 - Fast breakout
 - Medium breakout
@@ -36,7 +36,7 @@ Implemented strategy IDs:
 - Nested pullback continuation
 - Weighted three-speed ensemble
 
-Reserved but not yet implemented:
+Reserved:
 
 - Sequential confirmation
 - Breakout retest
@@ -44,81 +44,101 @@ Reserved but not yet implemented:
 - Compression breakout
 - Structure transition
 
-The suite emits all raw candidates, scores them, and selects one best candidate for the current event. It does not place orders.
+Invalid candidates without usable event, entry, or stop data are now rejected before entering the candidate array. Selection no longer depends on `DBL_MAX`.
+
+### Persistent event store
+
+- `Include/MultiSpeedZigZag/Execution/EventStore.mqh`
+
+Consumed structural event IDs are stored in a symbol/timeframe/magic-scoped file and reloaded on initialization. The store is bounded and rewritten after additions. This closes the original in-memory-only duplicate risk, subject to compile and runtime verification.
+
+### Execution guard
+
+- `Include/MultiSpeedZigZag/Execution/ExecutionGuard.mqh`
+
+Added:
+
+- symbol execution-property loading
+- volume min/max/step normalization
+- terminal, EA, and symbol trade-permission checks
+- spread gate
+- stop/freeze-distance validation
+- stop and target orientation validation
 
 ### Standalone EA
 
-- `Experts/MultiSpeedZigZagEA.mq5`
+- `Experts/MultiSpeedZigZagEA.mq5`, version `0.20`
 
-Features:
+Current features:
 
 - closed-bar processing only
-- shadow-only default
-- explicit second live-execution authorization flag
-- raw candidate and selected-signal CSV journaling
-- fixed-lot standalone execution path
+- three independent execution authorization gates
+- per-strategy enable inputs
+- persistent event deduplication
+- raw candidate and selected-decision journal
+- spread rejection
+- normalized volume
+- broker stop/freeze validation
+- live market entry substituted before target recalculation
+- opposite-position close verification
 - one-position-per-symbol option
-- opposite-position close option
-- in-memory event deduplication
 
-This EA is not production-authorized. Execution safeguards remain incomplete.
+The three live gates are:
+
+1. `InpShadowOnly=false`
+2. `InpAllowLiveExecution=true`
+3. `InpAcknowledgeRisk=true`
+
+This EA remains not production-authorized.
 
 ### Test
 
 - `Tests/MultiSpeedZigZag/Test_MSZZ_Determinism.mq5`
 
-The test rebuilds identical history through two independent engines and compares structural identities and state.
+The test rebuilds identical history through two independent engines and compares structural identities and state. It has not been run.
 
-### Documentation
-
-- `README.md`
-- `ARCHITECTURE.md`
-- `DECISION_LOG.md`
-- `NON_REPAINTING_CONTRACT.md`
-- `STRATEGY_CATALOG.md`
-- `TEST_PLAN.md`
-- `PARITY_AUDIT.md`
-- this handoff
-
-## Canonical milestone-1 behavior
+## Canonical behavior
 
 - Wick highs/lows maintain leg extremes.
 - ATR reversal distance confirms pivots.
-- Close breaks projected support/resistance.
+- Closed prices break projected support/resistance.
 - Only closed bars are processed.
-- The last two confirmed same-kind pivots define each projected trendline.
-- Pivot decisions use `confirmed_time`, never retrospectively claim knowledge at `pivot_time`.
-- Identical closed history must produce identical IDs.
+- Last two confirmed same-kind pivots define each projected line.
+- Pivot decisions use `confirmed_time`, never claim the pivot was known at `pivot_time`.
+- Identical closed history must reproduce identical IDs.
 
 ## Known limitations and risks
 
-1. No MetaEditor compile was available in this connector session. Compile status is unverified.
-2. The engine rebuilds full history each bar. This is deliberate for determinism but needs performance measurement.
-3. Consumed event IDs are not persisted across terminal restarts.
-4. Standalone execution lacks spread, stop-level, freeze-level, volume-step, daily-loss, and trade-count gates.
-5. Fixed strategy scores are placeholders, not proven edge estimates.
-6. Pine quality scoring, source selection, volume, momentum, Renko-body mode, volatility-slope lines, and historical projection variants are not yet ported.
-7. Candidate overlap is reduced by best-candidate selection, but formal opportunity-cluster aggregation remains incomplete.
-8. The source parity audit is structural and initial; bar-for-bar exported parity has not been run.
+1. MetaEditor compile remains unverified.
+2. The deterministic test has not been executed.
+3. Full-history rebuild performance has not been measured.
+4. Event-store behavior has not been runtime-tested, including missing-file and concurrent-terminal cases.
+5. Position ownership reconstruction is still absent.
+6. No account-risk sizing, daily-loss gate, trade-count gate, margin preflight, or emergency kill switch exists.
+7. Fixed strategy scores are placeholders rather than edge estimates.
+8. Advanced Pine features remain unported: source modes, quality scoring, volume, momentum, Renko bodies, volatility-slope lines, and historical projection variants.
+9. Formal opportunity aggregation remains incomplete; current logic selects the best candidate.
+10. Bar-for-bar Pine parity has not been run.
 
-## Required next actions, in order
+## Required next actions
 
-1. Compile the EA and test in MetaEditor; repair every error and review every warning.
-2. Run deterministic test and record terminal output.
-3. Add a replay/export harness comparing pivot and breakout timestamps against Pine on a fixed XAUUSD window.
-4. Add persistent consumed-event storage and restart reconstruction.
-5. Add broker-safe volume and stop normalization plus spread and account-risk gates.
-6. Implement reserved strategies one at a time, each with deterministic fixtures.
-7. Add real opportunity clustering so supporting strategies strengthen one opportunity rather than only competing by score.
-8. Run shadow-mode evidence collection before any demo execution.
+1. Compile the EA, headers, and tests in MetaEditor; fix every error and review every warning.
+2. Run deterministic and event-store tests and save terminal evidence.
+3. Add synthetic structural fixtures instead of relying only on market history.
+4. Add a replay/export harness for Pine-versus-MQL5 pivots, line values, and breakout timestamps.
+5. Implement position and order ownership reconstruction after restart.
+6. Add account-risk sizing, margin preflight, daily limits, and emergency controls.
+7. Implement reserved strategies one at a time with explicit state machines and tests.
+8. Replace best-candidate-only handling with first-class opportunity clusters.
+9. Collect shadow evidence before demo execution.
 
 ## Agent start procedure
 
 1. Read this file.
 2. Read `DECISION_LOG.md` from the end backward.
-3. Read `TEST_PLAN.md` and `NON_REPAINTING_CONTRACT.md`.
-4. Inspect latest branch commits.
-5. Do not call this branch production-ready until every release gate has evidence.
+3. Read `TEST_PLAN.md`, `NON_REPAINTING_CONTRACT.md`, and `KNOWN_ISSUES.md`.
+4. Inspect the latest branch commits and draft PR.
+5. Do not call the branch production-ready without compile, parity, restart, safety, and evidence gates.
 
 ## Agent end procedure
 
