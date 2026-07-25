@@ -642,7 +642,7 @@ Files affected: `TestEvidence/level1_edge_certification_20260724/
 TIER_C_REAL_TICK_TEST.md` (new), `TestEvidence/level1_edge_certification_
 20260724/FOLLOWUP_HISTORICAL_DATA_ACQUISITION.md` (new, separate
 engineering ticket, not part of this verdict), this entry, `HANDOFF.md`.
-Commit: (pending)
+Commit: `978fd7d`
 Follow-up: (1) investigate the journal auto-tag intermittency found above
 in a future pass. (2) Continue `qb-live-20260724-06-pendingcapfix`'s
 demo-forward accumulation toward the sprint's own Level-2 sample
