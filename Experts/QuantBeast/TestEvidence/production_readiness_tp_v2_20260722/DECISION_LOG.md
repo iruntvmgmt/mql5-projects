@@ -240,7 +240,7 @@ Files affected: `Experts/QuantBeast/QuantBeastEA.mq5`,
 `Include/QuantBeast/Analytics/TradeJournal.mqh`,
 `Include/QuantBeast/Testing/SafetyTests.mqh`,
 `Experts/QuantBeast/Tools/quantbeast_deploy.py` (roster presets).
-Commit: (pending)
+Commit: `ea2add7`
 Follow-up: BO and TP V2 remain `SHADOW_READY` not `DEMO_READY` per the
 readiness table (D013) -- this activation is an informed authorization
 decision, not new evidence that changes those labels. Revisit whether
@@ -289,7 +289,7 @@ least a 12-hour window on the live account before being noticed.
 Files affected: `Include/QuantBeast/Risk/RiskEngine.mqh`,
 `Experts/QuantBeast/QuantBeastEA.mq5`,
 `Include/QuantBeast/Testing/SafetyTests.mqh`.
-Commit: (pending)
+Commit: `ea2add7`
 Follow-up: consider whether `ResetState()` should be wired into an
 operator-facing command (mirroring `CMD_CLEAR_KILL_STATE`) in a future
 pass, so clearing a stale drawdown lock doesn't require manual
@@ -337,7 +337,7 @@ Trading-behavior impact: none -- this is a manual-intervention procedure
 question, not a code or control-flow change.
 Files affected: none (documentation only --
 `KNOWN_LIMITATIONS.md`, this entry).
-Commit: (pending)
+Commit: `ea2add7`
 Follow-up: if this trips up a future session again, reconsider the
 code-level fix (re-read-before-persist-on-detach) as a real, scoped
 change rather than documentation alone.
