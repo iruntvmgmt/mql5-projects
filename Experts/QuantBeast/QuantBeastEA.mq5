@@ -1214,9 +1214,44 @@ int OnInit()
                              InpEnableRegimeExit, InpShockVolMultiplier);
 
    // --- Initialize Journal ---
-   g_Journal.Init(InpEnableSignalJournal, InpEnableOrderJournal, InpEnableTradeJournal, InpJournalTesterPrefix);
-   g_Counterfactual.Init(InpEnableCounterfactual, InpJournalTesterPrefix);
-   g_TPOutcomeTracker.Init(InpEnableTPOutcomeJournal, InpJournalTesterPrefix);
+   // InpJournalRunTag is honored when explicitly set, but string-type
+   // inputs were found (2026-07-25) to not reliably apply when loaded via
+   // the Strategy Tester's --inputs_path .set mechanism (a pre-existing
+   // MT5/Wine input-application quirk, not fixable from this side -- see
+   // KNOWN_LIMITATIONS.md's existing note on a near-identical bool-input
+   // quirk). Every Tester run therefore gets an auto-generated, genuinely
+   // unique tag (wall-clock time + tick count, NOT simulated TimeCurrent()
+   // which is identical for every rerun of the same window) whenever no
+   // explicit tag arrived. Gated on MQLInfoInteger(MQL_TESTER) -- a runtime
+   // fact, not an input -- rather than InpJournalTesterPrefix, so this
+   // cannot be silently defeated by forgetting to set that input too.
+   // Live/production (MQL_TESTER false) is never auto-tagged -- unchanged
+   // shared filenames, unaffected by this.
+   string effectiveJournalTag = InpJournalRunTag;
+   if(effectiveJournalTag == "" && MQLInfoInteger(MQL_TESTER))
+      effectiveJournalTag = "auto" + IntegerToString((long)TimeGMT()) + "_" + IntegerToString((int)GetTickCount64());
+
+   bool journalInitOk = g_Journal.Init(InpEnableSignalJournal, InpEnableOrderJournal,
+                                        InpEnableTradeJournal, InpJournalTesterPrefix, effectiveJournalTag);
+   g_Counterfactual.Init(InpEnableCounterfactual, InpJournalTesterPrefix, effectiveJournalTag);
+   g_TPOutcomeTracker.Init(InpEnableTPOutcomeJournal, InpJournalTesterPrefix, effectiveJournalTag);
+   if(effectiveJournalTag != "")
+      QBLogInfo("Journal run tag: " + effectiveJournalTag);
+
+   // A non-empty InpJournalRunTag marks this as a certification/evidence
+   // run (Tools/quantbeast_certification*.py) -- a journal that fails to
+   // open there must not silently produce an empty/misleading evidence
+   // file (found 2026-07-25: rapid successive Tester runs intermittently
+   // failed to open the shared journal, error=5004, with no consequence
+   // beyond a log line). Live/production (empty tag) keeps the existing
+   // lenient behavior -- never fail closed on a journal-only defect
+   // for a real deployment.
+   if(InpJournalRunTag != "" && !journalInitOk)
+   {
+      QBLogError("Certification run (tag=" + InpJournalRunTag +
+                 ") journal failed to open -- refusing to run with unreliable evidence capture.");
+      return INIT_FAILED;
+   }
 
    // --- Initialize Dashboard ---
    g_Dashboard.Init(InpDashboardEnabled, InpDashboardX, InpDashboardY,
@@ -3532,6 +3567,16 @@ void RunSelfTests()
       { g_SelfTestPassed++; QBLogInfo("TEST 108 PASS: Pending-cap market-orders-only fix " + detail); }
       else
       { g_SelfTestFailed++; QBLogError("TEST 108 FAIL: Pending-cap market-orders-only fix " + detail); }
+
+      // Test 109: certification journal run-tag isolation -- two different
+      // InpJournalRunTag values must resolve to genuinely separate files
+      // with no cross-write, closing the gap that let rapid successive
+      // Tester runs silently lose evidence to shared-file contention
+      // (Level-1 Edge Certification Sprint, 2026-07-25).
+      if(QBTestJournalRunTagIsolation(detail))
+      { g_SelfTestPassed++; QBLogInfo("TEST 109 PASS: Journal run-tag isolation " + detail); }
+      else
+      { g_SelfTestFailed++; QBLogError("TEST 109 FAIL: Journal run-tag isolation " + detail); }
    }
 
    QBLogInfo("Self-tests complete: " + IntegerToString(g_SelfTestPassed) + " passed, " +

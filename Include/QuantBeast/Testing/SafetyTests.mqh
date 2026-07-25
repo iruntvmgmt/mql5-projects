@@ -3673,6 +3673,69 @@ bool QBTestPendingCapMarketOrdersOnly(CSymbolAdapter &adapter, CPositionSizer &s
 }
 
 //+------------------------------------------------------------------+
+//| 2026-07-25: proves the Level-1 Edge Certification Sprint's journal-|
+//| isolation fix -- two different InpJournalRunTag values must open   |
+//| genuinely separate files, and writes to one must never appear in   |
+//| the other. Does not (cannot, from a single-threaded self-test)     |
+//| prove OS-level concurrent-process lock safety; proves the narrower |
+//| but load-bearing guarantee that makes concurrent contention        |
+//| impossible by construction: different tags cannot resolve to the   |
+//| same path.                                                         |
+//+------------------------------------------------------------------+
+bool QBTestJournalRunTagIsolation(string &detail)
+{
+   string tagX = "SELFTEST_TAGX_" + IntegerToString((int)TimeCurrent());
+   string tagY = "SELFTEST_TAGY_" + IntegerToString((int)TimeCurrent());
+   string baseName = "SelfTestJournal.csv";
+
+   int handleX = OpenJournalFile(baseName, "H1,H2", false, tagX);
+   int handleY = OpenJournalFile(baseName, "H1,H2", false, tagY);
+   bool bothOpened = (handleX != INVALID_HANDLE && handleY != INVALID_HANDLE);
+
+   bool wroteX = false, wroteY = false;
+   if(bothOpened)
+   {
+      wroteX = WriteCSVLine(handleX, "ROWX,1");
+      wroteY = WriteCSVLine(handleY, "ROWY,1");
+      FileClose(handleX);
+      FileClose(handleY);
+   }
+
+   // Re-open each tagged path independently (same helper a real journal
+   // consumer would use) and confirm strict content isolation: X's file
+   // contains its own row and never Y's, and vice versa.
+   bool xIsolated = false, yIsolated = false;
+   if(bothOpened && wroteX && wroteY)
+   {
+      int reopenX = OpenJournalFile(baseName, "H1,H2", false, tagX);
+      int reopenY = OpenJournalFile(baseName, "H1,H2", false, tagY);
+      if(reopenX != INVALID_HANDLE && reopenY != INVALID_HANDLE)
+      {
+         FileSeek(reopenX, 0, SEEK_SET);
+         string contentX = "";
+         while(!FileIsEnding(reopenX)) contentX += FileReadString(reopenX) + "\n";
+         FileSeek(reopenY, 0, SEEK_SET);
+         string contentY = "";
+         while(!FileIsEnding(reopenY)) contentY += FileReadString(reopenY) + "\n";
+         xIsolated = (StringFind(contentX, "ROWX") >= 0) && (StringFind(contentX, "ROWY") < 0);
+         yIsolated = (StringFind(contentY, "ROWY") >= 0) && (StringFind(contentY, "ROWX") < 0);
+         FileClose(reopenX);
+         FileClose(reopenY);
+      }
+   }
+
+   // Cleanup: don't leave self-test artifacts in the shared journal dir.
+   FileDelete(QB_LOG_DIR + "SelfTestJournal_" + tagX + ".csv", FILE_COMMON);
+   FileDelete(QB_LOG_DIR + "SelfTestJournal_" + tagY + ".csv", FILE_COMMON);
+
+   detail = "bothOpened=" + (bothOpened ? "yes" : "FAIL") +
+            " wroteBoth=" + (wroteX && wroteY ? "yes" : "FAIL") +
+            " xIsolated=" + (xIsolated ? "yes" : "FAIL") +
+            " yIsolated=" + (yIsolated ? "yes" : "FAIL");
+   return bothOpened && wroteX && wroteY && xIsolated && yIsolated;
+}
+
+//+------------------------------------------------------------------+
 //| Phase 9 (follow-on sprint): restart-persistence round-trip for TP  |
 //| V2's kill-switch flag and daily trade counter. Both               |
 //| Save/LoadKillSwitchState and Save/LoadStrategyTradeCounters wrote  |

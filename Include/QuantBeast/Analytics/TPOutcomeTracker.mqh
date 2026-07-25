@@ -237,7 +237,7 @@ public:
    ~CTPOutcomeTracker() { Close(); }
 
    //+------------------------------------------------------------------+
-   bool Init(bool enabled, bool isTester = false)
+   bool Init(bool enabled, bool isTester = false, string runTag = "")
    {
       m_enabled = enabled;
       m_isTester = isTester;
@@ -263,7 +263,7 @@ public:
          "H12_ReachedNeg_p25,H12_ReachedNeg_p50,H12_ReachedNeg_p100,H12_FirstThreshold,H12_BarsToMFE,H12_BarsToMAE,H12_Status," +
          "H24_MFE_ATR,H24_MAE_ATR,H24_CloseReturn_ATR,H24_Reached_p25,H24_Reached_p50,H24_Reached_p100," +
          "H24_ReachedNeg_p25,H24_ReachedNeg_p50,H24_ReachedNeg_p100,H24_FirstThreshold,H24_BarsToMFE,H24_BarsToMAE,H24_Status",
-         isTester);
+         isTester, runTag);
 
       return (m_handle != INVALID_HANDLE);
    }

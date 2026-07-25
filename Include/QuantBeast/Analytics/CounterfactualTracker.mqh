@@ -32,6 +32,7 @@ class CCounterfactualTracker
 private:
    bool   m_enabled;
    bool   m_isTester;
+   string m_runTag;
    string m_rows[QB_CF_MAX_ROWS];
    int    m_rowCount;
 
@@ -40,15 +41,17 @@ public:
    {
       m_enabled  = false;
       m_isTester = false;
+      m_runTag   = "";
       m_rowCount = 0;
    }
 
    ~CCounterfactualTracker() { Close(); }
 
-   bool Init(bool enabled, bool isTester = false)
+   bool Init(bool enabled, bool isTester = false, string runTag = "")
    {
       m_enabled  = enabled;
       m_isTester = isTester;
+      m_runTag   = runTag;
       m_rowCount = 0;
       return true;
    }
@@ -108,7 +111,7 @@ public:
       int handle = OpenJournalFile(QB_COUNTERFACTUAL_LOG,
          "Timestamp,Symbol,Strategy,Direction,SetupCode,RejectionCode," +
          "RejectionReason,HypoEntry,HypoStop,HypoTarget,ExpectedR,Confidence," +
-         "RegimeTrend,RegimeVol,Spread,ATR_Points,StrategyFamily,StrategyTemplate,StrategyTags", m_isTester);
+         "RegimeTrend,RegimeVol,Spread,ATR_Points,StrategyFamily,StrategyTemplate,StrategyTags", m_isTester, m_runTag);
       if(handle == INVALID_HANDLE) return;
 
       for(int i = 0; i < m_rowCount; i++)

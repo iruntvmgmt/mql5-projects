@@ -324,6 +324,7 @@ input bool   InpEnableTPOutcomeJournal = true;   // Enable TP Resume-Candidate O
 input bool   InpEnableOrderJournal    = true;    // Enable Order Journal
 input bool   InpEnableTradeJournal    = true;    // Enable Trade Journal
 input bool   InpJournalTesterPrefix  = false;   // Route journals to Tester\ subdirectory (set true in Strategy Tester)
+input string InpJournalRunTag         = "";      // Journal Run Tag: when non-empty, journal filenames become <Type>Journal_<tag>.csv instead of the shared <Type>Journal.csv -- isolates certification/backtest runs from each other and from live journals (2026-07-25, found rapid successive Tester runs colliding on the shared file). Leave empty for live/production (unchanged filenames).
 input bool   InpEnableDebugLogging    = false;   // Enable Debug Logging
 
 //+------------------------------------------------------------------+

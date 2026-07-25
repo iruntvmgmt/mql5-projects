@@ -125,23 +125,48 @@ void QBLogSection(string section)
 }
 
 //+------------------------------------------------------------------+
-//| Write a CSV line to a file handle                                  |
+//| Write a CSV line to a file handle. Flushes and verifies the file  |
+//| actually grew -- a write that silently doesn't persist (found     |
+//| possible in this environment, see OpenJournalFile) is loudly      |
+//| reported rather than assumed to have succeeded.                   |
 //+------------------------------------------------------------------+
-void WriteCSVLine(int handle, string line)
+bool WriteCSVLine(int handle, string line)
 {
-   if(handle == INVALID_HANDLE) return;
+   if(handle == INVALID_HANDLE) return false;
+   ulong before = FileSize(handle);
    FileWriteString(handle, line + "\r\n");
+   FileFlush(handle);
+   ulong after = FileSize(handle);
+   if(after <= before)
+   {
+      QBLogError("Journal write did not persist: before=" + IntegerToString((int)before) +
+                 " after=" + IntegerToString((int)after) + " error=" + IntegerToString(GetLastError()));
+      return false;
+   }
+   return true;
 }
 
 //+------------------------------------------------------------------+
-//| Open a CSV journal file in common folder                          |
+//| Open a CSV journal file in common folder. When runTag is non-     |
+//| empty, the filename becomes <name>_<tag>.csv instead of the       |
+//| shared <name>.csv -- gives each certification/backtest run its    |
+//| own file so rapid successive Tester runs cannot collide on a      |
+//| single shared handle (found 2026-07-25: concurrent/overlapping    |
+//| Tester Agent processes intermittently failed to open the shared   |
+//| file at all, error=5004, silently losing that run's evidence).    |
 //+------------------------------------------------------------------+
-int OpenJournalFile(string filename, string headers, bool isTester=false)
+int OpenJournalFile(string filename, string headers, bool isTester=false, string runTag="")
 {
    string path = QB_LOG_DIR;
    if(isTester)
       path += "Tester\\";
-   path += filename;
+   if(runTag != "")
+   {
+      int dot = StringFind(filename, ".csv");
+      path += (dot >= 0) ? StringSubstr(filename, 0, dot) + "_" + runTag + ".csv" : filename + "_" + runTag;
+   }
+   else
+      path += filename;
 
    // Check if file exists to decide whether to write headers
    bool exists = FileIsExist(path, FILE_COMMON);

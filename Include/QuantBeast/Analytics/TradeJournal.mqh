@@ -72,7 +72,7 @@ public:
    }
 
    //+------------------------------------------------------------------+
-   bool Init(bool enableSignal, bool enableOrder, bool enableTrade, bool isTester=false)
+   bool Init(bool enableSignal, bool enableOrder, bool enableTrade, bool isTester=false, string runTag="")
    {
       m_enabledSignal = enableSignal;
       m_enabledOrder  = enableOrder;
@@ -85,7 +85,7 @@ public:
             "Timestamp,Symbol,Mode,Strategy,Direction,SignalID,SetupCode,TriggerCode," +
             "Accepted,RejectionCode,RejectionReason,RegimeTrend,RegimeVol,Session," +
             "Spread,ATR_Points,Entry,Stop,Target,ExpectedR,Confidence," +
-            "StrategyFamily,StrategyTemplate,StrategyTags", isTester);
+            "StrategyFamily,StrategyTemplate,StrategyTags", isTester, runTag);
          if(m_signalHandle == INVALID_HANDLE) success = false;
       }
 
@@ -93,7 +93,7 @@ public:
       {
          m_orderHandle = OpenJournalFile(QB_ORDER_LOG,
             "RequestTime,OrderType,RequestedPrice,RequestedVolume,Stop,Target," +
-            "BrokerRetcode,FillPrice,SlippagePts,Retries,FinalState,Comment", isTester);
+            "BrokerRetcode,FillPrice,SlippagePts,Retries,FinalState,Comment", isTester, runTag);
          if(m_orderHandle == INVALID_HANDLE) success = false;
       }
 
@@ -102,7 +102,7 @@ public:
          m_tradeHandle = OpenJournalFile(QB_TRADE_LOG,
             "Strategy,SignalID,EntryTime,ExitTime,Direction,Entry,Exit,Volume," +
             "Stop,Target,GrossPnL,Commission,Swap,NetPnL,RMultiple,MFE,MAE," +
-            "ExitReason,EntryRegime,ExitRegime,EntrySpread,Slippage", isTester);
+            "ExitReason,EntryRegime,ExitRegime,EntrySpread,Slippage", isTester, runTag);
          if(m_tradeHandle == INVALID_HANDLE) success = false;
       }
 
@@ -148,9 +148,7 @@ public:
       fields[23] = sig.strategy_tags;
 
       string row = MakeCSVRow(fields, 24);
-      WriteCSVLine(m_signalHandle, row);
-      FileFlush(m_signalHandle);
-      return true;
+      return WriteCSVLine(m_signalHandle, row);
    }
 
    //+------------------------------------------------------------------+

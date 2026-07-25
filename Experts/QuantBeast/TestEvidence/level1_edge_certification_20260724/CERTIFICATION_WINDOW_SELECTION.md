@@ -57,7 +57,16 @@ window:**
   trades, but using both as independent evidence needs to stay clearly
   separated, never pooled)
 
-**Total: ~19 fixed clean days, plus a few accruing forward.** This is far
+**Correction (same evening, before any real backtest data was used):** the
+2026.06.13-14 and 2026.06.27-28 gaps are both pure weekends (Sat/Sun) --
+confirmed via a live Tester probe against 2026.06.13 returning "0 ticks, 0
+bars generated." Zero market data exists for either gap; they contribute
+nothing usable. The only gap containing real trading weekdays is
+2026.07.04-2026.07.18 (10 weekdays: 07.06-07.10 and 07.13-07.17). **Actual
+usable clean real-tick trading days: 10, not ~19.**
+
+**Total: ~19 fixed calendar days, of which only 10 are actual trading
+weekdays, plus a few accruing forward.** This is far
 short of the 12-18 month certification + 3-6 month holdout this document
 originally planned, and not enough for the sprint's own predeclared gates
 (>=100 holdout trades, 3+ regimes, monthly non-negativity across many

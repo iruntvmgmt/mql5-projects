@@ -490,6 +490,88 @@ control).
 
 ---
 
+Decision ID: D019
+Date/time: 2026-07-25, journal filename collision under rapid successive
+Tester runs -- root cause found and fixed
+Question: Tier B's evidence pack disclosed that `SignalJournal.csv`/
+`OrderJournal.csv`/`TradeJournal.csv` did not grow across four back-to-back
+Tester runs despite real trades occurring, worked around at the time by
+parsing the Tester Agent's text log instead. The user's follow-up
+explicitly required fixing this properly before any further Tier C runs:
+unique filenames per run, loud failure on open/write problems, missing/
+stale journals failing certification runs outright, text-log parsing kept
+only as a secondary audit source, and a test proving isolation.
+Investigation: `OpenJournalFile()` (`Diagnostics.mqh`) opens every journal
+at a single shared path (`Common\Files\QuantBeast\Tester\<Name>.csv`) with
+`FILE_SHARE_READ` only, no `FILE_SHARE_WRITE`. Grepping the day's full
+Tester Agent log for "Cannot open journal file" found 332 occurrences:
+`TPOutcomeJournal.csv` alone failed 308 times (essentially every rapid
+Tester run today), `SignalJournal.csv`/`OrderJournal.csv`/`TradeJournal.csv`
+8 times each (concentrated in the most rapid back-to-back stretches) --
+`error=5004` (cannot open), consistent with a not-yet-released handle from
+the immediately preceding run's Tester Agent process colliding with the
+next run's open attempt under the exclusive-write-only sharing mode.
+Decision: (1) `OpenJournalFile()` gained an optional `runTag` parameter --
+when non-empty, `<Name>.csv` becomes `<Name>_<tag>.csv`, making cross-run
+collision structurally impossible regardless of process-teardown timing.
+(2) New `InpJournalRunTag` input, honored when explicitly set. (3) Discovered
+along the way: string-type inputs do not reliably apply when loaded via the
+Strategy Tester's `--inputs_path` .set mechanism (confirmed empirically --
+`InpJournalRunTag` set both unquoted and quoted in a `.set` never reached
+the running EA; matches the project's own prior note on a near-identical
+bool-input-via-`.ini`-`[TesterInputs]` quirk, KNOWN_LIMITATIONS.md). Not
+fixable from this side. (4) Worked around by having every Tester run
+auto-generate its own genuinely unique tag (`"auto" + TimeGMT() + "_" +
+GetTickCount64()`, real wall-clock time, not simulated `TimeCurrent()`
+which repeats identically for every rerun of the same historical window)
+whenever no explicit tag arrived -- gated on `MQLInfoInteger(MQL_TESTER)`,
+a runtime fact, not an input, so it cannot be silently defeated the same
+way. Live/production is never auto-tagged. (5) `WriteCSVLine()` now
+captures file size before/after, flushes, and logs loudly via `QBLogError`
+if the size did not grow -- previously `LogSignal()` hardcoded `return
+true` regardless of whether the write actually persisted. (6) `OnInit`
+fails closed (`INIT_FAILED`) when `InpJournalRunTag` is explicitly set (a
+certification run) and the journal failed to open -- live/production
+(empty tag) keeps its existing lenient behavior. (7) New TEST 109 proves
+two different tags resolve to genuinely separate files with zero cross-
+write.
+Verification: compiled 0 errors/0 warnings (two intermediate `ulong`/`long`
+conversion warnings from the write-size check found and fixed first).
+Diagnostic self-test-only run: 112 passed, 0 failed (up from 111), TEST 109
+passing. Real integration proof, not just unit-level: two genuinely
+back-to-back real Tester runs (started the instant the prior one's "thread
+finished" line appeared) each produced their own uniquely-tagged
+`SignalJournal_auto<ts>_<tick>.csv`/`TradeJournal_...`/`OrderJournal_...`/
+`TPOutcomeJournal_...` -- `TPOutcomeJournal.csv`'s near-constant open
+failures (308 that day) disappeared entirely, and the resulting
+`TradeJournal_auto1780272000_466407859.csv` was confirmed to contain the
+real FBO trade (entry=4519.26, net=-0.14) matching what the Experts log's
+text output had shown, proving genuine CSV persistence, not just the
+text-log workaround.
+Reason: this is the correct scope for the fix the user asked for --
+eliminates the collision by construction (unique files) rather than trying
+to out-race or out-lock a Wine/MQL5 file-sharing quirk that a prior session
+(2026-07-19) already tried and abandoned for the same underlying reason.
+Trading-behavior impact: none -- journal-only change, no control-flow
+touched. Live/production journals are unaffected (empty tag, unchanged
+filenames, unchanged lenient failure handling).
+Files affected: `Include/QuantBeast/Core/Diagnostics.mqh`,
+`Include/QuantBeast/Core/Configuration.mqh`,
+`Include/QuantBeast/Analytics/TradeJournal.mqh`,
+`Include/QuantBeast/Analytics/TPOutcomeTracker.mqh`,
+`Include/QuantBeast/Analytics/CounterfactualTracker.mqh`,
+`Experts/QuantBeast/QuantBeastEA.mq5`,
+`Include/QuantBeast/Testing/SafetyTests.mqh`.
+Commit: (pending)
+Follow-up: the underlying `FILE_SHARE_READ`-only opening mode is unchanged
+and could theoretically still collide if the Tester harness ever ran
+genuinely concurrent (not just rapid-sequential) jobs against the same tag
+-- not currently possible via `tester_run_backtest` (confirmed empirically:
+a second concurrent submission is rejected with `ok:false` while one is
+running), so not fixed further this pass.
+
+---
+
 Decision ID: D008
 Date/time: 2026-07-23, Phase 1 of the follow-on sprint (`QuantBeast_Production_Readiness_Sprint.md`)
 Question: Independently verify the prior sprint's documented final state
