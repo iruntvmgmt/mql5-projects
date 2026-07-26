@@ -9,6 +9,7 @@ private:
    bool m_fast_breakout,m_medium_breakout,m_slow_breakout,m_fast_medium_confluence;
    bool m_fast_medium_context,m_medium_slow_context,m_nested_pullback,m_weighted_ensemble;
    double m_rr;
+   int m_validity_bars;
 
    void ClearCandidate(MSZZCandidate &c) const { MSZZCandidate blank; c=blank; c.strategy_id=MSZZ_STRAT_NONE; }
 
@@ -27,6 +28,10 @@ private:
       c.setup_name=name; c.origin_id=origin_id; c.event_id=event_id; c.reason=reason;
       double risk=MathAbs(entry-stop);
       c.target=(dir==MSZZ_DIR_LONG ? entry+risk*m_rr : entry-risk*m_rr);
+      // D015: signal-validity horizon, in bars past signal_time. Was
+      // previously never assigned anywhere (always 0) -- see DECISION_LOG.md
+      // D015 for why this was a deeper gap than just "unenforced."
+      c.expiry_time=t+(datetime)(MathMax(1,m_validity_bars)*PeriodSeconds());
       out[count++]=c;
    }
 
@@ -49,6 +54,7 @@ public:
       m_fast_breakout=true; m_medium_breakout=true; m_slow_breakout=true;
       m_fast_medium_confluence=true; m_fast_medium_context=true; m_medium_slow_context=true;
       m_nested_pullback=true; m_weighted_ensemble=true; m_rr=1.5;
+      m_validity_bars=3;
    }
 
    void ConfigureStrategies(const bool fast_breakout,const bool medium_breakout,const bool slow_breakout,
@@ -62,6 +68,7 @@ public:
    }
 
    void SetRiskReward(const double rr) { m_rr=MathMax(0.1,rr); }
+   void SetSignalValidityBars(const int bars) { m_validity_bars=MathMax(1,bars); }
 
    int Evaluate(const MSZZSpeedSnapshot &f,const MSZZSpeedSnapshot &m,const MSZZSpeedSnapshot &s,
                 const datetime signal_time,const double close_price,MSZZCandidate &out[])

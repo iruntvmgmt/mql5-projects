@@ -4,6 +4,67 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 (ninth entry) — Stale-signal expiry enforcement, Phase 8 (D015)
+
+Per the user's explicit choice after D014's conditional go/no-go evaluation: close Phase 8 before any Phase 13 decision, stay in shadow-only (see `DECISION_LOG.md` D015). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
+
+### Change
+
+- `Include/MultiSpeedZigZag/Execution/ExecutionGuard.mqh`: new static `IsExpired(now, expiry_time)` — pure, `expiry_time<=0` disables the check, exclusive boundary (`now==expiry_time` is not expired).
+- `Include/MultiSpeedZigZag/Strategies/StrategySuite.mqh`: new `m_validity_bars` member (default `3`) and `SetSignalValidityBars()` setter, mirroring `SetRiskReward()`. `AddCandidate()` (the single shared candidate-construction helper used by every strategy) now sets `c.expiry_time = t + validity_bars*PeriodSeconds()` — previously never assigned anywhere.
+- `Experts/MultiSpeedZigZagEA.mq5`: new input `InpSignalValidityBars` (default `3`), wired via `g_suite.SetSignalValidityBars()` in `ProcessClosedBar()`. `ExecuteCluster()` gains a `REJECT_EXPIRED` check against `cluster.expiry_time` as the first content check, immediately after the shadow-mode early return. `#property version` bumped `0.360` → `0.370`.
+
+### Compile
+
+```
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_Clusters.mq5" /log   # smoke-check after ExecutionGuard/StrategySuite change
+Result: 0 errors, 0 warnings, 895 ms elapsed
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_Expiry.mq5" /log
+Result: 0 errors, 0 warnings, 606 ms elapsed
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Experts\MultiSpeedZigZagEA.mq5" /log
+MQL5\Experts\MultiSpeedZigZagEA.mq5(5,11) : warning 68: version '0.370' is incompatible with MQL5 Market, must be xxx.yyy
+Result: 0 errors, 1 warnings, 3045 ms elapsed
+```
+
+Isolated instance: all twelve targets (Ownership, Determinism, Clusters, Parity, IntentStore, Reconciler, StateMachine, Protection, Margin, Safeguard, Expiry, EA) recompiled clean, hash-verified identical source to the live tree before compiling.
+
+### Deterministic boundary test
+
+`[StartUp] Script=MultiSpeedZigZagTests\Test_MSZZ_Expiry, Symbol=XAUUSD, Period=M5` on the isolated instance:
+
+```
+PASS: now before expiry_time is not expired
+PASS: now exactly at expiry_time is not expired (expiry is exclusive)
+PASS: now after expiry_time is expired
+PASS: expiry_time of 0 disables the check entirely (never expired)
+PASS: a negative expiry_time disables the check entirely (never expired)
+PASS: Evaluate() runs cleanly with SetSignalValidityBars() configured
+MSZZ expiry test complete failures=0
+```
+
+6/6 assertions, `failures=0`.
+
+### Regression on the changed shared candidate-construction path
+
+`Test_MSZZ_Clusters.mq5` (22 assertions, unchanged test file) re-ran after the `AddCandidate()` change and reported `failures=0` — confirms the new `expiry_time` field assignment did not alter any existing candidate or cluster construction behavior.
+
+### Full regression
+
+Ownership, Determinism, IntentStore, Reconciler, StateMachine, Protection, Margin, Safeguard all re-ran on the isolated instance and reported `failures=0` (or `TEST PASS` for Determinism's single assertion), unchanged from their established baselines. (Note: this pass's isolated-instance runs took noticeably longer per cold boot than prior passes — traced to open chart accumulation in the isolated instance, unrelated to the code change; all results are unaffected once accounted for with longer wait times.)
+
+### Shadow Strategy Tester regression
+
+Two new configs (`shadow_d015_short.ini`, `shadow_d015_long.ini`), same `[Tester]` shape as every prior baseline in this series.
+
+- **Short window** (2026.07.20–2026.07.24): `last test passed with result "successfully finished" in 0:00:00.642`.
+- **Long window** (2026.07.01–2026.07.24): `last test passed with result "successfully finished" in 0:00:02.208`. `MSZZ_Shadow_Report_D015_Long.htm`: 0 Total Trades, 0 Total Deals. This run's log window sliced out of the cumulative daily Tester-agent log: 431 `RAW_CANDIDATE` + 178 `MSZZ SHADOW` lines — identical to the D006–D013 baseline. Zero `REJECT_EXPIRED` lines in either run.
+
+### Not exercised, and not expected to fire under the current architecture
+
+The `REJECT_EXPIRED` rejection path itself has no evidence of ever having actually rejected anything, by design — candidates are generated and acted upon synchronously in the same `OnTick()` call, so the elapsed time between `signal_time` and the check is effectively zero in every currently-possible code path. Built as defense-in-depth per the user's explicit direction, not as a currently-active safety net.
+
+---
+
 ## 2026-07-26 (eighth entry) — Account safeguards, first increment (D013)
 
 Continuation of the same 17-phase execution-safety request; first increment of Phase 7 (see `DECISION_LOG.md` D013 for exactly what is and is not covered). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.

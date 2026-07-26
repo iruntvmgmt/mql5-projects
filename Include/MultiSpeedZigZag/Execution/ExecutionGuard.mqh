@@ -63,6 +63,17 @@ public:
       return spread_points<=max_spread_points;
    }
 
+   // D015: pure, static staleness comparison. expiry_time<=0 means "no
+   // expiry configured" (disabled), not "always expired" -- same
+   // non-positive-disables-the-check convention as D012/D013. Expiry is
+   // exclusive: now==expiry_time is still valid, matching "valid through
+   // this instant."
+   static bool IsExpired(const datetime now,const datetime expiry_time)
+   {
+      if(expiry_time<=0) return false;
+      return now>expiry_time;
+   }
+
    bool TradingAllowed(string &reason) const
    {
       long trade_mode=SymbolInfoInteger(m_symbol,SYMBOL_TRADE_MODE);

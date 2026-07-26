@@ -2,7 +2,7 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.360"
+#property version   "0.370"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
@@ -52,6 +52,7 @@ input int    InpMinBarsBetween=3;
 input double InpMinScore=5.0;
 input double InpRiskReward=1.5;
 input bool   InpOneOwnedPositionPerSymbol=true;
+input int    InpSignalValidityBars=3;
 
 input group "═══ Standalone Execution ═══"
 input double InpFixedLots=0.01;
@@ -181,6 +182,23 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
       JournalCandidate(owner,"SHADOW",cluster.cluster_id);
       return true;
    }
+
+   // D015: reject a stale signal before any other consideration, including
+   // whether it would have scored well enough to execute. Checked against
+   // cluster.expiry_time (the cluster-level aggregated value the cluster
+   // engine already computes as the earliest constituent candidate's
+   // expiry), not owner.expiry_time. See DECISION_LOG.md D015 -- this is
+   // not currently expected to ever fire, since candidates are generated
+   // and acted upon synchronously in the same OnTick() call, but exists as
+   // defense-in-depth for the day any retry/queueing logic is added.
+   if(CMSZZExecutionGuard::IsExpired(TimeCurrent(),cluster.expiry_time))
+   {
+      MSZZCandidate rejected=owner;
+      rejected.reason=StringFormat("signal expired at %s",TimeToString(cluster.expiry_time,TIME_DATE|TIME_SECONDS));
+      JournalCandidate(rejected,"REJECT_EXPIRED",cluster.cluster_id);
+      return false;
+   }
+
    if(cluster.combined_score<InpMinScore){ JournalCandidate(owner,"REJECT_SCORE",cluster.cluster_id); return false; }
    if(EventConsumed(persistence_id)){ JournalCandidate(owner,"REJECT_DUPLICATE_CLUSTER",cluster.cluster_id); return false; }
 
@@ -413,6 +431,7 @@ void ProcessClosedBar()
    MSZZSpeedSnapshot slow=g_engine.Snapshot(MSZZ_SPEED_SLOW);
 
    g_suite.SetRiskReward(InpRiskReward);
+   g_suite.SetSignalValidityBars(InpSignalValidityBars);
    g_suite.ConfigureStrategies(InpEnableFastBreakout,InpEnableMediumBreakout,InpEnableSlowBreakout,
                                InpEnableFastMedConfluence,InpEnableFastMedContext,InpEnableMedSlowContext,
                                InpEnableNestedPullback,InpEnableWeightedEnsemble);
