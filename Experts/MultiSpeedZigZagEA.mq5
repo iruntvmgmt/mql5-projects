@@ -2,7 +2,7 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.370"
+#property version   "0.380"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
@@ -19,6 +19,7 @@
 #include <MultiSpeedZigZag/Execution/ProtectionGuard.mqh>
 #include <MultiSpeedZigZag/Execution/MarginGuard.mqh>
 #include <MultiSpeedZigZag/Execution/AccountSafeguard.mqh>
+#include <MultiSpeedZigZag/Diagnostics/TradeAnalyticsExporter.mqh>
 
 input group "═══ Operating Mode ═══"
 input bool   InpShadowOnly=true;
@@ -82,6 +83,7 @@ CMSZZExecutionReconciler       g_reconciler;
 CMSZZProtectionGuard           g_protection;
 CMSZZMarginGuard               g_margin;
 CMSZZAccountSafeguardGuard      g_safeguard;
+CMSZZTradeAnalyticsExporter     g_trade_analytics;
 CTrade                         g_trade;
 datetime                       g_last_bar=0;
 string                         g_instance_id="";
@@ -417,8 +419,80 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
    return ok;
 }
 
+// D016: detect an MSZZ-owned position closing every bar, not only at EA
+// restart. The D009 reconciler is deliberately not reused here -- it
+// solves identity ambiguity (comment-token matching, netting conflicts)
+// for the restart case where a ticket might be unknown; here the ticket
+// is already known and trustworthy (D011 sets it in the same tick as the
+// fill). A direct PositionSelectByTicket check is sufficient and safer
+// than threading this through the reconciler for a problem it doesn't
+// have. See DECISION_LOG.md D016.
+void DetectClosedPositions()
+{
+   int count=g_intent_store.Count();
+   for(int i=0;i<count;i++)
+   {
+      MSZZExecutionIntent intent;
+      if(!g_intent_store.IntentAt(i,intent)) continue;
+      if(intent.execution_state!=(int)MSZZ_INTENT_POSITION_ACTIVE) continue;
+      if(intent.position_ticket==0) continue;
+      if(PositionSelectByTicket(intent.position_ticket)) continue; // still open
+
+      if(!HistorySelect(intent.intent_time-3600,TimeCurrent()))
+      {
+         PrintFormat("MSZZ WARNING: closed-position detection HistorySelect failed intent=%s",intent.intent_id);
+         continue;
+      }
+
+      ulong closing_deal=0; datetime closing_time=0; double closing_price=0.0;
+      datetime fill_time=intent.intent_time; // fallback if the opening deal isn't found below
+      int deal_total=HistoryDealsTotal();
+      for(int d=0;d<deal_total;d++)
+      {
+         ulong ticket=HistoryDealGetTicket(d);
+         if(ticket==0) continue;
+         if((ulong)HistoryDealGetInteger(ticket,DEAL_POSITION_ID)!=intent.position_ticket) continue;
+
+         long entry_type=HistoryDealGetInteger(ticket,DEAL_ENTRY);
+         if(entry_type==DEAL_ENTRY_IN)
+         {
+            fill_time=(datetime)HistoryDealGetInteger(ticket,DEAL_TIME);
+         }
+         else if(entry_type==DEAL_ENTRY_OUT || entry_type==DEAL_ENTRY_OUT_BY)
+         {
+            datetime t=(datetime)HistoryDealGetInteger(ticket,DEAL_TIME);
+            if(t>=closing_time) { closing_time=t; closing_price=HistoryDealGetDouble(ticket,DEAL_PRICE); closing_deal=ticket; }
+         }
+      }
+
+      string transition_reason;
+      if(!CMSZZIntentStateMachine::TryTransition(intent,MSZZ_INTENT_POSITION_CLOSED,transition_reason))
+      {
+         PrintFormat("MSZZ WARNING: closed-position detection state transition rejected intent=%s reason=%s",
+                     intent.intent_id,transition_reason);
+         continue;
+      }
+
+      if(closing_deal==0)
+      {
+         PrintFormat("MSZZ WARNING: closed-position detection found no closing deal intent=%s ticket=%I64u; state transitioned, trade analytics not exported",
+                     intent.intent_id,intent.position_ticket);
+      }
+      else if(InpWriteCSV)
+      {
+         g_trade_analytics.ExportClosedTrade(intent,fill_time,closing_price,closing_time);
+      }
+
+      if(!g_intent_store.UpdateIntent(intent))
+         PrintFormat("MSZZ WARNING: closed-position detection intent update failed intent=%s error=%s",
+                     intent.intent_id,g_intent_store.LastError());
+   }
+}
+
 void ProcessClosedBar()
 {
+   DetectClosedPositions();
+
    MqlRates rates[]; ArraySetAsSeries(rates,false);
    int copied=CopyRates(_Symbol,_Period,0,MathMax(300,InpHistoryBars),rates);
    if(copied<100){ PrintFormat("MSZZ insufficient bars copied=%d error=%d",copied,GetLastError()); return; }

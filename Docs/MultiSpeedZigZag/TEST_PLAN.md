@@ -150,3 +150,14 @@ This gate is an evaluation, not a new code change — see `DECISION_LOG.md` D014
 - **Full regression: PASS, no change.** All ten unit-test suites re-ran clean.
 - **What this proves**: a real, nonzero signal-validity horizon is now computed for every candidate and enforced at the cluster level before any other execution consideration; the existing cluster-engine expiry-aggregation logic (previously dormant) is now exercised with real data.
 - **What this does not prove, by design**: the `REJECT_EXPIRED` path firing for real — it is not expected to under the EA's current synchronous, same-tick execution architecture (no queue or retry exists), and this gate was built as defense-in-depth for future retry logic, not as a currently-active safety net. D014's core finding (no live-execution code path has ever run against real broker state) is unchanged and remains the determining fact for Phase 13, whose go/no-go decision remains open.
+
+## Gate 18 — Edge Discovery Sprint, Stage A infrastructure: trade-outcome analytics (D016, 2026-07-26, eleventh pass)
+
+This gate begins a separate track from Gates 1–17 (execution safety) — the Edge Discovery Sprint, aimed at determining whether the strategy engine has any real edge, which nothing prior in this test plan addresses.
+
+- **Compile: PASS.** EA 0 errors, 1 pre-existing reviewed warning. New files (`TradeAnalyticsExporter.mqh`, `Test_MSZZ_TradeAnalytics.mq5`) 0 errors/0 warnings. Live tree and isolated instance hash-identical.
+- **Deterministic test: PASS.** 15/15 assertions, `failures=0` — R-multiple sign/magnitude for long/short win/loss plus a zero-risk guard; MFE/MAE excursion both directions; exit-reason classification at/near/between stop and target; session-bucket boundaries.
+- **Shadow regression: PASS, no change.** Short and long windows both `successfully finished`, zero orders/deals/trades, identical 431/178 counts on the long window, zero `MSZZ_TradeAnalytics.csv` files created (shadow mode never creates intents, so the new per-bar closed-position check iterates zero every bar).
+- **Full regression: PASS, no change.** All eleven unit-test suites re-ran clean.
+- **What this proves**: the EA can now detect a closed position every bar (not just at restart) and compute R-multiple/MFE/MAE/exit-reason/session correctly against deterministic mock values; none of this interferes with shadow-mode operation.
+- **What this does not prove, and cannot yet**: the export logic firing against a real closed trade — there has never been one on this branch. Unlike Gates 9–17's guards (which at least ran against real, if empty, broker state), this component has literally never executed its live code path at all. That remains unverified until Stage A backtests are actually run. D014's Phase 13 verdict is unaffected by this gate either way — this is Track 2 (research), not Track 1 (execution safety).

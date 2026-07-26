@@ -4,6 +4,50 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 (tenth entry) — Edge Discovery Sprint, Stage A infrastructure: trade-outcome analytics (D016)
+
+Start of a new, separate track from the execution-safety phases (D005–D015): the Edge Discovery Sprint. See `DECISION_LOG.md` D016 for exactly what is and is not covered. Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting. The isolated instance was occupied by the paused D014/D015 live-integration test at the start of this pass; the user detached the EA (confirmed via journal: `expert MultiSpeedZigZagEA (XAUUSD,M5) removed` at 14:18:48, clean `MSZZ deinitialized reason=1`) before any D016 compile/test work touched the isolated instance.
+
+### Change
+
+- `Include/MultiSpeedZigZag/Diagnostics/TradeAnalyticsExporter.mqh` (new file): `CMSZZTradeAnalyticsPolicy` (pure `RMultiple()`, `ExcursionInR()`, `ClassifyExitReason()`, `SessionBucket()`) + `CMSZZTradeAnalyticsExporter` (live `ExportClosedTrade()`), mirroring `Diagnostics/ParityExporter.mqh`'s CSV pattern.
+- `Experts/MultiSpeedZigZagEA.mq5`: new `DetectClosedPositions()`, called first in `ProcessClosedBar()`. Iterates `MSZZ_INTENT_POSITION_ACTIVE` intents, direct `PositionSelectByTicket()` check, on closure finds the closing deal via `HistorySelect`/`HistoryDealGetTicket` matching `DEAL_POSITION_ID`, transitions via `CMSZZIntentStateMachine::TryTransition(..., MSZZ_INTENT_POSITION_CLOSED, ...)`, and calls the new exporter. `#property version` bumped `0.370` → `0.380`.
+
+### Compile
+
+```
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_TradeAnalytics.mq5" /log
+Result: 0 errors, 0 warnings, 519 ms elapsed
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Experts\MultiSpeedZigZagEA.mq5" /log
+MQL5\Experts\MultiSpeedZigZagEA.mq5(5,11) : warning 68: version '0.380' is incompatible with MQL5 Market, must be xxx.yyy
+Result: 0 errors, 1 warnings, 4087 ms elapsed
+```
+
+Isolated instance: all thirteen targets (Ownership, Determinism, Clusters, Parity, IntentStore, Reconciler, StateMachine, Protection, Margin, Safeguard, Expiry, TradeAnalytics, EA) recompiled clean, hash-verified identical source to the live tree before compiling.
+
+### Deterministic test
+
+`[StartUp] Script=MultiSpeedZigZagTests\Test_MSZZ_TradeAnalytics, Symbol=XAUUSD, Period=M5` on the isolated instance: 15/15 assertions `PASS`, `failures=0` — covering `RMultiple` for long win/loss and short win/loss plus a zero-risk guard, `ExcursionInR` for both directions, `ClassifyExitReason` at/within-tolerance/between stop and target, and `SessionBucket` at hours 0/7/8/15/16/23.
+
+### Full regression
+
+All eleven unit-test suites (Ownership, Determinism, Clusters, IntentStore, Reconciler, StateMachine, Protection, Margin, Safeguard, Expiry, TradeAnalytics) re-ran on the isolated instance and reported `failures=0` (or `TEST PASS` for Determinism's single assertion), unchanged from their established baselines.
+
+### Shadow Strategy Tester regression
+
+Two new configs (`shadow_d016_short.ini`, `shadow_d016_long.ini`), same `[Tester]` shape as every prior baseline in this series.
+
+- **Short window** (2026.07.20–2026.07.24): `last test passed with result "successfully finished" in 0:00:00.835`.
+- **Long window** (2026.07.01–2026.07.24): `last test passed with result "successfully finished" in 0:00:02.160`. `MSZZ_Shadow_Report_D016_Long.htm`: 0 Total Trades, 0 Total Deals. This run's log window sliced from the cumulative daily Tester-agent log: 431 `RAW_CANDIDATE` + 178 `MSZZ SHADOW` lines — identical to the D006–D015 baseline. `find ... -iname "MSZZ_TradeAnalytics.csv"` returned no results anywhere under `Tester/` after either run — confirms `DetectClosedPositions()` is a true no-op in shadow mode (zero `POSITION_ACTIVE` intents ever exist, since shadow mode never creates intents at all).
+
+Both runs: `MSZZ initialized in SHADOW posture`, `MSZZ account mode=HEDGING`, `MSZZ intent store loaded count=0 unknown=0` logged at `OnInit()`, zero `MSZZ WARNING`/error lines.
+
+### Not exercised
+
+Unlike every prior decision in this series, this component's core logic has literally never executed against a real closed position — not in shadow mode (which never reaches it), not against real broker state (no trade has ever closed on this branch). It has only been exercised by the deterministic unit test's injected values. This is a materially different (weaker) form of "not exercised" than D009–D015's guards, which at least ran their live-query code against real, if empty, broker state during the paused D014/D015 live-integration attempt. This gap can only be closed by actually running Stage A backtests.
+
+---
+
 ## 2026-07-26 (ninth entry) — Stale-signal expiry enforcement, Phase 8 (D015)
 
 Per the user's explicit choice after D014's conditional go/no-go evaluation: close Phase 8 before any Phase 13 decision, stay in shadow-only (see `DECISION_LOG.md` D015). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
