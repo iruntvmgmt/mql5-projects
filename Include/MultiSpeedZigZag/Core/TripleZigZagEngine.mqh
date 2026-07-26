@@ -46,11 +46,33 @@ private:
       return (price > previous.price ? MSZZ_STRUCT_HL : MSZZ_STRUCT_LL);
    }
 
+   void BlankPivot(MSZZPivot &p) const
+   {
+      p.valid=false; p.speed=MSZZ_SPEED_FAST; p.kind=MSZZ_PIVOT_NONE;
+      p.structure_label=MSZZ_STRUCT_UNKNOWN; p.pivot_time=0; p.confirmed_time=0;
+      p.pivot_shift=0; p.price=0.0; p.id="";
+   }
+
    void ResetSnapshot(const ENUM_MSZZ_SPEED speed)
    {
-      ZeroMemory(m_snapshot[(int)speed]);
-      m_snapshot[(int)speed].speed = speed;
-      m_snapshot[(int)speed].leg_direction = MSZZ_DIR_NONE;
+      int s=(int)speed;
+      m_snapshot[s].speed=speed;
+      m_snapshot[s].leg_direction=MSZZ_DIR_NONE;
+      m_snapshot[s].atr=0.0;
+      m_snapshot[s].reversal_threshold=0.0;
+      m_snapshot[s].current_extreme=0.0;
+      m_snapshot[s].current_extreme_time=0;
+      BlankPivot(m_snapshot[s].last_high);
+      BlankPivot(m_snapshot[s].prior_high);
+      BlankPivot(m_snapshot[s].last_low);
+      BlankPivot(m_snapshot[s].prior_low);
+      m_snapshot[s].new_pivot=false;
+      m_snapshot[s].bullish_break=false;
+      m_snapshot[s].bearish_break=false;
+      m_snapshot[s].resistance_now=0.0;
+      m_snapshot[s].support_now=0.0;
+      m_snapshot[s].bullish_event_id="";
+      m_snapshot[s].bearish_event_id="";
    }
 
    void ConfirmHigh(const string symbol,const ENUM_TIMEFRAMES tf,const ENUM_MSZZ_SPEED speed,
@@ -58,7 +80,6 @@ private:
    {
       int s=(int)speed;
       MSZZPivot p;
-      ZeroMemory(p);
       p.valid=true; p.speed=speed; p.kind=MSZZ_PIVOT_HIGH;
       p.structure_label=ClassifyHigh(price,m_snapshot[s].last_high);
       p.pivot_time=pivot_time; p.confirmed_time=confirm_time; p.pivot_shift=shift; p.price=price;
@@ -73,7 +94,6 @@ private:
    {
       int s=(int)speed;
       MSZZPivot p;
-      ZeroMemory(p);
       p.valid=true; p.speed=speed; p.kind=MSZZ_PIVOT_LOW;
       p.structure_label=ClassifyLow(price,m_snapshot[s].last_low);
       p.pivot_time=pivot_time; p.confirmed_time=confirm_time; p.pivot_shift=shift; p.price=price;

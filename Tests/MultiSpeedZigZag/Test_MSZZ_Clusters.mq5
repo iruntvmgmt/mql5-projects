@@ -9,20 +9,22 @@
 void InitCandidate(MSZZCandidate &c,const ENUM_MSZZ_STRATEGY_ID strategy,const double score,
                    const string origin,const string event_id,const double stop,const int evidence)
 {
-   ZeroMemory(c);
    c.valid=true;
    c.strategy_id=strategy;
    c.direction=MSZZ_DIR_LONG;
    c.origin_type=MSZZ_ORIGIN_FAST_BREAK;
    c.signal_time=D'2026.01.01 10:00';
+   c.expiry_time=0;
    c.entry=100.0;
    c.stop=stop;
    c.target=110.0;
    c.score=score;
    c.supporting_models=1;
    c.evidence_mask=evidence;
+   c.setup_name="";
    c.origin_id=origin;
    c.event_id=event_id;
+   c.reason="";
 }
 
 void AssertTrue(const bool condition,const string message,int &failures)

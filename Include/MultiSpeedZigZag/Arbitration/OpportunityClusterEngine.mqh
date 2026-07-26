@@ -76,7 +76,6 @@ public:
          {
             target=cluster_count++;
             ArrayResize(clusters,cluster_count);
-            ZeroMemory(clusters[target]);
             clusters[target].valid=true;
             clusters[target].origin_id=(candidates[i].origin_id!="" ? candidates[i].origin_id : candidates[i].event_id);
             clusters[target].origin_type=candidates[i].origin_type;
@@ -98,27 +97,26 @@ public:
             continue;
          }
 
-         MSZZOpportunityCluster &cluster=clusters[target];
-         cluster.latest_time=MathMax(cluster.latest_time,candidates[i].signal_time);
-         if(cluster.expiry_time==0 || (candidates[i].expiry_time>0 && candidates[i].expiry_time<cluster.expiry_time))
-            cluster.expiry_time=candidates[i].expiry_time;
-         cluster.stop_disagreement=MathMax(cluster.stop_disagreement,MathAbs(candidates[i].stop-cluster.canonical_stop));
-         cluster.support_count++;
-         cluster.evidence_mask|=candidates[i].evidence_mask;
-         AppendStrategyId(cluster.supporting_strategy_ids,candidates[i].strategy_id);
+         clusters[target].latest_time=MathMax(clusters[target].latest_time,candidates[i].signal_time);
+         if(clusters[target].expiry_time==0 || (candidates[i].expiry_time>0 && candidates[i].expiry_time<clusters[target].expiry_time))
+            clusters[target].expiry_time=candidates[i].expiry_time;
+         clusters[target].stop_disagreement=MathMax(clusters[target].stop_disagreement,MathAbs(candidates[i].stop-clusters[target].canonical_stop));
+         clusters[target].support_count++;
+         clusters[target].evidence_mask|=candidates[i].evidence_mask;
+         AppendStrategyId(clusters[target].supporting_strategy_ids,candidates[i].strategy_id);
 
-         double support_bonus=MathMin(1.5,0.25*(double)(cluster.support_count-1));
-         cluster.combined_score=MathMax(cluster.combined_score,candidates[i].score)+support_bonus;
-         cluster.state=MSZZ_CLUSTER_STRENGTHENED;
+         double support_bonus=MathMin(1.5,0.25*(double)(clusters[target].support_count-1));
+         clusters[target].combined_score=MathMax(clusters[target].combined_score,candidates[i].score)+support_bonus;
+         clusters[target].state=MSZZ_CLUSTER_STRENGTHENED;
 
-         int current_priority=OwnerPriority(cluster.owner_strategy_id);
+         int current_priority=OwnerPriority(clusters[target].owner_strategy_id);
          int candidate_priority=OwnerPriority(candidates[i].strategy_id);
          if(candidate_priority>current_priority ||
-            (candidate_priority==current_priority && candidates[i].score>candidates[cluster.preferred_index].score))
+            (candidate_priority==current_priority && candidates[i].score>candidates[clusters[target].preferred_index].score))
          {
-            cluster.preferred_index=i;
-            cluster.owner_strategy_id=candidates[i].strategy_id;
-            cluster.canonical_stop=candidates[i].stop;
+            clusters[target].preferred_index=i;
+            clusters[target].owner_strategy_id=candidates[i].strategy_id;
+            clusters[target].canonical_stop=candidates[i].stop;
          }
       }
       return cluster_count;

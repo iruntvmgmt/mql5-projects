@@ -10,7 +10,7 @@ private:
    bool m_fast_medium_context,m_medium_slow_context,m_nested_pullback,m_weighted_ensemble;
    double m_rr;
 
-   void ClearCandidate(MSZZCandidate &c) const { ZeroMemory(c); c.strategy_id=MSZZ_STRAT_NONE; }
+   void ClearCandidate(MSZZCandidate &c) const { MSZZCandidate blank; c=blank; c.strategy_id=MSZZ_STRAT_NONE; }
 
    void AddCandidate(MSZZCandidate &out[],int &count,const ENUM_MSZZ_STRATEGY_ID id,
                      const ENUM_MSZZ_DIRECTION dir,const ENUM_MSZZ_ORIGIN_TYPE origin_type,
@@ -138,7 +138,7 @@ public:
 
    int SelectBestClustered(const MSZZCandidate &in[],const int count,MSZZCandidate &selected) const
    {
-      ZeroMemory(selected); if(count<=0) return -1;
+      MSZZCandidate blank; selected=blank; if(count<=0) return -1;
       int best=-1; double best_score=-1.0e100;
       for(int i=0;i<count;i++)
       {
