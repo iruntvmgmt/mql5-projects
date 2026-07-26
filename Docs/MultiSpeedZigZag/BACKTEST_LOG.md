@@ -4,6 +4,75 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 (fourth entry) — Broker order/deal/position reconciliation wired into the EA (D009)
+
+Continuation of the same 17-phase execution-safety request; first increment of Phase 2 (see `DECISION_LOG.md` D009 for exactly what is and is not covered). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
+
+### Change
+
+- `Include/MultiSpeedZigZag/Execution/ExecutionIntentStore.mqh`: added `MSZZCorrelationToken(intent_id)`, an 8-hex-character FNV-1a hash free function, reused by both the EA (to set the trade comment) and the reconciler (to match it back).
+- `Include/MultiSpeedZigZag/Execution/ExecutionReconciler.mqh` (new file): `CMSZZReconciliationPolicy` (pure) + `CMSZZExecutionReconciler` (live), per the D005 policy/live-query split pattern.
+- `Experts/MultiSpeedZigZagEA.mq5`: `OnInit()` runs the reconciler once after `ExecutionIntentStore::Load()`, for every loaded intent not already terminal; `RECOVERY_REQUIRED` sets `execution_state` accordingly and a session `g_recovery_required` flag; matched verdicts backfill `position_ticket`. `ExecuteCluster()` rejects new execution (`REJECT_RECOVERY_REQUIRED`) while `g_recovery_required` is set, and the trade comment changed from `"MSZZC|"+strategy_id` to `"MI"+MSZZCorrelationToken(intent_id)`. `#property version` bumped `0.310` → `0.320`.
+
+### Compile
+
+```
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Include\MultiSpeedZigZag\Execution\ExecutionReconciler.mqh" /log   # smoke-compiled via throwaway script, then removed
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_Reconciler.mq5" /log
+Result: 0 errors, 0 warnings, 959 ms elapsed
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Experts\MultiSpeedZigZagEA.mq5" /log
+MQL5\Experts\MultiSpeedZigZagEA.mq5(5,11) : warning 68: version '0.320' is incompatible with MQL5 Market, must be xxx.yyy
+Result: 0 errors, 1 warnings, 9774 ms elapsed
+```
+
+Isolated instance: all seven targets (Ownership, Determinism, Clusters, Parity, IntentStore, Reconciler, EA) recompiled clean, hash-verified identical source to the live tree before compiling (SHA-256 match on all synced files).
+
+### Deterministic reconciliation test
+
+`[StartUp] Script=MultiSpeedZigZagTests\Test_MSZZ_Reconciler, Symbol=XAUUSD, Period=M5` on the isolated instance:
+
+```
+PASS: terminal intent (POSITION_CLOSED) yields NO_ACTION regardless of broker records
+PASS: PERSISTED-lineage intent matches an open position by ticket
+PASS: matched ticket is reported correctly
+PASS: intent with no local ticket still matches via the comment correlation token
+PASS: intent with only history-deal records (no open position) matches as closed
+PASS: locally-rejected intent with no broker record is CONSISTENT_REJECTION, not flagged
+PASS: PERSISTED intent with nothing found is RECOVERY_REQUIRED, never assumed abandoned (the critical fail-closed case)
+PASS: a foreign-magic record is never treated as a match even if the comment token coincidentally matches
+PASS: first intent matches only its own ticket
+PASS: second intent matches only its own ticket, no cross-contamination
+PASS: duplicate/multiple history rows for the same position do not prevent a clean match
+PASS: two simultaneous non-terminal intents on a netting account both fail closed to RECOVERY_REQUIRED
+PASS: the same two-pending-intents shape resolves cleanly on a hedging account (netting-specific rule confirmed)
+PASS: a broker record matched by two distinct intents halts both to RECOVERY_REQUIRED rather than picking one
+PASS: correlation token is deterministic for the same intent ID
+PASS: correlation token differs for different intent IDs
+PASS: correlation token is exactly 8 hex characters
+MSZZ reconciler test complete failures=0
+```
+
+17/17 assertions, `failures=0`.
+
+### Shadow Strategy Tester regression
+
+Two new configs (`shadow_d009_short.ini`, `shadow_d009_long.ini`), same `[Tester]` shape as the D005/D006/D008 baselines (`InpShadowOnly=true`, `InpAllowLiveExecution=false`, `InpAcknowledgeRisk=false`).
+
+- **Short window** (2026.07.20–2026.07.24): `last test passed with result "successfully finished" in 0:00:00.791`. `MSZZ_Shadow_Report_D009_Short.htm`: 0 Total Trades, 0 Total Deals.
+- **Long window** (2026.07.01–2026.07.24): `last test passed with result "successfully finished" in 0:00:05.548`. `MSZZ_Shadow_Report_D009_Long.htm`: 0 Total Trades, 0 Total Deals. Signal journal for this run in isolation (this run's log window sliced out of the cumulative daily Tester-agent log by timestamp, not the raw cumulative count, which would double-count earlier runs from the same day): 431 `RAW_CANDIDATE` + 178 `MSZZ SHADOW` lines — identical to the D006/D008 baseline.
+
+Both runs: `MSZZ initialized in SHADOW posture`, `MSZZ account mode=HEDGING`, `MSZZ intent store loaded count=0 unknown=0` logged at `OnInit()`, zero `MSZZ RECONCILE`/`MSZZ WARNING`/error lines (expected — shadow mode never creates intents, so the reconciler has nothing to iterate), clean `MSZZ deinitialized reason=1` at the end.
+
+### Full regression
+
+Ownership, Determinism, Clusters, IntentStore all re-ran on the isolated instance and reported `failures=0` (or `TEST PASS` for Determinism's single assertion), unchanged from their established baselines.
+
+### Not exercised
+
+The reconciler has only been run against deterministic mock data (the unit test) and the isolated demo account's genuinely empty broker history (the shadow regression, where `CollectBrokerRecords` runs but finds nothing because `intent_count=0`). It has never been exercised against a real, non-empty position/order/deal history — no live order has ever been placed on this branch — so the `RECOVERY_REQUIRED` blocking path in `ExecuteCluster()` has never actually fired.
+
+---
+
 ## 2026-07-26 (third entry) — ExecutionIntentStore wired into the EA (D008)
 
 Continuation of the same 17-phase execution-safety request; still only incremental Phase-1-adjacent work (wiring the already-built D007 store into the EA), not Phase 2+. Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting (direct ref comparison, zero divergence at `c7b80e9`).

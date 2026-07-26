@@ -47,6 +47,21 @@ string MSZZIntentStateText(const ENUM_MSZZ_INTENT_STATE s)
    }
 }
 
+// D009: a short, deterministic correlation token for the broker trade comment.
+// A full intent/cluster ID (which can exceed 70 characters, see D004) does not
+// fit MT5's comment length limit, so this is a fallback correlation signal for
+// reconciliation, not a primary key -- order_ticket/position_ticket, recorded
+// locally at submission time, are always tried first. Same FNV-1a algorithm as
+// the store's own corruption checksum, exposed here as a free function since
+// both the EA (to set the comment) and the reconciler (to match it back) need it.
+string MSZZCorrelationToken(const string intent_id)
+{
+   uint h=2166136261;
+   int n=StringLen(intent_id);
+   for(int i=0;i<n;i++) { h^=(uint)StringGetCharacter(intent_id,i); h*=16777619; }
+   return StringFormat("%08X",h);
+}
+
 struct MSZZExecutionIntent
 {
    int      schema_version;

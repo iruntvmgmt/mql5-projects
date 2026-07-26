@@ -2,7 +2,7 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.310"
+#property version   "0.320"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
@@ -14,6 +14,7 @@
 #include <MultiSpeedZigZag/Execution/PositionOwnership.mqh>
 #include <MultiSpeedZigZag/Execution/PositionOwnershipPolicy.mqh>
 #include <MultiSpeedZigZag/Execution/ExecutionIntentStore.mqh>
+#include <MultiSpeedZigZag/Execution/ExecutionReconciler.mqh>
 
 input group "═══ Operating Mode ═══"
 input bool   InpShadowOnly=true;
@@ -66,9 +67,11 @@ CMSZZEventStore                g_event_store;
 CMSZZExecutionGuard            g_execution_guard;
 CMSZZPositionOwnership         g_ownership;
 CMSZZExecutionIntentStore      g_intent_store;
+CMSZZExecutionReconciler       g_reconciler;
 CTrade                         g_trade;
 datetime                       g_last_bar=0;
 string                         g_instance_id="";
+bool                           g_recovery_required=false;
 
 bool LiveExecutionAuthorized(){ return (!InpShadowOnly && InpAllowLiveExecution && InpAcknowledgeRisk); }
 bool EventConsumed(const string id){ return g_event_store.Contains(id); }
@@ -168,6 +171,17 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
    if(cluster.combined_score<InpMinScore){ JournalCandidate(owner,"REJECT_SCORE",cluster.cluster_id); return false; }
    if(EventConsumed(persistence_id)){ JournalCandidate(owner,"REJECT_DUPLICATE_CLUSTER",cluster.cluster_id); return false; }
 
+   // D009: a RECOVERY_REQUIRED intent (unresolved broker state from a prior
+   // run) blocks all new live execution for this symbol/magic until an
+   // operator clears it out-of-band. See DECISION_LOG.md D009 failure policy.
+   if(g_recovery_required)
+   {
+      MSZZCandidate rejected=owner;
+      rejected.reason="one or more execution intents require manual recovery (see MSZZ RECONCILE log at startup)";
+      JournalCandidate(rejected,"REJECT_RECOVERY_REQUIRED",cluster.cluster_id);
+      return false;
+   }
+
    string reason;
    if(!g_execution_guard.TradingAllowed(reason))
    {
@@ -254,7 +268,10 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
    g_trade.SetExpertMagicNumber(InpMagic);
    g_trade.SetDeviationInPoints(InpDeviationPoints);
    bool ok=false;
-   string comment="MSZZC|"+IntegerToString((int)prepared.strategy_id);
+   // D009: "MI"+8-hex correlation token, not the old bare strategy id -- lets
+   // the reconciler match this order back to its intent even if the local
+   // ticket fields were never recorded (e.g. a crash right after submission).
+   string comment="MI"+MSZZCorrelationToken(persistence_id);
    if(prepared.direction==MSZZ_DIR_LONG) ok=g_trade.Buy(volume,_Symbol,0.0,prepared.stop,prepared.target,comment);
    else if(prepared.direction==MSZZ_DIR_SHORT) ok=g_trade.Sell(volume,_Symbol,0.0,prepared.stop,prepared.target,comment);
 
@@ -368,6 +385,51 @@ int OnInit()
       PrintFormat("MSZZ intent store load failed: %s",g_intent_store.LastError());
       return INIT_FAILED;
    }
+
+   // D009: reconcile every loaded intent against broker truth once at startup,
+   // before the EA does anything else. See DECISION_LOG.md D009 "Restart
+   // behavior". This also fulfils D008's deferred TODO of deriving
+   // position_ticket from broker records rather than leaving it unset.
+   g_reconciler.Configure(_Symbol,InpMagic);
+   int intent_count=g_intent_store.Count();
+   MSZZExecutionIntent all_intents[];
+   ArrayResize(all_intents,intent_count);
+   for(int i=0;i<intent_count;i++) g_intent_store.IntentAt(i,all_intents[i]);
+
+   bool is_netting=(g_ownership.AccountMode()==MSZZ_ACCOUNT_NETTING || g_ownership.AccountMode()==MSZZ_ACCOUNT_EXCHANGE);
+   MSZZReconcileResult recon_results[];
+   g_reconciler.Reconcile(all_intents,intent_count,is_netting,recon_results);
+
+   g_recovery_required=false;
+   for(int i=0;i<intent_count;i++)
+   {
+      bool terminal=(all_intents[i].execution_state==(int)MSZZ_INTENT_POSITION_CLOSED ||
+                     all_intents[i].execution_state==(int)MSZZ_INTENT_ABANDONED);
+      if(terminal) continue;
+
+      PrintFormat("MSZZ RECONCILE intent=%s verdict=%s ticket=%I64u reason=%s",
+                  recon_results[i].intent_id,MSZZReconcileVerdictText(recon_results[i].verdict),
+                  recon_results[i].matched_ticket,recon_results[i].reason);
+
+      MSZZExecutionIntent updated=all_intents[i];
+      updated.last_reconciliation_time=TimeCurrent();
+      if(recon_results[i].verdict==MSZZ_RECONCILE_RECOVERY_REQUIRED)
+      {
+         updated.execution_state=(int)MSZZ_INTENT_RECOVERY_REQUIRED;
+         g_recovery_required=true;
+      }
+      else if((recon_results[i].verdict==MSZZ_RECONCILE_MATCHED_ACTIVE_POSITION ||
+               recon_results[i].verdict==MSZZ_RECONCILE_MATCHED_CLOSED_POSITION) &&
+              updated.position_ticket==0)
+      {
+         updated.position_ticket=recon_results[i].matched_ticket;
+      }
+      if(!g_intent_store.UpdateIntent(updated))
+         PrintFormat("MSZZ WARNING: reconciliation update failed for intent=%s error=%s",
+                     updated.intent_id,g_intent_store.LastError());
+   }
+   if(g_recovery_required)
+      Print("MSZZ WARNING: one or more intents require manual recovery. New live execution is blocked for this symbol/magic until cleared.");
 
    Print(!LiveExecutionAuthorized() ?
          "MSZZ initialized in SHADOW posture. Three live gates are required." :
