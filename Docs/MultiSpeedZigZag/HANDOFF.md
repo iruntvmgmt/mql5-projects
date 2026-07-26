@@ -61,37 +61,44 @@ The previous `PositionSelect(_Symbol)` and `CTrade::PositionClose(_Symbol)` exec
 - unsupported/invalid/error snapshots failing closed;
 - opposite-ticket selection excluding manual, foreign, same-direction, and unknown-direction records.
 
-## Required local validation
+## Validated through commit `73951d9` — ownership batch (2026-07-25 second pass)
 
-Claude should pull the latest branch into the one true Wine MQL5 working tree using `git pull --ff-only`, then compile in this order:
+Pulled `73951d9` into the live Wine MQL5 working tree (`git pull --ff-only`), synced into the isolated `~/MT5-MSZZ-TEST` instance with hash-verified source (14/14 files identical), and validated end-to-end:
 
-1. `Tests/MultiSpeedZigZag/Test_MSZZ_Ownership.mq5`
-2. `Experts/MultiSpeedZigZagEA.mq5`
-3. Existing determinism, cluster, and parity scripts as regression checks
+- **Compile**: `Test_MSZZ_Ownership.mq5`, `Test_MSZZ_Determinism.mq5`, `Test_MSZZ_Clusters.mq5`, `Export_MSZZ_Parity.mq5` all 0 errors/0 warnings; `MultiSpeedZigZagEA.mq5` 0 errors, 1 reviewed/accepted warning (Market-version, unrelated to ownership) — isolated MetaEditor/terminal build 6061.
+- **Source audit**: no compile-blocking or safety defects found in the new ownership subsystem itself. Two genuine test-coverage gaps against the requested assertion list were closed by adding 9 new assertions to `Test_MSZZ_Ownership.mq5` (empty input → deterministic zero counts, no-duplicate-ticket check, and nonempty failure reasons on every rejection path) — now 24/24 assertions pass. Three other requested assertions (different-symbol exclusion, owned long/short counts, owned volume totals) are `Refresh()`-level behaviors that need live non-zero position state to exercise meaningfully; they're covered by source review instead (every `MSZZPositionRecord` field is set explicitly — no reliance on implicit struct-default zeroing, the exact defect class found in an earlier pass) and documented as an open verification gap in `KNOWN_ISSUES.md`.
+- **Ownership unit test**: 24/24 assertions pass, `failures=0`.
+- **Live read-only inventory diagnostic**: on the isolated demo account (Coinexx-Demo 870012), `ACCOUNT_MARGIN_MODE` correctly resolves to `HEDGING`, ownership snapshot valid, zero positions of every kind (a valid empty baseline), execution allowed.
+- **Shadow regression**: zero orders/deals/trades on both the short (2026.07.20–2026.07.24) and long (2026.07.01–2026.07.24) windows; account mode logged as `HEDGING` at init; candidate/cluster counts identical to the pre-ownership baseline (431/178 on the long window); all cluster IDs `MSZZC1`-prefixed, zero duplicates.
+- **Regression**: determinism, cluster (22/22), and parity exporter all re-ran clean on hash-identical source.
 
-Required evidence:
-
-- exact MetaEditor error/warning output;
-- ownership test `failures=0`;
-- existing tests remain passing;
-- hedging demo shadow regression places zero orders;
-- ownership logs correctly report the demo account as hedging;
-- manual and foreign positions are never selected for closure;
-- ticket-specific `CTrade::PositionClose(ticket)` compiles and behaves as expected.
-
-Do not enable demo execution merely because this batch passes. It establishes ownership isolation but does not solve order-intent persistence, deal reconstruction, risk sizing, margin preflight, or account-level safeguards.
+This resolves the old "netting-account assumption" blocker in `KNOWN_ISSUES.md`. It does **not** authorize demo execution — see the narrower remaining issues there (close-by-ticket not yet tested against a real position, order/deal history reconciliation absent, post-order persistence failure and full restart reconstruction unchanged).
 
 ## Remaining production blockers
 
 1. Post-order persistence failure and idempotent execution intent.
 2. Full order/deal/cluster restart reconstruction.
-3. Percentage-risk sizing and broker-correct risk calculations.
-4. Margin preflight and exposure limits.
-5. Daily loss, trade-count, cooldown, and kill-switch controls.
-6. Five reserved stateful strategies.
-7. Pine-side parity and trendline-geometry decision.
-8. Long-duration forward shadow and demo evidence.
+3. Close-by-ticket execution not yet demo-tested against a real open position.
+4. Percentage-risk sizing and broker-correct risk calculations.
+5. Margin preflight and exposure limits.
+6. Daily loss, trade-count, cooldown, and kill-switch controls.
+7. Five reserved stateful strategies.
+8. Pine-side parity and trendline-geometry decision.
+9. Long-duration forward shadow and demo evidence.
+
+## Startup reconciliation scope (explicit boundary, 2026-07-25)
+
+Current startup behavior: EA initializes → account mode detected → live open-position inventory refreshes (by ticket, symbol- and magic-filtered) → snapshot logs → execution stays blocked if the inventory is invalid. This is **open-position inventory only**. The following are **not implemented** and must not be described as complete:
+
+- order history reconstruction;
+- deal history reconstruction;
+- cluster-to-position reconstruction after restart;
+- management-state reconstruction (stops/targets/trailing state tied to a specific cluster after restart).
 
 ## Agent procedure
 
 Read `DECISION_LOG.md`, `KNOWN_ISSUES.md`, `TEST_PLAN.md`, and this file before modifying the batch. Fix compile defects without weakening D005 invariants. Any behavioral change requires documentation and, where material, a new decision entry. Keep live execution gates closed and do not merge into `main`.
+
+## Next recommended subsystem
+
+Continue shadow testing and begin idempotent execution-intent persistence plus order/deal reconstruction (see "Remaining production blockers" above, items 1–2). Do not recommend demo execution yet.

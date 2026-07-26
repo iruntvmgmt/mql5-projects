@@ -4,6 +4,134 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-25 (third pass) — Account-mode and position ownership subsystem (D005)
+
+Pulled `feature/mszz-standalone-suite` from `31f13b0` to `73951d9` (fast-forward, no divergence) into the live Wine MQL5 tree via `git pull --ff-only github feature/mszz-standalone-suite`. `origin` remote does not exist on this repo (removed per `AGENTS.md`); `github` is the only active remote.
+
+### Source audit
+
+Reviewed `PositionOwnership.mqh`, `PositionOwnershipPolicy.mqh`, and the EA's ownership integration against the full hazard checklist (local references to array elements, `ZeroMemory` on strings, uninitialized scalar fields, `PositionGetTicket`/`PositionSelectByTicket` sequencing, `%I64u` formatting, iteration-invalidation while closing, mixed-symbol contamination, refresh-after-close ordering, one-position-limit ordering relative to opposite-closure, etc.). No compile-blocking or safety defects found — this batch was implemented cleanly. Confirmed via repo-wide grep: zero remaining `PositionSelect(_Symbol)`/`PositionClose(_Symbol)` calls, zero `ZeroMemory` calls anywhere in the MSZZ tree.
+
+Two genuine test-coverage gaps were found against the requested ownership-test assertion list and closed (see Fix below): empty-input determinism and nonempty-failure-reason coverage were both addable as pure deterministic tests and were missing. Three further requested items (different-symbol exclusion, owned long/short counts, owned volume totals) are implemented in the live-querying `CMSZZPositionOwnership::Refresh()`, not the pure policy layer under deterministic test — they require live non-zero position state to exercise meaningfully, which this pass intentionally never created (zero orders throughout). These are documented as an open verification gap in `KNOWN_ISSUES.md`, not fabricated as false-positive tests.
+
+One non-safety observation logged in `KNOWN_ISSUES.md`: `CloseOwnedOpposite`'s loop returns on the first failing ticket close without attempting remaining tickets, and its failure reason doesn't distinguish "nothing closed" from "partially closed." This is fail-safe (never touches foreign/manual tickets, EA correctly aborts the new entry) and was not changed, since no concrete defect exists — only a diagnostic-clarity nuance.
+
+### Fix: closed two ownership-test coverage gaps
+
+Added 9 assertions to `Tests/MultiSpeedZigZag/Test_MSZZ_Ownership.mq5`:
+- empty input to `CollectOppositeOwnedTickets` produces deterministic zero counts;
+- an explicit no-duplicate-ticket scan across 5 distinct owned-opposite records;
+- nonempty failure reasons on 6 distinct rejection paths (unsupported mode, invalid snapshot, terminal selection error, netting foreign-exposure block, exchange manual-exposure block, one-owned-position limit).
+
+Total: 24 assertions (was 15).
+
+### Hash verification (git tree vs. isolated staged copies, SHA-256)
+
+| File | SHA-256 |
+|---|---|
+| `Experts/MultiSpeedZigZagEA.mq5` | `b8710f9a2e7fd19482524c0826b93f0f589e2b5c5d0bd3bb83f2a0bc4a16f307` |
+| `Include/.../Execution/PositionOwnership.mqh` | `f20834a2a6a7e4f464eb65cb52aec8b0d6b0a10dea38760eea94c8f0e97cf877` |
+| `Include/.../Execution/PositionOwnershipPolicy.mqh` | `17d25b7da34891f286f50282ccc4c9ee09e019d405d4de5a9ec64586b1c39ed2` |
+| `Include/.../Execution/ExecutionGuard.mqh` | `2f7968433ea2f7de6f41b87734ee420538e7880870f1c481603540aa8796f7a6` |
+| `Include/.../Execution/EventStore.mqh` | `c021ddb20e06ab8cb628329ccb5bb4752985e99c2ff35af1959d47c7420f9aed` |
+| `Include/.../Core/Types.mqh` | `1e2bbff2416080548fa4efc78c6006384d8de797d7fb07be872ed61451d99714` |
+| `Include/.../Core/TripleZigZagEngine.mqh` | `6d1649f0bffc9e4f00781ac7037317bb7dd8924d7978e3faf1e8873fa75c70d7` |
+| `Include/.../Strategies/StrategySuite.mqh` | `d436c62a656a963580995aa70e44dcdc292659fdea90babe31fc3e2de1f8caf3` |
+| `Include/.../Arbitration/OpportunityClusterEngine.mqh` | `4e308e22778603c22896bae539a01c9c7eb8f7df5a167652b4d3b490a2243f98` |
+| `Include/.../Diagnostics/ParityExporter.mqh` | `712b96cae2b7d833f0441c14bb2dcc737734b69cf012a561e51192d9ef453329` |
+| `Tests/.../Test_MSZZ_Ownership.mq5` | `e93544f8671d554706b4331e5df831e9407b7c9d10d63ca7be3f810007aff482` |
+| `Tests/.../Test_MSZZ_Determinism.mq5` | `1868f90b8c4b889ee8eb11ebba0766113f40d25160790dd0d1d456e73fd51650` |
+| `Tests/.../Test_MSZZ_Clusters.mq5` | `80d9735b27399866dc2412d1152ba1252905eaffabc92c97a861466c96c802d9` |
+| `Tests/.../Export_MSZZ_Parity.mq5` | `dd03716ec9688e12a3eb9b7f749816c645a4fd2e9dcfaead3e68b7ff1f769277` |
+
+14/14 match between the live git tree and the isolated `~/MT5-MSZZ-TEST` staged copies. (Hashes recorded before the two-gap test fix above; the fix was made in the git tree, recompiled, and re-synced — see compile results below, which reflect the post-fix source.)
+
+### Compile results (isolated MetaEditor build 6061)
+
+| File | Result |
+|---|---|
+| `Tests/MultiSpeedZigZag/Test_MSZZ_Ownership.mq5` | 0 errors, 0 warnings |
+| `Tests/MultiSpeedZigZag/Test_MSZZ_Determinism.mq5` | 0 errors, 0 warnings |
+| `Tests/MultiSpeedZigZag/Test_MSZZ_Clusters.mq5` | 0 errors, 0 warnings |
+| `Tests/MultiSpeedZigZag/Export_MSZZ_Parity.mq5` | 0 errors, 0 warnings |
+| `Experts/MultiSpeedZigZagEA.mq5` | 0 errors, 1 warning (reviewed/accepted — same Market-version warning as prior passes, unrelated to ownership) |
+
+Compile command pattern: `wine start /Unix metaeditor64.exe /portable /compile:"<path>" /log`, run from `~/MT5-MSZZ-TEST`. Live-tree sanity compiles (build 6033) also ran clean before syncing, same results.
+
+### Ownership unit test (`Test_MSZZ_Ownership.mq5`)
+
+All 24 assertions PASS, `failures=0`:
+```
+PASS: matching positive magic is owned
+PASS: zero magic is manual
+PASS: different nonzero magic is foreign
+PASS: hedging mode allows foreign/manual coexistence when no owned position exists
+PASS: netting mode blocks foreign symbol exposure
+PASS: exchange mode blocks manual symbol exposure
+PASS: one-owned-position policy blocks second owned position
+PASS: disabled owned-position limit allows additional owned position
+PASS: unsupported account mode fails closed
+PASS: invalid snapshot fails closed
+PASS: terminal selection error fails closed
+PASS: only two owned short tickets collected for desired long
+PASS: manual, foreign, same-direction, and unknown-direction records excluded
+PASS: only owned long ticket collected for desired short
+PASS: no tickets collected for no desired direction
+PASS: empty input produces deterministic zero counts
+PASS: no duplicate ticket is returned across distinct owned opposite records
+PASS: unsupported account mode leaves a nonempty failure reason
+PASS: invalid snapshot leaves a nonempty failure reason
+PASS: terminal selection error leaves a nonempty failure reason
+PASS: netting foreign-exposure block leaves a nonempty failure reason
+PASS: exchange manual-exposure block leaves a nonempty failure reason
+PASS: one-owned-position limit block leaves a nonempty failure reason
+MSZZ ownership test complete failures=0
+```
+
+### Live read-only inventory diagnostic (`MSZZ_Inventory_Diagnostic.mq5`, isolated demo account)
+
+```
+INVENTORY raw_account_margin_mode=2 detected_mode=HEDGING
+INVENTORY refresh_ok=true valid=true error_reason=
+INVENTORY total_terminal_positions=0 symbol_total=0 owned=0 manual=0 foreign=0 owned_long=0 owned_short=0 owned_long_vol=0.00 owned_short_vol=0.00
+INVENTORY execution_allowed_for_account_mode=true reason=
+```
+
+Confirms `ACCOUNT_MARGIN_MODE_RETAIL_HEDGING` (raw value 2 in this MQL5 build) correctly resolves to the `HEDGING` text label, matching the terminal's own "trading has been enabled, demo account - hedging mode" connection log line. Zero positions of every kind is a valid, expected empty-inventory baseline — no positions were created during this pass by instruction.
+
+### Shadow Strategy Tester regression
+
+Symbol: XAUUSD. Inputs: `InpShadowOnly=true`, `InpAllowLiveExecution=false`, `InpAcknowledgeRisk=false`, `InpMagic=26072501`, `InpOneOwnedPositionPerSymbol=true`, `InpExitOwnedOpposite=true` (renamed from `InpOnePositionPerSymbol`/`InpExitOnOpposite` in this batch — configs from the prior pass were updated to match). Model=2 (Open prices only), headless (not visual — same disclosed substitution as the prior pass).
+
+**Short window (2026.07.20–2026.07.24):** History Quality 100%, Bars 1104, **Total Trades: 0, Total Deals: 0**. Signal journal: 113 `RAW_CANDIDATE` + 46 `SHADOW`, all 46 cluster IDs `MSZZC1`-prefixed, zero duplicates, 46 consumed-event entries matching exactly.
+
+**Long window (2026.07.01–2026.07.24, previously validated interval):** History Quality 100%, Bars 4645, **Total Trades: 0, Total Deals: 0**. Signal journal: 431 `RAW_CANDIDATE` + 178 `SHADOW` — identical counts to the pre-ownership baseline from the prior pass, confirming the ownership subsystem is purely additive to the execution layer and does not alter candidate/cluster generation. All 178 cluster IDs `MSZZC1`-prefixed, zero duplicates, 178 consumed-event entries matching exactly.
+
+Both runs' Expert log confirms at init: `MSZZ OWNERSHIP REFRESHED mode=HEDGING symbol_total=0 owned=0 long=0 short=0 manual=0 foreign=0 err=` and `MSZZ account mode=HEDGING event store loaded count=0`. Zero `INIT_FAILED`/initialization-failure/position-selection-error occurrences in either run's log. Clean deinit (`reason=1`, normal shutdown) in both.
+
+Note on log analysis method: the Tester agent's own log file (`Tester/Agent-127.0.0.1-3000/logs/<date>.log`) accumulates across multiple separate sessions run on the same calendar day rather than resetting per invocation (unlike the agent's `MQL5/Files/` sandbox, which does reset per invocation — see the prior pass's restart-test methodology note). Each run's evidence was isolated by locating that run's unique init timestamp line before analyzing counts, to avoid conflating current-run output with stale entries from earlier sessions.
+
+### Regression: determinism, clusters, parity exporter
+
+- `Test_MSZZ_Determinism`: `TEST PASS: deterministic rebuild`.
+- `Test_MSZZ_Clusters`: 22/22 assertions PASS, `failures=0` (includes the D004 cluster-ID encoding tests from the prior pass).
+- `Export_MSZZ_Parity` (XAUUSD M5, 1000 bars, default ATR settings): 966 bar rows, 76 pivot rows, 192 candidate rows, 70 cluster rows — identical row counts to the prior verified-clean pass. Zero duplicate cluster IDs, zero duplicate pivot rows, zero empty/malformed pivot IDs, zero bad speed values, zero missing candidate origin/event IDs, all cluster IDs `MSZZC1`-prefixed.
+
+### Safety confirmation
+
+- `InpShadowOnly=true`, `InpAllowLiveExecution=false`, `InpAcknowledgeRisk=false` in every run; Algo Trading confirmed disabled at the terminal level (verified directly in a prior pass, unchanged this pass).
+- Isolated demo account only (Coinexx-Demo 870012); zero orders/deals/trades across both shadow windows.
+- Live MT5 installation and its process (PID 66709, confirmed unchanged before and after every action in this pass) were never touched, reconfigured, or restarted.
+- No second clone or parallel worktree was created; all work was done directly in the one true Wine MQL5 working tree, with QuantBeast's uncommitted `main`-branch state preserved via `git stash` before switching branches and restored via `git stash pop` at the end of the session.
+- No live/demo positions or orders were created at any point in this pass.
+
+### Not done / explicitly out of scope this pass
+
+- Close-by-ticket execution against a real open position (would require creating a live/demo position, which this pass explicitly does not do).
+- Real netting or exchange broker account testing (none available; deterministic unit-test coverage only, documented as such).
+- Order/deal history reconstruction, cluster-to-position restart reconstruction, management-state reconstruction.
+- Pine-side parity, trendline geometry resolution, risk sizing, margin preflight, daily limits, reserved strategies (all unchanged from the prior pass).
+
 ## 2026-07-25 (second pass) — Cluster-ID encoding fix
 
 Implements DECISION_LOG.md D004. See KNOWN_ISSUES.md and OPPORTUNITY_CLUSTERING.md/PARITY_EXPORT_SCHEMA.md for the format itself. This entry records only compile/test evidence for the fix.
