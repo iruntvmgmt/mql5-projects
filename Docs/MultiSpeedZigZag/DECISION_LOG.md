@@ -350,3 +350,44 @@ Deterministic, broker-independent tests for `CMSZZReconciliationPolicy` covering
 ### Demo-readiness implications
 
 Still not sufficient alone. This increment gives the EA a real, tested, fail-closed answer to "did my last order actually happen and what state is it in now," which Phase 12's readiness gate explicitly requires — but risk sizing, margin preflight, account safeguards, the full execution state machine, and fault injection across the combined stack remain unstarted. The reconciler itself has only been exercised against deterministic mock data and the real (currently empty) broker history on the isolated demo account — it has not yet been exercised against a real, non-empty position/order/deal history, since no live order has ever been placed on this branch.
+
+## D010 — Execution state machine, first increment (transition-legality enforcement)
+
+**Date:** 2026-07-26
+**Status:** Accepted
+
+### Scope of this increment
+
+Phase 3 of the 2026-07-26 execution-safety request is "the execution state machine driving `ExecutionIntentStore`'s `execution_state` transitions, wired into `ExecuteCluster()`." Following the same scope discipline as D006–D009, this is a **first, deliberately bounded increment**, not the full phase. Covered now: a single, centralized, pure transition-legality table for all 14 `ENUM_MSZZ_INTENT_STATE` values; a `TryTransition()` gate that every `execution_state` write in the EA now goes through instead of a direct field assignment, so an illegal state jump is caught and rejected rather than silently applied; and — the concrete, immediately useful payoff — completing two transitions D009 deliberately left undone. D009's own text said: "Do NOT auto-transition to `POSITION_ACTIVE`/`POSITION_CLOSED`/`ABANDONED` terminal states — that reclassification is arguably Phase 3's execution state machine job." This decision is that job, for exactly those three transitions and no others.
+
+Explicitly deferred to a later increment: the EA still does not emit `PREFLIGHT_PASSED`, `SUBMISSION_STARTED`, `RESULT_UNKNOWN`, `PARTIALLY_FILLED`, or `FILLED` — `ExecuteCluster()` still goes directly from `PERSISTED` to `BROKER_ACCEPTED`/`BROKER_REJECTED` in one step, exactly as it does today. Those states remain defined in the enum and included in the legality table (so a future increment can adopt them without a table redesign), but nothing in this decision causes the EA to emit them. `PROTECTION_FAILED` is likewise defined and included in the table but wired nowhere — that is Phase 4's job. No automated recovery/clearing workflow for `RECOVERY_REQUIRED` is added (unchanged from D009, still a manual, out-of-band step).
+
+### Decision: a pure, static legality table plus a single gated setter
+
+`Include/MultiSpeedZigZag/Execution/IntentStateMachine.mqh` (new) — `CMSZZIntentStateMachine`, a pure, deterministic, no-MT5-API class (same "pure policy" shape as `CMSZZPositionOwnershipPolicy` and `CMSZZReconciliationPolicy`):
+
+- `IsLegalTransition(from, to)`: a static from→{legal-to-set} adjacency table. Every state can reach `RECOVERY_REQUIRED` (any point in the lifecycle can go wrong and need manual attention) and `ABANDONED` (an intent can always be given up on) — modelled as two explicit rows covering all 12 non-terminal source states, rather than special-cased in every other row, to keep the table auditable at a glance. `POSITION_CLOSED` and `ABANDONED` are terminal: no outgoing legal transitions from either (matches `CMSZZExecutionReconciler::IsTerminal()`'s existing definition — this decision does not redefine terminality, it enforces it). A state transitioning to itself is legal (idempotent re-application, e.g. reconciliation re-confirming the same verdict on a second restart) and is not treated as an error.
+- `TryTransition(intent, new_state, reason)`: checks `IsLegalTransition`; on success, sets `intent.execution_state` and returns `true`; on failure, leaves `intent` completely unchanged and returns `false` with a human-readable reason. The caller decides what "fail closed" means for its context (see wiring below) — this class never mutates state on a rejected transition, by construction.
+
+### Wiring into the EA
+
+- `ExecuteCluster()`: the post-submission `intent.execution_state=(int)MSZZ_INTENT_BROKER_ACCEPTED` / `MSZZ_INTENT_BROKER_REJECTED` direct assignments are replaced with `TryTransition()` calls. In practice this transition (`PERSISTED`→`BROKER_ACCEPTED`/`BROKER_REJECTED`) is always legal given how intents are constructed, but routing it through the gate means a future refactor that changes construction order gets caught immediately instead of silently corrupting a record. If `TryTransition` somehow fails here, the EA logs `MSZZ WARNING` and falls back to leaving `execution_state` as `PERSISTED` (not the illegal target) — the existing D009 reconciler will pick up a stuck `PERSISTED` intent and correctly fail it closed to `RECOVERY_REQUIRED` on the next restart, so this failure mode was already covered, not newly introduced.
+- `OnInit()`'s D009 reconciliation loop: the direct `updated.execution_state=(int)MSZZ_INTENT_RECOVERY_REQUIRED` assignment is replaced with `TryTransition()`. Two new transitions are added that D009 did not perform: `MSZZ_RECONCILE_MATCHED_ACTIVE_POSITION` now transitions the intent to `MSZZ_INTENT_POSITION_ACTIVE`, and `MSZZ_RECONCILE_MATCHED_CLOSED_POSITION` now transitions it to `MSZZ_INTENT_POSITION_CLOSED` (this is what finally makes `CMSZZExecutionReconciler::IsTerminal()`'s `POSITION_CLOSED` check reachable — before this decision no code path ever set it). `MSZZ_RECONCILE_CONSISTENT_REJECTION` now transitions `BROKER_REJECTED`→`ABANDONED`, marking a confirmed-rejected intent terminal so it stops being re-examined every restart (previously it stayed non-terminal forever, which was wasteful but not unsafe — this decision fixes the waste, it was not a correctness bug). Any `TryTransition` failure in this loop is journaled as `MSZZ WARNING` and the intent's `execution_state` is left as loaded — never forced.
+
+### Rejected alternatives
+
+- **Encoding legality as scattered `if` guards at each call site** instead of one table: rejected — the entire point of a "state machine" is one auditable source of truth for what is and is not a legal transition; scattering the checks would recreate exactly the ad hoc, unenforced-invariant problem this decision exists to fix.
+- **Special-casing `RECOVERY_REQUIRED`/`ABANDONED` reachability per source state** instead of two blanket rows: rejected — both are explicitly "something went wrong, stop trying" escape hatches by design (see D009's own `RECOVERY_REQUIRED` semantics), and a lifecycle bug that reaches an unanticipated state must still be nameable as broken, not trapped by a table that forgot to allow the one escape hatch it needs.
+- **Adopting the fine-grained intermediate states (`PREFLIGHT_PASSED`, `SUBMISSION_STARTED`, etc.) in this same pass**: rejected — `ExecuteCluster()`'s actual submission flow does not currently have distinct preflight/submission phases to hang those states off of; inventing transitions the EA doesn't actually go through would be untested, fabricated coverage, not real behavior.
+
+### Migration consequences
+
+None — additive. Existing `PERSISTED`/`BROKER_ACCEPTED`/`BROKER_REJECTED` records on disk are valid starting points for every transition this decision adds; no record needs to be rewritten or reinterpreted.
+
+### Testing requirements
+
+Deterministic tests for `CMSZZIntentStateMachine` covering: every currently-reachable transition in the EA is legal (`PERSISTED`→`BROKER_ACCEPTED`, `PERSISTED`→`BROKER_REJECTED`, `PERSISTED`→`RECOVERY_REQUIRED`, `BROKER_ACCEPTED`→`POSITION_ACTIVE`, `BROKER_ACCEPTED`→`RECOVERY_REQUIRED`, `POSITION_ACTIVE`→`POSITION_CLOSED`, `POSITION_ACTIVE`→`RECOVERY_REQUIRED`, `BROKER_REJECTED`→`ABANDONED`); every state can reach `RECOVERY_REQUIRED` and `ABANDONED`; `POSITION_CLOSED` and `ABANDONED` have zero legal outgoing transitions (terminal); a same-state transition is legal (idempotent); an arbitrary illegal jump (e.g. `CREATED`→`POSITION_ACTIVE`, skipping the entire lifecycle) is rejected; `TryTransition` leaves the intent struct byte-for-byte unchanged on a rejected transition, not partially mutated.
+
+### Demo-readiness implications
+
+Still not sufficient alone. This increment makes intent lifecycle transitions auditable and enforced rather than ad hoc, and completes the `POSITION_ACTIVE`/`POSITION_CLOSED`/`ABANDONED` reachability gap D009 explicitly deferred — but risk sizing, margin preflight, account safeguards, and fault injection across the combined stack remain unstarted, and the finer-grained intermediate states remain unadopted. As with every decision in this series, the new code path has only been exercised against deterministic mock data and the isolated demo account's empty broker history — no live order has ever been placed on this branch.
