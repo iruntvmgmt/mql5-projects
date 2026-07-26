@@ -13,6 +13,7 @@
 #include <MultiSpeedZigZag/Execution/ExecutionGuard.mqh>
 #include <MultiSpeedZigZag/Execution/PositionOwnership.mqh>
 #include <MultiSpeedZigZag/Execution/PositionOwnershipPolicy.mqh>
+#include <MultiSpeedZigZag/Execution/ExecutionIntentStore.mqh>
 
 input group "═══ Operating Mode ═══"
 input bool   InpShadowOnly=true;
@@ -64,8 +65,10 @@ CMSZZOpportunityClusterEngine g_cluster_engine;
 CMSZZEventStore                g_event_store;
 CMSZZExecutionGuard            g_execution_guard;
 CMSZZPositionOwnership         g_ownership;
+CMSZZExecutionIntentStore      g_intent_store;
 CTrade                         g_trade;
 datetime                       g_last_bar=0;
+string                         g_instance_id="";
 
 bool LiveExecutionAuthorized(){ return (!InpShadowOnly && InpAllowLiveExecution && InpAcknowledgeRisk); }
 bool EventConsumed(const string id){ return g_event_store.Contains(id); }
@@ -210,12 +213,73 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
       return false;
    }
 
+   // D008: a second, independent, equally fail-closed gate using the richer
+   // ExecutionIntentStore (D007), run after D006's proven EventStore gate.
+   // Neither gate replaces the other in this pass. See DECISION_LOG.md D008.
+   MSZZExecutionIntent intent;
+   intent.schema_version=MSZZ_INTENT_SCHEMA_VERSION;
+   intent.intent_id=persistence_id;
+   intent.cluster_id=cluster.cluster_id;
+   intent.origin_id=owner.origin_id;
+   intent.strategy_id=(int)prepared.strategy_id;
+   intent.symbol=_Symbol;
+   intent.timeframe=(int)_Period;
+   intent.magic=InpMagic;
+   intent.direction=(int)prepared.direction;
+   intent.signal_time=owner.signal_time;
+   intent.intent_time=TimeCurrent();
+   intent.expiry_time=owner.expiry_time;
+   intent.requested_volume=volume;
+   intent.requested_entry=prepared.entry;
+   intent.requested_stop=prepared.stop;
+   intent.requested_target=prepared.target;
+   intent.execution_state=(int)MSZZ_INTENT_PERSISTED;
+   intent.submission_attempts=0;
+   intent.broker_retcode=0;
+   intent.broker_result_text="";
+   intent.order_ticket=0; intent.position_ticket=0;
+   intent.first_deal_ticket=0; intent.last_deal_ticket=0;
+   intent.filled_volume=0.0; intent.average_fill_price=0.0;
+   intent.last_reconciliation_time=0;
+   intent.protection_status=0;
+   intent.instance_id=g_instance_id;
+
+   if(!g_intent_store.CreateIntent(intent))
+   {
+      prepared.reason="execution intent store persistence failed: "+g_intent_store.LastError();
+      JournalCandidate(prepared,"REJECT_INTENT_STORE",cluster.cluster_id);
+      return false;
+   }
+
    g_trade.SetExpertMagicNumber(InpMagic);
    g_trade.SetDeviationInPoints(InpDeviationPoints);
    bool ok=false;
    string comment="MSZZC|"+IntegerToString((int)prepared.strategy_id);
    if(prepared.direction==MSZZ_DIR_LONG) ok=g_trade.Buy(volume,_Symbol,0.0,prepared.stop,prepared.target,comment);
    else if(prepared.direction==MSZZ_DIR_SHORT) ok=g_trade.Sell(volume,_Symbol,0.0,prepared.stop,prepared.target,comment);
+
+   intent.submission_attempts=1;
+   intent.broker_retcode=g_trade.ResultRetcode();
+   intent.broker_result_text=g_trade.ResultRetcodeDescription();
+   if(ok)
+   {
+      intent.execution_state=(int)MSZZ_INTENT_BROKER_ACCEPTED;
+      intent.order_ticket=g_trade.ResultOrder();
+      intent.first_deal_ticket=g_trade.ResultDeal();
+      // position_ticket is intentionally left unset here -- see DECISION_LOG.md
+      // D008: deriving it correctly (especially under hedging) is Phase 2's job.
+   }
+   else
+   {
+      intent.execution_state=(int)MSZZ_INTENT_BROKER_REJECTED;
+   }
+   // Warn-only, not fail-closed: EventStore already durably marked this cluster
+   // consumed above, so the anti-duplicate guarantee does not depend on this
+   // update succeeding. A failure here leaves the intent record's fill/ticket
+   // details incomplete -- exactly what Phase 2's reconciler exists to detect
+   // and repair against broker truth, not a new gap this decision introduces.
+   if(!g_intent_store.UpdateIntent(intent))
+      Print("MSZZ WARNING: intent store post-submission update failed: ",g_intent_store.LastError());
 
    if(ok)
    {
@@ -293,12 +357,27 @@ int OnInit()
    g_event_store.Configure(_Symbol,_Period,InpMagic,InpMaxPersistentEvents);
    if(!g_event_store.Load()) return INIT_FAILED;
 
+   g_instance_id=StringFormat("%d-%d-%d",(int)AccountInfoInteger(ACCOUNT_LOGIN),(int)TimeLocal(),MathRand());
+   if(!g_intent_store.Configure(_Symbol,_Period,InpMagic,g_instance_id))
+   {
+      PrintFormat("MSZZ intent store initialization failed: %s",g_intent_store.LastError());
+      return INIT_FAILED;
+   }
+   if(!g_intent_store.Load())
+   {
+      PrintFormat("MSZZ intent store load failed: %s",g_intent_store.LastError());
+      return INIT_FAILED;
+   }
+
    Print(!LiveExecutionAuthorized() ?
          "MSZZ initialized in SHADOW posture. Three live gates are required." :
          "MSZZ WARNING: LIVE EXECUTION AUTHORIZED by all three gates.");
    PrintFormat("MSZZ account mode=%s event store loaded count=%d file=%s",
                CMSZZPositionOwnership::AccountModeText(g_ownership.AccountMode()),
                g_event_store.Count(),g_event_store.Filename());
+   PrintFormat("MSZZ intent store loaded count=%d unknown=%d file=%s instance=%s",
+               g_intent_store.Count(),g_intent_store.UnknownRecordCount(),
+               g_intent_store.PrimaryFilename(),g_instance_id);
    return INIT_SUCCEEDED;
 }
 
