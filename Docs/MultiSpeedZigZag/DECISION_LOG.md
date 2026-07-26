@@ -98,21 +98,42 @@ MSZZC1|<len>:<symbol>|<len>:<timeframe>|<len>:<direction>|<len>:<origin_type>|<l
 - Fields are still separated by `|` for human readability in raw CSV/journal output, but the separator is never required for correct parsing: decoding consumes each field by its declared length, so a `|` or `:` occurring *inside* `origin_id` is never mistaken for a delimiter. Only the final field (`origin_id`) is variable-length in practice, but the same length-prefix rule applies uniformly to all five fields for consistency and defense-in-depth.
 - Decoding validates that the string starts with the literal `MSZZC1|`, that every length prefix is composed only of decimal digits, that every declared length fits within the remaining string, and that the final field's declared length consumes the string exactly to its end. Any violation is a decode failure, not a best-effort partial parse.
 
-**Example:**
+### Consequences
 
-- Old (ambiguous): `MSZZC|XAUUSD|5|-1|2|BO|XAUUSD|5|1|S|1784639100|MSZZ|XAUUSD|5|1|-1|1784637600|1784638200`
-- New (unambiguous): `MSZZC1|6:XAUUSD|1:5|2:-1|1:2|76:BO|XAUUSD|5|1|S|1784639100|MSZZ|XAUUSD|5|1|-1|1784637600|1784638200`
+- `CMSZZOpportunityClusterEngine` gains dedicated `EncodeClusterId(...)` and `DecodeClusterId(...)` methods.
+- Legacy consumed-event files must be cleared or explicitly migrated before new evidence sessions.
+- No automatic destructive migration is performed.
 
-  (`76` is the exact character length of the `origin_id` value that follows; a decoder reads exactly those 76 characters regardless of how many `|` or `:` characters they contain.)
+---
 
-### Reason
+## D005 — Account-mode-aware, magic-safe ownership and ticket-specific position control
 
-Length-prefixing was chosen over percent/escape-encoding the `origin_id` (option B) because it is deterministic and reversible without needing an escaping/unescaping pass or a table of characters that must be escaped. It has no failure mode for "did I escape everything the origin ID might ever contain" — the origin ID's internal structure is completely irrelevant to correct decoding.
+**Date:** 2026-07-25  
+**Status:** Accepted
+
+### Defect being fixed
+
+The standalone EA currently uses symbol-wide helpers such as `PositionSelect(_Symbol)` and `CTrade::PositionClose(_Symbol)`. On hedging accounts, multiple positions can exist for one symbol; on all account modes, symbol-wide selection can observe or close positions that belong to a manual trader, Quant Beast, or another EA. The current implementation therefore cannot be authorized for demo or live execution.
+
+### Decision
+
+Introduce a dedicated ownership subsystem with these invariants:
+
+1. Every position, pending order, and historical deal is classified by symbol, magic number, direction, and ticket.
+2. MSZZ may manage or close only records whose magic number equals `InpMagic` and whose symbol equals the active symbol.
+3. Manual trades (`magic == 0`) and foreign-EA trades are never closed, modified, counted as owned exposure, or used as proof that an MSZZ cluster is already represented.
+4. Position closure is ticket-specific. Symbol-wide close calls are prohibited in MSZZ execution code.
+5. Account margin mode is detected at initialization and represented explicitly as netting, hedging, exchange, or unsupported.
+6. In netting/exchange modes, a foreign position on the active symbol blocks new standalone MSZZ execution because the broker aggregates symbol exposure and MSZZ cannot guarantee ownership isolation.
+7. In hedging mode, foreign positions may coexist, but one-position-per-symbol means one **owned MSZZ** position, not one account-wide symbol position.
+8. Opposite-signal handling closes only owned MSZZ opposite-direction tickets. It never closes foreign or manual tickets.
+9. Startup reconciliation rebuilds an owned-position snapshot from live terminal state before new execution is considered.
+10. Any ambiguity or terminal-selection failure is fail-closed: execution is rejected and the reason is journaled.
 
 ### Consequences
 
-- `CMSZZOpportunityClusterEngine` gains dedicated `EncodeClusterId(...)` and `DecodeClusterId(...)` methods. `ClusterId()`/`Build()` must call `EncodeClusterId(...)` rather than constructing the string inline, and no other code may construct or parse a cluster ID by ad hoc string manipulation.
-- The cluster-ID format version is bumped from the old unversioned `MSZZC|` prefix to `MSZZC1|`. Old and new IDs are textually distinct (different literal prefixes), so an old-format ID stored in a legacy `MSZZ_Consumed_*.txt` event-store file can never string-match a new-format ID and therefore can never falsely suppress a legitimate new-format cluster as a duplicate.
-- This is not a reason to skip cleanup: legacy consumed-event entries become permanently orphaned garbage in any event-store file that mixes old- and new-format IDs. **The event store must be cleared or migrated before the next shadow-testing session that uses the new format**, so that evidence isn't split across two incompatible ID schemes. No automatic migration is performed by this change — clearing/migrating an event-store file is an operational step for whoever runs the next test session, not something this commit does silently.
-- `PARITY_EXPORT_SCHEMA.md`'s `clusters.csv` documentation must reflect that `cluster_id` is now a self-describing length-prefixed string, not a naive five-field pipe-delimited value.
-- Existing shadow-test evidence in `BACKTEST_LOG.md` from before this decision remains valid evidence of clustering/dedup *behavior*, but any cluster-ID *values* quoted there are legacy-format examples, not current-format examples.
+- Add `Execution/PositionOwnership.mqh` and pure ownership-policy records suitable for deterministic tests.
+- Replace `HasSymbolPosition()` and symbol-wide opposite closing in the EA.
+- Add explicit inputs controlling owned-position limits and opposite-owned-position policy.
+- Add deterministic tests covering manual, foreign, owned, mixed, netting, and hedging scenarios.
+- Compilation and terminal verification are required before this subsystem changes demo-readiness status.
