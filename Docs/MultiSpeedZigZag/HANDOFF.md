@@ -74,17 +74,27 @@ Pulled `73951d9` into the live Wine MQL5 working tree (`git pull --ff-only`), sy
 
 This resolves the old "netting-account assumption" blocker in `KNOWN_ISSUES.md`. It does **not** authorize demo execution — see the narrower remaining issues there (close-by-ticket not yet tested against a real position, order/deal history reconciliation absent, post-order persistence failure and full restart reconstruction unchanged).
 
+## Validated 2026-07-26 — idempotent execution-intent persistence (D006)
+
+Implemented and validated in the live Wine MQL5 tree (no upstream commits pulled this pass — this was designed and built directly, per D003's decision-first discipline). `DECISION_LOG.md` D006 defines the change: `ExecuteCluster()`'s live-execution path now persists the consumed-cluster record *before* submitting the order, and fails closed (`REJECT_INTENT_PERSISTENCE`, order never attempted) if that write fails, instead of the old "place order, warn-only if persistence fails afterward" ordering.
+
+- **Compile**: EA 0 errors, 1 pre-existing reviewed warning (Market-version, unrelated) — live tree (build 6033) and isolated instance (build 6061), hash-verified identical.
+- **Shadow regression**: long window (2026.07.01–2026.07.24) unchanged from the pre-D006 baseline — identical 431/178/178 candidate/cluster/consumed counts, zero orders/deals/trades, zero `REJECT_INTENT_PERSISTENCE` occurrences (expected: shadow mode never reaches the live-execution path this change touches).
+- **Regression**: determinism (PASS), cluster (22/22), parity exporter (identical row counts, zero defects), and ownership (24/24) all re-ran clean on otherwise-unchanged source.
+- **Not exercised**: the new persist-first ordering has not been tested against a real order submission — all three live-execution gates remain closed throughout. This validates the *safety property* (order can't outrun its own persistence record) by construction and by shadow-path non-interference, not by observing a real order go through the new sequence.
+
+This resolves the "event persistence failure after successful order submission" item in `KNOWN_ISSUES.md`. Full order/deal history reconstruction (the other half of the previously recommended next subsystem) remains a separate, unimplemented, larger feature.
+
 ## Remaining production blockers
 
-1. Post-order persistence failure and idempotent execution intent.
-2. Full order/deal/cluster restart reconstruction.
-3. Close-by-ticket execution not yet demo-tested against a real open position.
-4. Percentage-risk sizing and broker-correct risk calculations.
-5. Margin preflight and exposure limits.
-6. Daily loss, trade-count, cooldown, and kill-switch controls.
-7. Five reserved stateful strategies.
-8. Pine-side parity and trendline-geometry decision.
-9. Long-duration forward shadow and demo evidence.
+1. Full order/deal/cluster restart reconstruction.
+2. Close-by-ticket execution not yet demo-tested against a real open position.
+3. Percentage-risk sizing and broker-correct risk calculations.
+4. Margin preflight and exposure limits.
+5. Daily loss, trade-count, cooldown, and kill-switch controls.
+6. Five reserved stateful strategies.
+7. Pine-side parity and trendline-geometry decision.
+8. Long-duration forward shadow and demo evidence.
 
 ## Startup reconciliation scope (explicit boundary, 2026-07-25)
 
@@ -101,4 +111,4 @@ Read `DECISION_LOG.md`, `KNOWN_ISSUES.md`, `TEST_PLAN.md`, and this file before 
 
 ## Next recommended subsystem
 
-Continue shadow testing and begin idempotent execution-intent persistence plus order/deal reconstruction (see "Remaining production blockers" above, items 1–2). Do not recommend demo execution yet.
+Continue shadow testing and begin full order/deal/cluster restart reconstruction (see "Remaining production blockers" above, item 1) — the natural follow-on to D006's write-ahead persistence, since the persisted intent records now give restart-time reconciliation something durable to check against. Do not recommend demo execution yet.

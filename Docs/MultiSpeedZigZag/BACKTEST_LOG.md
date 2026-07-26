@@ -4,6 +4,48 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 — Idempotent execution-intent persistence (D006)
+
+Designed and implemented directly in the live Wine MQL5 tree (no upstream pull this pass — branch was already at `e4a4a2e`, confirmed via `git log --oneline --left-right --graph feature/mszz-standalone-suite...github/feature/mszz-standalone-suite` showing no divergence before starting). Per D003, `DECISION_LOG.md` D006 was written before any source change.
+
+### Change
+
+`Experts/MultiSpeedZigZagEA.mq5::ExecuteCluster()`: moved `ConsumeEvent(persistence_id)` from after a successful `g_trade.Buy()`/`Sell()` (warning-only on failure) to immediately before order submission (fail-closed: `REJECT_INTENT_PERSISTENCE`, order never attempted, if the write fails). No new files, no new inputs, no change to `CMSZZEventStore`.
+
+### Compile results
+
+| File | Live tree (build 6033) | Isolated instance (build 6061) |
+|---|---|---|
+| `Experts/MultiSpeedZigZagEA.mq5` | 0 errors, 1 warning (reviewed/accepted, unrelated) | 0 errors, 1 warning (same) |
+
+SHA-256 hash-verified identical between live tree and isolated staged copy: `88ce74a5e3439335aee3b15b553fab26cf00f14d4c56d224759d5abc5984d5b6`.
+
+### Shadow regression (long window, 2026.07.01–2026.07.24, same config as prior passes)
+
+Result: History Quality 100%, Bars 4645, **Total Trades: 0, Total Deals: 0**. Signal journal: 431 `RAW_CANDIDATE` + 178 `SHADOW` — identical to every prior pass's counts. Consumed-event file: 178 entries, matching exactly. Zero `REJECT_INTENT_PERSISTENCE` occurrences (correct — shadow mode returns before reaching the live-execution path this change touches, so the new code is not exercised by design in any of this pass's runs).
+
+### Regression: ownership, determinism, clusters, parity exporter
+
+- `Test_MSZZ_Ownership`: 24/24 assertions PASS, `failures=0` (unchanged from prior pass — this batch didn't touch ownership source).
+- `Test_MSZZ_Determinism`: `TEST PASS: deterministic rebuild`.
+- `Test_MSZZ_Clusters`: 22/22 assertions PASS, `failures=0`.
+- `Export_MSZZ_Parity` (XAUUSD M5, 1000 bars, default ATR settings): 966 bar rows, 76 pivot rows, 192 candidate rows, 70 cluster rows — identical to every prior verified-clean pass. Zero duplicates, zero malformed/empty IDs, all cluster IDs `MSZZC1`-prefixed.
+
+### What this pass does and does not prove
+
+Proves: the new persist-before-submit ordering compiles, does not alter shadow-mode behavior in any observable way (candidate/cluster generation, journaling, zero-order guarantee), and does not regress any other subsystem. Does **not** prove: correct behavior of the persist-first ordering during an actual order submission attempt, since all three live-execution gates (`InpShadowOnly=true`, `InpAllowLiveExecution=false`, `InpAcknowledgeRisk=false`) remained closed throughout, as in every prior pass on this branch. The safety property (a persistence failure can never be followed by an order attempt) is guaranteed by the code's structure (the `return false` on a failed `ConsumeEvent()` occurs strictly before the `g_trade.Buy()`/`Sell()` call), not by observed runtime evidence of a real order.
+
+### Safety confirmation
+
+- All three live-execution gates closed in every run; zero orders/deals/trades throughout.
+- Live MT5 installation and its process (PID 66709, confirmed unchanged before and after every action) were never touched.
+- No second clone or parallel worktree; QuantBeast's `main`-branch state preserved via `git stash`/`git stash pop` around this session's branch switch.
+
+### Not done / explicitly out of scope this pass
+
+- Full order/deal history reconstruction (querying `HistorySelect`/`HistoryDealGetTicket`) — a separate, larger feature, not started.
+- Real order submission through the new persist-first path (requires live-execution gates open, which remain closed by design).
+
 ## 2026-07-25 (third pass) — Account-mode and position ownership subsystem (D005)
 
 Pulled `feature/mszz-standalone-suite` from `31f13b0` to `73951d9` (fast-forward, no divergence) into the live Wine MQL5 tree via `git pull --ff-only github feature/mszz-standalone-suite`. `origin` remote does not exist on this repo (removed per `AGENTS.md`); `github` is the only active remote.

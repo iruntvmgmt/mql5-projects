@@ -40,9 +40,16 @@ This supersedes the old "netting-account assumption" blocker previously listed h
 - **Post-order persistence failure remains** (see below, unchanged by this batch).
 - **Full position-management restart reconstruction remains absent** (see below, unchanged by this batch).
 
+## Fixed and verified 2026-07-26 — Idempotent execution-intent persistence (D006)
+
+**Event persistence failure after successful order submission — RESOLVED.** `ExecuteCluster()`'s live-execution path now calls `ConsumeEvent(persistence_id)` *before* submitting the order (was: after a successful order, warning-only on failure). If the persistence write fails, the order is never attempted (`REJECT_INTENT_PERSISTENCE`, fail-closed). This makes execution idempotent with respect to persistence-layer I/O failures by construction — a durable consumed record and a live order attempt can never be split apart. See `DECISION_LOG.md` D006 for the accepted trade-off (an order that is placed but then rejected by the broker will not be retried, since the cluster is already marked consumed — deliberate and conservative).
+
+Verified: EA compiles clean (0 errors, 1 pre-existing unrelated warning); shadow-mode regression (short + long windows) shows identical candidate/cluster/journal counts to the pre-D006 baseline and zero `REJECT_INTENT_PERSISTENCE` occurrences (expected — shadow mode never reaches the live-execution path); determinism, cluster (22/22), parity exporter, and ownership (24/24) regressions all re-ran clean on otherwise-unchanged source. The live-execution path itself (order submission with the new persist-first ordering) has **not** been exercised against a real broker order — all three live-execution gates remain closed in every test run this pass, by design.
+
+**Explicitly out of scope, still open:** full order/deal history reconstruction (querying `HistorySelect`/`HistoryDealGetTicket` to rebuild past MSZZ-owned orders/deals and reconcile cluster lifecycle state after restart). This is a separate, materially larger feature.
+
 ## Identified, not fixed
 
-- **Event persistence failure after successful order submission:** an accepted order followed by `ConsumeEvent()` failure still has no intent-before-submit journal, recovery halt, or history reconciliation.
 - **Full ownership reconstruction:** the current batch reconstructs live owned positions at startup, but does not yet map positions/orders/deals back to full cluster lifecycle records after restart.
 - **Freeze-level conservatism:** initial stop validation uses `max(stops_level, freeze_level)`, which may reject valid initial protection distances.
 - **Risk controls absent:** fixed lots only; no account-risk sizing, margin preflight, daily limits, exposure cap, or emergency kill switch.
