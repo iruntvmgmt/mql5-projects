@@ -195,6 +195,21 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
       return false;
    }
 
+   // D006 idempotent execution-intent persistence: durably mark this cluster
+   // consumed BEFORE attempting to submit the order, and fail closed if that
+   // write does not succeed. This makes execution idempotent with respect to
+   // persistence-layer failures -- a live order attempt and its durable
+   // consumed-event record can never be split by an I/O failure, because the
+   // record is written first and gates the attempt. The trade-off (accepted,
+   // see DECISION_LOG.md D006): if the order itself is then rejected by the
+   // broker, this cluster will not be retried even though no position opened.
+   if(!ConsumeEvent(persistence_id))
+   {
+      prepared.reason="execution intent persistence failed, order not attempted";
+      JournalCandidate(prepared,"REJECT_INTENT_PERSISTENCE",cluster.cluster_id);
+      return false;
+   }
+
    g_trade.SetExpertMagicNumber(InpMagic);
    g_trade.SetDeviationInPoints(InpDeviationPoints);
    bool ok=false;
@@ -204,12 +219,12 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
 
    if(ok)
    {
-      if(!ConsumeEvent(persistence_id)) Print("MSZZ WARNING: cluster executed but persistence failed.");
       JournalCluster(cluster,"EXECUTED"); JournalCandidate(prepared,"EXECUTED",cluster.cluster_id);
    }
    else
    {
-      prepared.reason=StringFormat("retcode=%u %s",g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
+      prepared.reason=StringFormat("retcode=%u %s (cluster already marked consumed; not retried)",
+                                   g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
       JournalCandidate(prepared,"ORDER_FAILED",cluster.cluster_id);
    }
    return ok;
