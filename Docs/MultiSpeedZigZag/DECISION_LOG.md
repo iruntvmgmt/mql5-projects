@@ -183,3 +183,65 @@ Full order/deal history reconstruction (querying `HistorySelect`/`HistoryDealGet
 - A new journaled status `REJECT_INTENT_PERSISTENCE` replaces the old post-hoc "WARNING: cluster executed but persistence failed" print, which can no longer occur (the order is never attempted if persistence fails).
 - No new files, no new inputs, no change to `CMSZZEventStore` itself — this decision reuses its existing fail-reporting `Add()` return value, which was already correct and simply wasn't being treated as fail-closed by its caller.
 - Full order/deal history reconstruction remains a separate, future decision.
+
+---
+
+## D007 — Atomic, versioned execution-intent store
+
+**Date:** 2026-07-26
+**Status:** Accepted (component only — not yet wired into the EA's execution path)
+
+### Defect or gap
+
+D006 made cluster execution idempotent against *one specific* failure mode (a silent `SaveAll()` I/O failure racing an order submission), by reusing `CMSZZEventStore` — a flat list of opaque "already consumed" strings with no schema, no per-record state, no ticket/fill/protection tracking, and no ability to distinguish *why* a cluster was consumed (shadow-journaled vs. submitted-but-unknown-result vs. filled vs. rejected). D006 itself says so explicitly: it "does not yet provide atomic, versioned, transactional intent persistence or broker-history reconstruction." That gap blocks everything downstream of it — a restart cannot distinguish "this cluster was shadow-journaled" from "this cluster's order result is unknown because the terminal crashed mid-submission," which is exactly the ambiguity that must fail closed rather than guess.
+
+### Chosen behavior
+
+Introduce `Include/MultiSpeedZigZag/Execution/ExecutionIntentStore.mqh`, a dedicated component (not an extension of `EventStore`, per the instruction that unrelated complex schemas should not be bolted onto it) holding one versioned `MSZZExecutionIntent` record per cluster execution attempt, with:
+
+- **Schema-versioned, length-prefixed serialization** (`MSZZI1` format literal, identical primitive to D004's `MSZZC1` cluster-ID encoding: every field is `<len>:<value>`, so no field's content — including a cluster ID that is itself a nested `MSZZC1|...` string — can ever be mistaken for a delimiter). This is a proven pattern in this codebase; D007 reuses it rather than inventing a new one.
+- **A non-cryptographic FNV-1a 32-bit checksum** over each record's serialized field payload, stored as an 8-hex-digit field. This detects accidental corruption (truncation, partial writes, bit rot) — it is explicitly **not** a security/tamper-resistance mechanism, and this document does not claim it is one.
+- **A two-generation, verify-at-every-step persistence protocol**: serialize to a temp file → flush and close → reopen the temp file and re-parse/re-checksum every record, aborting if anything fails → rotate the current primary to a backup file (abort if this fails, so a backup is never silently skipped) → move the temp file onto the primary → reopen the primary and re-verify record count and checksums → only then report success.
+- **Fail-closed in-memory rollback**: the caller-facing `CreateIntent`/`UpdateIntent` methods snapshot the in-memory record array before mutating it; if the persistence protocol above fails at any step, the in-memory array is restored to its pre-mutation snapshot and `false` is returned. The in-memory state and the on-disk state can never disagree about a successful write.
+- **`CreateIntent` vs. `UpdateIntent` as distinct operations**: `CreateIntent` rejects (returns `false`) if an intent with the same `intent_id` already exists — this is the "duplicate intent rejection" requirement. `UpdateIntent` requires the `intent_id` to already exist and replaces that record in place — this is how a single intent progresses through execution states over its lifetime without being treated as a duplicate.
+- **A load-time fallback chain**: `Load()` tries the primary file; if it fails schema/checksum/truncation validation, it falls back to the backup file; if the backup also fails validation, `Load()` returns `false` with an empty in-memory set (fail closed — never partially load a corrupt file and pretend it succeeded).
+- **Unknown-schema preservation**: a record whose `schema_version` field does not match the version this build understands is not parsed, mutated, or dropped — its raw serialized line is held verbatim in a side buffer and re-emitted unchanged on the next save, so an older build can never destroy a newer build's data by round-tripping the file.
+- **Exclusivity**: `Configure()` opens a dedicated `.lock` marker file without `FILE_SHARE_WRITE`. If that open fails (because another process/instance already holds it), `Configure()` returns `false` and no further writes are permitted from this instance. This is the "detect multiple writers or fail closed when exclusivity cannot be guaranteed" requirement, implemented with a mechanism MQL5 actually provides rather than an invented guarantee.
+- **Filename isolation**: the primary/backup/temp/lock filenames are derived from symbol, timeframe, and magic number (matching `CMSZZEventStore`'s existing convention), so different EA configurations never collide. Cross-*installation* isolation is inherent to MQL5's per-data-folder file sandboxing, not something this component can or needs to enforce itself.
+
+### Rejected alternatives
+
+- **Extending `CMSZZEventStore`'s existing flat-string schema** to carry structured intent data: rejected per this phase's own instruction, and because it would mean overloading a component whose entire contract today is "is this opaque string present or not" with a materially more complex, mutable, multi-field record — a correctness and testability regression, not an improvement.
+- **Claiming atomic filesystem rename**: rejected because it cannot be proven true under MQL5/Wine. `FileMove()`'s actual atomicity guarantee at the OS/filesystem level is unverified in this environment. Instead of asserting atomicity, this decision documents the exact residual risk below.
+- **A cryptographic hash (e.g., a full hash algorithm) for the integrity field**: rejected as unnecessary engineering weight for a corruption-detection-only requirement with no adversarial-tampering threat model in scope; FNV-1a is sufficient, dependency-free (no DLL imports), and deterministic.
+
+### Failure policy
+
+Every persistence operation that cannot be fully verified end-to-end returns `false` and leaves the in-memory state exactly as it was before the call. There is no partial-success return value and no silent best-effort fallback within a single `CreateIntent`/`UpdateIntent` call.
+
+### Exact atomicity guarantee (not to be overstated elsewhere in this project)
+
+This component provides a **two-generation recoverable protocol**, not proven atomicity:
+1. The temp file is fully written, flushed, closed, and independently re-verified before anything touches the primary or backup.
+2. The primary→backup rotation and the temp→primary promotion are each individual `FileMove()` calls. If the process is killed between these two calls, the store is left with a backup that equals the *previous* primary and a temp file that equals the *intended new* primary, with the old primary already gone. `Load()`'s fallback-to-backup path recovers to the last-known-good state in that specific case, at the cost of losing only the single in-flight update — never a run of accumulated, unverifiable data.
+3. If the process is killed between the temp→primary move completing and this call returning, the caller does not receive a `true` result and may retry or treat the operation as failed — but the data is in fact durable on disk. This is a conservative failure direction (reporting failure when the write actually succeeded), not a dangerous one.
+
+### Migration consequences
+
+This is a new component with no prior on-disk format to migrate from. It does not read or write `CMSZZEventStore`'s existing `MSZZ_Consumed_*.txt` files. The two stores currently coexist independently.
+
+### Restart behavior
+
+`Load()` is designed to be called once at EA startup (mirroring `CMSZZEventStore::Load()`'s existing contract) and reconstructs the full in-memory intent set from durable storage, including any unknown-schema records carried through verbatim. This component alone does not yet reconcile intents against live broker order/position/deal state — that is Phase 2 (order/deal/position reconciliation), a separate future decision.
+
+### Account-mode implications
+
+None directly — this component has no knowledge of account margin mode, ownership, or broker state. It is a pure persistence layer. Account-mode-aware decisions remain the responsibility of `CMSZZPositionOwnership`/`CMSZZPositionOwnershipPolicy` (D005) and the future reconciler (Phase 2).
+
+### Testing requirements
+
+Deterministic, broker-independent unit tests covering: valid save/load round trip; multiple records; duplicate-intent rejection; simulated temp-write failure; simulated primary-replacement failure; truncated temp file; truncated primary file; corrupt checksum; valid-backup-with-corrupt-primary recovery; valid-primary-with-corrupt-backup (primary still wins); in-memory rollback after a failed save; schema-version rejection (and preservation, not destruction); long cluster/origin IDs; IDs containing delimiter characters (`|` and `:`); restart reload; two-instance filename/exclusivity separation; deterministic serialization (identical input encodes identically every time).
+
+### Demo-readiness implications
+
+**None yet.** This decision covers the persistence component in isolation. It is explicitly not wired into `MultiSpeedZigZagEA.mq5`'s execution path in this pass — `ExecuteCluster()` continues to use `CMSZZEventStore` exactly as D006 left it. Wiring this store into the live execution path, building the reconciler that reads broker history against it, and building the execution state machine that drives its `execution_state` transitions are each separate, later decisions (Phase 2 and Phase 3 of the current engineering plan) with their own testing and evidence requirements before any of them can move demo-readiness forward. Demo execution remains blocked on all of the production blockers already listed in `KNOWN_ISSUES.md`, unchanged by this decision.
