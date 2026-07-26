@@ -622,3 +622,51 @@ Deterministic tests for `CMSZZExecutionGuard::IsExpired()` covering: `now` befor
 ### Demo-readiness implications
 
 This closes the one concretely-named gap from D014's verdict that the user chose to close before any live-execution decision. It does not change D014's core finding — no live-execution code path has ever run against real broker state — which remains the determining fact for Phase 13. Risk sizing (Phase 5) remains an assessed non-blocker, and combined-stack fault injection (Phase 11) remains something only real supervised demo activity can close. The Phase 13 go/no-go decision remains open and unchanged by this entry.
+
+## D016 — Edge Discovery Sprint, Stage A infrastructure: per-trade CSV export with R-multiples and MFE/MAE
+
+**Date:** 2026-07-26
+**Status:** Accepted
+
+### Context and pivot
+
+The user redirected this effort onto two separate tracks: the execution-safety work (D005–D015, now paused mid-way through the first supervised live-integration test, waiting on a live signal on a quiet Sunday session) and a new, much larger **Edge Discovery Sprint** aimed at answering a question the 17-phase execution-safety plan never tried to answer — whether the strategy engine has any real edge at all. The user's Stage A spec: run each of the 8 strategies independently with structural-stop exits at 1R/1.5R/2R/3R on XAUUSD M5 at canonical ATR settings, producing a run-level summary and a per-trade CSV so trades can be analyzed outside MT5.
+
+Two of the ingredients Stage A needs require no new code: isolating one strategy at a time (`CMSZZStrategySuite::ConfigureStrategies()` + existing `InpEnable*` inputs) and the 1R/1.5R/2R/3R exit sweep (the existing `InpRiskReward` input already controls `target = entry ± risk*RR`; re-running the Tester with different values *is* the sweep). What's missing, confirmed by source inspection, is the data-capture pipeline itself: nothing in this codebase computes or exports anything about a trade after it opens — no `OnTradeTransaction`, no per-tick or per-bar position-outcome tracking anywhere. This decision builds exactly that, and nothing more.
+
+### Scope of this increment
+
+**Covered**: detecting when an MSZZ-owned position closes on every bar (not just at EA restart — the existing D009 reconciler only runs once at `OnInit()`, so in a single continuous Strategy Tester run spanning months, a position opening and closing mid-test would never be detected as closed under the current architecture); computing R-multiple, MFE/MAE-in-R, exit reason, bars held, and a session bucket for that closed trade; writing one CSV row per completed trade immediately on detection.
+
+**Explicitly deferred**: the master run-level summary CSV (a separate, later decision); `spread_at_entry` and ATR/structure-snapshot columns from the user's full wishlist schema — these are only known at signal time, not close time, and capturing them would require new plumbing to carry signal-time context forward through the intent's lifetime (a schema-versioned `ExecutionIntentStore` bump or a side-table), not worth bundling into this first increment; `commit_sha` in the CSV — not obtainable from MQL5 at runtime, recorded externally per research batch instead; actually running any of the Stage A matrix, ATR robustness grids, cross-market tests, or walk-forward splits; and the currently-paused live demo test (D014/D015), which this decision does not touch (`InpShadowOnly`/`InpAllowLiveExecution`/`InpAcknowledgeRisk` are untouched by this change).
+
+### Decision: direct ticket check, not the D009 reconciler, for closed-position detection
+
+`CMSZZReconciliationPolicy::Reconcile()` (D009) exists to resolve *ambiguous* identity — comment-token matching, netting-conflict handling — for the *restart* case where a position's ticket might not be locally known. Here, the ticket is already known and trustworthy: D011 already sets `intent.position_ticket` and walks the intent to `MSZZ_INTENT_POSITION_ACTIVE` in the same tick as the fill. So `ProcessClosedBar()` gains a small, independent step: for every intent currently `MSZZ_INTENT_POSITION_ACTIVE`, a direct `PositionSelectByTicket(intent.position_ticket)` check. If it no longer resolves, the position closed — look up the closing deal via `HistorySelect`+`HistoryDealGetTicket` matching `DEAL_POSITION_ID`, transition the intent via `CMSZZIntentStateMachine::TryTransition(..., MSZZ_INTENT_POSITION_CLOSED, ...)` (already a legal transition per D010), and export. This does not refactor or reuse the OnInit reconciliation loop — the two paths stay independent, exactly as D009's restart-reconciliation and D011's same-tick-fill-handling already coexist without sharing implementation.
+
+### Decision: policy/live-query split, mirroring D005/D009–D013
+
+- **`CMSZZTradeAnalyticsPolicy`** (pure): `RMultiple(entry, stop, close, direction)`; `ExcursionInR(extreme_price, entry, stop, direction)` (used for both MFE and MAE by passing the window's high or low); `ClassifyExitReason(close, stop, target, point)` (SL/TP/OTHER, reusing D011's `ProtectionGuard.mqh` `point/2.0` tolerance convention rather than inventing a new one); `SessionBucket(hour_of_day)` (three fixed, non-overlapping 8-hour buckets on broker server time — Asian/London/NewYork — explicitly documented as a simplification, not a DST-aware trading-session calendar).
+- **`CMSZZTradeAnalyticsExporter`** (live), in a new `Include/MultiSpeedZigZag/Diagnostics/TradeAnalyticsExporter.mqh`: computes R-multiple from **`intent.average_fill_price`**, not `intent.requested_entry` — the latter is the pre-submission candidate price, the former is the true cost basis; using the wrong one would silently produce systematically-wrong R values on every trade. Realized profit uses the same convention as D013's `AccountSafeguard.mqh`: `DEAL_PROFIT+DEAL_SWAP+DEAL_COMMISSION`, summed across both the opening and closing deal. The MFE/MAE window is `CopyRates(_Symbol, _Period, fill_time, close_time, rates)` using the position's actual fill time (not `intent.signal_time`, which is one bar earlier — the signal candle, not the fill candle); a `copied<=0` guard falls back to MFE=MAE=realized-R with a logged warning rather than failing the whole export. Writes one row via the same pattern as `Diagnostics/ParityExporter.mqh`'s `OpenCsv()` (`FILE_CSV`, `;` delimiter, header-once-if-empty, reopen/seek-end/close per write) — mirrored, not shared code, since `ParityExporter` is a signal-shape-validation concern and this is a trade-outcome concern, the same separation this series has kept everywhere else.
+
+### Decision: one continuously-appended CSV, not one file per run
+
+`MSZZ_TradeAnalytics.csv` accumulates rows across every run, rather than a fresh file per Tester invocation — every row already carries `strategy_id`/`symbol`/`timeframe`, so downstream analysis (pandas, etc.) can group/filter across many runs from one file instead of stitching per-run files together, which is the more useful shape for exactly the "compare 8 strategies × 4 exit multiples" analysis Stage A calls for.
+
+### Rejected alternatives
+
+- **Batch computation at `OnDeinit()`** (scan the whole completed run's `HistoryDealsTotal()` in one pass at the end): rejected — lower code complexity, but Stage A means running the Tester unattended dozens of times over multi-month windows, and this session's own `BACKTEST_LOG.md` already documented MetaTester Agent sandbox quirks. A run that's killed or crashes before `OnDeinit` fires would silently lose every trade row for that entire run. Incremental per-bar detection with an immediate write only loses trades that hadn't closed yet at the point of interruption.
+- **Refactoring/reusing the OnInit reconciliation loop for per-bar closure detection**: rejected — see the ticket-check decision above; the reconciler solves a harder problem (identity ambiguity) this case doesn't have, and threading this through it increases surface area touching D009/D010 code for no benefit.
+- **Tick-level MFE/MAE instead of bar-range**: rejected for this increment — the existing Tester regressions in this series use `Model=2` (open-price-only), which doesn't simulate a real intrabar path either; computing MFE/MAE from bar highs/lows is precision-matched to that fill model, not a downgrade from it. Upgrading both the fill model and MFE/MAE precision together is a future decision, not two independent ones.
+
+### Migration consequences
+
+None — additive. No `ExecutionIntentStore` schema change; exit price and realized profit are computed fresh from broker history at detection time, not persisted on the intent record.
+
+### Testing requirements
+
+Deterministic tests for `CMSZZTradeAnalyticsPolicy` covering: `RMultiple` correct sign/magnitude for a long win, long loss, short win, short loss, and a zero-risk guard; `ExcursionInR` for MFE/MAE in both directions; `ClassifyExitReason` exactly at stop, exactly at target, within tolerance of each, and between the two (OTHER); `SessionBucket` boundary hours (0, 7, 8, 15, 16, 23).
+
+### Demo-readiness / edge-research-readiness implications
+
+This is Edge Discovery Sprint infrastructure, not execution-safety work — it does not advance or regress D014's Phase 13 verdict in either direction. Unlike every prior guard in this series, this component's entire purpose is to observe a closed trade, and there has never been one on this branch or in this session — so unlike D009–D015, this cannot be shadow-regression-validated as proof the export path itself works, only that it stays inert (zero `POSITION_ACTIVE` intents to iterate) during shadow-mode regression. The actual export logic remains unverified against a real closed trade until the Stage A backtests are actually run.
