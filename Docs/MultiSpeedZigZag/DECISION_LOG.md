@@ -391,3 +391,46 @@ Deterministic tests for `CMSZZIntentStateMachine` covering: every currently-reac
 ### Demo-readiness implications
 
 Still not sufficient alone. This increment makes intent lifecycle transitions auditable and enforced rather than ad hoc, and completes the `POSITION_ACTIVE`/`POSITION_CLOSED`/`ABANDONED` reachability gap D009 explicitly deferred — but risk sizing, margin preflight, account safeguards, and fault injection across the combined stack remain unstarted, and the finer-grained intermediate states remain unadopted. As with every decision in this series, the new code path has only been exercised against deterministic mock data and the isolated demo account's empty broker history — no live order has ever been placed on this branch.
+
+## D011 — Protection verification and repair, first increment
+
+**Date:** 2026-07-26
+**Status:** Accepted
+
+### Scope of this increment
+
+Phase 4 of the 2026-07-26 execution-safety request is "protection verification and repair after fill." A market order's SL/TP are submitted in the same `CTrade::Buy`/`Sell` request as the entry, so under normal conditions the resulting position already carries the correct protection atomically — but a broker can still reject or silently drop the SL/TP at the actual fill price (which can differ from the requested entry via slippage) while still filling the entry itself, especially near the freeze/stops-level boundary already validated pre-submission against the *requested*, not the *filled*, price. This is a first, deliberately bounded increment: verify the actual position's SL/TP against what was requested immediately after a successful order, attempt exactly one repair via `CTrade::PositionModify` if they don't match, and fail closed (block new execution, same as D009's `RECOVERY_REQUIRED`) if the repair also fails — not a general position-management or trailing-stop system.
+
+Explicitly deferred to a later increment: externally-modified-stop detection (an operator or another EA manually changing SL/TP after this EA set it correctly) is a distinct, ongoing-monitoring problem, not a one-shot post-fill check, and is not attempted here. Trailing stops, break-even moves, and partial-close management remain entirely unimplemented. Repair is attempted exactly once — no retry loop, no backoff — because an unbounded retry against a broker that keeps rejecting the same modify request is itself a risk (e.g. repeatedly hammering a request during a freeze-level violation); one attempt followed by fail-closed is deliberately conservative.
+
+### Decision: reuse the position-ticket-from-market-order assumption, document its limit
+
+Immediately after a successful `CTrade::Buy`/`Sell`, `g_trade.ResultOrder()` is used as the position ticket to verify. This is correct for a brand-new position on a **hedging** account (every market order opens a distinct position whose ticket equals the opening order's ticket) — the only account mode this EA has ever run against (Coinexx-Demo, confirmed `HEDGING` in every prior decision's evidence). It is **not proven correct under netting**, where an order can be aggregated into an existing position with a different ticket. This is the same class of account-mode-specific assumption D005 and D009 already made explicit rather than silently generalized, and is documented as a limitation, not fixed by a heuristic, per this branch's established fail-closed philosophy.
+
+### Decision: policy/live-query split, mirroring D005/D009
+
+- **`CMSZZProtectionPolicy`** (pure): `NeedsRepair(actual_sl, actual_tp, expected_sl, expected_tp, point)` — a tolerance-based comparison (half a point, to absorb broker rounding) with no MT5 API calls, unit-testable with injected doubles.
+- **`CMSZZProtectionGuard`** (live): `VerifyAndRepair(trade, ticket, expected_stop, expected_target, reason)` — selects the position by ticket, reads its actual `POSITION_SL`/`POSITION_TP`, delegates the comparison to the policy class, and if repair is needed, calls `CTrade::PositionModify(ticket, expected_stop, expected_target)` exactly once, then re-reads to confirm. Returns one of `PROTECTION_OK` (already correct), `PROTECTION_REPAIRED` (was wrong, fixed), `PROTECTION_REPAIR_FAILED` (still wrong after the one repair attempt), or `PROTECTION_POSITION_NOT_FOUND` (the ticket does not resolve to a live position — treated the same as a failure, not silently skipped).
+
+### Wiring into the EA
+
+- `ExecuteCluster()`: immediately after a successful order (`ok==true`), the intent's `position_ticket` is set to `g_trade.ResultOrder()` and, if `PositionSelectByTicket` confirms the position exists, the intent transitions `BROKER_ACCEPTED`→`POSITION_ACTIVE` via the D010 state machine (this is new — previously the EA only reached `POSITION_ACTIVE` via next-restart reconciliation, leaving a freshly-opened position's intent record stuck at `BROKER_ACCEPTED` for however long the EA kept running). `CMSZZProtectionGuard::VerifyAndRepair` then runs; on `PROTECTION_REPAIR_FAILED` or `PROTECTION_POSITION_NOT_FOUND`, the intent transitions `POSITION_ACTIVE`→`PROTECTION_FAILED` (a transition D010's table already allows) and `g_recovery_required` is set — the exact same new-execution block D009 built for `RECOVERY_REQUIRED`, now serving double duty for "something needs manual attention," per the original instruction's intent rather than a narrower one. If position selection fails (ticket doesn't resolve), the intent is left at `BROKER_ACCEPTED` rather than forcing an unproven `POSITION_ACTIVE` — D009's reconciler will pick this up at next restart exactly as it already does for any other stuck `BROKER_ACCEPTED` intent.
+- `OnInit()`'s reconciliation loop: when a `MATCHED_ACTIVE_POSITION` verdict transitions an intent to `POSITION_ACTIVE` (a D010 addition), the same `VerifyAndRepair` call now also runs against the reconciled ticket, extending protection coverage to positions that survived a restart, not just freshly-opened ones in the same session.
+
+### Rejected alternatives
+
+- **Retrying `PositionModify` in a loop until it succeeds**: rejected — an unbounded retry against a broker that keeps rejecting the same request (e.g. a genuine freeze-level violation at the fill price) is itself a new risk, not a fix. One attempt, then fail closed.
+- **Silently accepting a missing/wrong SL/TP and relying on the next reconciliation pass to notice**: rejected — the entire point of Phase 4 is a same-tick check, not a "hope a future restart catches it" gap; an unprotected live position is exactly the scenario this component exists to close.
+- **Attempting to generalize position-ticket derivation for netting accounts in this pass**: rejected — this EA has never run against a netting account, and inventing untested ticket-aggregation logic would be speculative, not verified behavior. Documented as an explicit limitation instead.
+
+### Migration consequences
+
+None — additive. `PROTECTION_FAILED` was already a defined-but-unused `ENUM_MSZZ_INTENT_STATE` value (D007) and an already-legal destination from `POSITION_ACTIVE` in D010's transition table; this decision is the first to actually reach it.
+
+### Testing requirements
+
+Deterministic tests for `CMSZZProtectionPolicy` covering: matching SL/TP within tolerance needs no repair; SL off by more than tolerance needs repair; TP off by more than tolerance needs repair; both off needs repair; a zero (unset) SL/TP when a nonzero one was expected needs repair; exact-match at floating-point-imprecision boundaries does not spuriously trigger repair.
+
+### Demo-readiness implications
+
+Still not sufficient alone. This increment gives the EA a real, tested answer to "is my open position actually protected," which closes a real gap (SL/TP can theoretically be dropped independently of entry fill) — but risk sizing, margin preflight, account safeguards, fault injection across the combined stack, and the finer-grained intermediate lifecycle states all remain unstarted or unadopted. The position-ticket-equals-order-ticket assumption is hedging-account-specific and undocumented risk if this EA is ever pointed at a netting account without revisiting this decision. As with every decision in this series, this has only been exercised against deterministic mock data — no live order has ever been placed on this branch, so `VerifyAndRepair` has never run against a real position.
