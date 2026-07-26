@@ -25,11 +25,15 @@ A collection of compatible candidates sharing a structural origin, direction, an
 
 ## Cluster identity
 
-Canonical format:
+Canonical format (version `MSZZC1`, effective 2026-07-25 — see DECISION_LOG.md D004):
 
 ```text
-MSZZC|symbol|timeframe|direction|origin_type|origin_id
+MSZZC1|<len>:<symbol>|<len>:<timeframe>|<len>:<direction>|<len>:<origin_type>|<len>:<origin_id>
 ```
+
+Every field is length-prefixed (`<len>` is the exact character count of the value that follows the `:`). This is required because `origin_id` is frequently itself an already pipe-delimited breakout/pivot identity (e.g. `BO|XAUUSD|5|1|S|<time>|MSZZ|XAUUSD|5|1|-1|<time>|<time>`) and a naive `|`-delimited outer format cannot distinguish the outer cluster-ID delimiters from delimiters inside `origin_id`. Always construct and parse cluster IDs through `CMSZZOpportunityClusterEngine::EncodeClusterId()`/`DecodeClusterId()` — never by ad hoc string splitting.
+
+The prior format (`MSZZC|symbol|timeframe|direction|origin_type|origin_id`, no version marker) is deprecated and was confirmed ambiguous in practice: real exported cluster IDs contained 17 `|` characters instead of the 5 the five-field description implied. IDs in that format are legacy evidence only; they are not compatibility-stable and a decoder for the new format correctly rejects them (different literal prefix).
 
 Cluster IDs must not depend on strategy ranking or score. Adding a supporting strategy later must not change the cluster ID.
 

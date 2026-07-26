@@ -91,6 +91,18 @@ File: `clusters.csv`
 bar_index,time,cluster_id,direction,origin_id,state,owner_strategy_id,supporting_strategy_ids,evidence_mask,combined_score,stop,expiry_time
 ```
 
+### `cluster_id` encoding (format version `MSZZC1`, see DECISION_LOG.md D004)
+
+`cluster_id` is a **self-describing, length-prefixed** string, not a naive delimited value. It must not be parsed by splitting on `|`:
+
+```text
+MSZZC1|<len>:<symbol>|<len>:<timeframe>|<len>:<direction>|<len>:<origin_type>|<len>:<origin_id>
+```
+
+Each `<len>` is the exact character count of the value that follows its `:`. A correct decoder consumes exactly `<len>` characters for each field rather than scanning for the next `|`, because `origin_id` is frequently itself an already pipe-delimited breakout/pivot identity and may contain any number of `|` or `:` characters. `CMSZZOpportunityClusterEngine::EncodeClusterId()`/`DecodeClusterId()` in `OpportunityClusterEngine.mqh` are the only correct way to construct or parse this field.
+
+Cluster IDs produced before 2026-07-25 used an unversioned `MSZZC|symbol|timeframe|direction|origin_type|origin_id` format that is ambiguous when `origin_id` itself contains `|`. Any exported `clusters.csv` from before that date is legacy evidence only — its `cluster_id` values cannot be reliably decoded and should not be compared field-by-field against `MSZZC1`-format exports.
+
 ## Comparison tolerances
 
 - Price: no more than one symbol tick unless a documented feed difference applies.

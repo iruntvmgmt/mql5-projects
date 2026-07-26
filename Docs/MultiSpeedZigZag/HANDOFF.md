@@ -118,6 +118,12 @@ Compiled all four MSZZ files for the first time (previously unverified). Fixed o
 
 All work was done in an isolated portable MT5 test instance (`~/MT5-MSZZ-TEST`) on a freshly self-registered demo account, per explicit instruction, to avoid touching the live/main MT5 installation or its QuantBeast state.
 
+## 2026-07-25 worklog #2 — cluster-ID encoding fix (D004)
+
+Fixed the malformed cluster IDs identified in the first pass. Per DECISION_LOG.md D004, `OpportunityClusterEngine.mqh` now has dedicated `EncodeClusterId()`/`DecodeClusterId()` methods using a versioned, length-prefixed format (`MSZZC1|<len>:<symbol>|<len>:<timeframe>|<len>:<direction>|<len>:<origin_type>|<len>:<origin_id>`) instead of naive `|`-delimited `StringFormat`. Added 15 new unit-test assertions covering `|`-containing, `:`-containing, empty, 500-character, and real-world-nested origin IDs, decode-rejects-malformed-input cases, determinism, and distinctness — all pass (22/22 total in `Test_MSZZ_Clusters.mq5`, `failures=0`). Re-ran the parity exporter: all 70 cluster rows now carry a correctly-prefixed, non-duplicate `MSZZC1|` ID. Re-ran a short shadow Strategy Tester regression (2026.07.20–2026.07.24): zero orders/deals/trades, and confirmed the signal journal's shadow entries use the new ID format.
+
+**Compatibility**: old- and new-format cluster IDs are textually distinct by construction, so a legacy `MSZZ_Consumed_*.txt` event-store file cannot falsely suppress a new-format cluster as a duplicate — but it also can't recognize any old-format entries as consumed. No automatic migration was performed. **Clear or migrate any existing event-store file before the next shadow-testing session** so evidence isn't split across two incompatible ID schemes.
+
 ## Known blockers
 
 1. ~~MetaEditor compile remains unverified.~~ Resolved 2026-07-25 — all four files compile (0 errors; EA has one reviewed/accepted warning, see KNOWN_ISSUES.md).
@@ -144,7 +150,7 @@ All work was done in an isolated portable MT5 test instance (`~/MT5-MSZZ-TEST`) 
 9. Add percentage-risk sizing, margin checks, daily limits, and kill switches.
 10. Implement reserved stateful strategies one at a time.
 11. ~~Collect shadow evidence before demo execution.~~ Done 2026-07-25 — shadow Strategy Tester run over 24 days, zero orders, 178 clusters journaled/consumed with zero duplicates.
-12. New: fix the malformed cluster-ID encoding (needs a DECISION_LOG entry first).
+12. ~~New: fix the malformed cluster-ID encoding (needs a DECISION_LOG entry first).~~ Done 2026-07-25 — see D004 and the worklog entry above. Remember to clear/migrate any existing event-store file before the next shadow-testing session.
 13. New: add an `ACCOUNT_MARGIN_MODE` check or otherwise resolve the netting-account assumption in `CloseOppositeIfNeeded`/`InpOnePositionPerSymbol` before any hedging-account live/demo use.
 14. New: run a full EA restart test on a live/demo chart across real elapsed bar-closes (the Tester-based attempt in this pass was methodologically invalid — see KNOWN_ISSUES.md).
 

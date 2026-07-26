@@ -6,11 +6,44 @@
 class CMSZZOpportunityClusterEngine
 {
 private:
-   string ClusterId(const string symbol,const ENUM_TIMEFRAMES timeframe,
-                    const ENUM_MSZZ_DIRECTION direction,const ENUM_MSZZ_ORIGIN_TYPE origin_type,
-                    const string origin_id) const
+   string LenPrefix(const string value) const
    {
-      return StringFormat("MSZZC|%s|%d|%d|%d|%s",symbol,(int)timeframe,(int)direction,(int)origin_type,origin_id);
+      return StringFormat("%d:%s",StringLen(value),value);
+   }
+
+   bool IsAllDigits(const string s) const
+   {
+      int n=StringLen(s);
+      if(n<=0) return false;
+      for(int i=0;i<n;i++)
+      {
+         ushort c=StringGetCharacter(s,i);
+         if(c<'0' || c>'9') return false;
+      }
+      return true;
+   }
+
+   bool DecodeField(const string id,int &pos,const bool is_last,string &value) const
+   {
+      int colon=StringFind(id,":",pos);
+      if(colon<0) return false;
+      string len_str=StringSubstr(id,pos,colon-pos);
+      if(!IsAllDigits(len_str)) return false;
+      int len=(int)StringToInteger(len_str);
+      int value_start=colon+1;
+      if(len<0 || value_start+len>StringLen(id)) return false;
+      value=StringSubstr(id,value_start,len);
+      pos=value_start+len;
+      if(is_last)
+      {
+         if(pos!=StringLen(id)) return false;
+      }
+      else
+      {
+         if(pos>=StringLen(id) || StringSubstr(id,pos,1)!="|") return false;
+         pos=pos+1;
+      }
+      return true;
    }
 
    bool SameCluster(const MSZZCandidate &a,const MSZZCandidate &b) const
@@ -52,6 +85,39 @@ private:
    }
 
 public:
+   // Format (see DECISION_LOG.md D004): MSZZC1|<len>:<symbol>|<len>:<timeframe>|<len>:<direction>|<len>:<origin_type>|<len>:<origin_id>
+   // Every field is length-prefixed so a "|" or ":" inside origin_id can never be
+   // mistaken for a field delimiter. Do not construct or parse cluster IDs by ad hoc
+   // string manipulation anywhere else -- always go through these two methods.
+   string EncodeClusterId(const string symbol,const ENUM_TIMEFRAMES timeframe,
+                          const ENUM_MSZZ_DIRECTION direction,const ENUM_MSZZ_ORIGIN_TYPE origin_type,
+                          const string origin_id) const
+   {
+      return "MSZZC1|"+LenPrefix(symbol)+"|"+LenPrefix(IntegerToString((int)timeframe))+"|"+
+             LenPrefix(IntegerToString((int)direction))+"|"+LenPrefix(IntegerToString((int)origin_type))+"|"+
+             LenPrefix(origin_id);
+   }
+
+   bool DecodeClusterId(const string id,string &symbol,int &timeframe,int &direction,int &origin_type,string &origin_id) const
+   {
+      string prefix="MSZZC1|";
+      int prefix_len=StringLen(prefix);
+      if(StringLen(id)<prefix_len || StringSubstr(id,0,prefix_len)!=prefix) return false;
+
+      int pos=prefix_len;
+      string tf_str,dir_str,ot_str;
+      if(!DecodeField(id,pos,false,symbol)) return false;
+      if(!DecodeField(id,pos,false,tf_str)) return false;
+      if(!DecodeField(id,pos,false,dir_str)) return false;
+      if(!DecodeField(id,pos,false,ot_str)) return false;
+      if(!DecodeField(id,pos,true,origin_id)) return false;
+
+      timeframe=(int)StringToInteger(tf_str);
+      direction=(int)StringToInteger(dir_str);
+      origin_type=(int)StringToInteger(ot_str);
+      return true;
+   }
+
    int Build(const string symbol,const ENUM_TIMEFRAMES timeframe,const MSZZCandidate &candidates[],
              const int candidate_count,MSZZOpportunityCluster &clusters[])
    {
@@ -92,8 +158,8 @@ public:
             clusters[target].preferred_index=i;
             clusters[target].owner_strategy_id=candidates[i].strategy_id;
             clusters[target].supporting_strategy_ids=IntegerToString((int)candidates[i].strategy_id);
-            clusters[target].cluster_id=ClusterId(symbol,timeframe,candidates[i].direction,
-                                                  candidates[i].origin_type,clusters[target].origin_id);
+            clusters[target].cluster_id=EncodeClusterId(symbol,timeframe,candidates[i].direction,
+                                                        candidates[i].origin_type,clusters[target].origin_id);
             continue;
          }
 

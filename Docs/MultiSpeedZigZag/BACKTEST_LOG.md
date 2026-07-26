@@ -4,6 +4,68 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-25 (second pass) — Cluster-ID encoding fix
+
+Implements DECISION_LOG.md D004. See KNOWN_ISSUES.md and OPPORTUNITY_CLUSTERING.md/PARITY_EXPORT_SCHEMA.md for the format itself. This entry records only compile/test evidence for the fix.
+
+### Compile results (live tree build 6033, isolated instance build 6061 — identical on both)
+
+| File | Result |
+|---|---|
+| `Include/MultiSpeedZigZag/Arbitration/OpportunityClusterEngine.mqh` | compiles as a dependency of the three files below; no standalone script |
+| `Tests/MultiSpeedZigZag/Test_MSZZ_Clusters.mq5` | 0 errors, 0 warnings |
+| `Tests/MultiSpeedZigZag/Export_MSZZ_Parity.mq5` | 0 errors, 0 warnings |
+| `Experts/MultiSpeedZigZagEA.mq5` | 0 errors, 1 warning (same reviewed/accepted Market-version warning as before, unrelated to this change) |
+
+One test-writing mistake caught and fixed before commit: an assertion asserted the encoded cluster ID contains exactly 5 total `|` characters, which is wrong whenever `origin_id` itself contains `|` (the exact case the fix targets) — the origin ID's own pipe characters are still physically present in the string, they're just no longer load-bearing for parsing. Replaced with a correct assertion that a naive split-on-`|` would produce far more than the old format's 6 tokens, proving the ambiguity this format fixes, while the round-trip assertion immediately above it proves `DecodeClusterId` still recovers the exact original value.
+
+### Cluster unit test (`Test_MSZZ_Clusters.mq5`), isolated instance, real XAUUSD M5 history
+
+All 22 assertions PASS, `failures=0`:
+```
+PASS: origin ID containing '|' round-trips exactly
+PASS: origin ID containing '|' preserves symbol/timeframe/direction/origin_type
+PASS: origin ID containing ':' round-trips exactly
+PASS: real-world nested pipe-delimited origin ID round-trips exactly
+PASS: naive split-on-'|' would be ambiguous, confirming length-prefix decoding is required
+PASS: empty origin ID round-trips to an empty string
+PASS: empty string is not a valid cluster ID
+PASS: legacy unversioned format is rejected, not silently accepted as new format
+PASS: declared length exceeding available data is rejected
+PASS: non-digit length prefix is rejected
+PASS: trailing garbage after the declared final-field length is rejected
+PASS: 500-character origin ID round-trips exactly
+PASS: identical inputs encode to identical output every time
+PASS: distinct origin IDs produce distinct cluster IDs
+PASS: distinct directions with the same origin ID produce distinct cluster IDs
+PASS: three related candidates become one cluster and independent origin stays separate
+PASS: support count preserved
+PASS: specific nested pullback owns cluster
+PASS: evidence mask merges structure evidence
+PASS: stop disagreement measured
+PASS: stable cluster ID created
+PASS: best cluster selected
+PASS: stronger related cluster selected
+MSZZ cluster test complete failures=0
+```
+
+### Parity export re-run (`Export_MSZZ_Parity.mq5`, XAUUSD M5, 1000 bars, default ATR settings)
+
+`clusters.csv`: 70 data rows (same as the pre-fix run — clustering behavior is unchanged, only the ID string format changed). Verified:
+- Every `cluster_id` starts with the literal `MSZZC1|` (0 rows failed this check).
+- Zero duplicate `cluster_id` values (70 unique out of 70 rows).
+- Spot-checked example: `MSZZC1|6:XAUUSD|1:5|2:-1|1:2|67:BO|XAUUSD|5|1|S|1784639100|MSZZ|XAUUSD|5|1|-1|1784637600|1784638200` — the declared length `67` is the exact character count of the trailing origin ID, which itself contains 11 `|` characters that a naive parser would have misread as delimiters under the old format.
+
+### Shadow Strategy Tester regression check (short window, 2026.07.20–2026.07.24, `InpShadowOnly=true`)
+
+Result: History Quality 100%, Bars 1104, **Total Trades: 0, Total Deals: 0** — zero orders placed, consistent with the full 24-day run from the first pass. Spot-checked the signal journal: all `SHADOW`-status rows carry the new `MSZZC1|`-prefixed cluster ID; 0 rows failed that check.
+
+### Not re-run this pass (unchanged by this fix, already covered by the first pass's evidence above)
+
+`Test_MSZZ_Determinism`, the full 24-day shadow run, and the `EventStore` restart-persistence probe were not re-run, since this fix does not touch the ZigZag engine, the strategy suite's candidate generation, the EA's execution path, or the event store — only how a cluster's identity string is encoded.
+
+---
+
 ## 2026-07-25 — Compile, repair, and shadow-test pass
 
 ### Environment

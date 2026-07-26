@@ -33,9 +33,99 @@ void AssertTrue(const bool condition,const string message,int &failures)
    else { Print("FAIL: ",message); failures++; }
 }
 
+void TestClusterIdEncoding(int &failures)
+{
+   CMSZZOpportunityClusterEngine engine;
+
+   // origin ID containing "|"
+   {
+      string symbol,origin_id; int tf,dir,ot;
+      string encoded=engine.EncodeClusterId("XAUUSD",PERIOD_M5,MSZZ_DIR_SHORT,MSZZ_ORIGIN_MEDIUM_BREAK,"A|B|C");
+      bool ok=engine.DecodeClusterId(encoded,symbol,tf,dir,ot,origin_id);
+      AssertTrue(ok && origin_id=="A|B|C","origin ID containing '|' round-trips exactly",failures);
+      AssertTrue(ok && symbol=="XAUUSD" && tf==(int)PERIOD_M5 && dir==(int)MSZZ_DIR_SHORT && ot==(int)MSZZ_ORIGIN_MEDIUM_BREAK,
+                 "origin ID containing '|' preserves symbol/timeframe/direction/origin_type",failures);
+   }
+
+   // origin ID containing ":"
+   {
+      string symbol,origin_id; int tf,dir,ot;
+      string encoded=engine.EncodeClusterId("XAUUSD",PERIOD_M5,MSZZ_DIR_LONG,MSZZ_ORIGIN_FAST_BREAK,"12:34:56");
+      bool ok=engine.DecodeClusterId(encoded,symbol,tf,dir,ot,origin_id);
+      AssertTrue(ok && origin_id=="12:34:56","origin ID containing ':' round-trips exactly",failures);
+   }
+
+   // origin ID with both, mirroring a real nested breakout/pivot ID (the exact defect class this fix addresses)
+   {
+      string symbol,origin_id; int tf,dir,ot;
+      string nested="BO|XAUUSD|5|1|S|1784639100|MSZZ|XAUUSD|5|1|-1|1784637600|1784638200";
+      string encoded=engine.EncodeClusterId("XAUUSD",PERIOD_M5,MSZZ_DIR_SHORT,MSZZ_ORIGIN_MEDIUM_BREAK,nested);
+      bool ok=engine.DecodeClusterId(encoded,symbol,tf,dir,ot,origin_id);
+      AssertTrue(ok && origin_id==nested,"real-world nested pipe-delimited origin ID round-trips exactly",failures);
+      int pipe_count=0;
+      for(int i=0;i<StringLen(encoded);i++) if(StringGetCharacter(encoded,i)=='|') pipe_count++;
+      int naive_token_count=pipe_count+1;
+      // The origin ID alone contributes 11 "|" characters, so a naive split-on-"|" parser
+      // would see far more than the 6 tokens the old five-field format implied -- proving
+      // exactly the ambiguity this format fixes. Correct decoding never splits blindly on
+      // "|"; it only ever consumes the length declared by each field's prefix.
+      AssertTrue(naive_token_count>6,"naive split-on-'|' would be ambiguous, confirming length-prefix decoding is required",failures);
+   }
+
+   // empty origin ID
+   {
+      string symbol,origin_id; int tf,dir,ot;
+      string encoded=engine.EncodeClusterId("XAUUSD",PERIOD_M5,MSZZ_DIR_LONG,MSZZ_ORIGIN_FAST_BREAK,"");
+      bool ok=engine.DecodeClusterId(encoded,symbol,tf,dir,ot,origin_id);
+      AssertTrue(ok && origin_id=="","empty origin ID round-trips to an empty string",failures);
+   }
+
+   // invalid / malformed encoded strings must fail to decode, not silently parse
+   {
+      string symbol,origin_id; int tf,dir,ot;
+      AssertTrue(!engine.DecodeClusterId("",symbol,tf,dir,ot,origin_id),"empty string is not a valid cluster ID",failures);
+      AssertTrue(!engine.DecodeClusterId("MSZZC|XAUUSD|5|-1|2|BO|XAUUSD|5|1|S|1|MSZZ|XAUUSD|5|1|-1|2|3",
+                 symbol,tf,dir,ot,origin_id),"legacy unversioned format is rejected, not silently accepted as new format",failures);
+      AssertTrue(!engine.DecodeClusterId("MSZZC1|6:XAUUSD|1:5|2:-1|1:2|999:short",
+                 symbol,tf,dir,ot,origin_id),"declared length exceeding available data is rejected",failures);
+      AssertTrue(!engine.DecodeClusterId("MSZZC1|X:XAUUSD|1:5|2:-1|1:2|3:abc",
+                 symbol,tf,dir,ot,origin_id),"non-digit length prefix is rejected",failures);
+      AssertTrue(!engine.DecodeClusterId("MSZZC1|6:XAUUSD|1:5|2:-1|1:2|3:abcXX",
+                 symbol,tf,dir,ot,origin_id),"trailing garbage after the declared final-field length is rejected",failures);
+   }
+
+   // long origin ID
+   {
+      string long_origin="";
+      for(int i=0;i<50;i++) long_origin+="0123456789";
+      string symbol,origin_id; int tf,dir,ot;
+      string encoded=engine.EncodeClusterId("XAUUSD",PERIOD_M5,MSZZ_DIR_LONG,MSZZ_ORIGIN_FAST_BREAK,long_origin);
+      bool ok=engine.DecodeClusterId(encoded,symbol,tf,dir,ot,origin_id);
+      AssertTrue(ok && origin_id==long_origin && StringLen(origin_id)==500,"500-character origin ID round-trips exactly",failures);
+   }
+
+   // deterministic output
+   {
+      string a=engine.EncodeClusterId("XAUUSD",PERIOD_M5,MSZZ_DIR_LONG,MSZZ_ORIGIN_FAST_BREAK,"SAME|ORIGIN:X");
+      string b=engine.EncodeClusterId("XAUUSD",PERIOD_M5,MSZZ_DIR_LONG,MSZZ_ORIGIN_FAST_BREAK,"SAME|ORIGIN:X");
+      AssertTrue(a==b,"identical inputs encode to identical output every time",failures);
+   }
+
+   // distinct origins producing distinct cluster IDs
+   {
+      string a=engine.EncodeClusterId("XAUUSD",PERIOD_M5,MSZZ_DIR_LONG,MSZZ_ORIGIN_FAST_BREAK,"ORIGIN_A");
+      string b=engine.EncodeClusterId("XAUUSD",PERIOD_M5,MSZZ_DIR_LONG,MSZZ_ORIGIN_FAST_BREAK,"ORIGIN_B");
+      string c=engine.EncodeClusterId("XAUUSD",PERIOD_M5,MSZZ_DIR_SHORT,MSZZ_ORIGIN_FAST_BREAK,"ORIGIN_A");
+      AssertTrue(a!=b,"distinct origin IDs produce distinct cluster IDs",failures);
+      AssertTrue(a!=c,"distinct directions with the same origin ID produce distinct cluster IDs",failures);
+   }
+}
+
 void OnStart()
 {
    int failures=0;
+   TestClusterIdEncoding(failures);
+
    MSZZCandidate candidates[];
    ArrayResize(candidates,4);
 
