@@ -57,6 +57,8 @@ Tests/MultiSpeedZigZag/
 └── deterministic and replay tests
 ```
 
+**Actual `Execution/` contents as of 2026-07-26** (this section was never updated as implementation diverged from the planned names above — noted here rather than rewriting the aspirational tree wholesale): `EventStore.mqh`, `ExecutionGuard.mqh`, `PositionOwnership.mqh`, `PositionOwnershipPolicy.mqh` (D005), `ExecutionIntentStore.mqh` (D007, persistence component only — not yet wired into the EA). See `DECISION_LOG.md` D005–D007 and `HANDOFF.md` for what each actually does.
+
 ## Layer boundaries
 
 ### Structural engine

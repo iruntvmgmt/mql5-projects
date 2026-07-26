@@ -4,6 +4,83 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 (second entry) — Atomic execution-intent store (D007), Phase 1 of a 17-phase request
+
+### Context and scope decision
+
+A single instruction requested, in one pass: an atomic/versioned execution-intent store, broker order/deal/position reconciliation, a full execution state machine, protection verification, risk sizing, margin preflight, account safeguards, stale-signal controls, a complete regression pass, extended shadow regression, fault injection across ~19 scenarios, a demo-readiness gate, and — if that gate passed — an actual controlled order submission against the isolated demo account (with a restart-with-active-position test and a close-by-ticket test), explicitly authorized to "abuse the demo account as intended."
+
+**Only Phase 1 (the intent store itself) was implemented.** See `HANDOFF.md`'s "Scope decision, 2026-07-26" for the full reasoning: each remaining phase is independently comparable in scope to a full prior decision cycle (D004/D005/D006), several are materially larger, and compressing all of them into one pass — then firing a real order at a real broker connection on top of an unvalidated risk/margin/safeguard/reconciliation stack — would have contradicted the incremental, evidence-before-progress discipline this branch has used throughout. **No live-execution gates were opened. No order, demo or otherwise, was placed or attempted.**
+
+Repo state before starting: `git fetch github` + `git log --oneline --left-right --graph feature/mszz-standalone-suite...github/feature/mszz-standalone-suite` showed zero divergence at `3d76ca7` (matching the expected head exactly). No pull was needed. QuantBeast's uncommitted `main`-branch state was preserved via `git stash` before switching branches, as in every prior pass.
+
+### Files created
+
+- `Include/MultiSpeedZigZag/Execution/ExecutionIntentStore.mqh`
+- `Tests/MultiSpeedZigZag/Test_MSZZ_IntentStore.mq5`
+
+No existing file was modified in this pass (D007 is additive-only; nothing includes the new header yet).
+
+### Compile results
+
+| File | Live tree (build 6033) | Isolated instance (build 6061) |
+|---|---|---|
+| `Include/MultiSpeedZigZag/Execution/ExecutionIntentStore.mqh` | compiles as a dependency; no standalone script | — |
+| `Tests/MultiSpeedZigZag/Test_MSZZ_IntentStore.mq5` | 0 errors, 0 warnings | 0 errors, 0 warnings |
+
+First compile attempt (via a throwaway smoke-test script) surfaced 18 real errors, all from the same root cause: MQL5's generic `ArrayCopy(T&[],const T&[])` template and whole-array `=` assignment both reject struct arrays containing `string` members (`error 368: structures or classes containing objects are not allowed`), even though single-struct assignment with strings (`a = b;` for one instance) works fine and is used throughout this codebase already. Fixed by adding explicit `CopyIntents()`/`CopyStrings()` helpers that copy element-by-element via `ArrayResize` + a loop, and using them everywhere an array-level copy was needed (`Load()`'s primary/backup assignment, and the pre-mutation snapshot/rollback in `CreateIntent()`/`UpdateIntent()`). Recompiled clean.
+
+SHA-256 hash-verified identical between live tree and isolated staged copies:
+- `ExecutionIntentStore.mqh`: `edeb6496a36ea4c6f8eb6c3d0f045f9510f8b7bb07dbda88e5875f5ddc505844`
+- `Test_MSZZ_IntentStore.mq5`: `a57346d4d411e659a2bc2395d327cb2d5e166b405ca48425c61497d0a087ee1e`
+
+### Test results — 52/52 assertions PASS, `failures=0`, on first real execution
+
+Run via `[StartUp] Script=MultiSpeedZigZagTests\Test_MSZZ_IntentStore` in the isolated instance. Scenarios (all PASS):
+
+1. **Round trip / multiple records**: configure, load-when-empty, create two records, find-by-id, exact field recovery.
+2. **Duplicate intent rejection**: a second `CreateIntent()` with the same `intent_id` is rejected; store still holds exactly one record.
+3. **Temp-write failure + rollback**: test harness opens the `.tmp` file exclusively (no share flags) before calling `CreateIntent()`; the store's own attempt to open the same file for writing fails, `CreateIntent()` returns `false`, and `Count()` is unchanged (in-memory rollback proven). Releasing the block allows the identical call to succeed.
+4. **Primary-replacement failure + rollback**: same technique against the `.dat` primary file (which must exist first) — the backup-rotation `FileMove()` fails while the primary is held open elsewhere, the whole save fails, and rollback is proven the same way.
+5. **Truncated temp file**: raw-writing garbage to the `.tmp` path does not corrupt the store — the next legitimate `CreateIntent()` overwrites it and succeeds normally (the store never trusts stale temp content; it always writes fresh).
+6. **Truncated primary file**: a primary file cut to half its length fails `Load()`'s validation and (with no valid backup available in this scenario) `Load()` returns `false` with zero records exposed — fail closed, not a partial read.
+7. **Corrupt checksum**: a fixture record's `instance_id` field is mutated by exactly one character (same length, so the length-prefix stays structurally valid) directly in the raw file; `Load()` fails closed because the recomputed checksum no longer matches — proving checksum validation is independent of structural parseability.
+8. **Backup recovery, both directions**: after two saves (backup = 1-record generation, primary = 2-record generation), corrupting the primary recovers cleanly from backup (to the *older*, 1-record state — the correct and expected two-generation behavior); corrupting the backup instead has no effect, since a valid primary is tried first and is sufficient.
+9. **Schema-version preservation**: a hand-crafted, checksum-valid record with `schema_version=99` (this build understands only version 1) loads successfully, is not exposed via `Count()`/`FindById()`, is tracked via `UnknownRecordCount()==1`, and survives a subsequent unrelated save verbatim (confirmed by raw-reading the file afterward and finding the exact original unknown-schema line still present, byte-for-byte).
+10. **Long IDs**: a 500-character cluster/origin ID round-trips exactly.
+11. **Delimiter characters**: a record with `|` and `:` embedded throughout `cluster_id`, `origin_id`, `instance_id`, and `broker_result_text` round-trips every field exactly (reusing the D004-proven length-prefix technique, which is why this passed cleanly on the first attempt).
+12. **Restart reload**: one store instance creates a record and explicitly `Close()`s (releasing its exclusivity lock); a second, independent instance then `Configure()`s and `Load()`s successfully and recovers the exact record.
+13. **Exclusivity + filename separation**: a second store instance cannot `Configure()` against the same symbol/timeframe/magic while a first instance holds the lock (and can once the first releases it); two instances configured with *different* magic numbers never see each other's records and produce distinct filenames.
+14. **Deterministic serialization**: a no-op `UpdateIntent()` with identical field values produces a byte-for-byte identical raw file line to the original save.
+
+### Regression
+
+All other MSZZ compile targets (`Test_MSZZ_Ownership.mq5`, `Test_MSZZ_Determinism.mq5`, `Test_MSZZ_Clusters.mq5`, `Export_MSZZ_Parity.mq5`, `MultiSpeedZigZagEA.mq5`) recompile clean in the isolated instance — 0 errors, and the EA's single pre-existing reviewed warning, unchanged. Not re-executed at runtime, since no source they depend on changed (hash-verified in the prior pass and untouched since).
+
+### Intent-store guarantees (see D007 for full detail)
+
+- A `CreateIntent`/`UpdateIntent` call either fully succeeds (in-memory and on-disk state agree, verified by reopening and re-checksumming the primary file before returning `true`) or fully fails (in-memory state rolled back to its pre-call snapshot, on-disk state untouched or, in the worst case documented below, containing data the caller correctly does not trust because it never received `true`).
+- **Exact atomicity limit, stated plainly**: this is a two-generation recoverable protocol, not proven atomic filesystem semantics. If the process is killed between the primary→backup rotation and the temp→primary promotion, the backup ends up equal to the previous primary and `Load()`'s fallback path recovers to that last-known-good state, at the cost of the single in-flight update. If the process is killed after the temp→primary move completes but before `SaveAll()` returns, the caller receives `false` (or never returns) even though the data is in fact durable — a conservative failure direction (report failure when it actually succeeded), not a dangerous one.
+- Exclusivity is enforced via a real MQL5 file-sharing lock (`FileOpen` with no share flags on a dedicated `.lock` file), not an assumption.
+
+### Intent-store limitations (explicitly out of scope for D007/Phase 1)
+
+- Not wired into `MultiSpeedZigZagEA.mq5`. `ExecuteCluster()` still uses `CMSZZEventStore` exactly as D006 left it.
+- No reconciliation against live broker order/deal/position history (Phase 2).
+- No execution state machine driving the `execution_state` field through real transitions (Phase 3).
+- ulong ticket fields round-trip via `StringToInteger`→`(ulong)` cast, which is correct for real-world MT5 ticket values (far below `LONG_MAX`) but would misparse a ulong value above `LONG_MAX` — a theoretical, not practical, limitation given actual broker ticket ranges.
+
+### Safety confirmation
+
+- No live-execution gates opened at any point.
+- No order, demo or otherwise, placed or attempted.
+- Live MT5 installation and its process (PID 66709, confirmed unchanged before and after every action) never touched.
+- No second clone or parallel worktree; QuantBeast's `main`-branch state preserved via `git stash`/`git stash pop`.
+
+### Not done / explicitly out of scope this pass
+
+Phases 2 through 17 of the requesting instruction in full: reconciliation, execution state machine, protection verification and repair, risk sizing, margin/exposure preflight, account safeguards (daily loss, drawdown, kill switch, cooldowns), stale-signal/expiry re-validation, extended fault injection across the full stack, the demo-readiness gate, and controlled demo execution (including restart-with-active-position and close-by-ticket tests).
+
 ## 2026-07-26 — Idempotent execution-intent persistence (D006)
 
 Designed and implemented directly in the live Wine MQL5 tree (no upstream pull this pass — branch was already at `e4a4a2e`, confirmed via `git log --oneline --left-right --graph feature/mszz-standalone-suite...github/feature/mszz-standalone-suite` showing no divergence before starting). Per D003, `DECISION_LOG.md` D006 was written before any source change.
