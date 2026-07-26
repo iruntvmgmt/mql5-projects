@@ -524,3 +524,59 @@ Deterministic tests for `CMSZZAccountSafeguardPolicy` covering: trade count belo
 ### Demo-readiness implications
 
 Still not sufficient alone. This increment gives the EA its first real per-day loss and trade-count circuit breakers, plus a manual kill switch — real progress toward Phase 12's readiness gate — but cooldowns, floating-equity drawdown limits, risk sizing, and fault injection across the combined stack all remain unstarted. As with every decision in this series, `CheckSafeguards()` has only been exercised against the isolated demo account's genuinely empty trade history (zero trades ever placed on this branch) — it has never actually counted a real trade or summed a real loss.
+
+## D014 — Phase 12 demo-readiness gate evaluation
+
+**Date:** 2026-07-26
+**Status:** Accepted (verdict below; no code changed by this entry)
+
+### Purpose
+
+D005 through D013 each built one bounded increment of the 2026-07-26 execution-safety request and each closed with an honest "demo-readiness implications" paragraph saying, correctly, "still not sufficient alone." This entry is Phase 12 of that request: stop adding increments and instead evaluate, explicitly and in writing, whether what exists is sufficient for Phase 13 (the first controlled demo execution test) — not by assuming the answer, but by walking every phase and every gate and stating plainly what is proven, what is assumed, and what is still missing.
+
+### What is proven (compile + deterministic test + shadow regression evidence exists)
+
+- **Compile**: every file across every decision compiles with 0 errors on both the live tree and the isolated instance, hash-verified identical, in every single pass (D005–D013). One pre-existing, reviewed, unrelated Market-version warning persists throughout and is not a defect.
+- **Determinism, closed-bar integrity, cluster-ID encoding, duplicate suppression**: established and re-verified clean through Gates 1–8 (`TEST_PLAN.md`), unchanged by anything in D009–D013.
+- **Restart-safe ownership** (D005), **idempotent consumed-event persistence** (D006), **atomic versioned intent store** (D007), **intent store wired into the EA** (D008): all compile-clean, deterministically tested, shadow-regression-clean.
+- **Broker reconciliation, first increment** (D009): 17/17 deterministic assertions. Correctly fails closed on "nothing found," on netting-account ambiguity, and on conflicting matches.
+- **Execution state machine, first increment** (D010): 25/25 deterministic assertions. Every reachable transition is legal; both terminal states have zero legal outgoing transitions; a rejected transition never partially mutates the record.
+- **Protection verification and repair, first increment** (D011): 10/10 deterministic assertions. Tolerance comparison is correct at and around the boundary.
+- **Margin preflight, first increment** (D012): 8/8 deterministic assertions. Correctly treats a non-positive buffer as clamped, not as a weakened check.
+- **Account safeguards, first increment** (D013): 11/11 deterministic assertions. Kill switch, trade-count limit, and daily-loss limit each independently verified at, above, and below their thresholds, and independently disable-able via a non-positive threshold.
+- **Shadow-mode non-interference**: every single decision in this series (D006–D013) re-ran the short and long shadow Strategy Tester windows and reported the same 431 candidates / 178 clusters / 0 orders / 0 deals / 0 trades, proving none of this new machinery has ever changed shadow-mode behavior by so much as one candidate.
+
+That is real, load-bearing evidence — not a claim, a checkable trail across nine decision-log entries and their linked `BACKTEST_LOG.md` sections.
+
+### What is assumed but not yet observed (the honest core of this evaluation)
+
+This is the single most important finding of this gate evaluation, stated as plainly as possible: **no live-execution code path built since D009 has ever actually executed against real broker state.** `InpAllowLiveExecution` has been `false` in every test run of every decision in this entire series. Concretely, none of the following have ever run for real:
+
+- `CMSZZExecutionReconciler::CollectBrokerRecords()` against a real, non-empty position/order/deal history.
+- `CMSZZProtectionGuard::VerifyAndRepair()` against a real position's real `POSITION_SL`/`POSITION_TP`, and its one-shot `CTrade::PositionModify()` repair path.
+- `CMSZZMarginGuard::CheckMargin()`'s `OrderCalcMargin()` call against a real pending order.
+- `CMSZZAccountSafeguardGuard::CheckSafeguards()`'s `HistorySelect()`/deal-summation against real deal history.
+- The `position_ticket = order_ticket` assumption (D011) that a market order's ticket equals its resulting position's ticket, which is believed true for this hedging-mode demo account but has literally never been checked against a real fill.
+- The `"MI"+8-hex` comment correlation token (D009) actually appearing on a real broker order and being read back correctly from `POSITION_COMMENT`/`DEAL_COMMENT`/`ORDER_COMMENT`.
+
+Every one of these has exactly one form of evidence: a deterministic unit test against hand-constructed mock data. That is real evidence for the *logic*, and it is not evidence that the *live MT5 API integration* is correct, because shadow mode returns before any of this code runs (`ExecuteCluster()`'s very first check is `if(!LiveExecutionAuthorized()) { ...; return true; }`) — confirmed by grep of the current source, not inferred. This is not a new discovery; every decision from D009 onward stated it in its own "not exercised" section. This entry's contribution is naming it as the single cross-cutting fact that determines what "gates pass" can honestly mean.
+
+### Gaps that remain genuinely unstarted
+
+- **Phase 5 (risk sizing beyond fixed lots)**: not started. `InpFixedLots=0.01` is the only sizing path. Assessed as **non-blocking** for a first test — fixed-lot sizing is the *safest* available choice for an initial validation (no calculation to get wrong), not a gap that needs closing before one.
+- **Phase 8 (stale-signal/expiry revalidation)**: not started. `intent.expiry_time` is populated (from `owner.expiry_time`) but never read or enforced anywhere in the source — confirmed by grep, there is no code path that checks it. Assessed as **currently unreachable, not currently dangerous**: `ProcessClosedBar()` generates a candidate and calls `ExecuteCluster()` synchronously in the same `OnTick()` invocation, with no queue, no retry, and no delayed-resubmission path anywhere in the codebase. A signal cannot currently go stale because nothing holds one and reconsiders it later. This would become a real, blocking gap the moment any retry/backoff logic is added — it is not one today.
+- **Cooldowns and floating-equity drawdown limits** (explicitly deferred in D013): not started.
+- **Phase 11 (fault injection across the *combined* stack)**: partial. Every component listed above has its own deterministic fault-injection-style unit tests for its own failure modes in isolation. Nothing has exercised two or more of these guards failing, or interacting, in the same order attempt (e.g., a margin check that barely passes, a requote that shifts the fill price, and a protection repair that itself fails, all in one submission). This is not something a unit test can honestly simulate — MT5 does not expose a way to inject a broker-side requote or partial fill deterministically — so closing this gap fully requires exactly the kind of real, supervised demo activity Phase 13 exists to provide, not more code.
+
+### Verdict
+
+**Not ready for unsupervised or extended live operation.** It is, however, **conditionally ready for exactly one narrow purpose**: a single, fully-supervised, tightly bounded first demo trade, whose explicit goal is to observe the previously-unobserved live-integration paths above for the first time — not to generate a trading result. Recommended conditions for that specific, narrow test, not for anything broader:
+
+1. Run only on the isolated `~/MT5-MSZZ-TEST` instance, attached to a live/demo chart (not the Strategy Tester, which never lets these code paths run for real) — never the live MT5 terminal or account, per this branch's standing constraint.
+2. Set `InpMaxTradesPerDay=1` for this specific run, overriding the default `20` — the test should produce exactly one trade, not up to twenty.
+3. Set a real, nonzero `InpMaxDailyLossAmount` sized to a small fraction of the actual demo balance, rather than leaving it at the disabled default `0.0` — this is the first time this gate would ever actually be armed.
+4. A human must be actively watching in real time for the duration of the test — this evaluation cannot itself confirm that condition, only recommend it.
+5. Immediately after the single trade resolves (filled-and-managed-to-close, or rejected), revert `InpShadowOnly` to `true` regardless of outcome, before considering any further live activity.
+6. Capture and review, in the same pass: the `MSZZ RECONCILE`, `MSZZ PROTECTION`, and order-submission journal lines, plus a post-hoc reconciliation run (a restart) to confirm the reconciler correctly finds and classifies the real position/deal history this test will finally create.
+
+This verdict is a recommendation, not an authorization to act — see `HANDOFF.md` for how this is being surfaced.
