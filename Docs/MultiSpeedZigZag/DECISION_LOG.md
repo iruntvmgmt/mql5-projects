@@ -670,3 +670,45 @@ Deterministic tests for `CMSZZTradeAnalyticsPolicy` covering: `RMultiple` correc
 ### Demo-readiness / edge-research-readiness implications
 
 This is Edge Discovery Sprint infrastructure, not execution-safety work — it does not advance or regress D014's Phase 13 verdict in either direction. Unlike every prior guard in this series, this component's entire purpose is to observe a closed trade, and there has never been one on this branch or in this session — so unlike D009–D015, this cannot be shadow-regression-validated as proof the export path itself works, only that it stays inert (zero `POSITION_ACTIVE` intents to iterate) during shadow-mode regression. The actual export logic remains unverified against a real closed trade until the Stage A backtests are actually run.
+
+## D017 — Edge Discovery Sprint, Stage A infrastructure: master run-level summary CSV
+
+**Date:** 2026-07-26
+**Status:** Accepted
+
+### Scope of this increment
+
+D016 built per-trade export. This increment builds the second half of Stage A's stated output: one row per completed *run* (not per trade), aggregating the same trades D016 already captures — trade count, win rate, expectancy, profit factor, max drawdown, average MFE/MAE, average holding time, and a long/short split — plus run metadata (symbol, timeframe, magic, the `InpRiskReward` exit multiple this run used, and which strategies were enabled).
+
+**In scope**: an in-memory accumulator fed by every call to D016's `ExportClosedTrade()` (no double detection work — the same closed-trade event that writes a trade-level CSV row also feeds this run's summary), a pure aggregation policy class, and one summary row written at `OnDeinit()`.
+
+**Explicitly deferred**: raw-currency profit/profit-factor (D016 never computed dollar profit either — see the correction to D016's own entry above; this stays R-only, consistent with what actually exists); `commit_sha` (unchanged reasoning from D016 — not obtainable from MQL5 at runtime); ATR-setting and full date-range columns beyond what's trivially derivable (the run's actual observed first-signal/last-close timestamps, not the Tester's *requested* `FromDate`/`ToDate`, which isn't exposed to a running EA as a queryable value) — deferred rather than guessed at; walk-forward/holdout bookkeeping (Stage D territory, far later).
+
+### Decision: accumulate in the existing exporter, not a new file
+
+`CMSZZTradeAnalyticsExporter` (D016) already receives every closed trade's inputs at the exact moment `ExportClosedTrade()` is called. Rather than a second detection/call site in the EA, `ExportClosedTrade()` itself appends the trade's R-multiple, direction, MFE/MAE-in-R, and bars-held to small internal arrays, and a new `WriteRunSummary()` method (called once, from `OnDeinit()`) aggregates them. This mirrors `Diagnostics/ParityExporter.mqh`'s own shape — one exporter class producing several related CSV outputs for one concern — more closely than spinning up a second, separate exporter file would.
+
+### Decision: policy/live split, mirroring every prior component in this series
+
+- **`CMSZZRunSummaryPolicy`** (pure, static, array-based — deterministic and directly unit-testable with injected arrays, the same shape D009's tests already use for struct arrays): `Average(values,count)`; `WinRate(r_results,count)` (fraction with `r_result>0`; exactly `0.0` counts as not-a-win, i.e. breakeven is not counted as a win); `ProfitFactorR(r_results,count)` (sum of positive R / `|sum of negative R|`; returns the sentinel `-1.0`, documented explicitly, when there are wins but zero losing trades — a true profit factor is undefined there, not infinite-in-a-meaningful-sense, and `-1.0` is unambiguous against the normal `>=0` range); `MaxDrawdownR(r_results,count)` (walks the cumulative-R equity curve in trade order, tracks the running peak, returns the largest peak-to-trough drop as a positive R number).
+- **`CMSZZTradeAnalyticsExporter::WriteRunSummary(symbol, magic, timeframe, risk_reward, enabled_strategies)`** (live): calls the policy functions on the accumulated arrays (and on direction-filtered subsets for the long/short expectancy split — filtering is data-wrangling, not policy, and stays in the live class), and writes one row to a new continuously-appended `MSZZ_RunSummary.csv`, via the same `OpenCsv` pattern as everything else in this series.
+
+CSV schema for this increment: `symbol;timeframe;magic;risk_reward;enabled_strategies;first_signal_time;last_close_time;trades;win_rate;expectancy_r;profit_factor_r;max_drawdown_r;avg_mfe_r;avg_mae_r;avg_bars_held;long_expectancy_r;long_trades;short_expectancy_r;short_trades`.
+
+### Rejected alternatives
+
+- **A second, independent scan of `HistoryDealsTotal()` at `OnDeinit()`** (re-deriving everything from broker history rather than reusing D016's already-computed per-trade values): rejected — recomputing R-multiples, MFE/MAE, etc. a second, independent way risks the two numbers silently disagreeing (which one would be "right"?) and is pure duplicated work for data D016's `ExportClosedTrade()` already has in hand at the moment it's called.
+- **Writing the summary incrementally, one partial row updated after every trade** (matching D016's "write immediately, don't batch" reasoning for durability): rejected here — a run-level summary is, by definition, only meaningful once the run is over; a partial mid-run summary row would need to be overwritten in place (not appended), which is a different, more complex CSV-file operation than this series' established append-only pattern, for a case (an entire Tester run being killed mid-way through months of simulated history) that is a real risk for trade-level data but a much smaller one for a single end-of-run row.
+- **A separate `RunSummaryExporter.mqh` file**: rejected — see the "accumulate in the existing exporter" decision above; `ParityExporter.mqh` already establishes the "one class, several related CSV outputs" precedent for exactly this kind of closely-coupled concern.
+
+### Migration consequences
+
+None — additive, new file only (`MSZZ_RunSummary.csv`), no existing schema touched.
+
+### Testing requirements
+
+Deterministic tests for `CMSZZRunSummaryPolicy` covering: `WinRate` with a mix of wins/losses/an exact-zero breakeven; `ProfitFactorR` with a normal mixed set, an all-wins set (the `-1.0` sentinel), and an all-losses set; `MaxDrawdownR` with a monotonically-improving sequence (drawdown `0`), a single large loss after wins (drawdown equals that loss), and a sequence with a genuine peak-to-trough-to-recovery shape; `Average` on a simple known set.
+
+### Demo-readiness / edge-research-readiness implications
+
+Same as D016: this is Track 2 (research infrastructure), does not touch D014's Phase 13 verdict, and — like D016 — has never executed against a real closed trade, so the run-summary aggregation itself remains unverified against real data until Stage A backtests are actually run.
