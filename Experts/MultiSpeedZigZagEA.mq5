@@ -2,7 +2,7 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.340"
+#property version   "0.350"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
@@ -17,6 +17,7 @@
 #include <MultiSpeedZigZag/Execution/ExecutionReconciler.mqh>
 #include <MultiSpeedZigZag/Execution/IntentStateMachine.mqh>
 #include <MultiSpeedZigZag/Execution/ProtectionGuard.mqh>
+#include <MultiSpeedZigZag/Execution/MarginGuard.mqh>
 
 input group "═══ Operating Mode ═══"
 input bool   InpShadowOnly=true;
@@ -57,6 +58,7 @@ input double InpMaxSpreadPoints=80.0;
 input int    InpDeviationPoints=30;
 input bool   InpExitOwnedOpposite=true;
 input int    InpMaxPersistentEvents=2000;
+input double InpMarginBufferRatio=1.0;
 
 input group "═══ Diagnostics ═══"
 input bool InpWriteCSV=true;
@@ -71,6 +73,7 @@ CMSZZPositionOwnership         g_ownership;
 CMSZZExecutionIntentStore      g_intent_store;
 CMSZZExecutionReconciler       g_reconciler;
 CMSZZProtectionGuard           g_protection;
+CMSZZMarginGuard               g_margin;
 CTrade                         g_trade;
 datetime                       g_last_bar=0;
 string                         g_instance_id="";
@@ -209,6 +212,21 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
    }
    double volume=g_execution_guard.NormalizeVolume(InpFixedLots);
    if(volume<=0.0){ prepared.reason="volume normalization failed"; JournalCandidate(prepared,"REJECT_VOLUME",cluster.cluster_id); return false; }
+
+   // D012: fail closed before any state-mutating call if the account cannot
+   // comfortably afford this order. See DECISION_LOG.md D012 for why
+   // OrderCalcMargin() (broker-authoritative) is used instead of a manual
+   // formula, and why InpMarginBufferRatio defaults to requiring double the
+   // bare minimum required margin.
+   ENUM_ORDER_TYPE order_type=(prepared.direction==MSZZ_DIR_LONG ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+   double required_margin,free_margin;
+   string margin_reason;
+   if(!g_margin.CheckMargin(_Symbol,order_type,volume,prepared.entry,InpMarginBufferRatio,required_margin,free_margin,margin_reason))
+   {
+      prepared.reason=margin_reason;
+      JournalCandidate(prepared,"REJECT_MARGIN",cluster.cluster_id);
+      return false;
+   }
 
    if(!ApplyOwnershipPreflight(prepared.direction,reason))
    {

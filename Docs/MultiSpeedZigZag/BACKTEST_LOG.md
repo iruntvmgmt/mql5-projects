@@ -4,6 +4,64 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 (seventh entry) — Margin preflight, first increment (D012)
+
+Continuation of the same 17-phase execution-safety request; first increment of Phase 6 (see `DECISION_LOG.md` D012 for exactly what is and is not covered). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
+
+### Change
+
+- `Include/MultiSpeedZigZag/Execution/MarginGuard.mqh` (new file): `CMSZZMarginPolicy` (pure `HasSufficientMargin()`) + `CMSZZMarginGuard` (live `CheckMargin()`), per the D005/D009/D010/D011 policy/live-query split pattern.
+- `Experts/MultiSpeedZigZagEA.mq5`: new input `InpMarginBufferRatio` (default `1.0`). `ExecuteCluster()` calls `CMSZZMarginGuard::CheckMargin()` immediately after `NormalizeVolume()` succeeds, rejecting (`REJECT_MARGIN`) before `ApplyOwnershipPreflight()` or any state-mutating call. `#property version` bumped `0.340` → `0.350`.
+
+### Compile
+
+```
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_Margin.mq5" /log
+Result: 0 errors, 0 warnings, 469 ms elapsed
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Experts\MultiSpeedZigZagEA.mq5" /log
+MQL5\Experts\MultiSpeedZigZagEA.mq5(5,11) : warning 68: version '0.350' is incompatible with MQL5 Market, must be xxx.yyy
+Result: 0 errors, 1 warnings, 2966 ms elapsed
+```
+
+Isolated instance: all ten targets (Ownership, Determinism, Clusters, Parity, IntentStore, Reconciler, StateMachine, Protection, Margin, EA) recompiled clean, hash-verified identical source to the live tree before compiling.
+
+### Deterministic tolerance-comparison test
+
+`[StartUp] Script=MultiSpeedZigZagTests\Test_MSZZ_Margin, Symbol=XAUUSD, Period=M5` on the isolated instance:
+
+```
+PASS: free margin comfortably above the buffered requirement (100 required, 1.0 buffer -> need 200, have 1000) passes
+PASS: free margin exactly at the buffered boundary (100 required, 1.0 buffer -> need exactly 200, have 200) passes
+PASS: free margin just below the buffered boundary (need 200, have 199.99) fails
+PASS: zero required margin is trivially sufficient regardless of free margin
+PASS: zero free margin with nonzero required margin fails
+PASS: a buffer ratio of 0 reduces to a bare free>=required comparison (equal passes)
+PASS: a buffer ratio of 0 still fails when free is below the bare requirement
+PASS: a negative buffer ratio is clamped to zero, not allowed to reduce the requirement below bare minimum
+MSZZ margin test complete failures=0
+```
+
+8/8 assertions, `failures=0`.
+
+### Shadow Strategy Tester regression
+
+Two new configs (`shadow_d012_short.ini`, `shadow_d012_long.ini`), same `[Tester]` shape as every prior baseline in this series.
+
+- **Short window** (2026.07.20–2026.07.24): `last test passed with result "successfully finished" in 0:00:00.820`.
+- **Long window** (2026.07.01–2026.07.24): `last test passed with result "successfully finished" in 0:00:03.211`. `MSZZ_Shadow_Report_D012_Long.htm`: 0 Total Trades, 0 Total Deals. This run's log window sliced out of the cumulative daily Tester-agent log by timestamp: 431 `RAW_CANDIDATE` + 178 `MSZZ SHADOW` lines — identical to the D006/D008/D009/D010/D011 baseline.
+
+Both runs: `MSZZ initialized in SHADOW posture`, `MSZZ account mode=HEDGING`, `MSZZ intent store loaded count=0 unknown=0` logged at `OnInit()`, zero `REJECT_MARGIN`/`MSZZ WARNING`/error lines (the margin check only runs on the live-execution path, which shadow mode never enters).
+
+### Full regression
+
+Ownership, Determinism, Clusters, IntentStore, Reconciler, StateMachine, Protection all re-ran on the isolated instance and reported `failures=0` (or `TEST PASS` for Determinism's single assertion), unchanged from their established baselines.
+
+### Not exercised
+
+Exactly as every prior decision in this series: `CheckMargin()` has only run against deterministic mock data (the unit test) — it has never gated a real order, since no live order has been placed on this branch. The isolated demo account's actual `OrderCalcMargin()`/`ACCOUNT_MARGIN_FREE` behavior under a real fill remains unverified.
+
+---
+
 ## 2026-07-26 (sixth entry) — Protection verification and repair, first increment (D011)
 
 Continuation of the same 17-phase execution-safety request; first increment of Phase 4 (see `DECISION_LOG.md` D011 for exactly what is and is not covered). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.

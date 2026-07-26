@@ -194,10 +194,25 @@ Designed and implemented directly in the live Wine MQL5 tree, continuing the sam
 
 See `DECISION_LOG.md` D011 for the full rationale, rejected alternatives (no retry loop, no netting-account ticket-derivation heuristic), and explicitly deferred scope (externally-modified-stop monitoring, trailing stops, break-even moves, partial-close management all remain unimplemented).
 
+## Validated 2026-07-26 (seventh pass) — Margin preflight, first increment (D012)
+
+Designed and implemented directly in the live Wine MQL5 tree, continuing the same incremental discipline. Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
+
+- **New component**: `Include/MultiSpeedZigZag/Execution/MarginGuard.mqh` — `CMSZZMarginPolicy` (pure `HasSufficientMargin()`: `free >= required * (1 + buffer_ratio)`) plus `CMSZZMarginGuard` (live `CheckMargin()`: calls the broker-authoritative `OrderCalcMargin()`, reads `ACCOUNT_MARGIN_FREE`, delegates the comparison to the policy class). A failed `OrderCalcMargin()` call is treated as insufficient margin, not skipped.
+- **New input**: `InpMarginBufferRatio` (default `1.0`) — requires free margin to be at least double the bare minimum required margin, deliberately conservative since this component has never been exercised against a real account's real margin state.
+- **EA wiring**: `ExecuteCluster()` now calls `CMSZZMarginGuard::CheckMargin()` immediately after `NormalizeVolume()` succeeds, before `ApplyOwnershipPreflight()` or any state-mutating call. Insufficient margin (or a failed margin calculation) rejects the cluster (`REJECT_MARGIN`) — no order is attempted, no intent is created.
+- **Compile**: EA 0 errors, 1 pre-existing reviewed warning. New files (`MarginGuard.mqh`, `Test_MSZZ_Margin.mq5`) 0 errors/0 warnings. Live tree and isolated instance hash-verified identical.
+- **Tests**: 8/8 deterministic assertions, `failures=0` — comfortable margin passes, exact buffered boundary passes, just-below-boundary fails, zero required margin trivially sufficient, zero free margin with nonzero required fails, a zero buffer ratio reduces to a bare comparison, a negative buffer ratio is clamped to zero rather than allowed to weaken the check.
+- **Shadow regression**: short and long windows both `successfully finished`, 0 orders/0 deals/0 trades, identical 431/178 counts on the long window. Zero `REJECT_MARGIN`/`MSZZ WARNING`/error lines in either run — correct, since the margin check only runs on the live-execution path, which shadow mode never enters.
+- **Full regression**: ownership, determinism, clusters, intent-store, reconciler, state-machine, protection, and margin suites all re-ran clean, `failures=0` each.
+- **Not exercised**: `CheckMargin()` has never gated a real order — no live order has been placed on this branch. The isolated demo account's actual margin behavior under a real fill (as opposed to the deterministic unit test's injected values) remains unverified.
+
+See `DECISION_LOG.md` D012 for the full rationale, rejected alternatives (no manual margin formula, no combined account-wide exposure cap in this pass), and explicitly deferred scope (Phase 5 risk sizing, Phase 7 account safeguards including daily loss limits and a kill switch, and a true cross-symbol exposure cap all remain unstarted).
+
 ## Agent procedure
 
 Read `DECISION_LOG.md`, `KNOWN_ISSUES.md`, `TEST_PLAN.md`, and this file before modifying the batch. Fix compile defects without weakening D005 invariants. Any behavioral change requires documentation and, where material, a new decision entry. Keep live execution gates closed and do not merge into `main`.
 
 ## Next recommended subsystem
 
-Phase 4's first increment is now wired: a freshly-opened or restart-reconciled position gets its SL/TP verified and, if necessary, repaired once, with fail-closed blocking on repair failure. The next logical step is Phase 5/6 (risk sizing and margin/exposure preflight — currently fixed-lot only, no account-risk sizing or margin checks at all) or Phase 7 (account safeguards: daily loss/drawdown limits, trade-count limits, kill switch), since those are prerequisites the demo-readiness gate (Phase 12) explicitly requires and neither has been started. Do not recommend demo execution yet.
+Phase 6's first increment (per-order margin sufficiency) is now wired. The next logical step is Phase 7 (account safeguards: daily loss/drawdown limits, trade-count limits, cooldowns, a kill switch) — this is the most directly loss-preventing subsystem still unstarted and is a hard prerequisite for the demo-readiness gate (Phase 12), or Phase 5 (risk sizing beyond fixed lots), which is more of a flexibility improvement than a safety gate since fixed-lot sizing is already conservative. Do not recommend demo execution yet — fault injection across the combined stack (Phase 11) and the demo-readiness gate itself (Phase 12) remain unstarted regardless of which of these comes next.
