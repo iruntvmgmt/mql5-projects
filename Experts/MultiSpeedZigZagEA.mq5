@@ -2,7 +2,7 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.300"
+#property version   "0.310"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
@@ -11,6 +11,8 @@
 #include <MultiSpeedZigZag/Arbitration/OpportunityClusterEngine.mqh>
 #include <MultiSpeedZigZag/Execution/EventStore.mqh>
 #include <MultiSpeedZigZag/Execution/ExecutionGuard.mqh>
+#include <MultiSpeedZigZag/Execution/PositionOwnership.mqh>
+#include <MultiSpeedZigZag/Execution/PositionOwnershipPolicy.mqh>
 
 input group "═══ Operating Mode ═══"
 input bool   InpShadowOnly=true;
@@ -43,31 +45,31 @@ input group "═══ Structure & Signal ═══"
 input int    InpMinBarsBetween=3;
 input double InpMinScore=5.0;
 input double InpRiskReward=1.5;
-input bool   InpOnePositionPerSymbol=true;
+input bool   InpOneOwnedPositionPerSymbol=true;
 
 input group "═══ Standalone Execution ═══"
 input double InpFixedLots=0.01;
 input double InpMaxSpreadPoints=80.0;
 input int    InpDeviationPoints=30;
-input bool   InpExitOnOpposite=true;
+input bool   InpExitOwnedOpposite=true;
 input int    InpMaxPersistentEvents=2000;
 
 input group "═══ Diagnostics ═══"
 input bool InpWriteCSV=true;
 input bool InpVerboseLog=true;
 
-CMSZZTripleZigZagEngine    g_engine;
-CMSZZStrategySuite         g_suite;
+CMSZZTripleZigZagEngine       g_engine;
+CMSZZStrategySuite            g_suite;
 CMSZZOpportunityClusterEngine g_cluster_engine;
-CMSZZEventStore            g_event_store;
-CMSZZExecutionGuard        g_execution_guard;
-CTrade                     g_trade;
-datetime                   g_last_bar=0;
+CMSZZEventStore                g_event_store;
+CMSZZExecutionGuard            g_execution_guard;
+CMSZZPositionOwnership         g_ownership;
+CTrade                         g_trade;
+datetime                       g_last_bar=0;
 
 bool LiveExecutionAuthorized(){ return (!InpShadowOnly && InpAllowLiveExecution && InpAcknowledgeRisk); }
 bool EventConsumed(const string id){ return g_event_store.Contains(id); }
 bool ConsumeEvent(const string id){ return g_event_store.Add(id); }
-bool HasSymbolPosition(){ return PositionSelect(_Symbol); }
 
 void JournalCandidate(const MSZZCandidate &c,const string status,const string cluster_id="")
 {
@@ -95,18 +97,47 @@ void JournalCluster(const MSZZOpportunityCluster &cluster,const string status)
                   cluster.support_count,cluster.evidence_mask,_Digits,cluster.stop_disagreement);
 }
 
-bool CloseOppositeIfNeeded(const MSZZCandidate &c)
+void JournalOwnership(const MSZZOwnershipSnapshot &snapshot,const string status)
 {
-   if(!InpExitOnOpposite || !PositionSelect(_Symbol)) return true;
-   long type=PositionGetInteger(POSITION_TYPE);
-   bool opposite=(c.direction==MSZZ_DIR_LONG && type==POSITION_TYPE_SELL) ||
-                 (c.direction==MSZZ_DIR_SHORT && type==POSITION_TYPE_BUY);
-   if(!opposite) return true;
-   if(!g_trade.PositionClose(_Symbol))
+   if(!InpVerboseLog) return;
+   PrintFormat("MSZZ OWNERSHIP %s mode=%s symbol_total=%d owned=%d long=%d short=%d manual=%d foreign=%d err=%s",
+               status,CMSZZPositionOwnership::AccountModeText(snapshot.account_mode),snapshot.total_symbol_positions,
+               snapshot.owned_positions,snapshot.owned_longs,snapshot.owned_shorts,
+               snapshot.manual_positions,snapshot.foreign_positions,snapshot.error_reason);
+}
+
+bool RefreshOwnership(string &reason)
+{
+   reason="";
+   if(!g_ownership.Refresh())
    {
-      PrintFormat("MSZZ opposite close failed retcode=%u %s",g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
+      MSZZOwnershipSnapshot failed=g_ownership.Snapshot();
+      JournalOwnership(failed,"REFRESH_FAILED");
+      reason=(failed.error_reason!="" ? failed.error_reason : "ownership refresh failed");
       return false;
    }
+   JournalOwnership(g_ownership.Snapshot(),"REFRESHED");
+   return true;
+}
+
+bool ApplyOwnershipPreflight(const ENUM_MSZZ_DIRECTION desired,string &reason)
+{
+   reason="";
+   if(!RefreshOwnership(reason)) return false;
+
+   MSZZOwnershipSnapshot before=g_ownership.Snapshot();
+   if(!g_ownership.ExecutionAllowedForAccountMode(reason)) return false;
+
+   if(!g_ownership.CloseOwnedOpposite(g_trade,desired,InpExitOwnedOpposite,reason)) return false;
+
+   if(InpExitOwnedOpposite && ((desired==MSZZ_DIR_LONG && before.owned_shorts>0) ||
+                               (desired==MSZZ_DIR_SHORT && before.owned_longs>0)))
+   {
+      if(!RefreshOwnership(reason)) return false;
+   }
+
+   MSZZOwnershipSnapshot after=g_ownership.Snapshot();
+   if(!CMSZZPositionOwnershipPolicy::CanOpen(after,InpOneOwnedPositionPerSymbol,reason)) return false;
    return true;
 }
 
@@ -156,8 +187,13 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
    }
    double volume=g_execution_guard.NormalizeVolume(InpFixedLots);
    if(volume<=0.0){ prepared.reason="volume normalization failed"; JournalCandidate(prepared,"REJECT_VOLUME",cluster.cluster_id); return false; }
-   if(!CloseOppositeIfNeeded(prepared)){ JournalCandidate(prepared,"REJECT_OPPOSITE_CLOSE_FAILED",cluster.cluster_id); return false; }
-   if(InpOnePositionPerSymbol && HasSymbolPosition()){ JournalCandidate(prepared,"REJECT_POSITION_EXISTS",cluster.cluster_id); return false; }
+
+   if(!ApplyOwnershipPreflight(prepared.direction,reason))
+   {
+      prepared.reason=reason;
+      JournalCandidate(prepared,"REJECT_OWNERSHIP",cluster.cluster_id);
+      return false;
+   }
 
    g_trade.SetExpertMagicNumber(InpMagic);
    g_trade.SetDeviationInPoints(InpDeviationPoints);
@@ -223,17 +259,31 @@ void ProcessClosedBar()
 
 int OnInit()
 {
-   if(InpFastATRLen<1 || InpMedATRLen<1 || InpSlowATRLen<1 || InpFastATRMult<=0.0 ||
+   if(InpMagic<=0 || InpFastATRLen<1 || InpMedATRLen<1 || InpSlowATRLen<1 || InpFastATRMult<=0.0 ||
       InpMedATRMult<=0.0 || InpSlowATRMult<=0.0 || InpRiskReward<=0.0 || InpHistoryBars<300)
       return INIT_PARAMETERS_INCORRECT;
-   g_trade.SetExpertMagicNumber(InpMagic); g_trade.SetDeviationInPoints(InpDeviationPoints);
+
+   g_trade.SetExpertMagicNumber(InpMagic);
+   g_trade.SetDeviationInPoints(InpDeviationPoints);
    if(!g_execution_guard.Load(_Symbol)) return INIT_FAILED;
+
+   g_ownership.Configure(_Symbol,InpMagic);
+   string ownership_reason;
+   if(!RefreshOwnership(ownership_reason))
+   {
+      PrintFormat("MSZZ ownership initialization failed: %s",ownership_reason);
+      return INIT_FAILED;
+   }
+
    g_event_store.Configure(_Symbol,_Period,InpMagic,InpMaxPersistentEvents);
    if(!g_event_store.Load()) return INIT_FAILED;
+
    Print(!LiveExecutionAuthorized() ?
          "MSZZ initialized in SHADOW posture. Three live gates are required." :
          "MSZZ WARNING: LIVE EXECUTION AUTHORIZED by all three gates.");
-   PrintFormat("MSZZ event store loaded count=%d file=%s",g_event_store.Count(),g_event_store.Filename());
+   PrintFormat("MSZZ account mode=%s event store loaded count=%d file=%s",
+               CMSZZPositionOwnership::AccountModeText(g_ownership.AccountMode()),
+               g_event_store.Count(),g_event_store.Filename());
    return INIT_SUCCEEDED;
 }
 
