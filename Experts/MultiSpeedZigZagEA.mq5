@@ -2,7 +2,7 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.320"
+#property version   "0.330"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
@@ -15,6 +15,7 @@
 #include <MultiSpeedZigZag/Execution/PositionOwnershipPolicy.mqh>
 #include <MultiSpeedZigZag/Execution/ExecutionIntentStore.mqh>
 #include <MultiSpeedZigZag/Execution/ExecutionReconciler.mqh>
+#include <MultiSpeedZigZag/Execution/IntentStateMachine.mqh>
 
 input group "═══ Operating Mode ═══"
 input bool   InpShadowOnly=true;
@@ -278,9 +279,19 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
    intent.submission_attempts=1;
    intent.broker_retcode=g_trade.ResultRetcode();
    intent.broker_result_text=g_trade.ResultRetcodeDescription();
+   // D010: routed through the state machine's TryTransition() instead of a
+   // direct field write. This transition is always legal given how intents
+   // are constructed above (always starts PERSISTED), but the gate means a
+   // future refactor that changes construction order gets caught here
+   // instead of silently corrupting the record. On rejection, TryTransition
+   // leaves intent.execution_state untouched (still PERSISTED) -- the D009
+   // reconciler already fails a stuck PERSISTED intent closed to
+   // RECOVERY_REQUIRED on the next restart, so this is not a new gap.
+   string transition_reason;
    if(ok)
    {
-      intent.execution_state=(int)MSZZ_INTENT_BROKER_ACCEPTED;
+      if(!CMSZZIntentStateMachine::TryTransition(intent,MSZZ_INTENT_BROKER_ACCEPTED,transition_reason))
+         Print("MSZZ WARNING: post-accept state transition rejected: ",transition_reason);
       intent.order_ticket=g_trade.ResultOrder();
       intent.first_deal_ticket=g_trade.ResultDeal();
       // position_ticket is intentionally left unset here -- see DECISION_LOG.md
@@ -288,7 +299,8 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
    }
    else
    {
-      intent.execution_state=(int)MSZZ_INTENT_BROKER_REJECTED;
+      if(!CMSZZIntentStateMachine::TryTransition(intent,MSZZ_INTENT_BROKER_REJECTED,transition_reason))
+         Print("MSZZ WARNING: post-reject state transition rejected: ",transition_reason);
    }
    // Warn-only, not fail-closed: EventStore already durably marked this cluster
    // consumed above, so the anti-duplicate guarantee does not depend on this
@@ -413,16 +425,36 @@ int OnInit()
 
       MSZZExecutionIntent updated=all_intents[i];
       updated.last_reconciliation_time=TimeCurrent();
+      // D010: verdict-to-state transitions now go through the state machine
+      // instead of direct field writes. MATCHED_ACTIVE_POSITION/
+      // MATCHED_CLOSED_POSITION/CONSISTENT_REJECTION completing to
+      // POSITION_ACTIVE/POSITION_CLOSED/ABANDONED are new as of D010 -- D009
+      // deliberately left these transitions undone (see DECISION_LOG.md D009
+      // and D010). A rejected transition is journaled and the intent's
+      // execution_state is left exactly as loaded -- never forced.
+      string transition_reason;
       if(recon_results[i].verdict==MSZZ_RECONCILE_RECOVERY_REQUIRED)
       {
-         updated.execution_state=(int)MSZZ_INTENT_RECOVERY_REQUIRED;
+         if(!CMSZZIntentStateMachine::TryTransition(updated,MSZZ_INTENT_RECOVERY_REQUIRED,transition_reason))
+            PrintFormat("MSZZ WARNING: reconciliation state transition rejected intent=%s reason=%s",updated.intent_id,transition_reason);
          g_recovery_required=true;
       }
-      else if((recon_results[i].verdict==MSZZ_RECONCILE_MATCHED_ACTIVE_POSITION ||
-               recon_results[i].verdict==MSZZ_RECONCILE_MATCHED_CLOSED_POSITION) &&
-              updated.position_ticket==0)
+      else if(recon_results[i].verdict==MSZZ_RECONCILE_MATCHED_ACTIVE_POSITION)
       {
-         updated.position_ticket=recon_results[i].matched_ticket;
+         if(updated.position_ticket==0) updated.position_ticket=recon_results[i].matched_ticket;
+         if(!CMSZZIntentStateMachine::TryTransition(updated,MSZZ_INTENT_POSITION_ACTIVE,transition_reason))
+            PrintFormat("MSZZ WARNING: reconciliation state transition rejected intent=%s reason=%s",updated.intent_id,transition_reason);
+      }
+      else if(recon_results[i].verdict==MSZZ_RECONCILE_MATCHED_CLOSED_POSITION)
+      {
+         if(updated.position_ticket==0) updated.position_ticket=recon_results[i].matched_ticket;
+         if(!CMSZZIntentStateMachine::TryTransition(updated,MSZZ_INTENT_POSITION_CLOSED,transition_reason))
+            PrintFormat("MSZZ WARNING: reconciliation state transition rejected intent=%s reason=%s",updated.intent_id,transition_reason);
+      }
+      else if(recon_results[i].verdict==MSZZ_RECONCILE_CONSISTENT_REJECTION)
+      {
+         if(!CMSZZIntentStateMachine::TryTransition(updated,MSZZ_INTENT_ABANDONED,transition_reason))
+            PrintFormat("MSZZ WARNING: reconciliation state transition rejected intent=%s reason=%s",updated.intent_id,transition_reason);
       }
       if(!g_intent_store.UpdateIntent(updated))
          PrintFormat("MSZZ WARNING: reconciliation update failed for intent=%s error=%s",

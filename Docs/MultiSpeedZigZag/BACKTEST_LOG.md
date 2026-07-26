@@ -4,6 +4,81 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 (fifth entry) — Execution state machine, first increment (D010)
+
+Continuation of the same 17-phase execution-safety request; first increment of Phase 3 (see `DECISION_LOG.md` D010 for exactly what is and is not covered). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
+
+### Change
+
+- `Include/MultiSpeedZigZag/Execution/IntentStateMachine.mqh` (new file): `CMSZZIntentStateMachine`, a pure, static, no-MT5-API class — `IsLegalTransition(from, to)` (adjacency table for all 14 `ENUM_MSZZ_INTENT_STATE` values) and `TryTransition(intent, new_state, reason)` (gated setter, leaves the struct unchanged on rejection).
+- `Experts/MultiSpeedZigZagEA.mq5`: `ExecuteCluster()`'s post-submission `BROKER_ACCEPTED`/`BROKER_REJECTED` direct assignments replaced with `TryTransition()` calls. `OnInit()`'s D009 reconciliation loop's `RECOVERY_REQUIRED` assignment likewise replaced; two new transitions added (`MATCHED_ACTIVE_POSITION`→`POSITION_ACTIVE`, `MATCHED_CLOSED_POSITION`→`POSITION_CLOSED`) plus one more (`CONSISTENT_REJECTION`→`ABANDONED`, marking a confirmed rejection terminal so it stops being re-examined every restart). `#property version` bumped `0.320` → `0.330`.
+
+### Compile
+
+```
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_StateMachine.mq5" /log
+Result: 0 errors, 0 warnings, 539 ms elapsed
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Experts\MultiSpeedZigZagEA.mq5" /log
+MQL5\Experts\MultiSpeedZigZagEA.mq5(5,11) : warning 68: version '0.330' is incompatible with MQL5 Market, must be xxx.yyy
+Result: 0 errors, 1 warnings, 3851 ms elapsed
+```
+
+Isolated instance: all eight targets (Ownership, Determinism, Clusters, Parity, IntentStore, Reconciler, StateMachine, EA) recompiled clean, hash-verified identical source to the live tree before compiling.
+
+### Deterministic transition-legality test
+
+`[StartUp] Script=MultiSpeedZigZagTests\Test_MSZZ_StateMachine, Symbol=XAUUSD, Period=M5` on the isolated instance:
+
+```
+PASS: PERSISTED -> BROKER_ACCEPTED is legal
+PASS: PERSISTED -> BROKER_REJECTED is legal
+PASS: PERSISTED -> RECOVERY_REQUIRED is legal
+PASS: BROKER_ACCEPTED -> POSITION_ACTIVE is legal
+PASS: BROKER_ACCEPTED -> RECOVERY_REQUIRED is legal
+PASS: POSITION_ACTIVE -> POSITION_CLOSED is legal
+PASS: POSITION_ACTIVE -> RECOVERY_REQUIRED is legal
+PASS: BROKER_REJECTED -> ABANDONED is legal
+PASS: every non-terminal state can transition to RECOVERY_REQUIRED
+PASS: every non-terminal state can transition to ABANDONED
+PASS: POSITION_CLOSED has zero legal outgoing transitions to any other state
+PASS: ABANDONED has zero legal outgoing transitions to any other state
+PASS: PERSISTED -> PERSISTED (idempotent) is legal
+PASS: POSITION_CLOSED -> POSITION_CLOSED (idempotent, even though terminal) is legal
+PASS: ABANDONED -> ABANDONED (idempotent, even though terminal) is legal
+PASS: CREATED -> POSITION_ACTIVE (skipping the entire lifecycle) is rejected
+PASS: PERSISTED -> POSITION_CLOSED (skipping fill/active) is rejected
+PASS: BROKER_REJECTED -> POSITION_ACTIVE is rejected
+PASS: TryTransition returns true for a legal transition
+PASS: TryTransition applies the new state on success
+PASS: TryTransition leaves reason empty on success
+PASS: TryTransition returns false for an illegal transition
+PASS: TryTransition leaves execution_state unchanged on a rejected transition
+PASS: TryTransition leaves every other field byte-for-byte unchanged on a rejected transition, not partially mutated
+PASS: TryTransition sets a non-empty reason on rejection
+MSZZ state machine test complete failures=0
+```
+
+25/25 assertions, `failures=0`.
+
+### Shadow Strategy Tester regression
+
+Two new configs (`shadow_d010_short.ini`, `shadow_d010_long.ini`), same `[Tester]` shape as every prior baseline in this series.
+
+- **Short window** (2026.07.20–2026.07.24): `last test passed with result "successfully finished" in 0:00:01.458`.
+- **Long window** (2026.07.01–2026.07.24): `last test passed with result "successfully finished" in 0:00:06.877`. `MSZZ_Shadow_Report_D010_Long.htm`: 0 Total Trades, 0 Total Deals. This run's log window sliced out of the cumulative daily Tester-agent log by timestamp: 431 `RAW_CANDIDATE` + 178 `MSZZ SHADOW` lines — identical to the D006/D008/D009 baseline.
+
+Both runs: `MSZZ initialized in SHADOW posture`, `MSZZ account mode=HEDGING`, `MSZZ intent store loaded count=0 unknown=0` logged at `OnInit()`, zero `MSZZ RECONCILE`/`MSZZ WARNING`/error lines (shadow mode never creates intents, so there is nothing for the reconciler or the new state-machine transitions to act on).
+
+### Full regression
+
+Ownership, Determinism, Clusters, IntentStore, Reconciler all re-ran on the isolated instance and reported `failures=0` (or `TEST PASS` for Determinism's single assertion), unchanged from their established baselines.
+
+### Not exercised
+
+Exactly as every prior decision in this series: the new transition logic has only run against deterministic mock data (the unit test) and the isolated demo account's genuinely empty broker history (the shadow regression). None of the new `POSITION_ACTIVE`/`POSITION_CLOSED`/`ABANDONED` transitions have ever fired against a real broker record — no live order has been placed on this branch.
+
+---
+
 ## 2026-07-26 (fourth entry) — Broker order/deal/position reconciliation wired into the EA (D009)
 
 Continuation of the same 17-phase execution-safety request; first increment of Phase 2 (see `DECISION_LOG.md` D009 for exactly what is and is not covered). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
