@@ -295,3 +295,58 @@ Extend `Test_MSZZ_Determinism`/`Test_MSZZ_Clusters`/`Export_MSZZ_Parity`/`Test_M
 ### Demo-readiness implications
 
 **Still none.** This wires a second persistence gate into the live path, but the live path itself remains untested against a real order (all three live-execution gates stay closed in every test this decision covers). Phase 2 (broker-history reconciliation), Phase 3 (the actual execution state machine with legality-checked transitions), risk sizing, margin preflight, and account safeguards all remain unstarted. Demo execution is not brought closer by this decision beyond making the persisted evidence a future reconciler will need actually exist.
+
+---
+
+## D009 — Broker order/deal/position reconciliation, first increment
+
+**Date:** 2026-07-26
+**Status:** Accepted
+
+### Scope of this increment
+
+Phase 2 of the 2026-07-26 execution-safety request lists ~20 reconciliation scenarios (pending orders, partial fills, multi-deal orders, manual/SL/TP closes, externally modified stops, truncated comments, terminal crashes at various points, netting aggregation, etc.). This decision covers a **first, deliberately bounded increment**, not all of them, following the same scope discipline as D007/D008. Covered now: an intent that is still `PERSISTED` (no confirmed broker outcome) being matched against live positions, open orders, and closed-deal history by ticket and by a new comment correlation token; a `BROKER_REJECTED` intent being confirmed as having no matching position (the consistent, expected case); and — critically — an intent for which nothing conclusive is found, which **fails closed to `RECOVERY_REQUIRED`** rather than being assumed abandoned. Explicitly deferred to a later increment: pending-order and partial-fill scenarios (this EA only ever submits market orders today, so these are not currently reachable and are not fabricated as tested coverage), externally-modified-stop detection (that is Phase 4, protection verification), and netting-account aggregation beyond "more than one unresolved intent on a netting account is itself an ambiguity, fail closed" (see below).
+
+### Correlation token
+
+The current trade comment (`"MSZZC|"+strategy_id`) does not correlate to any specific intent. Add `MSZZCorrelationToken(intent_id)`: an 8-hex-character FNV-1a hash of the intent ID (reusing D007's proven checksum algorithm as a free function), embedded in the trade comment as `"MI"+token` (10 characters total, well inside MT5's comment length limit, unlike a full cluster ID which would not fit). This is explicitly a **correlation aid, not a primary key** — matching by `order_ticket`/`position_ticket` (recorded locally by D008 at submission time) is always tried first; the comment token is the fallback for exactly the cases where the local ticket is missing (crash before the D008 `UpdateIntent()` call) or a ticket alone is insufficient to disambiguate.
+
+### Decision: policy/live-query split, mirroring D005
+
+Exactly as `PositionOwnership.mqh`/`PositionOwnershipPolicy.mqh` split live MT5 API calls from a pure, deterministically-testable policy layer, this decision introduces:
+
+- **`CMSZZReconciliationPolicy`** (pure): given an array of `MSZZExecutionIntent` and an array of injected `MSZZBrokerRecord` (ticket, symbol, magic, direction, volume, price, time, comment token, record type [open position / history order / history deal], and — for deals — the owning position ID), classifies every non-terminal intent into one verdict: `NO_ACTION` (already terminal, e.g. `POSITION_CLOSED`/`ABANDONED`), `MATCHED_ACTIVE_POSITION`, `MATCHED_CLOSED_POSITION`, `CONSISTENT_REJECTION` (locally `BROKER_REJECTED` and no matching broker record exists — expected, not ambiguous), or `RECOVERY_REQUIRED` (anything else, including "nothing found" for a `PERSISTED` intent, multiple candidate matches, or more than one unresolved intent simultaneously on a netting-mode account).
+- **`CMSZZExecutionReconciler`** (live): builds the `MSZZBrokerRecord` array from `PositionsTotal()`/`PositionGetTicket()`, `HistorySelect()` + `HistoryDealsTotal()`/`HistoryDealGetTicket()`, and `HistoryOrdersTotal()`/`HistoryOrderGetTicket()` — filtered to the configured symbol and magic number (never adopting a foreign-magic record, consistent with D005), deduplicated by ticket — then delegates to `CMSZZReconciliationPolicy` for the actual classification.
+
+### Failure policy (per the original instruction, restated precisely for this component)
+
+- A `PERSISTED` intent with no matching broker record found is **not** assumed abandoned — "never assume a missing local callback means broker rejection" applies exactly here. It is marked `RECOVERY_REQUIRED`.
+- More than one non-terminal intent found on a **netting** account is itself ambiguous (a netting account has one aggregated position per symbol, which cannot be unambiguously attributed to multiple distinct intents) and is marked `RECOVERY_REQUIRED` for all of them, not resolved by guessing.
+- Any intent resolving to `RECOVERY_REQUIRED` blocks new live execution for that symbol/magic until cleared. No automated recovery/clearing workflow exists yet in this increment — clearing is a manual, out-of-band operational step. This is a known, accepted limitation of a first increment, not a silent gap.
+- A conflicting match (the same broker ticket appears to satisfy two different intents) halts execution and journals the exact conflict, per the original instruction, rather than picking one arbitrarily.
+
+### Rejected alternatives
+
+- **Embedding the full cluster ID in the trade comment**: rejected — MT5 comment length limits (well under the ~76+ character length these IDs can reach, per D004) make this structurally impossible, not just impractical.
+- **Trusting ticket fields alone with no comment-token fallback**: rejected — the exact scenario this component exists to handle (terminal crash between order submission and the local ticket being recorded) is precisely the case where the local ticket is missing and a fallback correlation signal is needed.
+- **Attempting netting-account position-to-intent disambiguation via volume/price heuristics**: rejected as unsound — a netting account's single aggregated position cannot be soundly decomposed back into which specific intents contributed to it without additional broker-side data this component does not have. Failing closed is the honest answer, not a heuristic that could be wrong.
+
+### Migration consequences
+
+None — this is additive. Existing `ExecutionIntentStore` records without a `last_reconciliation_time`/`protection_status` set are handled the same as any other `PERSISTED` record.
+
+### Restart behavior
+
+The reconciler runs once at `OnInit()`, after `ExecutionIntentStore::Load()`, for every loaded intent not already in a terminal state. `last_reconciliation_time` is updated on every intent examined, whether or not its verdict changed, so operators can see when reconciliation last ran.
+
+### Account-mode implications
+
+Directly relevant for the first time: reconciliation behavior differs by account mode specifically for the netting-ambiguity rule above. Hedging accounts do not have this specific ambiguity (multiple simultaneous positions are normal and individually ticketed), though the general "one broker record can only satisfy one intent" conflict rule still applies to all modes.
+
+### Testing requirements
+
+Deterministic, broker-independent tests for `CMSZZReconciliationPolicy` covering: a terminal intent is left alone; a `PERSISTED` intent correctly matches an open position by ticket; by comment token when the ticket is missing; a `PERSISTED` intent matches a closed position via deal history; a `BROKER_REJECTED` intent with nothing found is `CONSISTENT_REJECTION`, not flagged; a `PERSISTED` intent with nothing found is `RECOVERY_REQUIRED`; a foreign-magic record is never considered a match; duplicate ticket rows in the observed-record list do not produce duplicate/inconsistent verdicts; two simultaneously non-terminal intents on a netting-mode account are both `RECOVERY_REQUIRED`; a record that would satisfy two different intents is treated as a conflict, not resolved arbitrarily.
+
+### Demo-readiness implications
+
+Still not sufficient alone. This increment gives the EA a real, tested, fail-closed answer to "did my last order actually happen and what state is it in now," which Phase 12's readiness gate explicitly requires — but risk sizing, margin preflight, account safeguards, the full execution state machine, and fault injection across the combined stack remain unstarted. The reconciler itself has only been exercised against deterministic mock data and the real (currently empty) broker history on the isolated demo account — it has not yet been exercised against a real, non-empty position/order/deal history, since no live order has ever been placed on this branch.
