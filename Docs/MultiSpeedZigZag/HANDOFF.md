@@ -10,6 +10,10 @@ Build a standalone MQL5 Expert Advisor around the existing three-speed ATR ZigZa
 
 Quant Beast work on `main` remains isolated from this branch.
 
+Isolated test-instance demo account credentials (Coinexx-Demo `870012`) and
+the standing authorization to fully abuse that account for testing are in
+`ISOLATED_TEST_ACCOUNT.md`.
+
 ## Validated baseline through commit `31f13b0`
 
 - Determinism test passed.

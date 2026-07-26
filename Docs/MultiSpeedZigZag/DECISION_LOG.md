@@ -712,3 +712,42 @@ Deterministic tests for `CMSZZRunSummaryPolicy` covering: `WinRate` with a mix o
 ### Demo-readiness / edge-research-readiness implications
 
 Same as D016: this is Track 2 (research infrastructure), does not touch D014's Phase 13 verdict, and — like D016 — has never executed against a real closed trade, so the run-summary aggregation itself remains unverified against real data until Stage A backtests are actually run.
+
+## D018 — Edge Discovery Sprint, Stage A pipeline validation: fix `average_fill_price` never assigned
+
+**Date:** 2026-07-26
+**Status:** Accepted
+
+### Scope of this increment
+
+D016/D017 built the trade-analytics export pipeline but, per both entries' own honest caveats, it had "never executed against a real closed trade." The first actual Stage A run (MediumBreakout, RiskReward=1.0, XAUUSD M5, full ~17-month history, 548 closed trades) is that first real exercise, and it surfaced a genuine bug: every row's `entry` field in `MSZZ_TradeAnalytics.csv` was `0.00000000`, and every `r_result`/`mfe_r`/`mae_r` value was consequently wrong — e.g. a SHORT trade whose `exit_reason` was `TP` (a win) showed `r_result=-0.9948` (reading as a loss). This is not a Stage A strategy finding; it is a data-correctness bug in infrastructure that would have silently invalidated every Stage A result if run against the full 32-config matrix before being caught.
+
+**In scope:** find and fix the root cause; re-validate against the same MediumBreakout run; nothing else. No strategy logic, no scoring, no exit-model code is touched.
+
+### Root cause
+
+`MSZZExecutionIntent.average_fill_price` (`ExecutionIntentStore.mqh:92`) is declared, serialized/deserialized by the intent-store persistence layer (`ExecutionIntentStore.mqh:203,288`), and read by `TradeAnalyticsExporter.mqh:224` (`double entry=intent.average_fill_price;`) exactly as D016 designed it. But nothing between intent construction and export ever *assigns* it a real value — `MultiSpeedZigZagEA.mq5:319` initializes it to `0.0` at intent creation, and no line after the order fills (`ExecuteCluster()`'s post-`g_trade.Buy()/Sell()` block, `MultiSpeedZigZagEA.mq5:353-394`, which already captures `order_ticket` from `g_trade.ResultOrder()` and `first_deal_ticket` from `g_trade.ResultDeal()`) ever writes the actual fill price into it. It is a field that was designed, plumbed through persistence, and consumed, but never populated — a gap that unit tests couldn't catch (D016/D017's tests inject known-good struct values directly) and that shadow regression couldn't catch either (shadow mode never creates a real intent). Only a real closed trade could expose it, which is exactly why D016 and D017 both flagged "unverified against a real closed trade" as a named, not-yet-closed risk rather than a pass.
+
+`filled_volume` (same struct, same `MultiSpeedZigZagEA.mq5:319` initializer) has the identical never-assigned gap, but nothing currently reads it (not part of the D016/D017 CSV schema), so it was fixed in the same pass as cheap, obviously-correct hygiene rather than treated as a second bug investigation.
+
+### Decision: assign both fields immediately after a successful `g_trade.Buy()/Sell()`, from the same `CTrade` result object already in scope
+
+`MultiSpeedZigZagEA.mq5:357-358` already reads `g_trade.ResultOrder()` and `g_trade.ResultDeal()` in the `if(ok)` block. Add `intent.average_fill_price=g_trade.ResultPrice();` and `intent.filled_volume=g_trade.ResultVolume();` alongside them — same source object, same block, no new API surface. This runs unconditionally once the order is accepted (`ok==true`), before the `PositionSelectByTicket()` branch, so both fields are populated even in the "ticket did not resolve to a live position" fallback path (`MultiSpeedZigZagEA.mq5:393`) — that path already leaves other fields (e.g. `position_ticket`) representing what's actually known, and the fill itself did happen (the order was accepted) regardless of whether the position lookup succeeded a moment later, so recording the fill price there is consistent, not a special case.
+
+### Rejected alternatives
+
+- **Deriving entry price at export time from `PositionGetDouble(POSITION_PRICE_OPEN)` or the opening deal's `DEAL_PRICE` instead of storing it on the intent**: rejected — by the time a position closes and `ExportClosedTrade()` runs, `PositionSelectByTicket()` no longer resolves (the position is gone), and re-deriving from `HistoryDealGetDouble(DEAL_PRICE)` on the opening deal would require a second history lookup beyond the closing-deal lookup `DetectClosedPositions()` already does (D016) — strictly more code and a second point of failure, to reconstruct a value that is already known for free at fill time and just needs to be saved.
+- **Fixing only `average_fill_price` and leaving `filled_volume` as a separately-tracked known issue**: rejected — the fix is the same shape, the same block, one extra line, and leaving a field with an identical bug sitting right next to the one just fixed (for no cost saved) would just be manufacturing a future "wait, this one's broken too" moment for whoever eventually reads `filled_volume`.
+- **Re-running all of D016/D017's existing deterministic unit tests as sufficient proof of the fix**: rejected as sufficient on its own — those tests inject known-good struct values and would pass whether or not this field is ever assigned in the live EA path, which is exactly how this bug shipped through two prior decisions undetected. The fix is only actually verified by re-running the same real Stage A backtest and confirming the CSV changes shape (see Verification).
+
+### Migration consequences
+
+None — no schema change, no CSV column change. Existing `MSZZ_TradeAnalytics.csv`/`MSZZ_RunSummary.csv` output from the one MediumBreakout run made before this fix is corrupt and must be discarded, not merged into any Stage A master table.
+
+### Testing requirements
+
+No new deterministic unit test — the pure policy functions (`RMultiple`, `ExcursionInR`) were already correct and already tested (D016); the bug was entirely in live-code field assignment, which this codebase's established pattern (D009 onward) verifies via full regression + shadow regression + an actual exercised run, not a mocked unit test. Verification here is empirical: re-run the exact same MediumBreakout Stage A config and confirm `entry` is a real, non-zero XAUUSD price on every row, and that winning trades (`exit_reason=TP`) show positive-sign `r_result` for both directions.
+
+### Demo-readiness / edge-research-readiness implications
+
+Track 2 (research infrastructure) only — does not touch D014's Phase 13 execution-safety verdict. This closes D016/D017's own named open risk ("unverified against a real closed trade") for the `average_fill_price`-dependent fields specifically. The one MediumBreakout run made before this fix is not usable as a Stage A result and will be re-run after the fix is compiled, synced, and regression-clean.
