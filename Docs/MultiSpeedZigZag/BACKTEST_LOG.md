@@ -4,6 +4,66 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 (sixth entry) — Protection verification and repair, first increment (D011)
+
+Continuation of the same 17-phase execution-safety request; first increment of Phase 4 (see `DECISION_LOG.md` D011 for exactly what is and is not covered). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
+
+### Change
+
+- `Include/MultiSpeedZigZag/Execution/ProtectionGuard.mqh` (new file): `CMSZZProtectionPolicy` (pure `NeedsRepair()`) + `CMSZZProtectionGuard` (live `VerifyAndRepair()`), per the D005/D009/D010 policy/live-query split pattern.
+- `Experts/MultiSpeedZigZagEA.mq5`: `ExecuteCluster()`'s `ok==true` branch now sets `intent.position_ticket=intent.order_ticket`, transitions `BROKER_ACCEPTED`→`POSITION_ACTIVE` if the position resolves, and calls `VerifyAndRepair`, transitioning to `PROTECTION_FAILED` (+ `g_recovery_required=true`) on repair failure. `OnInit()`'s `MATCHED_ACTIVE_POSITION` reconciliation branch runs the same check. `#property version` bumped `0.330` → `0.340`.
+
+### Compile
+
+```
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_Protection.mq5" /log
+Result: 0 errors, 0 warnings, 540 ms elapsed
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Experts\MultiSpeedZigZagEA.mq5" /log
+MQL5\Experts\MultiSpeedZigZagEA.mq5(5,11) : warning 68: version '0.340' is incompatible with MQL5 Market, must be xxx.yyy
+Result: 0 errors, 1 warnings, 3171 ms elapsed
+```
+
+Isolated instance: all nine targets (Ownership, Determinism, Clusters, Parity, IntentStore, Reconciler, StateMachine, Protection, EA) recompiled clean, hash-verified identical source to the live tree before compiling.
+
+### Deterministic tolerance-comparison test
+
+`[StartUp] Script=MultiSpeedZigZagTests\Test_MSZZ_Protection, Symbol=XAUUSD, Period=M5` on the isolated instance:
+
+```
+PASS: exact-match SL/TP needs no repair
+PASS: SL off by 1.00 (far beyond tolerance) needs repair
+PASS: TP off by 1.00 (far beyond tolerance) needs repair
+PASS: both SL and TP off needs repair
+PASS: unset (zero) SL when a nonzero SL was expected needs repair
+PASS: unset (zero) TP when a nonzero TP was expected needs repair
+PASS: unset (zero) SL and TP when both were expected needs repair
+PASS: sub-tolerance floating-point noise does not spuriously trigger repair
+PASS: an offset well inside half-point tolerance needs no repair
+PASS: an offset of a full point (beyond half-point tolerance) needs repair
+MSZZ protection test complete failures=0
+```
+
+10/10 assertions, `failures=0`.
+
+### Shadow Strategy Tester regression
+
+Two new configs (`shadow_d011_short.ini`, `shadow_d011_long.ini`), same `[Tester]` shape as every prior baseline in this series.
+
+- **Short window** (2026.07.20–2026.07.24): `last test passed with result "successfully finished" in 0:00:01.172`.
+- **Long window** (2026.07.01–2026.07.24): `last test passed with result "successfully finished" in 0:00:02.882`. `MSZZ_Shadow_Report_D011_Long.htm`: 0 Total Trades, 0 Total Deals. This run's log window sliced out of the cumulative daily Tester-agent log by timestamp: 431 `RAW_CANDIDATE` + 178 `MSZZ SHADOW` lines — identical to the D006/D008/D009/D010 baseline.
+
+Both runs: `MSZZ initialized in SHADOW posture`, `MSZZ account mode=HEDGING`, `MSZZ intent store loaded count=0 unknown=0` logged at `OnInit()`, zero `MSZZ RECONCILE`/`MSZZ PROTECTION`/`MSZZ WARNING`/error lines (shadow mode never creates intents or opens positions, so there is nothing for the reconciler, state machine, or protection guard to act on).
+
+### Full regression
+
+Ownership, Determinism, Clusters, IntentStore, Reconciler, StateMachine all re-ran on the isolated instance and reported `failures=0` (or `TEST PASS` for Determinism's single assertion), unchanged from their established baselines.
+
+### Not exercised
+
+Exactly as every prior decision in this series: the new protection-verification logic has only run against deterministic mock data (the unit test) and the isolated demo account's genuinely empty broker history (the shadow regression, where the guard is never invoked since no position exists). `VerifyAndRepair` has never run against a real position — no live order has been placed on this branch. The hedging-account-specific `position_ticket=order_ticket` assumption is therefore also unverified against a real fill.
+
+---
+
 ## 2026-07-26 (fifth entry) — Execution state machine, first increment (D010)
 
 Continuation of the same 17-phase execution-safety request; first increment of Phase 3 (see `DECISION_LOG.md` D010 for exactly what is and is not covered). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.

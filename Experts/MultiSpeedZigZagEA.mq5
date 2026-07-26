@@ -2,7 +2,7 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.330"
+#property version   "0.340"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
@@ -16,6 +16,7 @@
 #include <MultiSpeedZigZag/Execution/ExecutionIntentStore.mqh>
 #include <MultiSpeedZigZag/Execution/ExecutionReconciler.mqh>
 #include <MultiSpeedZigZag/Execution/IntentStateMachine.mqh>
+#include <MultiSpeedZigZag/Execution/ProtectionGuard.mqh>
 
 input group "═══ Operating Mode ═══"
 input bool   InpShadowOnly=true;
@@ -69,6 +70,7 @@ CMSZZExecutionGuard            g_execution_guard;
 CMSZZPositionOwnership         g_ownership;
 CMSZZExecutionIntentStore      g_intent_store;
 CMSZZExecutionReconciler       g_reconciler;
+CMSZZProtectionGuard           g_protection;
 CTrade                         g_trade;
 datetime                       g_last_bar=0;
 string                         g_instance_id="";
@@ -172,13 +174,15 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
    if(cluster.combined_score<InpMinScore){ JournalCandidate(owner,"REJECT_SCORE",cluster.cluster_id); return false; }
    if(EventConsumed(persistence_id)){ JournalCandidate(owner,"REJECT_DUPLICATE_CLUSTER",cluster.cluster_id); return false; }
 
-   // D009: a RECOVERY_REQUIRED intent (unresolved broker state from a prior
-   // run) blocks all new live execution for this symbol/magic until an
-   // operator clears it out-of-band. See DECISION_LOG.md D009 failure policy.
+   // D009/D011: a RECOVERY_REQUIRED (unresolved broker state) or
+   // PROTECTION_FAILED (an open position whose SL/TP could not be repaired)
+   // intent blocks all new live execution for this symbol/magic until an
+   // operator clears it out-of-band. See DECISION_LOG.md D009 failure policy
+   // and D011 for why PROTECTION_FAILED shares this same gate.
    if(g_recovery_required)
    {
       MSZZCandidate rejected=owner;
-      rejected.reason="one or more execution intents require manual recovery (see MSZZ RECONCILE log at startup)";
+      rejected.reason="one or more execution intents require manual recovery (see MSZZ RECONCILE/PROTECTION log)";
       JournalCandidate(rejected,"REJECT_RECOVERY_REQUIRED",cluster.cluster_id);
       return false;
    }
@@ -294,8 +298,42 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
          Print("MSZZ WARNING: post-accept state transition rejected: ",transition_reason);
       intent.order_ticket=g_trade.ResultOrder();
       intent.first_deal_ticket=g_trade.ResultDeal();
-      // position_ticket is intentionally left unset here -- see DECISION_LOG.md
-      // D008: deriving it correctly (especially under hedging) is Phase 2's job.
+
+      // D011: on a hedging account (the only mode this EA has ever run
+      // against), a brand-new position's ticket equals the opening order's
+      // ticket -- see DECISION_LOG.md D011 for why this is documented as a
+      // limitation, not generalized to netting. If the position resolves,
+      // mark it active immediately (previously this only happened at the
+      // next restart's reconciliation, D010) and verify/repair protection
+      // in the same tick rather than waiting for a future restart.
+      intent.position_ticket=intent.order_ticket;
+      if(PositionSelectByTicket(intent.position_ticket))
+      {
+         if(!CMSZZIntentStateMachine::TryTransition(intent,MSZZ_INTENT_POSITION_ACTIVE,transition_reason))
+            Print("MSZZ WARNING: post-fill state transition rejected: ",transition_reason);
+
+         string protection_reason;
+         ENUM_MSZZ_PROTECTION_VERDICT verdict=g_protection.VerifyAndRepair(
+            g_trade,intent.position_ticket,prepared.stop,prepared.target,protection_reason);
+         PrintFormat("MSZZ PROTECTION verdict=%s ticket=%I64u reason=%s",
+                     MSZZProtectionVerdictText(verdict),intent.position_ticket,protection_reason);
+         if(verdict==MSZZ_PROTECTION_REPAIR_FAILED || verdict==MSZZ_PROTECTION_POSITION_NOT_FOUND)
+         {
+            if(!CMSZZIntentStateMachine::TryTransition(intent,MSZZ_INTENT_PROTECTION_FAILED,transition_reason))
+               Print("MSZZ WARNING: post-protection-failure state transition rejected: ",transition_reason);
+            g_recovery_required=true;
+         }
+      }
+      else
+      {
+         // Ticket did not resolve to a live position -- do not force an
+         // unproven POSITION_ACTIVE. Leave at BROKER_ACCEPTED; D009's
+         // reconciler will pick up this stuck intent at the next restart
+         // exactly as it already does for any other unresolved case, and
+         // clear position_ticket back to unset rather than keep a ticket
+         // that never actually resolved.
+         intent.position_ticket=0;
+      }
    }
    else
    {
@@ -444,6 +482,22 @@ int OnInit()
          if(updated.position_ticket==0) updated.position_ticket=recon_results[i].matched_ticket;
          if(!CMSZZIntentStateMachine::TryTransition(updated,MSZZ_INTENT_POSITION_ACTIVE,transition_reason))
             PrintFormat("MSZZ WARNING: reconciliation state transition rejected intent=%s reason=%s",updated.intent_id,transition_reason);
+
+         // D011: a position that survived a restart gets the same protection
+         // check as one opened in the current session -- see DECISION_LOG.md
+         // D011. This extends the same VerifyAndRepair call used immediately
+         // post-fill in ExecuteCluster() to the restart/reconciliation path.
+         string protection_reason;
+         ENUM_MSZZ_PROTECTION_VERDICT verdict=g_protection.VerifyAndRepair(
+            g_trade,updated.position_ticket,updated.requested_stop,updated.requested_target,protection_reason);
+         PrintFormat("MSZZ PROTECTION verdict=%s ticket=%I64u reason=%s",
+                     MSZZProtectionVerdictText(verdict),updated.position_ticket,protection_reason);
+         if(verdict==MSZZ_PROTECTION_REPAIR_FAILED || verdict==MSZZ_PROTECTION_POSITION_NOT_FOUND)
+         {
+            if(!CMSZZIntentStateMachine::TryTransition(updated,MSZZ_INTENT_PROTECTION_FAILED,transition_reason))
+               PrintFormat("MSZZ WARNING: reconciliation state transition rejected intent=%s reason=%s",updated.intent_id,transition_reason);
+            g_recovery_required=true;
+         }
       }
       else if(recon_results[i].verdict==MSZZ_RECONCILE_MATCHED_CLOSED_POSITION)
       {
