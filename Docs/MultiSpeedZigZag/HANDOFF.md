@@ -112,10 +112,16 @@ The exporter writes manifest, bars, pivots, snapshots, candidates, and clusters.
 - Strategy candidates sharing one structural origin are clustered.
 - One selected cluster may produce at most one action unless staged entry is explicitly added later.
 
+## 2026-07-25 worklog — compile, repair, and shadow-test pass
+
+Compiled all four MSZZ files for the first time (previously unverified). Fixed one real compile blocker (illegal local reference to an array element in `OpportunityClusterEngine.mqh`) and one crash-risk defect (`ZeroMemory()` on string-containing structs in five sites) — the fix for the latter itself introduced an uninitialized-field bug that was caught via runtime evidence (a garbage pivot row in a real parity export) and corrected with explicit field-by-field resets. Ran `Test_MSZZ_Determinism` (PASS) and `Test_MSZZ_Clusters` (8/8 PASS, failures=0) against real XAUUSD M5 history on an isolated demo account. Ran `Export_MSZZ_Parity` (1000 bars, default ATR settings) and found a real defect: cluster IDs are malformed (pipe-delimited origin IDs nested inside another pipe-delimited ID). Ran the EA in the Strategy Tester in shadow mode over 2026.07.01–2026.07.24: zero orders/deals/trades, 178 clusters correctly shadow-journaled and consumed with zero duplicates. Directly verified the `CMSZZEventStore` component persists across a genuine process restart; a full EA-level restart test on a live/demo chart remains open (see KNOWN_ISSUES.md and BACKTEST_LOG.md for why the Tester-based attempt was invalid). Full evidence, exact commands, and file paths are in `BACKTEST_LOG.md`.
+
+All work was done in an isolated portable MT5 test instance (`~/MT5-MSZZ-TEST`) on a freshly self-registered demo account, per explicit instruction, to avoid touching the live/main MT5 installation or its QuantBeast state.
+
 ## Known blockers
 
-1. MetaEditor compile remains unverified.
-2. Determinism, cluster, event-store, and parity scripts have not been executed.
+1. ~~MetaEditor compile remains unverified.~~ Resolved 2026-07-25 — all four files compile (0 errors; EA has one reviewed/accepted warning, see KNOWN_ISSUES.md).
+2. ~~Determinism, cluster, event-store, and parity scripts have not been executed.~~ Resolved 2026-07-25 for determinism/cluster/parity; event-store persistence verified at the component level. Full EA restart-on-chart test still open.
 3. Full-history rebuild performance has not been measured.
 4. Position/order ownership reconstruction is absent.
 5. Account-risk sizing, margin preflight, daily limits, trade-count limits, and emergency kill controls are absent.
@@ -127,17 +133,20 @@ The exporter writes manifest, bars, pivots, snapshots, candidates, and clusters.
 
 ## Next actions
 
-1. Compile every EA, header, and test script in MetaEditor.
-2. Fix all errors and review every warning.
-3. Run deterministic and cluster tests.
-4. Add executable tests for synthetic pivot fixtures.
-5. Run the MQL5 parity exporter on a fixed XAUUSD interval.
-6. Produce the matching Pine export.
-7. Resolve trendline geometry from parity evidence.
+1. ~~Compile every EA, header, and test script in MetaEditor.~~ Done 2026-07-25.
+2. ~~Fix all errors and review every warning.~~ Done 2026-07-25 (one warning reviewed and accepted, not eliminated — see KNOWN_ISSUES.md).
+3. ~~Run deterministic and cluster tests.~~ Done 2026-07-25 — both PASS.
+4. Add executable tests for synthetic pivot fixtures (F01–F12 in SYNTHETIC_FIXTURES.md are still specifications only, not executable tests).
+5. ~~Run the MQL5 parity exporter on a fixed XAUUSD interval.~~ Done 2026-07-25 (1000 bars, default ATR settings). Found and left open: malformed cluster IDs (KNOWN_ISSUES.md).
+6. Produce the matching Pine export and run the actual cross-platform comparison — still not done.
+7. Resolve trendline geometry from parity evidence — still open.
 8. Add position/order ownership reconstruction.
 9. Add percentage-risk sizing, margin checks, daily limits, and kill switches.
 10. Implement reserved stateful strategies one at a time.
-11. Collect shadow evidence before demo execution.
+11. ~~Collect shadow evidence before demo execution.~~ Done 2026-07-25 — shadow Strategy Tester run over 24 days, zero orders, 178 clusters journaled/consumed with zero duplicates.
+12. New: fix the malformed cluster-ID encoding (needs a DECISION_LOG entry first).
+13. New: add an `ACCOUNT_MARGIN_MODE` check or otherwise resolve the netting-account assumption in `CloseOppositeIfNeeded`/`InpOnePositionPerSymbol` before any hedging-account live/demo use.
+14. New: run a full EA restart test on a live/demo chart across real elapsed bar-closes (the Tester-based attempt in this pass was methodologically invalid — see KNOWN_ISSUES.md).
 
 ## Agent procedure
 
