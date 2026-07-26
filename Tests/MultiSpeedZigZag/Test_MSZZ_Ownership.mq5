@@ -116,5 +116,40 @@ void OnStart()
    count=CMSZZPositionOwnershipPolicy::CollectOppositeOwnedTickets(records,ArraySize(records),MSZZ_DIR_NONE,tickets);
    AssertTrue(count==0,"no tickets collected for no desired direction",failures);
 
+   // Empty input must produce deterministic zero counts, not an error or garbage.
+   MSZZPositionRecord empty_records[];
+   ArrayResize(empty_records,0);
+   ulong empty_tickets[];
+   int empty_count=CMSZZPositionOwnershipPolicy::CollectOppositeOwnedTickets(empty_records,0,MSZZ_DIR_LONG,empty_tickets);
+   AssertTrue(empty_count==0 && ArraySize(empty_tickets)==0,"empty input produces deterministic zero counts",failures);
+
+   // Explicit duplicate-ticket check: five owned opposite records with distinct tickets
+   // must return exactly five distinct tickets, never fewer (dropped) or more (duplicated).
+   MSZZPositionRecord dup_check[];
+   ArrayResize(dup_check,5);
+   for(int i=0;i<5;i++) dup_check[i]=Record(200+i,MSZZ_OWNER_OWNED,MSZZ_DIR_SHORT);
+   ulong dup_tickets[];
+   int dup_count=CMSZZPositionOwnershipPolicy::CollectOppositeOwnedTickets(dup_check,ArraySize(dup_check),MSZZ_DIR_LONG,dup_tickets);
+   bool all_distinct=true;
+   for(int i=0;i<dup_count && all_distinct;i++)
+      for(int j=i+1;j<dup_count;j++)
+         if(dup_tickets[i]==dup_tickets[j]) { all_distinct=false; break; }
+   AssertTrue(dup_count==5 && all_distinct,"no duplicate ticket is returned across distinct owned opposite records",failures);
+
+   // Every gate that rejects must leave a nonempty, actionable reason -- never a silent false.
+   string r;
+   CMSZZPositionOwnershipPolicy::CanOpen(unsupported,true,r);
+   AssertTrue(r!="","unsupported account mode leaves a nonempty failure reason",failures);
+   CMSZZPositionOwnershipPolicy::CanOpen(invalid,true,r);
+   AssertTrue(r!="","invalid snapshot leaves a nonempty failure reason",failures);
+   CMSZZPositionOwnershipPolicy::CanOpen(selection_error,true,r);
+   AssertTrue(r!="","terminal selection error leaves a nonempty failure reason",failures);
+   CMSZZPositionOwnershipPolicy::CanOpen(netting_foreign,true,r);
+   AssertTrue(r!="","netting foreign-exposure block leaves a nonempty failure reason",failures);
+   CMSZZPositionOwnershipPolicy::CanOpen(exchange_manual,true,r);
+   AssertTrue(r!="","exchange manual-exposure block leaves a nonempty failure reason",failures);
+   CMSZZPositionOwnershipPolicy::CanOpen(hedging_owned,true,r);
+   AssertTrue(r!="","one-owned-position limit block leaves a nonempty failure reason",failures);
+
    PrintFormat("MSZZ ownership test complete failures=%d",failures);
 }
