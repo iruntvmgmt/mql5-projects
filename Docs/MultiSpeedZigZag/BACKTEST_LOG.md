@@ -4,6 +4,52 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 (third entry) — ExecutionIntentStore wired into the EA (D008)
+
+Continuation of the same 17-phase execution-safety request; still only incremental Phase-1-adjacent work (wiring the already-built D007 store into the EA), not Phase 2+. Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting (direct ref comparison, zero divergence at `c7b80e9`).
+
+### Change
+
+`Experts/MultiSpeedZigZagEA.mq5`:
+- `OnInit()`: configure + load `g_intent_store` (fail-closed on either failure, same pattern as `g_event_store`), derive `g_instance_id` from account login + local time + a random component, log the loaded count/filename/instance.
+- `ExecuteCluster()`: after D006's `EventStore` gate passes, build a full `MSZZExecutionIntent` and call `CreateIntent()` — fail-closed (`REJECT_INTENT_STORE`) if it fails, order never attempted. After the order attempt, `UpdateIntent()` with the outcome — warn-only, not fail-closed (see D008 for why this asymmetry is safe and deliberate).
+
+### Compile results
+
+| File | Live tree (build 6033) | Isolated instance (build 6061) |
+|---|---|---|
+| `Experts/MultiSpeedZigZagEA.mq5` | 0 errors, 1 warning (reviewed/accepted, unrelated) | 0 errors, 1 warning (same) |
+
+SHA-256 hash-verified identical: `5dad1be8b188836ce61a7bd717a6b19496fe261aac3d0dc19cf663598e477c41`.
+
+### Shadow regression (long window, 2026.07.01–2026.07.24, same config as every prior pass)
+
+Result: History Quality 100%, Bars 4645, **Total Trades: 0, Total Deals: 0**. Signal journal: 431 `RAW_CANDIDATE` + 178 `SHADOW` — identical to every prior pass. Zero `REJECT_INTENT_STORE` occurrences. Expert log confirms clean intent-store initialization: `MSZZ intent store loaded count=0 unknown=0 file=MSZZ_Intents_XAUUSD_5_26072501.dat instance=870012-1782864000-1088`.
+
+### Full regression
+
+- `Test_MSZZ_Ownership`: 24/24 PASS, `failures=0`.
+- `Test_MSZZ_Determinism`: `TEST PASS: deterministic rebuild`.
+- `Test_MSZZ_Clusters`: 22/22 PASS, `failures=0`.
+- `Export_MSZZ_Parity`: 966/76/192/70 rows, identical to every prior verified-clean pass, zero defects.
+- `Test_MSZZ_IntentStore`: 52/52 PASS, `failures=0` — confirms the EA's new `#include` of `ExecutionIntentStore.mqh` did not disturb the store's own standalone test suite (which uses distinct magic numbers 990201–990215, so no file collision with the EA's real `InpMagic`).
+
+### What this pass proves and does not prove
+
+Proves: the second gate is correctly wired, fail-closed on the pre-submission `CreateIntent()`, warn-only on the post-submission `UpdateIntent()` exactly as D008 specifies, and provably inert in shadow mode (structurally unreachable, not just empirically unexercised). Does not prove: any behavior on the actual live-order path, since all three live-execution gates remained closed throughout, as in every prior pass on this branch.
+
+### Safety confirmation
+
+- All three live-execution gates closed in every run; zero orders/deals/trades throughout.
+- Live MT5 process (PID 66709) confirmed unchanged before and after.
+- No second clone/worktree; QuantBeast's `main` state preserved via `git stash`/`git stash pop`.
+
+### Not done / explicitly out of scope this pass
+
+Everything listed in the D007 entry above, plus: reconciliation of loaded intents against broker state at startup, `position_ticket` derivation, execution state machine transition-legality enforcement, and any real order submission.
+
+---
+
 ## 2026-07-26 (second entry) — Atomic execution-intent store (D007), Phase 1 of a 17-phase request
 
 ### Context and scope decision

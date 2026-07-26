@@ -140,10 +140,21 @@ Current startup behavior: EA initializes → account mode detected → live open
 - cluster-to-position reconstruction after restart;
 - management-state reconstruction (stops/targets/trailing state tied to a specific cluster after restart).
 
+## Validated 2026-07-26 (third pass) — ExecutionIntentStore wired into the EA (D008)
+
+Designed and implemented directly (no upstream pull needed — branch was already at `c7b80e9`, confirmed via direct ref comparison before starting).
+
+- **Compile**: EA 0 errors, 1 pre-existing reviewed warning (Market-version, unrelated) — live tree and isolated instance, hash-verified identical (`5dad1be8...`).
+- **Shadow regression**: long window (2026.07.01–2026.07.24) unchanged — identical 431/178/178 counts, zero orders/deals/trades, intent store correctly initializes at startup, zero `REJECT_INTENT_STORE` occurrences (shadow mode never reaches this code, same non-interference property D006 already established).
+- **Regression**: ownership (24/24), determinism, cluster (22/22), parity exporter, and the intent-store suite itself (52/52) all re-ran clean.
+- **Not exercised**: the new gate has not been tested against a real order submission — all three live-execution gates remain closed throughout.
+
+This makes D007's previously-inert store actually populate with real (shadow-mode `INTENT_PERSISTED`-state) records for the first time, laying the groundwork Phase 2 (reconciliation) needs. It does not itself add any reconciliation, state-machine transition legality, or demo-readiness. See `KNOWN_ISSUES.md` for the new record-eviction-cap limitation this decision deliberately left open.
+
 ## Agent procedure
 
 Read `DECISION_LOG.md`, `KNOWN_ISSUES.md`, `TEST_PLAN.md`, and this file before modifying the batch. Fix compile defects without weakening D005 invariants. Any behavioral change requires documentation and, where material, a new decision entry. Keep live execution gates closed and do not merge into `main`.
 
 ## Next recommended subsystem
 
-Continue with Phase 2 of the execution-safety plan: wire `ExecutionIntentStore` into `ExecuteCluster()` (replacing the D006 flat consumed-event check with real intent lifecycle records) and build the broker order/deal/position reconciler that reads live history against those intents at startup. Do not recommend demo execution yet — that remains several full passes away (risk sizing, margin preflight, account safeguards, and fault injection across the full stack all remain unstarted).
+Continue with Phase 2 of the execution-safety plan: build the broker order/deal/position reconciler that reads live history (`HistorySelect`, `HistoryDealGetTicket`, open positions/orders) against the intents `ExecutionIntentStore` now actually records, resolving ambiguous cases to `RECOVERY_REQUIRED` and failing closed rather than guessing. Do not recommend demo execution yet — that remains several full passes away (risk sizing, margin preflight, account safeguards, execution state machine, and fault injection across the full stack all remain unstarted).
