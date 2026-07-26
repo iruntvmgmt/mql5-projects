@@ -434,3 +434,49 @@ Deterministic tests for `CMSZZProtectionPolicy` covering: matching SL/TP within 
 ### Demo-readiness implications
 
 Still not sufficient alone. This increment gives the EA a real, tested answer to "is my open position actually protected," which closes a real gap (SL/TP can theoretically be dropped independently of entry fill) — but risk sizing, margin preflight, account safeguards, fault injection across the combined stack, and the finer-grained intermediate lifecycle states all remain unstarted or unadopted. The position-ticket-equals-order-ticket assumption is hedging-account-specific and undocumented risk if this EA is ever pointed at a netting account without revisiting this decision. As with every decision in this series, this has only been exercised against deterministic mock data — no live order has ever been placed on this branch, so `VerifyAndRepair` has never run against a real position.
+
+## D012 — Margin preflight, first increment
+
+**Date:** 2026-07-26
+**Status:** Accepted
+
+### Scope of this increment
+
+Phase 6 of the 2026-07-26 execution-safety request is "margin and exposure preflight." Today the EA has **zero** margin awareness — it will attempt to submit an order at whatever fixed lot size is configured regardless of available free margin. This is a first, deliberately bounded increment: before submitting an order, calculate the margin the intended order would require via the broker-authoritative `OrderCalcMargin()`, compare it against current free margin with a conservative safety buffer, and fail closed (reject the cluster, no order attempted) if the margin is insufficient. This covers **per-order margin sufficiency on the traded symbol only** — not a general account-wide or cross-symbol exposure cap.
+
+Explicitly deferred to a later increment: a cross-symbol/account-wide exposure cap (this EA only ever trades `_Symbol`, and D005's existing one-owned-position-per-symbol policy already bounds same-symbol exposure to at most one position by default, so the marginal risk a broader cap would additionally close is smaller than it would be for a multi-symbol EA); daily loss/drawdown limits, trade-count limits, and a kill switch (Phase 7, a distinct account-safeguards concern, not margin-specific); dynamic/risk-based position sizing (Phase 5 — this increment checks margin for whatever volume `NormalizeVolume()` already produced, it does not change how that volume is computed).
+
+### Decision: use `OrderCalcMargin()`, not a manual leverage/contract-size formula
+
+`OrderCalcMargin(trade_operation, symbol, volume, price, margin)` is the broker-authoritative margin calculation — it accounts for symbol-specific margin requirements, tick value, contract size, and hedged-margining rules that vary by broker and instrument. Reimplementing this from leverage and contract-size inputs manually was considered and rejected: a hand-rolled formula that is subtly wrong in a way that matters is exactly the kind of error this whole execution-safety engineering effort exists to prevent, and there is no reason to accept that risk when the broker already exposes the authoritative calculation directly.
+
+### Decision: policy/live-query split, mirroring D005/D009/D011
+
+- **`CMSZZMarginPolicy`** (pure): `HasSufficientMargin(required_margin, free_margin, buffer_ratio)` — `free_margin >= required_margin * (1.0 + buffer_ratio)`. No MT5 API calls, deterministic, unit-testable with injected doubles.
+- **`CMSZZMarginGuard`** (live): `CheckMargin(symbol, order_type, volume, price, buffer_ratio, required_margin_out, free_margin_out, reason)` — calls `OrderCalcMargin()`, reads `AccountInfoDouble(ACCOUNT_MARGIN_FREE)`, delegates the comparison to the policy class. If `OrderCalcMargin()` itself fails (returns `false`), this is treated as insufficient margin, not skipped or assumed fine — "never assume a missing calculation means it's safe" applies here exactly as it has everywhere else in this series.
+
+### Buffer default and new input
+
+A new input, `InpMarginBufferRatio` (default `1.0`), requires free margin to be at least **double** the bare minimum required margin before allowing execution. This is deliberately conservative for a component that has never been exercised against a real account's real margin state — opening a position that consumes exactly 100% of free margin leaves zero room for adverse price movement before a margin call, which defeats the purpose of a margin check that only confirms the order can be *placed*, not that the account can *survive* it. The buffer is configurable, not hardcoded, so an operator can tune it once real demo evidence exists.
+
+### Wiring into the EA
+
+`ExecuteCluster()`: immediately after `NormalizeVolume()` succeeds (i.e. after the existing volume<=0 rejection), `CMSZZMarginGuard::CheckMargin()` runs for the prepared direction/volume/entry price. On insufficient margin (or a failed `OrderCalcMargin()` call), the cluster is rejected (`REJECT_MARGIN`) before `ApplyOwnershipPreflight()`, `CreateIntent()`, or any order submission — consistent with every other pre-order guard in this chain (spread, stops, volume) rejecting before any state-mutating call.
+
+### Rejected alternatives
+
+- **Manual margin formula from leverage/contract size**: rejected, see above — `OrderCalcMargin()` is authoritative and broker/instrument-correct in ways a manual formula is not guaranteed to be.
+- **A single "enough margin exists" check with no buffer**: rejected — passing a check that leaves zero headroom is not the same as being safe to actually hold the position through normal price movement.
+- **Combining this with a full account-wide exposure cap in the same pass**: rejected as premature scope expansion — this EA trades one symbol with an existing one-position cap; a true multi-symbol exposure cap is Phase 7 territory and would be speculative (untested) if built before this EA ever trades more than one symbol.
+
+### Migration consequences
+
+None — additive. `InpMarginBufferRatio` has a default, so no existing `.set` file or test config needs to change to keep working.
+
+### Testing requirements
+
+Deterministic tests for `CMSZZMarginPolicy::HasSufficientMargin` covering: free margin comfortably above the buffered requirement passes; free margin exactly at the buffered boundary passes; free margin just below the buffered boundary fails; zero required margin is trivially sufficient regardless of free margin; zero free margin with nonzero required margin fails; a buffer ratio of `0` reduces to a bare `free >= required` comparison.
+
+### Demo-readiness implications
+
+Still not sufficient alone. This increment gives the EA its first real margin awareness, closing a genuine gap (previously: none at all) — but risk sizing, a broader account-wide exposure cap, account safeguards (daily loss limits, kill switch), and fault injection across the combined stack all remain unstarted. As with every decision in this series, `CMSZZMarginGuard::CheckMargin()` has only been exercised against deterministic mock data and the isolated demo account's real-but-untested-under-load margin state — no live order has ever been placed on this branch, so this has never actually gated a real order.
