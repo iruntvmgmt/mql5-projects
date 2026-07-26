@@ -2,7 +2,7 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.350"
+#property version   "0.360"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
@@ -18,6 +18,7 @@
 #include <MultiSpeedZigZag/Execution/IntentStateMachine.mqh>
 #include <MultiSpeedZigZag/Execution/ProtectionGuard.mqh>
 #include <MultiSpeedZigZag/Execution/MarginGuard.mqh>
+#include <MultiSpeedZigZag/Execution/AccountSafeguard.mqh>
 
 input group "═══ Operating Mode ═══"
 input bool   InpShadowOnly=true;
@@ -60,6 +61,11 @@ input bool   InpExitOwnedOpposite=true;
 input int    InpMaxPersistentEvents=2000;
 input double InpMarginBufferRatio=1.0;
 
+input group "═══ Account Safeguards ═══"
+input bool   InpKillSwitchEngaged=false;
+input int    InpMaxTradesPerDay=20;
+input double InpMaxDailyLossAmount=0.0;
+
 input group "═══ Diagnostics ═══"
 input bool InpWriteCSV=true;
 input bool InpVerboseLog=true;
@@ -74,6 +80,7 @@ CMSZZExecutionIntentStore      g_intent_store;
 CMSZZExecutionReconciler       g_reconciler;
 CMSZZProtectionGuard           g_protection;
 CMSZZMarginGuard               g_margin;
+CMSZZAccountSafeguardGuard      g_safeguard;
 CTrade                         g_trade;
 datetime                       g_last_bar=0;
 string                         g_instance_id="";
@@ -187,6 +194,19 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
       MSZZCandidate rejected=owner;
       rejected.reason="one or more execution intents require manual recovery (see MSZZ RECONCILE/PROTECTION log)";
       JournalCandidate(rejected,"REJECT_RECOVERY_REQUIRED",cluster.cluster_id);
+      return false;
+   }
+
+   // D013: kill switch, daily trade-count limit, and daily realized-loss
+   // limit -- checked first among the per-attempt guards, as cheaply as
+   // possible, since a breached account safeguard should short-circuit
+   // everything else. See DECISION_LOG.md D013 for scope and defaults.
+   string safeguard_reason;
+   if(!g_safeguard.CheckSafeguards(_Symbol,InpMagic,InpMaxTradesPerDay,InpMaxDailyLossAmount,
+                                    InpKillSwitchEngaged,safeguard_reason))
+   {
+      MSZZCandidate rejected=owner; rejected.reason=safeguard_reason;
+      JournalCandidate(rejected,"REJECT_ACCOUNT_SAFEGUARD",cluster.cluster_id);
       return false;
    }
 

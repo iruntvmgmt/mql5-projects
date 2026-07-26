@@ -4,6 +4,67 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 (eighth entry) — Account safeguards, first increment (D013)
+
+Continuation of the same 17-phase execution-safety request; first increment of Phase 7 (see `DECISION_LOG.md` D013 for exactly what is and is not covered). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
+
+### Change
+
+- `Include/MultiSpeedZigZag/Execution/AccountSafeguard.mqh` (new file): `CMSZZAccountSafeguardPolicy` (pure `TradeCountLimitReached()`/`DailyLossLimitReached()`) + `CMSZZAccountSafeguardGuard` (live `CheckSafeguards()`), per the D005/D009/D010/D011/D012 policy/live-query split pattern.
+- `Experts/MultiSpeedZigZagEA.mq5`: new inputs `InpKillSwitchEngaged` (default `false`), `InpMaxTradesPerDay` (default `20`), `InpMaxDailyLossAmount` (default `0.0`). `ExecuteCluster()` calls `CMSZZAccountSafeguardGuard::CheckSafeguards()` immediately after the `RECOVERY_REQUIRED`/`PROTECTION_FAILED` block check, rejecting (`REJECT_ACCOUNT_SAFEGUARD`) before the rest of the preflight chain. `#property version` bumped `0.350` → `0.360`.
+
+### Compile
+
+```
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_Safeguard.mq5" /log
+Result: 0 errors, 0 warnings, 464 ms elapsed
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Experts\MultiSpeedZigZagEA.mq5" /log
+MQL5\Experts\MultiSpeedZigZagEA.mq5(5,11) : warning 68: version '0.360' is incompatible with MQL5 Market, must be xxx.yyy
+Result: 0 errors, 1 warnings, 3161 ms elapsed
+```
+
+Isolated instance: all eleven targets (Ownership, Determinism, Clusters, Parity, IntentStore, Reconciler, StateMachine, Protection, Margin, Safeguard, EA) recompiled clean, hash-verified identical source to the live tree before compiling.
+
+### Deterministic comparison test
+
+`[StartUp] Script=MultiSpeedZigZagTests\Test_MSZZ_Safeguard, Symbol=XAUUSD, Period=M5` on the isolated instance:
+
+```
+PASS: trade count (5) below the limit (20) is not reached
+PASS: trade count exactly at the limit (20/20) is reached
+PASS: trade count above the limit (25/20) is reached
+PASS: a max_trades of 0 disables the trade-count check entirely
+PASS: a negative max_trades disables the trade-count check entirely
+PASS: loss magnitude (50) below the limit (100) is not reached
+PASS: loss magnitude exactly at the limit (100/100) is reached
+PASS: loss magnitude above the limit (150/100) is reached
+PASS: a max_daily_loss_amount of 0.0 disables the loss check entirely (the documented default)
+PASS: a negative max_daily_loss_amount disables the loss check entirely
+PASS: zero loss magnitude never blocks even with a positive, enabled limit
+MSZZ safeguard test complete failures=0
+```
+
+11/11 assertions, `failures=0`.
+
+### Shadow Strategy Tester regression
+
+Two new configs (`shadow_d013_short.ini`, `shadow_d013_long.ini`), same `[Tester]` shape as every prior baseline in this series.
+
+- **Short window** (2026.07.20–2026.07.24): `last test passed with result "successfully finished" in 0:00:00.934`.
+- **Long window** (2026.07.01–2026.07.24): `last test passed with result "successfully finished" in 0:00:06.806`. `MSZZ_Shadow_Report_D013_Long.htm`: 0 Total Trades, 0 Total Deals. This run's log window sliced out of the cumulative daily Tester-agent log by line offset (the timestamp-range slicing approach used in prior entries missed this run's actual start time; sliced from the correct `MSZZ initialized` line instead): 431 `RAW_CANDIDATE` + 178 `MSZZ SHADOW` lines — identical to the D006/D008/D009/D010/D011/D012 baseline.
+
+Both runs: `MSZZ initialized in SHADOW posture`, `MSZZ account mode=HEDGING`, `MSZZ intent store loaded count=0 unknown=0` logged at `OnInit()`, zero `REJECT_ACCOUNT_SAFEGUARD`/`MSZZ WARNING`/error lines (the safeguard check only runs on the live-execution path, which shadow mode never enters).
+
+### Full regression
+
+Ownership, Determinism, Clusters, IntentStore, Reconciler, StateMachine, Protection, Margin all re-ran on the isolated instance and reported `failures=0` (or `TEST PASS` for Determinism's single assertion), unchanged from their established baselines.
+
+### Not exercised
+
+Exactly as every prior decision in this series: `CheckSafeguards()` has only run against the isolated demo account's genuinely empty trade history (zero trades ever placed on this branch) — it has never actually counted a real trade or summed a real realized loss. The live `HistorySelect`/deal-summation logic is not independently unit-testable without a live terminal, same category as D009's `CollectBrokerRecords`.
+
+---
+
 ## 2026-07-26 (seventh entry) — Margin preflight, first increment (D012)
 
 Continuation of the same 17-phase execution-safety request; first increment of Phase 6 (see `DECISION_LOG.md` D012 for exactly what is and is not covered). Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
