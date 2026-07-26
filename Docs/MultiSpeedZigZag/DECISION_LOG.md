@@ -480,3 +480,47 @@ Deterministic tests for `CMSZZMarginPolicy::HasSufficientMargin` covering: free 
 ### Demo-readiness implications
 
 Still not sufficient alone. This increment gives the EA its first real margin awareness, closing a genuine gap (previously: none at all) — but risk sizing, a broader account-wide exposure cap, account safeguards (daily loss limits, kill switch), and fault injection across the combined stack all remain unstarted. As with every decision in this series, `CMSZZMarginGuard::CheckMargin()` has only been exercised against deterministic mock data and the isolated demo account's real-but-untested-under-load margin state — no live order has ever been placed on this branch, so this has never actually gated a real order.
+
+## D013 — Account safeguards, first increment (kill switch, daily trade-count limit, daily loss limit)
+
+**Date:** 2026-07-26
+**Status:** Accepted
+
+### Scope of this increment
+
+Phase 7 of the 2026-07-26 execution-safety request is "account safeguards: daily loss/drawdown limits, trade-count limits, cooldowns, kill switch." This is a first, deliberately bounded increment covering three of these: a manual kill switch, a daily trade-count limit, and a daily realized-loss limit — all scoped to this EA's own trades (filtered by symbol and magic, exactly as every other guard in this series has been since D005), not the account as a whole. Explicitly deferred to a later increment: cooldowns (a minimum elapsed-time gap between trades), drawdown limits measured against floating/unrealized equity rather than realized daily loss, and any notion of safeguarding trades placed by other EAs or manually on the same account (this EA has no authority over those, consistent with the magic-number-scoped safety philosophy established since D005).
+
+### Decision: three independent circuit breakers, one shared gate
+
+- **Kill switch** (`InpKillSwitchEngaged`, default `false`): when `true`, blocks all new execution unconditionally. This is the simplest, most direct manual override the plan calls for — no query, no calculation, just an operator-controlled flag checked first.
+- **Daily trade-count limit** (`InpMaxTradesPerDay`, default `20`): counts today's opening deals (`DEAL_ENTRY_IN`) for this symbol+magic via `HistorySelect` over today's date range, blocks new execution once the count reaches the configured maximum. Default is nonzero and reasonably generous — the primary threat model here is a runaway bug causing rapid repeated execution, not legitimate trading volume, so a permissive-but-real default is safer than leaving this unbounded by default.
+- **Daily realized-loss limit** (`InpMaxDailyLossAmount`, default `0.0` = disabled): sums today's realized P&L (`DEAL_PROFIT`+`DEAL_SWAP`+`DEAL_COMMISSION`) for this symbol+magic over today's date range; if the loss magnitude meets or exceeds the configured amount, blocks new execution. Default is **disabled**, not a guessed number — the "right" daily loss cap depends entirely on the account's size and the operator's risk tolerance, and hardcoding a currency amount here would be presumptuous for an account this component has never been evaluated against. An operator must explicitly opt in with a real number once they have an account size in mind.
+
+All three fail closed the same way: a query failure (`HistorySelect` returning `false`) is treated as if a limit were breached, not silently ignored — "never assume a missing calculation means it's safe" applies here exactly as it has everywhere else in this series.
+
+### Decision: policy/live-query split, mirroring D005/D009/D011/D012
+
+- **`CMSZZAccountSafeguardPolicy`** (pure): `TradeCountLimitReached(today_count, max_trades)` (`max_trades>0 && today_count>=max_trades`) and `DailyLossLimitReached(loss_magnitude, max_loss_amount)` (`max_loss_amount>0 && loss_magnitude>=max_loss_amount`). Both treat a non-positive limit as "disabled," not as "always breached" or "always some numeric comparison against zero." No MT5 API calls, deterministic, unit-testable with injected values.
+- **`CMSZZAccountSafeguardGuard`** (live): `CheckSafeguards(symbol, magic, max_trades, max_daily_loss_amount, kill_switch_engaged, reason)` — checks the kill switch first, then calls `HistorySelect` for today's date range (from local midnight to now) and, on success, counts today's `DEAL_ENTRY_IN` deals and sums realized P&L across all matching deals, delegating both comparisons to the policy class.
+
+### Rejected alternatives
+
+- **A single combined "account health" score instead of three independent checks**: rejected — three simple, independently-reasoned-about circuit breakers are more auditable than one opaque composite score, consistent with this branch's preference for explicit, narrow checks over clever aggregation (see D010's explicit transition table for the same reasoning applied to state).
+- **A default nonzero daily loss limit (e.g. guessing a "reasonable" dollar amount)**: rejected — there is no account-size-independent "reasonable" default, and guessing one risks being silently wrong (too loose to matter, or too tight to be usable) for whatever account this actually runs against. Disabled-by-default with a clear operator opt-in is the honest choice.
+- **Measuring drawdown against floating equity instead of realized daily loss in this pass**: rejected as premature — floating-equity drawdown requires deciding what "today's starting equity" means across restarts and requires the protection-guard and reconciliation machinery to be fully trustworthy first; realized-deal-history P&L is simpler, broker-authoritative, and does not depend on this EA's own bookkeeping being perfect.
+
+### Migration consequences
+
+None — additive, and the loss limit defaults to disabled, so no existing `.set` file or test config changes behavior by omission.
+
+### Wiring into the EA
+
+`ExecuteCluster()`: `CMSZZAccountSafeguardGuard::CheckSafeguards()` runs first, immediately after the existing `RECOVERY_REQUIRED`/`PROTECTION_FAILED` block check and before the spread/stops/volume/margin/ownership preflight chain — this is a higher-level circuit breaker that should short-circuit everything else as cheaply as possible, consistent with cheapest-checks-first ordering already used for spread/stops/volume. On failure, the cluster is rejected (`REJECT_ACCOUNT_SAFEGUARD`) with no order attempted and no intent created.
+
+### Testing requirements
+
+Deterministic tests for `CMSZZAccountSafeguardPolicy` covering: trade count below the limit passes, at the limit is blocked, above the limit is blocked, a non-positive max-trades value disables the check entirely; loss magnitude below the limit passes, at the limit is blocked, above is blocked, a non-positive max-loss value disables the check entirely; zero loss magnitude never blocks regardless of a positive limit. The live `CMSZZAccountSafeguardGuard::CheckSafeguards()` history-querying and summation logic is not independently unit-testable without a live terminal (same category as D009's `CollectBrokerRecords`) — it is exercised via compile-time smoke test and shadow regression only, exactly as `CollectBrokerRecords` was in D009.
+
+### Demo-readiness implications
+
+Still not sufficient alone. This increment gives the EA its first real per-day loss and trade-count circuit breakers, plus a manual kill switch — real progress toward Phase 12's readiness gate — but cooldowns, floating-equity drawdown limits, risk sizing, and fault injection across the combined stack all remain unstarted. As with every decision in this series, `CheckSafeguards()` has only been exercised against the isolated demo account's genuinely empty trade history (zero trades ever placed on this branch) — it has never actually counted a real trade or summed a real loss.
