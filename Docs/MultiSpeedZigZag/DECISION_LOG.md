@@ -245,3 +245,53 @@ Deterministic, broker-independent unit tests covering: valid save/load round tri
 ### Demo-readiness implications
 
 **None yet.** This decision covers the persistence component in isolation. It is explicitly not wired into `MultiSpeedZigZagEA.mq5`'s execution path in this pass — `ExecuteCluster()` continues to use `CMSZZEventStore` exactly as D006 left it. Wiring this store into the live execution path, building the reconciler that reads broker history against it, and building the execution state machine that drives its `execution_state` transitions are each separate, later decisions (Phase 2 and Phase 3 of the current engineering plan) with their own testing and evidence requirements before any of them can move demo-readiness forward. Demo execution remains blocked on all of the production blockers already listed in `KNOWN_ISSUES.md`, unchanged by this decision.
+
+---
+
+## D008 — Wire `ExecutionIntentStore` into the EA as a supplementary fail-closed gate
+
+**Date:** 2026-07-26
+**Status:** Accepted
+
+### Gap being closed
+
+D007 built and exhaustively tested `ExecutionIntentStore` in isolation, but it was inert — no code path in `MultiSpeedZigZagEA.mq5` ever created or updated a record. A tested-but-unused component provides no actual safety benefit and cannot be the foundation Phase 2 (broker reconciliation) needs, since there would be nothing real to reconcile against.
+
+### Decision
+
+Wire the store into `ExecuteCluster()`'s live-execution path as a **second, independent, equally fail-closed gate alongside D006's existing `CMSZZEventStore` check** — not a replacement for it:
+
+1. `OnInit()` additionally configures and loads a `CMSZZExecutionIntentStore` (`g_intent_store`), using a per-run `g_instance_id` derived from account login, local time, and a random component. Exactly like D005's ownership refresh and the existing `CMSZZEventStore::Load()`, failure to configure (e.g. the exclusivity lock is already held — see D007) or load (corrupt store with no valid backup) returns `INIT_FAILED`. This is unchanged fail-closed philosophy applied to a new component, not a new philosophy.
+2. In `ExecuteCluster()`'s live path, **after** D006's `ConsumeEvent()` gate passes (unchanged — still the first, proven gate), build a full `MSZZExecutionIntent` record from the already-validated cluster/candidate data and call `g_intent_store.CreateIntent()`. If this fails, journal `REJECT_INTENT_STORE` and return `false` **without ever calling `OrderSend`** — identical fail-closed shape to D006's `REJECT_INTENT_PERSISTENCE`, just for the second store.
+3. After the order attempt (success or failure), call `g_intent_store.UpdateIntent()` with the outcome: `execution_state` (`BROKER_ACCEPTED`/`BROKER_REJECTED`), `broker_retcode`, `broker_result_text`, and on success, `order_ticket` (`CTrade::ResultOrder()`) and `first_deal_ticket` (`CTrade::ResultDeal()`). This update is **warn-only, not fail-closed**, and that asymmetry is deliberate: by this point in the sequence, D006's `EventStore` gate has *already* durably marked the cluster consumed, so the anti-duplicate-execution guarantee does not depend on this update succeeding. A failed update here means the intent record's fill/ticket details are incomplete or stale — exactly the situation Phase 2's broker-history reconciler is meant to detect and repair by checking broker truth directly, not a new safety gap this decision introduces.
+4. `intent_id` is set to the cluster's own `cluster_id` (already globally unique per D004). No new ID scheme is introduced.
+5. `position_ticket` is deliberately left at `0` by this decision. MT5's `CTrade` result accessors after a market order give the order and deal tickets directly; deriving the resulting *position* ticket correctly (especially under hedging, where it is not always identical to the order/deal ticket) is exactly the kind of broker-truth reconciliation Phase 2 is scoped to do properly, not something to guess at here.
+
+### Rejected alternatives
+
+- **Replacing `CMSZZEventStore` outright with `ExecutionIntentStore`** in this pass: rejected. D006's `EventStore` gate is proven across many shadow-regression passes; swapping the primary safety gate and adding a new, less-battle-tested one that ALSO reconciles/manages full lifecycle state in the same change would conflate two decisions and make any regression harder to attribute. Running both gates in sequence is strictly more conservative than either alone.
+- **Making the post-submission `UpdateIntent()` fail-closed** (e.g., attempting to cancel/reverse the just-placed order if the update fails): rejected as unsafe and out of proportion — attempting to programmatically reverse a live order to satisfy a logging failure is a materially riskier action than accepting an incomplete-but-recoverable local record, and reversal logic does not exist yet in any case.
+
+### Failure policy
+
+Both `CreateIntent()` (pre-submission) and the `OnInit()` configure/load calls are fail-closed: any failure blocks the corresponding operation (order submission, or EA initialization) and journals/prints the specific reason. `UpdateIntent()` (post-submission) is warn-only, per the explicit reasoning above.
+
+### Migration consequences
+
+None. This is purely additive wiring of an already-existing, already-tested component. No on-disk format changes.
+
+### Restart behavior
+
+Unchanged from D007: `Load()` reconstructs the in-memory intent set at startup. This decision does not yet add any reconciliation of those loaded intents against live broker state — an intent left in `BROKER_ACCEPTED` from a prior session is not yet cross-checked against whether a position actually exists for it. That remains Phase 2.
+
+### Account-mode implications
+
+None directly, same as D007.
+
+### Testing requirements
+
+Extend `Test_MSZZ_Determinism`/`Test_MSZZ_Clusters`/`Export_MSZZ_Parity`/`Test_MSZZ_Ownership`/`Test_MSZZ_IntentStore` regression (all must remain green, unaffected by this additive change) and re-run the shadow Strategy Tester regression to confirm zero orders/deals/trades and that `REJECT_INTENT_STORE` never spuriously fires in shadow mode (it cannot, structurally, since shadow mode returns before reaching this code — the same non-interference property D006 already established for `REJECT_INTENT_PERSISTENCE`).
+
+### Demo-readiness implications
+
+**Still none.** This wires a second persistence gate into the live path, but the live path itself remains untested against a real order (all three live-execution gates stay closed in every test this decision covers). Phase 2 (broker-history reconciliation), Phase 3 (the actual execution state machine with legality-checked transitions), risk sizing, margin preflight, and account safeguards all remain unstarted. Demo execution is not brought closer by this decision beyond making the persisted evidence a future reconciler will need actually exist.
