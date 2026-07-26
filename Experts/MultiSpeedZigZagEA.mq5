@@ -2,7 +2,7 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.380"
+#property version   "0.390"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
@@ -667,4 +667,24 @@ void OnTick()
    g_last_bar=bar; ProcessClosedBar();
 }
 
-void OnDeinit(const int reason){ PrintFormat("MSZZ deinitialized reason=%d",reason); }
+// D017: a comma-separated list of the strategies enabled for this run,
+// for the run-summary CSV's metadata column.
+string EnabledStrategiesSummary()
+{
+   string out="";
+   if(InpEnableFastBreakout)       out+=(out=="" ? "" : ",")+"FastBreakout";
+   if(InpEnableMediumBreakout)     out+=(out=="" ? "" : ",")+"MediumBreakout";
+   if(InpEnableSlowBreakout)       out+=(out=="" ? "" : ",")+"SlowBreakout";
+   if(InpEnableFastMedConfluence)  out+=(out=="" ? "" : ",")+"FastMedConfluence";
+   if(InpEnableFastMedContext)     out+=(out=="" ? "" : ",")+"FastMedContext";
+   if(InpEnableMedSlowContext)     out+=(out=="" ? "" : ",")+"MedSlowContext";
+   if(InpEnableNestedPullback)     out+=(out=="" ? "" : ",")+"NestedPullback";
+   if(InpEnableWeightedEnsemble)   out+=(out=="" ? "" : ",")+"WeightedEnsemble";
+   return (out=="" ? "NONE" : out);
+}
+
+void OnDeinit(const int reason)
+{
+   g_trade_analytics.WriteRunSummary(_Symbol,InpMagic,_Period,InpRiskReward,EnabledStrategiesSummary());
+   PrintFormat("MSZZ deinitialized reason=%d",reason);
+}

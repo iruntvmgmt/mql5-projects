@@ -1,13 +1,15 @@
 #ifndef __MSZZ_TRADE_ANALYTICS_EXPORTER_MQH__
 #define __MSZZ_TRADE_ANALYTICS_EXPORTER_MQH__
 
-// See DECISION_LOG.md D016. First infrastructure piece of the Edge
+// See DECISION_LOG.md D016 and D017. Infrastructure for the Edge
 // Discovery Sprint (Stage A) -- a separate track from the execution-
-// safety phases (D005-D015). Computes and exports per-trade outcome
-// analytics (R-multiple, MFE/MAE-in-R, exit reason, bars held, session)
-// for a closed MSZZ-owned position. See D016 for exactly what is and is
-// not covered (deferred: spread_at_entry, ATR/structure snapshot columns,
-// commit_sha, the master run-level summary CSV).
+// safety phases (D005-D015). D016: computes and exports per-trade
+// outcome analytics (R-multiple, MFE/MAE-in-R, exit reason, bars held,
+// session) for a closed MSZZ-owned position. D017: accumulates those same
+// trades and writes one master run-level summary row at OnDeinit(). See
+// both entries for exactly what is and is not covered (deferred:
+// spread_at_entry, ATR/structure snapshot columns, commit_sha, raw-
+// currency profit/profit-factor -- this stays R-only throughout).
 
 #include <MultiSpeedZigZag/Core/Types.mqh>
 #include <MultiSpeedZigZag/Execution/ExecutionIntentStore.mqh>
@@ -100,6 +102,64 @@ public:
    }
 };
 
+// D017: pure, static, array-based aggregation over a completed run's
+// trades -- same deterministic-and-unit-testable shape as every other
+// policy class in this series.
+class CMSZZRunSummaryPolicy
+{
+public:
+   static double Average(const double &values[],const int count)
+   {
+      if(count<=0) return 0.0;
+      double sum=0.0;
+      for(int i=0;i<count;i++) sum+=values[i];
+      return sum/count;
+   }
+
+   // A breakeven trade (r_result exactly 0.0) does not count as a win.
+   static double WinRate(const double &r_results[],const int count)
+   {
+      if(count<=0) return 0.0;
+      int wins=0;
+      for(int i=0;i<count;i++) if(r_results[i]>0.0) wins++;
+      return (double)wins/(double)count;
+   }
+
+   // Returns -1.0 (an unambiguous sentinel outside the normal >=0 range)
+   // when there are winning trades but zero losing trades -- a true
+   // profit factor is undefined there, not "infinite" in any useful sense.
+   // Returns 0.0 when there are no winning trades at all (including the
+   // fully-empty case), consistent with Average()'s zero-count behavior.
+   static double ProfitFactorR(const double &r_results[],const int count)
+   {
+      double gross_win=0.0, gross_loss=0.0;
+      for(int i=0;i<count;i++)
+      {
+         if(r_results[i]>0.0) gross_win+=r_results[i];
+         else if(r_results[i]<0.0) gross_loss+=(-r_results[i]);
+      }
+      if(gross_win<=0.0) return 0.0;
+      if(gross_loss<=0.0) return -1.0;
+      return gross_win/gross_loss;
+   }
+
+   // Walks the cumulative-R equity curve in trade order, tracking the
+   // running peak, and returns the largest peak-to-trough drop as a
+   // positive R number (0.0 if the curve never draws down).
+   static double MaxDrawdownR(const double &r_results[],const int count)
+   {
+      double cumulative=0.0, peak=0.0, max_dd=0.0;
+      for(int i=0;i<count;i++)
+      {
+         cumulative+=r_results[i];
+         if(cumulative>peak) peak=cumulative;
+         double dd=peak-cumulative;
+         if(dd>max_dd) max_dd=dd;
+      }
+      return max_dd;
+   }
+};
+
 // Live wrapper: given a closed intent and its closing deal's price/time,
 // derives realized figures from broker history and CopyRates, and writes
 // one CSV row via the same header-once/reopen-per-write pattern as
@@ -109,6 +169,20 @@ public:
 class CMSZZTradeAnalyticsExporter
 {
 private:
+   // D017: fed by every ExportClosedTrade() call this session, so
+   // WriteRunSummary() can aggregate at OnDeinit() without a second,
+   // independent scan of broker history (see DECISION_LOG.md D017
+   // "Rejected alternatives" for why that would risk two numbers silently
+   // disagreeing).
+   double  m_r_results[];
+   int     m_directions[];
+   double  m_mfe[];
+   double  m_mae[];
+   int     m_bars_held[];
+   int     m_trade_count;
+   datetime m_first_signal_time;
+   datetime m_last_close_time;
+
    string Sanitize(const string s) const
    {
       string out=s;
@@ -132,6 +206,15 @@ private:
    }
 
 public:
+   CMSZZTradeAnalyticsExporter(void)
+   {
+      m_trade_count=0;
+      m_first_signal_time=0;
+      m_last_close_time=0;
+      ArrayResize(m_r_results,0); ArrayResize(m_directions,0);
+      ArrayResize(m_mfe,0); ArrayResize(m_mae,0); ArrayResize(m_bars_held,0);
+   }
+
    bool ExportClosedTrade(const MSZZExecutionIntent &intent,
                            const datetime fill_time,
                            const double closing_price,
@@ -194,6 +277,69 @@ public:
                 MSZZExitReasonText(exit_reason),
                 DoubleToString(r_result,4),DoubleToString(mfe_r,4),DoubleToString(mae_r,4),
                 bars_held,MSZZSessionText(session));
+      FileFlush(h); FileClose(h);
+
+      // D017: feed the same trade into this session's run-summary
+      // accumulator -- see WriteRunSummary().
+      int n=m_trade_count;
+      ArrayResize(m_r_results,n+1); ArrayResize(m_directions,n+1);
+      ArrayResize(m_mfe,n+1); ArrayResize(m_mae,n+1); ArrayResize(m_bars_held,n+1);
+      m_r_results[n]=r_result; m_directions[n]=(int)direction;
+      m_mfe[n]=mfe_r; m_mae[n]=mae_r; m_bars_held[n]=bars_held;
+      m_trade_count=n+1;
+      if(m_first_signal_time==0 || intent.signal_time<m_first_signal_time) m_first_signal_time=intent.signal_time;
+      if(closing_time>m_last_close_time) m_last_close_time=closing_time;
+
+      return true;
+   }
+
+   // D017: called once, from OnDeinit(), after every trade this session
+   // has already been fed in via ExportClosedTrade() above. Writes one row
+   // to a continuously-appended master summary CSV. No-op (writes nothing)
+   // if zero trades occurred this session -- matches D016's own behavior
+   // of never writing a trade-level row when there is nothing to report.
+   bool WriteRunSummary(const string symbol,const long magic,const ENUM_TIMEFRAMES timeframe,
+                         const double risk_reward,const string enabled_strategies)
+   {
+      if(m_trade_count<=0) return true;
+
+      double long_r[]; int long_n=0;
+      double short_r[]; int short_n=0;
+      ArrayResize(long_r,m_trade_count); ArrayResize(short_r,m_trade_count);
+      for(int i=0;i<m_trade_count;i++)
+      {
+         if(m_directions[i]==(int)MSZZ_DIR_LONG) long_r[long_n++]=m_r_results[i];
+         else if(m_directions[i]==(int)MSZZ_DIR_SHORT) short_r[short_n++]=m_r_results[i];
+      }
+      ArrayResize(long_r,long_n); ArrayResize(short_r,short_n);
+
+      double win_rate=CMSZZRunSummaryPolicy::WinRate(m_r_results,m_trade_count);
+      double expectancy_r=CMSZZRunSummaryPolicy::Average(m_r_results,m_trade_count);
+      double profit_factor_r=CMSZZRunSummaryPolicy::ProfitFactorR(m_r_results,m_trade_count);
+      double max_dd_r=CMSZZRunSummaryPolicy::MaxDrawdownR(m_r_results,m_trade_count);
+      double avg_mfe_r=CMSZZRunSummaryPolicy::Average(m_mfe,m_trade_count);
+      double avg_mae_r=CMSZZRunSummaryPolicy::Average(m_mae,m_trade_count);
+
+      double bars_held_d[]; ArrayResize(bars_held_d,m_trade_count);
+      for(int i=0;i<m_trade_count;i++) bars_held_d[i]=(double)m_bars_held[i];
+      double avg_bars_held=CMSZZRunSummaryPolicy::Average(bars_held_d,m_trade_count);
+
+      double long_expectancy_r=CMSZZRunSummaryPolicy::Average(long_r,long_n);
+      double short_expectancy_r=CMSZZRunSummaryPolicy::Average(short_r,short_n);
+
+      int h=OpenCsv("MSZZ_RunSummary.csv",
+                    "symbol;timeframe;magic;risk_reward;enabled_strategies;first_signal_time;last_close_time;"+
+                    "trades;win_rate;expectancy_r;profit_factor_r;max_drawdown_r;avg_mfe_r;avg_mae_r;avg_bars_held;"+
+                    "long_expectancy_r;long_trades;short_expectancy_r;short_trades");
+      if(h==INVALID_HANDLE) return false;
+
+      FileWrite(h,symbol,EnumToString(timeframe),magic,DoubleToString(risk_reward,2),Sanitize(enabled_strategies),
+                TimeToString(m_first_signal_time,TIME_DATE|TIME_SECONDS),
+                TimeToString(m_last_close_time,TIME_DATE|TIME_SECONDS),
+                m_trade_count,DoubleToString(win_rate,4),DoubleToString(expectancy_r,4),
+                DoubleToString(profit_factor_r,4),DoubleToString(max_dd_r,4),
+                DoubleToString(avg_mfe_r,4),DoubleToString(avg_mae_r,4),DoubleToString(avg_bars_held,2),
+                DoubleToString(long_expectancy_r,4),long_n,DoubleToString(short_expectancy_r,4),short_n);
       FileFlush(h); FileClose(h);
       return true;
    }

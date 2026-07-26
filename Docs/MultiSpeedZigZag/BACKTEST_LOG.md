@@ -4,6 +4,51 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 (eleventh entry) — Edge Discovery Sprint, Stage A infrastructure: master run-level summary CSV (D017)
+
+Second half of Stage A's stated output; see `DECISION_LOG.md` D017 for exactly what is and is not covered. Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
+
+### Change
+
+- `Include/MultiSpeedZigZag/Diagnostics/TradeAnalyticsExporter.mqh` (extended, not a new file): new `CMSZZRunSummaryPolicy` (pure `Average`/`WinRate`/`ProfitFactorR`/`MaxDrawdownR`). `CMSZZTradeAnalyticsExporter` gains internal accumulation arrays fed by `ExportClosedTrade()` and a new `WriteRunSummary()` method.
+- `Experts/MultiSpeedZigZagEA.mq5`: new `EnabledStrategiesSummary()` helper; `OnDeinit()` now calls `g_trade_analytics.WriteRunSummary(...)`. `#property version` bumped `0.380` → `0.390`.
+- Separately (prior commit, not part of this change but referenced here for the record): corrected D016's `DECISION_LOG.md`/`HANDOFF.md` entries, which had described a realized-profit calculation that was never actually implemented in D016's code.
+
+### Compile
+
+```
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_RunSummary.mq5" /log
+Result: 0 errors, 0 warnings, 532 ms elapsed
+$WINE start /Unix metaeditor64.exe /compile:"MQL5\Experts\MultiSpeedZigZagEA.mq5" /log
+MQL5\Experts\MultiSpeedZigZagEA.mq5(5,11) : warning 68: version '0.390' is incompatible with MQL5 Market, must be xxx.yyy
+Result: 0 errors, 1 warnings, 3275 ms elapsed
+```
+
+Isolated instance: all fourteen targets (Ownership, Determinism, Clusters, Parity, IntentStore, Reconciler, StateMachine, Protection, Margin, Safeguard, Expiry, TradeAnalytics, RunSummary, EA) recompiled clean, hash-verified identical source to the live tree before compiling.
+
+### Deterministic test
+
+`[StartUp] Script=MultiSpeedZigZagTests\Test_MSZZ_RunSummary, Symbol=XAUUSD, Period=M5` on the isolated instance: 10/10 assertions `PASS`, `failures=0` — `Average` on [1,2,3,4] and the empty-set case; `WinRate` with a breakeven correctly excluded and an all-wins case; `ProfitFactorR` for a normal mix (PF=2.0), the all-wins `-1.0` sentinel, and the all-losses `0.0` case; `MaxDrawdownR` for a monotonic curve (0.0), a single large loss after two wins (3.0R), and a peak-trough-recovery shape correctly measured at the trough (2.0R), not the final value.
+
+### Full regression
+
+All twelve unit-test suites re-ran on the isolated instance and reported `failures=0` (or `TEST PASS` for Determinism's single assertion), unchanged from their established baselines. (`Test_MSZZ_Expiry` needed a longer wait on the first attempt in this pass — a timing artifact of the isolated-instance regression harness, not a test failure; it passed cleanly on rerun.)
+
+### Shadow Strategy Tester regression
+
+Two new configs (`shadow_d017_short.ini`, `shadow_d017_long.ini`), same `[Tester]` shape as every prior baseline in this series.
+
+- **Short window** (2026.07.20–2026.07.24): `last test passed with result "successfully finished" in 0:00:00.846`.
+- **Long window** (2026.07.01–2026.07.24): `last test passed with result "successfully finished" in 0:00:05.808`. `MSZZ_Shadow_Report_D017_Long.htm`: 0 Total Trades, 0 Total Deals. This run's log window sliced from the cumulative daily Tester-agent log: 431 `RAW_CANDIDATE` + 178 `MSZZ SHADOW` lines — identical to the D006–D016 baseline. `find ... -iname "MSZZ_RunSummary.csv" -o -iname "MSZZ_TradeAnalytics.csv"` returned no results anywhere under `Tester/` after either run.
+
+Both runs: `MSZZ initialized in SHADOW posture`, `MSZZ account mode=HEDGING`, `MSZZ intent store loaded count=0 unknown=0` at `OnInit()`, clean `MSZZ deinitialized reason=1` at `OnDeinit()` (confirming `WriteRunSummary()` ran and correctly no-op'd rather than erroring), zero `MSZZ WARNING`/error lines.
+
+### Not exercised
+
+Same category as D016: this aggregation logic has never executed against a real completed trade. It has only been exercised by the deterministic unit test's injected arrays.
+
+---
+
 ## 2026-07-26 (tenth entry) — Edge Discovery Sprint, Stage A infrastructure: trade-outcome analytics (D016)
 
 Start of a new, separate track from the execution-safety phases (D005–D015): the Edge Discovery Sprint. See `DECISION_LOG.md` D016 for exactly what is and is not covered. Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting. The isolated instance was occupied by the paused D014/D015 live-integration test at the start of this pass; the user detached the EA (confirmed via journal: `expert MultiSpeedZigZagEA (XAUUSD,M5) removed` at 14:18:48, clean `MSZZ deinitialized reason=1`) before any D016 compile/test work touched the isolated instance.
