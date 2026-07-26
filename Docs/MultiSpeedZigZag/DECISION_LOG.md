@@ -580,3 +580,45 @@ Every one of these has exactly one form of evidence: a deterministic unit test a
 6. Capture and review, in the same pass: the `MSZZ RECONCILE`, `MSZZ PROTECTION`, and order-submission journal lines, plus a post-hoc reconciliation run (a restart) to confirm the reconciler correctly finds and classifies the real position/deal history this test will finally create.
 
 This verdict is a recommendation, not an authorization to act — see `HANDOFF.md` for how this is being surfaced.
+
+## D015 — Stale-signal expiry enforcement (Phase 8), closed as defense-in-depth
+
+**Date:** 2026-07-26
+**Status:** Accepted
+
+### Context and user decision
+
+D014 assessed Phase 8 (stale-signal/expiry revalidation) as "currently unreachable, not currently dangerous," since nothing in the codebase retries or delays a signal, and recommended closing it before any future retry logic is added rather than after. Presented with D014's conditional go/no-go on Phase 13, the user chose explicitly: not yet — close Phase 8 first, stay in shadow-only. This decision is that work.
+
+### A deeper finding than D014 stated
+
+Investigating the fix surfaced something D014 did not know: `MSZZCandidate.expiry_time` is not merely *unenforced* — it is **never assigned a nonzero value anywhere in the strategy code**. Every strategy in `StrategySuite.mqh` constructs its candidates through one shared helper, `CMSZZStrategySuite::AddCandidate()`, and that helper never touches `expiry_time`, leaving it at its zero-initialized default. `OpportunityClusterEngine.mqh`'s cluster-level expiry aggregation logic (propagate the earliest nonzero constituent candidate's expiry to the cluster) is already correct and has been sitting there unused this whole time — it has simply never received a nonzero input to aggregate. This means "closing Phase 8" is not only about adding an enforcement check; the signal-validity horizon has to actually be computed somewhere first, or an enforcement check would just be comparing against a permanently-zero value forever.
+
+### Decision: compute expiry at the single existing choke point, enforce at the single existing execution choke point
+
+- **`CMSZZStrategySuite::AddCandidate()`** (the one place every strategy's candidate is constructed) now sets `c.expiry_time = t + validity_bars * PeriodSeconds()`, where `validity_bars` is a new configurable member (`SetSignalValidityBars()`, mirroring the existing `SetRiskReward()` setter pattern) wired from a new EA input, `InpSignalValidityBars` (default `3` — a signal is considered valid for a small, fixed number of bars past its own close, matching the same order of magnitude as `InpMinBarsBetween`'s existing "a few bars" scale, not a guessed unrelated number).
+- **`ExecuteCluster()`** now checks `cluster.expiry_time` — the cluster-level aggregated value, not the individual winning candidate's own `owner.expiry_time` — because the cluster is the actual unit being decided upon, and the cluster engine's existing aggregation already correctly computes "the earliest point at which any constituent candidate goes stale." A non-positive `expiry_time` (still possible in principle, e.g. if this logic were ever bypassed) is treated as "no expiry configured," consistent with the non-positive-disables-the-check convention already used in D012/D013, not as "always expired."
+- The persisted `intent.expiry_time` field (D007) is left recording `owner.expiry_time` (the winning candidate's own value) unchanged — that is a record of the specific candidate that won, not the enforcement input, and changing what gets recorded there was not necessary to close this gap.
+- The check is placed as the very first content check in `ExecuteCluster()`, before the score/duplicate-cluster checks that already exist there — a stale signal should be rejected before any other consideration, including whether it would have scored well enough to execute.
+
+### Decision: a static, pure comparison function, not a new class
+
+Given the actual comparison is a single line (`expiry_time>0 && now>expiry_time`), this does not warrant a new policy/live-query class pair like D009–D013's guards. Instead, `CMSZZExecutionGuard` (already home to spread/stops/volume checks — an existing "general execution guard" component, not a new concept) gains one new static method, `IsExpired(now, expiry_time)`, pure and deterministic, unit-tested the same way as everything else in this series.
+
+### Rejected alternatives
+
+- **A configurable expiry horizon expressed in seconds/minutes instead of bars**: rejected — every other timing concept in this codebase (`InpMinBarsBetween`, the ATR lookback lengths) is expressed in bars, and a signal's natural staleness horizon is more meaningfully "how many bars have closed since this formed," not a fixed wall-clock duration that would mean something different on every timeframe.
+- **Enforcing against `owner.expiry_time` (the individual candidate) instead of `cluster.expiry_time`**: rejected — the cluster, not the individual candidate, is what `ExecuteCluster()` actually decides to act on, and the cluster engine already has correct, existing logic for aggregating multiple candidates' expiries into one cluster-level value. Enforcing against the narrower value would ignore that existing, correct aggregation.
+- **A new dedicated policy/live-query class pair**: rejected as unnecessary ceremony for a single-line, side-effect-free comparison — see above.
+
+### Migration consequences
+
+None on disk — `ExecutionIntentStore` records are unaffected (the field was always present, D007). Behaviorally: candidates now carry a real, nonzero `expiry_time` for the first time. Since candidates are generated and acted upon synchronously within the same `OnTick()` call (confirmed in D014), the elapsed time between a candidate's `signal_time` and `ExecuteCluster()`'s check of `TimeCurrent()` is, in every currently-possible code path, effectively zero — so this check is not expected to ever actually reject anything under the EA's current architecture. It exists as defense-in-depth for the day retry/backoff logic is added, exactly as the user directed.
+
+### Testing requirements
+
+Deterministic tests for `CMSZZExecutionGuard::IsExpired()` covering: `now` before `expiry_time` is not expired; `now` exactly at `expiry_time` is not expired (expiry is exclusive, matching "valid through this instant"); `now` after `expiry_time` is expired; `expiry_time<=0` is never expired regardless of `now` (disabled, not "always stale"). Additionally, a smoke check that `CMSZZStrategySuite::AddCandidate()` now produces a nonzero, `signal_time`-relative `expiry_time` given a nonzero `validity_bars` setting — exercised via the existing `Test_MSZZ_Clusters.mq5`/shadow-regression evidence rather than a new dedicated test, since candidate construction is already covered there.
+
+### Demo-readiness implications
+
+This closes the one concretely-named gap from D014's verdict that the user chose to close before any live-execution decision. It does not change D014's core finding — no live-execution code path has ever run against real broker state — which remains the determining fact for Phase 13. Risk sizing (Phase 5) remains an assessed non-blocker, and combined-stack fault injection (Phase 11) remains something only real supervised demo activity can close. The Phase 13 go/no-go decision remains open and unchanged by this entry.
