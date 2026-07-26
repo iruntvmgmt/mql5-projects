@@ -2,7 +2,7 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.390"
+#property version   "0.400"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
@@ -356,6 +356,11 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
          Print("MSZZ WARNING: post-accept state transition rejected: ",transition_reason);
       intent.order_ticket=g_trade.ResultOrder();
       intent.first_deal_ticket=g_trade.ResultDeal();
+      // D018: these were declared and persisted since Phase 1 but never
+      // actually assigned anywhere -- always 0.0, silently corrupting every
+      // R-multiple the D016/D017 analytics exporter has ever computed.
+      intent.average_fill_price=g_trade.ResultPrice();
+      intent.filled_volume=g_trade.ResultVolume();
 
       // D011: on a hedging account (the only mode this EA has ever run
       // against), a brand-new position's ticket equals the opening order's

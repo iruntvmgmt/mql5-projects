@@ -4,6 +4,45 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-26 (twelfth entry) — Edge Discovery Sprint, Stage A pipeline validation: `average_fill_price` fix (D018)
+
+First actual Stage A backtest (MediumBreakout, RiskReward=1.0, XAUUSD M5, 2025.03.01–2026.07.24, 548 closed trades) surfaced a real bug: `MSZZ_TradeAnalytics.csv`'s `entry` column was `0.00000000` on every row, and every `r_result`/`mfe_r`/`mae_r` was consequently wrong (a SHORT trade with `exit_reason=TP` — a win — showed `r_result=-0.9948`). See `DECISION_LOG.md` D018 for full root-cause analysis and rejected alternatives.
+
+### Change
+
+- `Experts/MultiSpeedZigZagEA.mq5`: two lines added in `ExecuteCluster()`'s post-fill block, immediately after the existing `intent.order_ticket=g_trade.ResultOrder()` / `intent.first_deal_ticket=g_trade.ResultDeal()` assignments — `intent.average_fill_price=g_trade.ResultPrice();` and `intent.filled_volume=g_trade.ResultVolume();`. Both fields were declared, persisted, and (for `average_fill_price`) consumed by D016's exporter since Phase 1, but never actually assigned anywhere. `#property version` bumped `0.390` → `0.400`.
+
+### Compile
+
+```
+$WINE MetaEditor64.exe /compile:"MQL5\Experts\MultiSpeedZigZagEA.mq5" /log
+Result: 0 errors, 1 warnings, 3554 ms elapsed  (live tree)
+Result: 0 errors, 1 warnings, 3535 ms elapsed  (isolated instance, hash-verified identical source)
+```
+
+### Shadow Strategy Tester regression
+
+Two new configs (`shadow_d018_short.ini`, `shadow_d018_long.ini`), same `[Tester]` shape as every prior baseline. Short window (2026.07.20–2026.07.24): 113 `RAW_CANDIDATE`, 46 unique `SHADOW` cluster IDs, 0 `REJECT_*`/`EXECUTED`/`ORDER_FAILED`, 0 Total Trades/Deals — identical to the established short-window baseline. Long window (2026.07.01–2026.07.24): 431 `RAW_CANDIDATE`, 178 unique `SHADOW` cluster IDs, 0 `REJECT_*`/`EXECUTED`/`ORDER_FAILED`, 0 Total Trades/Deals — identical to the established long-window baseline (D006 onward). Confirms this change is purely additive and does not touch the shadow-mode return path, as expected.
+
+No new deterministic unit test was written — the bug was in live-code field assignment (a call site nothing injects synthetic data through), not in any of D016/D017's already-tested pure policy functions. See D018's own "Rejected alternatives" for why re-running those existing tests would not have caught, and does not verify, this fix.
+
+### Empirical verification (the actual test): re-ran the exact corrupted Stage A config
+
+`stageA_MediumBreakout_RR10.ini` re-run, byte-identical config to the corrupted first attempt. Result: same 548 trades, but now:
+- `entry` column: realistic XAUUSD prices (e.g. `2920.10000000`, `2914.12000000`) instead of `0.00000000` on every row.
+- Every SHORT trade with `exit_reason=TP` now shows `r_result=1.0000` (was `-0.99xx`) — sign and magnitude both correct for RiskReward=1.0.
+
+Run summary (now trustworthy, for the record — this is a real Stage A finding, not a pipeline artifact): 548 trades, win rate 41.61%, expectancy **-0.0768R**, profit factor **0.835**, max drawdown **55.84R**, long expectancy -0.0795R (263 trades), short expectancy -0.0743R (285 trades). MediumBreakout at structural-stop/RiskReward=1.0 shows a modest negative edge after the fix, roughly symmetric between long and short — a legitimate first data point, not yet a verdict (only one of 8 strategies × 4 RR values, no robustness/cross-market/walk-forward testing yet per the user's own staged plan).
+
+Results copied to `~/MT5-MSZZ-TEST/StageA_Results/MediumBreakout_RR10/` (both CSVs + `.htm` report) before the Tester Agent sandbox was wiped by the next relaunch, per this session's known MetaTester Agent gotcha (`Tester/Agent-127.0.0.1-3000/MQL5/Files/` resets on every separate `terminal64.exe` invocation).
+
+### Safety confirmation
+
+- Live MT5 installation and its process (PID unchanged throughout) never touched.
+- All runs against the isolated demo account only (Coinexx-Demo `870012`); this account's stored credentials were separately found wiped by MT5 itself ("deleted due security reason") mid-session and manually re-authenticated by the user — documented in `ISOLATED_TEST_ACCOUNT.md`, not related to this fix.
+
+---
+
 ## 2026-07-26 (eleventh entry) — Edge Discovery Sprint, Stage A infrastructure: master run-level summary CSV (D017)
 
 Second half of Stage A's stated output; see `DECISION_LOG.md` D017 for exactly what is and is not covered. Confirmed no new commits on `github/feature/mszz-standalone-suite` before starting.
