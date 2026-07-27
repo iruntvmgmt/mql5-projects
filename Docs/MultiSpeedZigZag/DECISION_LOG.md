@@ -751,3 +751,57 @@ No new deterministic unit test — the pure policy functions (`RMultiple`, `Excu
 ### Demo-readiness / edge-research-readiness implications
 
 Track 2 (research infrastructure) only — does not touch D014's Phase 13 execution-safety verdict. This closes D016/D017's own named open risk ("unverified against a real closed trade") for the `average_fill_price`-dependent fields specifically. The one MediumBreakout run made before this fix is not usable as a Stage A result and will be re-run after the fix is compiled, synced, and regression-clean.
+
+## D019 — FastBreakout research eligibility override (fail-closed, hardened)
+
+**Date:** 2026-07-27
+**Status:** Accepted
+
+### Scope of this increment
+
+Stage A's D018 investigation found FastBreakout's base score (`4.0`, hardcoded in `StrategySuite.mqh`) is structurally below `InpMinScore` (default `5.0`), and since isolation-mode testing enables only one strategy, no cross-strategy clustering can lift it above threshold — FastBreakout can never produce a standalone trade under canonical settings, by design of the current scoring literals. The user wants FastBreakout evaluated anyway, for research purposes, without changing production scoring for any strategy running normally.
+
+**In scope:** one new pair of EA inputs that lower the effective score threshold, gated behind a fail-closed authorization check so this can never accidentally run against anything but the Tester or the isolated demo account; a manifest CSV recording that a run used this mode; four new Tester configs exercising it against FastBreakout specifically.
+
+**Explicitly deferred:** any change to `StrategySuite.mqh`'s scoring literals themselves (this overrides the *threshold*, not the *score* — FastBreakout's `4.0` is untouched); Stage B-lite execution (D020, harness only this pass); the exit-efficiency study (D021).
+
+### Decision: general override, not FastBreakout-specific, gated fail-closed
+
+One new input pair: `InpResearchMinScoreOverride` (`double`, default `0.0` — a provable no-op, every existing config omits it) and `InpAcknowledgeResearchOverride` (`bool`, default `false`). General rather than narrowly named for FastBreakout, since any strategy could hit this same isolation-mode ceiling later (e.g. after a Stage B ATR-multiplier change shifts an achievable score) and would need the identical mechanism, not a second one-off input.
+
+Authorization is checked once, early in `OnInit()`, before any other setup, and is **all-or-nothing** — if `InpResearchMinScoreOverride>0.0` is set, every one of the following must also hold, or `OnInit()` returns `INIT_FAILED` with a loud `Print()`. There is no partial/fallback path that silently reverts to normal scoring with the override quietly ignored — a config author who gets this wrong needs to see the EA refuse to start, not get confusing results from a threshold they thought they'd changed:
+- `InpAcknowledgeResearchOverride==true` (a second, explicit flag — a single numeric override input is too easy to set accidentally by copy-pasting a `.set` file; a human has to also flip a boolean specifically labeled "acknowledge" for this to activate).
+- Running inside the Strategy Tester (`MQLInfoInteger(MQL_TESTER)`), **or** `AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO` on a live-attached chart.
+- When live-attached (not Tester): `AccountInfoInteger(ACCOUNT_LOGIN)` matches a hardcoded expected login (`870012`, the documented isolated-instance account in `ISOLATED_TEST_ACCOUNT.md`) — hardcoded, not read from an input, specifically so this check can't be satisfied by pointing the override at some *other* demo account by accident. Tester runs skip this specific check since every Tester run is inherently sandboxed regardless of which account the config references.
+
+This mirrors this branch's established fail-closed philosophy (D005 onward: ambiguous or unverifiable states block, they don't proceed optimistically) applied to a new kind of risk — not "did the broker state resolve correctly" but "did a human definitely mean to relax a safety threshold on this specific run."
+
+### Decision: effective-score computed once, used at both existing gate sites
+
+`InpMinScore` is checked at two sites today — once in the per-bar candidate-evaluation path (before `ExecuteCluster()` is even called) and again inside `ExecuteCluster()` itself (defense-in-depth, same pattern as every other guard in this codebase's chain). A new global, `g_effective_min_score`, is computed once in `OnInit()` (set to `InpResearchMinScoreOverride` only after the authorization check above passes; otherwise `InpMinScore` unchanged) and both existing comparison sites are updated to read it instead of `InpMinScore` directly. Computing it once and reusing it avoids the two gates silently disagreeing (one honoring the override, one not) if only one call site were updated.
+
+### Decision: manifest CSV, not folded into the existing run-summary
+
+A new `MSZZ_ResearchManifest.csv`, written once from `OnDeinit()` (alongside, not inside, the existing `WriteRunSummary()` call) **only when research mode was active this run** — a normal Stage A/shadow/live run never writes this file at all, so its mere presence in a Tester Agent sandbox is itself a signal that research eligibility was used. Columns: `configured_min_score;effective_min_score;research_eligibility_enabled;tester_or_demo;account_login;account_server;commit_sha_placeholder;ex5_hash`. `commit_sha` and the compiled `.ex5`'s hash are not obtainable from MQL5 at runtime (same limitation D016/D017 already documented for `commit_sha`) — both columns are written empty and filled in externally (via `git rev-parse` / `shasum`) when the research batch is logged in `BACKTEST_LOG.md`, not faked or hardcoded into the CSV itself.
+
+### Decision: research results kept out of the canonical Stage A masters
+
+New configs (`stageA_research_FastBreakout_RR1.0/1.5/2.0/3.0.ini`, `InpResearchMinScoreOverride=3.5`, `InpAcknowledgeResearchOverride=true` — `3.5` chosen comfortably below FastBreakout's hardcoded `4.0`, not at some arbitrary round number) are run through the existing `Tools/StageA/run_stageA.sh` harness unchanged, but their output is merged into separate `_master_trades_research.csv` / `_master_runsummary_research.csv` files, never appended to the canonical `_master_trades.csv`/`_master_runsummary.csv`. A reader of the canonical Stage A table should never be able to mistake an eligibility-relaxed research result for a normal-scoring one.
+
+### Rejected alternatives
+
+- **A single override input with no acknowledge flag**: rejected — a bare numeric input is exactly the kind of thing that survives a copy-paste of a `.set`/`.ini` file into a context where it was never meant to apply (e.g. accidentally carried into a future live-demo test config). Requiring a second, explicitly-named boolean makes the activation impossible to trigger by accident.
+- **Silently falling back to `InpMinScore` if the authorization check fails, with a warning log only**: rejected — this is precisely the shape of bug this whole branch's discipline exists to prevent: a config author believes research mode is active (because they set the override), gets normal-threshold behavior instead, and the only signal is a log line they may never read. Fail-closed (`INIT_FAILED`) makes the mismatch impossible to miss — the EA simply doesn't start.
+- **Checking account login via a user-suppliable input instead of a hardcoded constant**: rejected — an input the config itself controls doesn't add any real protection (a wrong config could just set the "expected login" to match whatever account it's pointed at, defeating the check's purpose). Hardcoding the one authorized isolated-instance login is a deliberate, if inflexible, choice: extending this to a second isolated instance later means changing code, not just a config value, which is the right amount of friction for a check whose entire job is "prove a human isn't pointing this at the wrong account."
+
+### Migration consequences
+
+None — additive. Every existing config (all 32 Stage A `.ini` files, both shadow-regression configs, the paused live-demo `.set` file) omits both new inputs, so `InpResearchMinScoreOverride` defaults to `0.0` and the authorization block never executes for any of them.
+
+### Testing requirements
+
+A deterministic test of the authorization decision as a pure function (given override value, acknowledge flag, tester-flag, trade-mode, login → pass/`INIT_FAILED` decision), independent of `OnInit()` itself, covering: override `<=0` always passes (mechanism fully disabled); override `>0` with acknowledge `false` → fail; override `>0`, acknowledge `true`, non-demo trade mode, not in Tester → fail; override `>0`, acknowledge `true`, demo mode, wrong login, not in Tester → fail; override `>0`, acknowledge `true`, in Tester (login irrelevant) → pass; override `>0`, acknowledge `true`, demo mode, correct login, not in Tester → pass.
+
+### Demo-readiness / edge-research-readiness implications
+
+Track 2 (research infrastructure) only — does not touch D014's Phase 13 execution-safety verdict, and does not relax any live-execution guard (`InpShadowOnly`/`InpAllowLiveExecution`/`InpAcknowledgeRisk` are untouched; this only ever changes what counts as a high-enough score to be considered, not whether execution itself is authorized). Per the user's broadened standing authorization for the isolated demo account (documented in `ISOLATED_TEST_ACCOUNT.md` and this session's memory), this mechanism is deliberately narrow and fail-closed regardless — the account being disposable is a reason to test aggressively, not a reason to make a scoring-threshold override easier to trigger by accident.
