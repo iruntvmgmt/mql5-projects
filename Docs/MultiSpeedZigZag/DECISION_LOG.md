@@ -1227,3 +1227,57 @@ Every required metric (expectancy_R, PF, max drawdown_R, median/p90 holding time
 ### Testing requirements
 
 Structural-scan equivalence test (duplicated scan vs. real engine, multiple synthetic + real-data cases). Deterministic causal-sequencing tests for every new model family (Chandelier ratchet-never-widens, Fast/Medium swing-trail activation-bar-survives-first, HL/LH-label-filtering distinguishing model 3 from model 4, opposite-structure-exit fires exactly on `bearish_break`/`bullish_break`, combined models 9/11 resolve ties correctly, session-aware model 12 only fires at the lowest-liquidity transition not every boundary), plus the full D022-style sequencing-ambiguity suite (old-stop-before-activation, same-bar trigger-and-new-stop-touch, pessimistic-vs-optimistic divergence, no-lookahead) applied per new model family.
+
+### Two real bugs found and fixed during verification (before any result was trusted)
+
+**Bug 1 — stale/wrong-side ZigZag swing accepted as a trail candidate.** The very first full offline run produced impossible numbers (`FAST_SWING_TRAIL` SIGNAL_LEVEL expectancy +1.18R, PF 3.49; `MEDIUM_SWING_TRAIL` +0.70R, PF 2.37). Root cause: `CMSZZTripleZigZagEngine`'s "last confirmed low/high" can legitimately be *stale* — during a sustained, un-reversed decline, `last_low` still holds the older, higher swing from before the decline began, which can sit **above** current price. `SwingTrailCandidate()` was accepting this as a valid long trailing-stop level purely because it was numerically "better" than the original stop, without checking it was on the correct side of the market — producing a stop placed above price, guaranteeing an immediate spurious "stop-out" that computed as a >100R fake profit via `RMultiple`. Fixed by requiring a candidate be strictly on the correct side of the current bar's close (`< close` for longs, `> close` for shorts) before it can be accepted at all. A dedicated regression test (`TestSwingTrailRejectsStaleWrongSideSwing`) now guards this.
+
+**Bug 2 — off-by-one model-index mapping in the live script.** `ExitSimulatorPhase2.mq5` mapped model index `m` to the `MSZZPhase2Params` array via `pidx=(m<9)?m:m-1`, intended to skip the unused slot for the delegated `TRAIL_AFTER_1R` model (index 9). This was wrong for indices 10 and 11: `BE_1R_PLUS_TRAIL` (m=10) silently ran against `p2[9]` — uninitialized/garbage parameters that happened to resolve to a degenerate zero-multiplier Chandelier trail (locking in almost the exact entry-bar extreme as a stop) — while `SESSION_OVERNIGHT` (m=11) silently ran `BE_1R_PLUS_TRAIL`'s real parameters instead of its own logic. Caught via the same implausible-output review (`BE_1R_PLUS_TRAIL` showing a 75% win rate and PF 6.8). Fixed by removing the shift entirely (`pidx=m`, since `p2[]` is already indexed identically to `g_model_names[]` and slot 9 is simply never read). **Neither bug affected any already-tested code path** — `SwingTrailCandidate`'s unit tests all used data where the stale-swing case didn't arise, and the index bug was purely in the live script's wiring, not in `ExitModelsPhase2.mqh` itself.
+
+Both fixes were cross-validated against two independent known-good baselines before trusting any further numbers: `TRAIL_AFTER_1R` (delegates directly to D021/D022's already-certified `SimulateExit`) reproduced D022's exact `ambiguous_count=92` for FastMedConfluence on the fresh signal set, and `FIXED_2R_PLUS_TIMEOUT`'s magnitude landed in the same ballpark as D022's committed plain `FIXED_2R` result (both near-flat-to-slightly-negative at the full-signal-population level, for the methodological reason described below) — not the wild multi-R-per-trade numbers the bugs were producing.
+
+### Results
+
+**Methodological finding, stated up front because it reframes every number below:** the SIGNAL_LEVEL/PORTFOLIO_LEVEL replay population (530 signals — every `EXECUTED ∪ REJECT_OWNERSHIP` row from a fresh journal capture) is **not the same population** as Stage B's canonical live-EA run (224 executed trades, the source of the `+0.1261R` baseline this study's success criteria were framed against). This is the exact same phenomenon D021 was built to expose in the first place: a given exit choice's own occupancy dynamics determine which signals from the full population actually get taken, so no single fixed trade list is "the" entry set across different exits. Confirmation: D022's own committed plain `FIXED_2R` model (functionally identical to this study's `FIXED_2R_PLUS_TIMEOUT`, since the 24h cap essentially never intervenes before a 2R/stop resolution) shows PORTFOLIO_LEVEL expectancy of **-0.0726R** against the full signal population — nowhere near the live-EA's `+0.1261R`. **The fair comparison for these 12 new models is therefore against this replay methodology's own fixed-2R-equivalent baseline (`FIXED_2R_PLUS_TIMEOUT`, PORTFOLIO_LEVEL +0.0006R), not directly against the `+0.1261R` Stage B number** — both are reported below so the reader can judge either way, but the literal 80%-of-baseline floor as originally specified (against +0.1261R) is not a population-matched comparison and is noted as such rather than silently applied as if it were.
+
+**Full PORTFOLIO_LEVEL results, all 12 models** (SIGNAL_LEVEL numbers, quarterly tables, long/short splits, and MFE/surrender detail for every model are in the committed trade-level CSV; headline table below):
+
+| Model | n | expectancy_r | PF | max DD_R | median hold | p90 hold | %>8h | %>12h | %>24h | ex-best-Q | ambiguous |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| CHANDELIER_TRAIL | 392 | -0.0212 | 0.91 | 19.6 | 25min | **85min** | 0% | 0% | 0% | -0.040 | 116 |
+| FAST_SWING_TRAIL | 176 | +0.0087 | 1.02 | 15.6 | 115min | 4065min (67.8h) | 35% | 28% | 18% | -0.007 | 87 |
+| MEDIUM_SWING_TRAIL | 195 | +0.0051 | 1.01 | 19.2 | 110min | 3035min (50.6h) | 28% | 22% | 14% | -0.037 | 39 |
+| HL_LH_TRAIL | 188 | +0.0082 | 1.01 | 20.0 | 148min | 3295min (54.9h) | 29% | 24% | 15% | -0.047 | 33 |
+| OPPOSITE_FAST_EXIT | 176 | **+0.0337** | **1.06** | 14.9 | 150min | 4065min (67.8h) | 37% | 31% | 19% | **+0.008** | 0 |
+| TIME_8H | 209 | -0.0613 | 0.88 | 22.8 | 480min | 490min (8.2h) | 11% | 8% | 8% | -0.090 | 0 |
+| TIME_12H | 182 | +0.0054 | 1.01 | 24.2 | 720min | 720min (12h) | 58% | 10% | 9% | -0.047 | 0 |
+| TIME_24H | 173 | **+0.0584** | **1.09** | 25.0 | 800min | 3035min (50.6h) | 57% | 51% | 11% | -0.018 | 0 |
+| FIXED_2R_PLUS_TIMEOUT | 187 | +0.0006 | 1.00 | 18.2 | 300min | 1440min (24h, capped by construction) | 46% | 41% | 8% | -0.033 | 0 |
+| TRAIL_AFTER_1R (D021/D022) | 168 | +0.0298 | 1.06 | 10.6 | 140min | 3820min (63.7h) | 35% | 29% | 20% | +0.007 | 92 |
+| BE_1R_PLUS_TRAIL | 160 | -0.0305 | 0.94 | 14.4 | 185min | 3965min (66.1h) | 38% | 32% | 21% | -0.058 | 31 |
+| SESSION_OVERNIGHT | 140 | -0.0986 | 0.86 | 24.0 | 275min | 4305min (71.8h) | 44% | 39% | 26% | -0.149 | 31 |
+
+**Success-criteria screen** (expectancy ≥ 80% of Stage B's +0.1261R = +0.1009R floor; PF > 1.10): **not one of the 12 models clears both bars.** Against the population-matched (`FIXED_2R_PLUS_TIMEOUT`, +0.0006R) baseline instead, three models show real relative improvement: `TIME_24H` (+0.0584R, PF 1.09), `OPPOSITE_FAST_EXIT` (+0.0337R, PF 1.06), and `TRAIL_AFTER_1R` (+0.0298R, PF 1.06) — the latter two are also the only models whose expectancy stays positive with the best quarter excluded, the strongest single robustness signal in this batch.
+
+**Primary objective (reduce p90 holding time without materially damaging expectancy) is not cleanly achieved by any model.** The pattern is a stark trade-off, not a win: models that dramatically cut holding time (`CHANDELIER_TRAIL` at 85 minutes, `TIME_8H` at 8.2 hours) have negative expectancy; models with the best expectancy (`TIME_24H`, `OPPOSITE_FAST_EXIT`, `TRAIL_AFTER_1R`) barely move the p90 tail (50.6-67.8 hours, versus the ~56-77h that motivated this whole study). `TIME_24H` is the best-balanced compromise (p90 cut to 50.6h from the original range, positive expectancy, best PF of the batch) but even it doesn't represent a clean win on both axes simultaneously.
+
+**Cost stress** (same D023 proxy methodology — additional synthetic round-trip cost of 0.25×/0.50×/1.00× of D021's 0.02R flat estimate) on the two best relative performers:
+
+| Model | Baseline | +25% | +50% | +100% |
+|---|---|---|---|---|
+| TIME_24H | +0.0584 (PF 1.09) | +0.0534 (1.08) | +0.0484 (1.08) | +0.0384 (1.06) |
+| OPPOSITE_FAST_EXIT | +0.0337 (1.06) | +0.0287 (1.05) | +0.0237 (1.04) | +0.0137 (1.02) |
+
+Both degrade gradually, staying PF>1.0 even at +100% stress — neither is cost-fragile, for whatever that is worth given neither clears the primary success bar.
+
+### Survivor selection
+
+Per instruction, select no more than 2 survivors even though none pass the strict floor: **`TIME_24H` and `OPPOSITE_FAST_EXIT`** are named as the two most promising candidates for further study — best expectancy/PF in the batch, positive (or near-zero, in `TIME_24H`'s case slightly negative at -0.018) results excluding their best quarter, and (`OPPOSITE_FAST_EXIT` specifically) zero sequencing ambiguity since it is a discrete exit condition rather than a trail. This is **not** a claim that either is ready for live wiring — see explicit scope statement below. `TRAIL_AFTER_1R` (D021/D022's already-vetted model) remains a reasonable third reference point but is not "new" to this study.
+
+### Recommended next step before any live wiring
+
+Rerun `TIME_24H` and `OPPOSITE_FAST_EXIT` against the **live-EA's own actually-executed trade population** (not the full SIGNAL_LEVEL/PORTFOLIO_LEVEL replay set) for a population-matched comparison against the real +0.1261R baseline — this requires either instrumenting the live EA to journal which of its real executed trades would have exited earlier under each candidate model, or accepting the replay population's own (lower) baseline as the correct frame of reference going forward. Given neither candidate cleanly solves the original holding-time problem, longer/out-of-sample history (per D023's own closing recommendation) is likely higher-value next research than iterating further on Phase 2 exit variants against the current single-window sample.
+
+### Explicit scope statement
+
+No exit model from this study is implemented into the live EA. No merge to `main`. Per instruction, no production-ready edge is claimed — the primary objective (cut the holding-time tail without damaging expectancy) is not achieved by any of the 12 models tested, and the two named "survivors" are relative-best-in-batch, not validated candidates.
