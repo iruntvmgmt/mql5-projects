@@ -2,7 +2,7 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.400"
+#property version   "0.410"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
@@ -20,6 +20,11 @@
 #include <MultiSpeedZigZag/Execution/MarginGuard.mqh>
 #include <MultiSpeedZigZag/Execution/AccountSafeguard.mqh>
 #include <MultiSpeedZigZag/Diagnostics/TradeAnalyticsExporter.mqh>
+#include <MultiSpeedZigZag/Research/ResearchEligibilityPolicy.mqh>
+
+// D019: hardcoded, not user-suppliable -- see DECISION_LOG.md D019 for why
+// the authorized login is a compile-time constant rather than an input.
+#define MSZZ_RESEARCH_AUTHORIZED_DEMO_LOGIN 870012
 
 input group "═══ Operating Mode ═══"
 input bool   InpShadowOnly=true;
@@ -51,6 +56,8 @@ input bool InpEnableWeightedEnsemble=true;
 input group "═══ Structure & Signal ═══"
 input int    InpMinBarsBetween=3;
 input double InpMinScore=5.0;
+input double InpResearchMinScoreOverride=0.0;
+input bool   InpAcknowledgeResearchOverride=false;
 input double InpRiskReward=1.5;
 input bool   InpOneOwnedPositionPerSymbol=true;
 input int    InpSignalValidityBars=3;
@@ -88,6 +95,12 @@ CTrade                         g_trade;
 datetime                       g_last_bar=0;
 string                         g_instance_id="";
 bool                           g_recovery_required=false;
+// D019: computed once in OnInit() after the fail-closed authorization
+// check passes; both existing InpMinScore comparison sites read this
+// instead, so the two gates can never disagree about which threshold
+// is in effect.
+double                         g_effective_min_score=0.0;
+bool                           g_research_mode_active=false;
 
 bool LiveExecutionAuthorized(){ return (!InpShadowOnly && InpAllowLiveExecution && InpAcknowledgeRisk); }
 bool EventConsumed(const string id){ return g_event_store.Contains(id); }
@@ -201,7 +214,7 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
       return false;
    }
 
-   if(cluster.combined_score<InpMinScore){ JournalCandidate(owner,"REJECT_SCORE",cluster.cluster_id); return false; }
+   if(cluster.combined_score<g_effective_min_score){ JournalCandidate(owner,"REJECT_SCORE",cluster.cluster_id); return false; }
    if(EventConsumed(persistence_id)){ JournalCandidate(owner,"REJECT_DUPLICATE_CLUSTER",cluster.cluster_id); return false; }
 
    // D009/D011: a RECOVERY_REQUIRED (unresolved broker state) or
@@ -531,7 +544,7 @@ void ProcessClosedBar()
    MSZZCandidate owner=candidates[owner_index];
 
    JournalCluster(selected_cluster,"SELECTED");
-   if(selected_cluster.combined_score<InpMinScore){ JournalCandidate(owner,"REJECT_SCORE",selected_cluster.cluster_id); return; }
+   if(selected_cluster.combined_score<g_effective_min_score){ JournalCandidate(owner,"REJECT_SCORE",selected_cluster.cluster_id); return; }
    if(EventConsumed(selected_cluster.cluster_id)){ JournalCandidate(owner,"REJECT_DUPLICATE_CLUSTER",selected_cluster.cluster_id); return; }
 
    ExecuteCluster(selected_cluster,owner);
@@ -544,6 +557,32 @@ int OnInit()
    if(InpMagic<=0 || InpFastATRLen<1 || InpMedATRLen<1 || InpSlowATRLen<1 || InpFastATRMult<=0.0 ||
       InpMedATRMult<=0.0 || InpSlowATRMult<=0.0 || InpRiskReward<=0.0 || InpHistoryBars<300)
       return INIT_PARAMETERS_INCORRECT;
+
+   // D019: fail-closed research-eligibility authorization. All-or-nothing --
+   // if InpResearchMinScoreOverride>0.0 is set but any required condition
+   // is not met, refuse to start entirely rather than silently falling
+   // back to normal scoring. See DECISION_LOG.md D019.
+   g_effective_min_score=InpMinScore;
+   g_research_mode_active=false;
+   if(InpResearchMinScoreOverride>0.0)
+   {
+      bool is_tester=(bool)MQLInfoInteger(MQL_TESTER);
+      long trade_mode=AccountInfoInteger(ACCOUNT_TRADE_MODE);
+      long login=AccountInfoInteger(ACCOUNT_LOGIN);
+      bool authorized=CMSZZResearchEligibilityPolicy::IsAuthorized(
+         InpResearchMinScoreOverride,InpAcknowledgeResearchOverride,is_tester,
+         trade_mode,login,MSZZ_RESEARCH_AUTHORIZED_DEMO_LOGIN,(long)ACCOUNT_TRADE_MODE_DEMO);
+      if(!authorized)
+      {
+         PrintFormat("MSZZ RESEARCH ELIGIBILITY REJECTED: override=%.2f acknowledge=%s is_tester=%s trade_mode=%d login=%I64d -- refusing to start. See DECISION_LOG.md D019.",
+                     InpResearchMinScoreOverride,(InpAcknowledgeResearchOverride?"true":"false"),(is_tester?"true":"false"),(int)trade_mode,login);
+         return INIT_FAILED;
+      }
+      g_effective_min_score=InpResearchMinScoreOverride;
+      g_research_mode_active=true;
+      PrintFormat("MSZZ WARNING: RESEARCH ELIGIBILITY MODE ACTIVE -- effective min score overridden from %.2f to %.2f",
+                  InpMinScore,g_effective_min_score);
+   }
 
    g_trade.SetExpertMagicNumber(InpMagic);
    g_trade.SetDeviationInPoints(InpDeviationPoints);
@@ -688,8 +727,33 @@ string EnabledStrategiesSummary()
    return (out=="" ? "NONE" : out);
 }
 
+// D019: written only when research eligibility mode was active this run --
+// a normal Stage A/shadow/live run never creates this file at all, so its
+// mere presence in a Tester Agent sandbox is itself a signal. commit_sha
+// and ex5_hash are not obtainable from MQL5 at runtime (same limitation as
+// D016/D017's commit_sha) -- left empty, filled in externally via
+// `git rev-parse`/`shasum` when the research batch is logged.
+void WriteResearchManifest()
+{
+   int h=FileOpen("MSZZ_ResearchManifest.csv",FILE_READ|FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_SHARE_READ,';');
+   if(h==INVALID_HANDLE)
+   {
+      PrintFormat("MSZZ research manifest open failed error=%d",GetLastError());
+      return;
+   }
+   if(FileSize(h)==0)
+      FileWriteString(h,"configured_min_score;effective_min_score;research_eligibility_enabled;tester_or_demo;account_login;account_server;commit_sha_placeholder;ex5_hash\r\n");
+   FileSeek(h,0,SEEK_END);
+   bool is_tester=(bool)MQLInfoInteger(MQL_TESTER);
+   FileWriteString(h,StringFormat("%.2f;%.2f;true;%s;%I64d;%s;;\r\n",
+                   InpMinScore,g_effective_min_score,(is_tester?"TESTER":"DEMO"),
+                   AccountInfoInteger(ACCOUNT_LOGIN),AccountInfoString(ACCOUNT_SERVER)));
+   FileClose(h);
+}
+
 void OnDeinit(const int reason)
 {
    g_trade_analytics.WriteRunSummary(_Symbol,InpMagic,_Period,InpRiskReward,EnabledStrategiesSummary());
+   if(g_research_mode_active) WriteResearchManifest();
    PrintFormat("MSZZ deinitialized reason=%d",reason);
 }
