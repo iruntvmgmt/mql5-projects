@@ -4,6 +4,55 @@ This file is append-only. Add new dated entries; do not rewrite prior evidence.
 
 ---
 
+## 2026-07-27 (fourteenth entry) — FastBreakout research eligibility override, verified (D019)
+
+New `InpResearchMinScoreOverride`/`InpAcknowledgeResearchOverride` inputs, gated behind an all-or-nothing fail-closed `OnInit()` check. See `DECISION_LOG.md` D019 for full design.
+
+### Compile
+`ResearchEligibilityPolicy.mqh`, `Test_MSZZ_ResearchEligibility.mq5`, changed `MultiSpeedZigZagEA.mq5` — 0 errors, live tree + isolated instance, hash-verified identical.
+
+### Deterministic test
+`Test_MSZZ_ResearchEligibility.mq5`: 6/6 `PASS`, `failures=0` — override disabled (always authorized), override without acknowledge (fails), override+acknowledge but real-money/not-Tester (fails), override+acknowledge+demo-but-wrong-login/not-Tester (fails), override+acknowledge+Tester (passes regardless of login), override+acknowledge+correct-demo-login/not-Tester (passes).
+
+### Full regression
+All 13 `Test_MSZZ_*.mq5`/`Export_MSZZ_Parity.mq5` scripts re-ran clean, `failures=0` throughout — unaffected by the D019 changes.
+
+### Shadow regression
+`shadow_d019_short.ini`/`shadow_d019_long.ini`. Short window: 113 `RAW_CANDIDATE`, 46 unique `SHADOW` cluster IDs, 0 orders/deals/trades — identical to baseline. Long window: 431 `RAW_CANDIDATE`, 178 unique `SHADOW` cluster IDs, 0 orders/deals/trades — identical to baseline.
+
+### Empirical verification — FastBreakout research runs
+
+4 configs (`Tools/StageA_Research/stageA_research_FastBreakout_RR*.ini`, `InpResearchMinScoreOverride=3.5`) run via the Stage A harness. FastBreakout now produces trades (previously always 0): RR1.0 290 trades/+0.044R/PF1.11; RR1.5 272/+0.057R/PF1.12; RR2.0 261/+0.080R/PF1.16; RR3.0 246/+0.056R/PF1.10 — positive expectancy at every RR, though short-side is weak-to-flat at RR≥1.5 (same drift-asymmetry pattern flagged in the main Stage A report). Each run's `MSZZ_ResearchManifest.csv` correctly recorded `configured_min_score=5.00`, `effective_min_score=3.50`, `research_eligibility_enabled=true`. Kept in separate `_master_trades_research.csv`/`_master_runsummary_research.csv`, not merged into the canonical Stage A masters.
+
+### Negative-path confirmation
+
+`stageA_research_negtest_FastBreakout_RR10.ini` (`InpAcknowledgeResearchOverride=false`, override still set to `3.5`): Tester Agent log confirms `MSZZ RESEARCH ELIGIBILITY REJECTED: override=3.50 acknowledge=false ... -- refusing to start` followed by `tester stopped because OnInit returns non-zero code 1` — the fail-closed gate genuinely blocks, no silent fallback to normal scoring.
+
+### Safety confirmation
+
+Live MT5 installation and its process never touched. All runs against the isolated demo account only (Coinexx-Demo `870012`). The new authorization check requires Tester mode or a hardcoded matching demo login — verified working via both the positive path (Tester runs, login irrelevant) and the negative path (rejected without acknowledge) in this pass.
+
+---
+
+## 2026-07-26/27 (thirteenth entry) — Edge Discovery Sprint, Stage A baseline complete: all 32 configs, harness fixes (D018 continued)
+
+Full Stage A matrix (8 strategies x 4 RiskReward values) completed after D018's `average_fill_price` fix. Two real infrastructure bugs surfaced and were fixed mid-batch, both now hardened into the harness itself (`Tools/StageA/run_stageA.sh`/`run_all_stageA.sh`):
+
+1. **Wifi drop mid-batch** caused several runs to fail to execute at all; the batch script's completion check at the time didn't distinguish "run genuinely completed" from "run failed, leftover files from a previous run got copied as if fresh" — 6 of 20 attempted results were silently stale/truncated duplicates, caught by a full duplicate-hash audit before merging, discarded, and re-run correctly.
+2. **MetaTester Agent port migration**: after a forceful `pkill` mid-batch, the next agent process started on `Agent-127.0.0.1-3001` instead of the expected `-3000`, and the harness was hardcoded to the original port — causing further stale-data confusion until fixed to dynamically discover whichever `Agent-*/MQL5/Files` directory actually received each run's fresh output. Also fixed: the completion-verification check now requires the `"last test passed"` count to *increase* beyond a pre-launch baseline (not just appear anywhere in the cumulative daily log), closing a gap where a genuinely failed run could false-positive by matching an unrelated earlier run's success line.
+
+All 32 configs re-verified clean after both fixes (correct `strategy_id` per file, zero duplicate hashes across all 28 trade-producing configs, full-range `close_time` on every result). Merged into `Tools/StageA/_master_trades.csv` (8772 trade rows) / `_master_runsummary.csv` (28 rows — FastBreakout's 4 configs produced zero trades, a structural finding not a harness gap, see D018/D019).
+
+**Baseline result**: FastMedConfluence, FastMedContext, and WeightedEnsemble show positive expectancy improving with RiskReward at every level tested (PF 1.10–1.25), positive on both long and short sides. MediumBreakout, MedSlowContext, SlowBreakout, NestedPullback show flat-to-slightly-negative aggregate expectancy driven by a long/short asymmetry (long positive, short flat-to-negative) consistent with directional drift over this XAUUSD bull-run window rather than a genuine bidirectional edge. FastBreakout: 0 trades at every RR — its hardcoded base score (`4.0`) sits structurally below `InpMinScore` (`5.0`) and can never fire in isolation-mode testing (root-caused and reproducibly confirmed, addressed for research purposes in D019 above).
+
+Harness (`Tools/StageA/`: `generate_configs.sh`, `run_stageA.sh`, `run_all_stageA.sh`, the 32 `.ini` configs, both master CSVs, `README.md`) committed to `feature/mszz-standalone-suite`.
+
+### Safety confirmation
+
+Live MT5 installation and its process never touched throughout the entire batch, including through the wifi outage and the two harness-bug investigations. Isolated demo account only; `config/accounts.dat` was found wiped once mid-session (`Accounts: deleted due security reason`) and manually re-authenticated by the user — documented in `ISOLATED_TEST_ACCOUNT.md`.
+
+---
+
 ## 2026-07-26 (twelfth entry) — Edge Discovery Sprint, Stage A pipeline validation: `average_fill_price` fix (D018)
 
 First actual Stage A backtest (MediumBreakout, RiskReward=1.0, XAUUSD M5, 2025.03.01–2026.07.24, 548 closed trades) surfaced a real bug: `MSZZ_TradeAnalytics.csv`'s `entry` column was `0.00000000` on every row, and every `r_result`/`mfe_r`/`mae_r` was consequently wrong (a SHORT trade with `exit_reason=TP` — a win — showed `r_result=-0.9948`). See `DECISION_LOG.md` D018 for full root-cause analysis and rejected alternatives.
