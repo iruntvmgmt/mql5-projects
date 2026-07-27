@@ -67,6 +67,13 @@ input double InpFixedLots=0.01;
 input double InpMaxSpreadPoints=80.0;
 input int    InpDeviationPoints=30;
 input bool   InpExitOwnedOpposite=true;
+// D025: research-only mechanism-decomposition inputs, all default to a
+// no-op so canonical behavior is unchanged unless explicitly opted in.
+// See DECISION_LOG.md D025.
+input bool   InpSuppressReversalEntry=false;  // close on opposite signal, but do not let that same signal reverse into a new position
+input bool   InpDisableFixedTarget=false;     // structural stop only, no take-profit -- exits via SL or opposite-signal reversal only
+input double InpPartialCloseAtR=0.0;          // 0=disabled; else close InpPartialCloseFraction of volume once floating R reaches this on a closed bar
+input double InpPartialCloseFraction=0.5;
 input int    InpMaxPersistentEvents=2000;
 input double InpMarginBufferRatio=1.0;
 
@@ -101,6 +108,12 @@ bool                           g_recovery_required=false;
 // is in effect.
 double                         g_effective_min_score=0.0;
 bool                           g_research_mode_active=false;
+// D025 variants G/H: research-only, in-memory (non-persistent across
+// restarts) record of tickets already partially closed by
+// ProcessPartialCloses(). Not integrated with ExecutionIntentStore --
+// explicitly out of scope for a bounded mechanism-decomposition study.
+// See DECISION_LOG.md D025.
+ulong                          g_partial_closed_tickets[];
 
 bool LiveExecutionAuthorized(){ return (!InpShadowOnly && InpAllowLiveExecution && InpAcknowledgeRisk); }
 bool EventConsumed(const string id){ return g_event_store.Contains(id); }
@@ -155,9 +168,13 @@ bool RefreshOwnership(string &reason)
    return true;
 }
 
-bool ApplyOwnershipPreflight(const ENUM_MSZZ_DIRECTION desired,string &reason)
+// D025: closed_opposite reports whether THIS call actually closed an owned
+// opposite position (i.e. the candidate's own arrival triggered the close),
+// distinct from simply "InpExitOwnedOpposite is enabled" -- consumed by
+// InpSuppressReversalEntry in ExecuteCluster(). See DECISION_LOG.md D025.
+bool ApplyOwnershipPreflight(const ENUM_MSZZ_DIRECTION desired,string &reason,bool &closed_opposite)
 {
-   reason="";
+   reason=""; closed_opposite=false;
    if(!RefreshOwnership(reason)) return false;
 
    MSZZOwnershipSnapshot before=g_ownership.Snapshot();
@@ -168,6 +185,7 @@ bool ApplyOwnershipPreflight(const ENUM_MSZZ_DIRECTION desired,string &reason)
    if(InpExitOwnedOpposite && ((desired==MSZZ_DIR_LONG && before.owned_shorts>0) ||
                                (desired==MSZZ_DIR_SHORT && before.owned_longs>0)))
    {
+      closed_opposite=true;
       if(!RefreshOwnership(reason)) return false;
    }
 
@@ -184,8 +202,11 @@ bool PrepareMarketCandidate(const MSZZCandidate &source,MSZZCandidate &prepared,
    prepared.entry=(source.direction==MSZZ_DIR_LONG ? tick.ask : tick.bid);
    double risk=MathAbs(prepared.entry-source.stop);
    if(risk<=0.0){ reason="market entry equals structural stop"; return false; }
-   prepared.target=(source.direction==MSZZ_DIR_LONG ? prepared.entry+risk*InpRiskReward : prepared.entry-risk*InpRiskReward);
-   return g_execution_guard.ValidateStops(prepared,prepared.stop,prepared.target,reason);
+   // D025 variant F: no fixed take-profit at all -- exits via SL or
+   // opposite-signal reversal only. See DECISION_LOG.md D025.
+   prepared.target=InpDisableFixedTarget ? 0.0 :
+      (source.direction==MSZZ_DIR_LONG ? prepared.entry+risk*InpRiskReward : prepared.entry-risk*InpRiskReward);
+   return g_execution_guard.ValidateStops(prepared,prepared.stop,prepared.target,reason,InpDisableFixedTarget);
 }
 
 bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &owner)
@@ -281,11 +302,30 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
       return false;
    }
 
-   if(!ApplyOwnershipPreflight(prepared.direction,reason))
+   bool closed_opposite=false;
+   if(!ApplyOwnershipPreflight(prepared.direction,reason,closed_opposite))
    {
       prepared.reason=reason;
       JournalCandidate(prepared,"REJECT_OWNERSHIP",cluster.cluster_id);
       return false;
+   }
+
+   // D025 variant C: the close-on-opposite-signal behavior is retained
+   // (it already happened, above), but the same triggering signal is not
+   // allowed to reverse into a new position -- a later, independent
+   // cluster may still enter normally. The cluster is still marked
+   // consumed so this same signal is not retried. See DECISION_LOG.md D025.
+   if(InpSuppressReversalEntry && closed_opposite)
+   {
+      if(!ConsumeEvent(persistence_id))
+      {
+         prepared.reason="execution intent persistence failed after suppressed reversal, order not attempted";
+         JournalCandidate(prepared,"REJECT_INTENT_PERSISTENCE",cluster.cluster_id);
+         return false;
+      }
+      prepared.reason="reversal entry suppressed by InpSuppressReversalEntry after closing owned opposite position";
+      JournalCandidate(prepared,"SUPPRESSED_REVERSAL_ENTRY",cluster.cluster_id);
+      return true;
    }
 
    // D006 idempotent execution-intent persistence: durably mark this cluster
@@ -464,6 +504,16 @@ void DetectClosedPositions()
 
       ulong closing_deal=0; datetime closing_time=0; double closing_price=0.0;
       datetime fill_time=intent.intent_time; // fallback if the opening deal isn't found below
+      // D025: a position may have been PARTIALLY closed earlier (variants
+      // G/H's InpPartialCloseAtR) before this final exit deal. R-multiple
+      // is linear in price for a fixed entry/risk, so the volume-weighted
+      // average price across EVERY exit deal for this position (not just
+      // the last one) gives the exact blended R-multiple across a
+      // partial-then-remainder close sequence -- found and fixed during
+      // D025 verification; the prior single-last-deal-price logic silently
+      // discarded any profit already banked at an earlier partial close.
+      // See DECISION_LOG.md D025.
+      double exit_volume_sum=0.0, exit_price_volume_sum=0.0;
       int deal_total=HistoryDealsTotal();
       for(int d=0;d<deal_total;d++)
       {
@@ -479,9 +529,14 @@ void DetectClosedPositions()
          else if(entry_type==DEAL_ENTRY_OUT || entry_type==DEAL_ENTRY_OUT_BY)
          {
             datetime t=(datetime)HistoryDealGetInteger(ticket,DEAL_TIME);
-            if(t>=closing_time) { closing_time=t; closing_price=HistoryDealGetDouble(ticket,DEAL_PRICE); closing_deal=ticket; }
+            double deal_price=HistoryDealGetDouble(ticket,DEAL_PRICE);
+            double deal_volume=HistoryDealGetDouble(ticket,DEAL_VOLUME);
+            exit_volume_sum+=deal_volume;
+            exit_price_volume_sum+=deal_price*deal_volume;
+            if(t>=closing_time) { closing_time=t; closing_deal=ticket; }
          }
       }
+      if(exit_volume_sum>0.0) closing_price=exit_price_volume_sum/exit_volume_sum;
 
       string transition_reason;
       if(!CMSZZIntentStateMachine::TryTransition(intent,MSZZ_INTENT_POSITION_CLOSED,transition_reason))
@@ -507,6 +562,57 @@ void DetectClosedPositions()
    }
 }
 
+bool TicketAlreadyPartialClosed(const ulong ticket)
+{
+   for(int i=0;i<ArraySize(g_partial_closed_tickets);i++)
+      if(g_partial_closed_tickets[i]==ticket) return true;
+   return false;
+}
+
+void MarkTicketPartialClosed(const ulong ticket)
+{
+   int n=ArraySize(g_partial_closed_tickets);
+   ArrayResize(g_partial_closed_tickets,n+1);
+   g_partial_closed_tickets[n]=ticket;
+}
+
+// D025 variants G/H: checked once per closed bar, using that bar's own
+// favorable extreme -- matches this EA's existing bar-based (not
+// tick-based) decision cadence everywhere else. The exact partial-close
+// fill price may therefore differ slightly from the theoretical
+// R-threshold price; an accepted, documented simplification for this
+// mechanism-decomposition study, not a live-trading-grade feature. See
+// DECISION_LOG.md D025.
+void ProcessPartialCloses(const MqlRates &bar)
+{
+   if(InpPartialCloseAtR<=0.0) return;
+   string reason;
+   if(!RefreshOwnership(reason)) return; // best-effort for this research-only feature; skip this bar's check rather than fail loudly
+   int count=g_ownership.RecordCount();
+   for(int i=0;i<count;i++)
+   {
+      MSZZPositionRecord record;
+      if(!g_ownership.RecordAt(i,record)) continue;
+      if(!record.valid || record.owner!=MSZZ_OWNER_OWNED) continue;
+      if(record.volume<=0.0 || record.stop_loss<=0.0) continue;
+      if(TicketAlreadyPartialClosed(record.ticket)) continue;
+
+      double risk=MathAbs(record.price_open-record.stop_loss);
+      if(risk<=0.0) continue;
+      double favorable=(record.direction==MSZZ_DIR_LONG ? bar.high : bar.low);
+      double fav_r=(record.direction==MSZZ_DIR_LONG ? (favorable-record.price_open) : (record.price_open-favorable))/risk;
+      if(fav_r<InpPartialCloseAtR) continue;
+
+      double close_volume=g_execution_guard.NormalizeVolume(record.volume*InpPartialCloseFraction);
+      if(close_volume<=0.0 || close_volume>=record.volume) continue;
+      if(g_trade.PositionClosePartial(record.ticket,close_volume))
+         MarkTicketPartialClosed(record.ticket);
+      else
+         PrintFormat("MSZZ WARNING: partial close failed ticket=%I64u retcode=%u %s",
+                     record.ticket,g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
+   }
+}
+
 void ProcessClosedBar()
 {
    DetectClosedPositions();
@@ -515,6 +621,8 @@ void ProcessClosedBar()
    int copied=CopyRates(_Symbol,_Period,0,MathMax(300,InpHistoryBars),rates);
    if(copied<100){ PrintFormat("MSZZ insufficient bars copied=%d error=%d",copied,GetLastError()); return; }
    int closed_count=copied-1; if(closed_count<100) return;
+
+   ProcessPartialCloses(rates[closed_count-1]);
 
    g_engine.Configure(InpFastATRLen,InpFastATRMult,InpMedATRLen,InpMedATRMult,InpSlowATRLen,InpSlowATRMult,InpMinBarsBetween);
    if(!g_engine.Rebuild(_Symbol,_Period,rates,closed_count)) return;

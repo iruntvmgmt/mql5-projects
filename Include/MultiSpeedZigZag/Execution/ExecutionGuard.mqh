@@ -96,11 +96,17 @@ public:
       return true;
    }
 
-   bool ValidateStops(const MSZZCandidate &candidate,double &normalized_stop,double &normalized_target,string &reason) const
+   // D025 variant F: disable_target skips every target-related check (the
+   // position is opened with no take-profit at all, target left at 0.0) --
+   // stop validation and orientation are otherwise unchanged. Default
+   // false preserves the exact prior behavior for every existing caller.
+   // See DECISION_LOG.md D025.
+   bool ValidateStops(const MSZZCandidate &candidate,double &normalized_stop,double &normalized_target,
+                       string &reason,const bool disable_target=false) const
    {
       normalized_stop=NormalizeDouble(candidate.stop,m_digits);
-      normalized_target=NormalizeDouble(candidate.target,m_digits);
-      if(candidate.entry<=0.0 || normalized_stop<=0.0 || normalized_target<=0.0)
+      normalized_target=disable_target ? 0.0 : NormalizeDouble(candidate.target,m_digits);
+      if(candidate.entry<=0.0 || normalized_stop<=0.0 || (!disable_target && normalized_target<=0.0))
       {
          reason="non-positive entry/stop/target";
          return false;
@@ -108,12 +114,12 @@ public:
       double min_distance=(double)MathMax(m_stops_level_points,m_freeze_level_points)*m_point;
       if(candidate.direction==MSZZ_DIR_LONG)
       {
-         if(normalized_stop>=candidate.entry || normalized_target<=candidate.entry)
+         if(normalized_stop>=candidate.entry || (!disable_target && normalized_target<=candidate.entry))
          {
             reason="invalid long stop/target orientation";
             return false;
          }
-         if(candidate.entry-normalized_stop<min_distance || normalized_target-candidate.entry<min_distance)
+         if(candidate.entry-normalized_stop<min_distance || (!disable_target && normalized_target-candidate.entry<min_distance))
          {
             reason="long stop/target inside broker minimum distance";
             return false;
@@ -121,12 +127,12 @@ public:
       }
       else if(candidate.direction==MSZZ_DIR_SHORT)
       {
-         if(normalized_stop<=candidate.entry || normalized_target>=candidate.entry)
+         if(normalized_stop<=candidate.entry || (!disable_target && normalized_target>=candidate.entry))
          {
             reason="invalid short stop/target orientation";
             return false;
          }
-         if(normalized_stop-candidate.entry<min_distance || candidate.entry-normalized_target<min_distance)
+         if(normalized_stop-candidate.entry<min_distance || (!disable_target && candidate.entry-normalized_target<min_distance))
          {
             reason="short stop/target inside broker minimum distance";
             return false;
