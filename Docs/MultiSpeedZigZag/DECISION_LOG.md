@@ -929,3 +929,57 @@ None — additive, entirely new files. Existing `MSZZ_TradeAnalytics.csv`/`MSZZ_
 ### Demo-readiness / edge-research-readiness implications
 
 Track 2 (research infrastructure) only — no live EA behavior changes, D014's Phase 13 verdict untouched. This pass's headline result should be read as `OHLC_PESSIMISTIC`-derived, not tick-precise, per the tick-coverage finding above — reported plainly rather than overstated.
+
+## D022 — Exit simulator: same-bar activation sequencing and replay-metric integrity
+
+**Date:** 2026-07-27
+**Status:** Accepted
+
+### Scope of this increment
+
+D021's `SimulateExit()` had a real methodological flaw in every breakeven and trailing model, caught on review before Stage B began: within a single bar, the code updated the stop from that bar's own favorable extreme *first*, then immediately tested that bar's adverse extreme against the *newly moved* stop. Without tick data, the true intrabar order of "price moved favorably enough to arm/ratchet" versus "price moved adversely enough to be stopped out" is unknowable — and the old code silently assumed the favorable event happened first, every time, even in `OHLC_PESSIMISTIC` mode, which is supposed to be the worst-case assumption. This could retroactively manufacture a breakeven/trail save on a bar that a truly worst-case ordering would have stopped out at the *original* stop.
+
+**In scope:** correct the activation/ratchet sequencing for all 5 affected models (`BE_0_5R`, `BE_0_75R`, `BE_1R`, `BE_PLUS_COSTS`, `TRAIL_0_5R_AFTER_1R`); give `OHLC_OPTIMISTIC` its own genuinely favorable-first logic instead of reusing pessimistic sequencing; anchor time-based exits to the real `entry_time` rather than the first forward bar's own timestamp; add dual excursion metrics (until-exit vs. the shared reference horizon) so `percent_mfe_captured` stops conflating two different questions; new deterministic tests for every sequencing edge case; rerun all three strategies against all 14 Phase-1 models with the corrected logic and report what changed.
+
+**Explicitly deferred:** Stage B execution and Phase 2 structural exits — both wait until this correction's results are reviewed, per explicit instruction. No live EA changes.
+
+### Decision: track `stop_at_bar_open` separately from the stop carried into the next bar
+
+Each bar now evaluates the stop **as it stood at that bar's open** against that bar's own high/low *before* any activation/ratchet logic runs. In `OHLC_PESSIMISTIC` mode: if the old stop and target are both touched this bar, the adverse level wins (unchanged from the original same-bar-ambiguity rule, just now applied to the *correct*, pre-update stop value); if only the old stop is touched, the trade exits there — the bar's own favorable excursion never gets a chance to arm or ratchet anything, because the position didn't survive to see it "count"; only a bar that survives against the old stop (neither old stop nor target touched) is allowed to compute a new stop from that bar's favorable extreme, and that new stop is recorded as `stop_at_bar_open` for the *next* bar only — never tested against the bar that produced it.
+
+### Decision: flag same-bar sequencing ambiguity and report both bounds, rather than silently picking one
+
+If a bar survives against the old stop and its favorable extreme would arm/ratchet a new stop, but that same bar's *adverse* extreme would also have touched the newly-computed (not-yet-active) stop, the true outcome is genuinely unknowable without ticks — the primary `OHLC_PESSIMISTIC` result still defers the new stop to the next bar (per the rule above, so the headline numbers stay methodologically consistent), but the row is marked `sequencing_ambiguous=true` and an alternate immediate-exit bound (as if the new stop had been hit the same bar) is computed and reported alongside, rather than silently discarded.
+
+### Decision: `OHLC_OPTIMISTIC` gets its own explicit favorable-first logic, not a reused pessimistic path with the labels swapped
+
+Optimistic mode now assumes the bar's favorable event resolves *first*: a target touch this bar wins outright before any adverse check; otherwise, activation/ratchet is applied first (as if the good move happened before the bad one), and only *then* is the adverse extreme checked against the freshly-updated stop for a same-bar exit. This is a genuinely different computation from pessimistic mode, not the same code path with which-level-wins flipped — the two now diverge exactly where they should (any bar with real intrabar ambiguity), and agree everywhere else.
+
+### Decision: `entry_time` is an explicit parameter, not inferred from `bars[0].time`
+
+Time-based exits (`TIME_4H/8H/12H/24H`) were anchored to `bars[0].time` (the first bar in the supplied forward-path array), documented at the time as "accurate to within one bar" — an approximation that no longer needs to exist now that the live script can simply pass the real `entry_time` through. `SimulateExit()` gains an `entry_time` parameter; the boundary check becomes `bars[i].time >= entry_time + time_limit_seconds`, exact rather than approximate.
+
+### Decision: two excursion metrics, not one ambiguous `percent_mfe_captured`
+
+D021's single `mfe_r`/`mae_r`/`percent_mfe_captured` conflated two different questions: "how much of the excursion available *while this specific model held the trade* was captured" versus "how much of the excursion available over the *shared reference window* (used to keep comparisons fair across models) was captured." Both are now computed and exported separately:
+- `mfe_until_exit_r` / `mae_until_exit_r` — computed only over the bars this specific (signal, model) pair actually held the position, i.e. truncated at that model's own resolved exit.
+- `mfe_reference_horizon_r` / `mae_reference_horizon_r` — the original D021 shared-window computation, unchanged, still comparable across all 14 models for a given signal.
+- `pct_open_trade_mfe_captured` (against the until-exit denominator) and `pct_reference_horizon_mfe_captured` (against the reference-horizon denominator) replace the single D021 `percent_mfe_captured` column, each still null below the same minimum-MFE threshold rather than a meaningless or divide-by-zero ratio.
+
+### Rejected alternatives
+
+- **Assuming adverse-first unconditionally for every same-bar case, including the newly-computed-stop scenario, rather than deferring to the next bar**: rejected — the explicit instruction requires the *primary* pessimistic result to defer the new stop to the next bar (matching how a real broker's server-side trailing-stop modification would only take effect after the modification request completes, not retroactively within the same price bar), while still surfacing the alternate immediate-exit bound for anyone who wants the more conservative number.
+- **Silently reusing `OHLC_PESSIMISTIC`'s same-bar-ambiguity branch for `OHLC_OPTIMISTIC`, just swapping which level "wins"**: rejected per explicit instruction — this was exactly the shortcut that made the original bug easy to miss, since both modes shared one code path differing only in a single comparison. Genuinely separate logic makes the two modes' divergence auditable.
+- **Keeping a single `percent_mfe_captured` and just fixing its denominator**: rejected — the two questions ("how much of what was available while held" vs. "how much of what was available in the shared comparison window") are both legitimately useful and answer different things; collapsing them back into one field would just reintroduce a different ambiguity.
+
+### Migration consequences
+
+D021's committed trade-level CSVs (`Tools/ExitSim/results/*/MSZZ_ExitSim_Trades.csv`) are now known to be corrupted for the 5 affected models (`BE_*`, `TRAIL_0_5R_AFTER_1R`) and must be treated as superseded, not deleted-and-forgotten — this decision log entry and the D022 BACKTEST_LOG.md entry document exactly what was wrong with them and why. The 9 unaffected models (`FIXED_1R/1.5R/2R/3R`, `TIME_4H/8H/12H/24H`, `SESSION_CLOSE`) never had activation/ratchet logic in the first place and are unaffected by this fix — their D021 numbers stand. Output schema gains `mfe_until_exit_r`, `mae_until_exit_r`, `mfe_reference_horizon_r`, `mae_reference_horizon_r`, `pct_open_trade_mfe_captured`, `pct_reference_horizon_mfe_captured`, `sequencing_ambiguous`, `alt_bound_exit_price`, `alt_bound_exit_time`; the D021 single `percent_mfe_captured`/`mfe_r`/`mae_r` columns are superseded by the reference-horizon-suffixed equivalents.
+
+### Testing requirements
+
+New deterministic cases in `Test_MSZZ_ExitSimulator.mq5`: old stop touched before any same-bar favorable move can activate BE (long and short mirror); a bar that survives the old stop and correctly arms/ratchets, with the new stop only live starting the next bar; a same-bar case where the favorable extreme reaches the trail trigger *and* the adverse extreme would cross the proposed new stop (confirms `sequencing_ambiguous` fires and both bounds are populated); a case where the old stop is not hit but the proposed new stop alone would have been (must not exit this bar in pessimistic mode); pessimistic vs. optimistic producing genuinely different outcomes on an identical ambiguous bar; a time exit anchored to a entry_time that does not fall exactly on a bar boundary; MFE-until-exit excluding price movement after the resolved exit; reference-horizon MFE including it; a portfolio-occupancy rerun remaining deterministic after the fix.
+
+### Demo-readiness / edge-research-readiness implications
+
+Track 2 (research infrastructure) only. This does not change whether Stage B or Phase 2 are worth pursuing on its own — it changes whether the numbers used to decide that are trustworthy. Per explicit instruction, Stage B and Phase 2 remain paused until the corrected D021 results (this entry's rerun) are reviewed.
