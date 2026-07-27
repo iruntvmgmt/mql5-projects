@@ -805,3 +805,47 @@ A deterministic test of the authorization decision as a pure function (given ove
 ### Demo-readiness / edge-research-readiness implications
 
 Track 2 (research infrastructure) only — does not touch D014's Phase 13 execution-safety verdict, and does not relax any live-execution guard (`InpShadowOnly`/`InpAllowLiveExecution`/`InpAcknowledgeRisk` are untouched; this only ever changes what counts as a high-enough score to be considered, not whether execution itself is authorized). Per the user's broadened standing authorization for the isolated demo account (documented in `ISOLATED_TEST_ACCOUNT.md` and this session's memory), this mechanism is deliberately narrow and fail-closed regardless — the account being disposable is a reason to test aggressively, not a reason to make a scoring-threshold override easier to trigger by accident.
+
+## D020 — Stage B-lite harness: one-factor-at-a-time ATR robustness (generate only, no execution)
+
+**Date:** 2026-07-27
+**Status:** Accepted
+
+### Scope of this increment
+
+Stage A found positive expectancy in 3-4 strategies under one fixed set of canonical ATR settings. That says nothing about whether those settings are a narrow, lucky peak or sit inside a genuinely robust parameter region — and, symmetrically, whether a Stage-A-negative strategy might have a wide stable plateau somewhere else in the ATR space that canonical settings simply missed. Stage B-lite answers this with one-factor-at-a-time robustness testing across **all 8 strategies**, not just the 3 Stage-A-promising ones — deliberately, so a weak-Stage-A strategy isn't excluded before its parameter space is even looked at, and a strong-Stage-A strategy isn't overrated before its sensitivity to nearby settings is checked.
+
+**In scope this increment:** a config generator producing the 64 non-canonical `.ini` files (8 strategies × 4 factors × 2 non-canonical levels each), committed to the repo, verified for correctness. **Not in scope:** running any of the 64 configs — per explicit prior direction, Stage B execution waits until D021's exit-efficiency Phase 1 results are reviewed, since the exit-model choice could change which strategies are even worth spending robustness-testing time on.
+
+### Decision: fixed RiskReward=2.0 throughout, not "best two Stage A exit targets"
+
+An earlier draft of this plan proposed using each strategy's best two Stage A RR values as the exit models for Stage B. Superseded by explicit direction: entry-parameter robustness and exit-model choice are two different questions, and testing both at once (4 ATR factors × 3 levels × 2 exit models × 8 strategies) would have made the robustness grid's own results harder to read (is a weak cell weak because of the ATR setting, or because of the exit model?). Fixing RiskReward=2.0 as a single shared baseline isolates the entry-robustness question cleanly; exit-model comparison is D021's job entirely.
+
+### Decision: the "ATR length" factor moves all three speeds together
+
+`InpFastATRLen`/`InpMedATRLen`/`InpSlowATRLen` are set to the same tested value (10, 14, or 20) simultaneously when varying the length factor — only the three ATR *multipliers* differentiate fast/medium/slow speed identity from each other, so testing "does a shorter/longer ATR lookback window (applied uniformly) change the outcome" is the meaningful one-factor question, not "what if only the fast speed's length changed while medium/slow stayed at 14" (a combination canonical settings never exercise and that wouldn't isolate a single interpretable factor).
+
+### Decision: canonical-cell reuse from Stage A, with an explicit match requirement
+
+Each factor's canonical level (ATR length 14, Fast mult 1.0, Medium mult 2.0, Slow mult 3.5) is the exact cell Stage A's own RR2.0 run already computed for 7 of the 8 strategies — regenerating and rerunning it would be pure duplicated work. Reuse is only valid because, checked explicitly rather than assumed: same commit family, same `2025.03.01–2026.07.24` data interval, same `Model=2` execution/tick model, same broker/account cost assumptions, same symbol specification, no research-override eligibility mode active (for the 7 non-FastBreakout strategies), and the same CSV output schema. Any future change to any of these invalidates the reuse and that cell must be regenerated and rerun, not assumed. FastBreakout's canonical cell does **not** reuse Stage A (which was 0 trades under normal scoring — not a valid data point) — it reuses D019's research-mode RR2.0 run instead, which used the same `InpResearchMinScoreOverride=3.5`/`InpAcknowledgeResearchOverride=true` eligibility mode Stage B's own FastBreakout configs will also need.
+
+### Decision: extend the existing generator pattern, don't modify it
+
+New `Tools/StageB/generate_configs_stageB.sh`, structurally mirroring `Tools/StageA/generate_configs.sh` (same `[Tester]`/`[TesterInputs]` shape, same magic-number-per-config scheme) rather than editing the Stage A script to take on a second responsibility — Stage A's generator stays exactly as it was for D018, matching this branch's consistent avoidance of retroactively repurposing already-shipped tooling.
+
+### Rejected alternatives
+
+- **Testing all 4 RR values per factor cell (256 configs instead of 64)**: rejected — quadruples execution time for a question (entry robustness) that doesn't need an exit-model sweep to answer; RiskReward is Stage A's and D021's variable, not Stage B's.
+- **Varying two factors at once (e.g. ATR length and Fast multiplier together) to catch interaction effects**: rejected for this pass — one-factor-at-a-time was the user's explicit design; interaction effects are a legitimate follow-up question but multiply the grid size combinatorially and weren't asked for here.
+
+### Migration consequences
+
+None — additive, new files only (`Tools/StageB/*.ini`, generator script, README). No existing Stage A config or result is touched.
+
+### Testing requirements
+
+Config correctness only (this increment produces no new MQL5 code): generator produces exactly 64 files; spot-check confirms the ATR-length factor's configs set all three `*ATRLen` inputs together while leaving multipliers canonical, and each of the other three factors changes exactly one multiplier while leaving everything else canonical.
+
+### Demo-readiness / edge-research-readiness implications
+
+Track 2 (research infrastructure) only. No Tester execution occurs in this increment, so there is nothing to verify empirically yet — that happens once Stage B execution is authorized after D021's Phase 1 review.
