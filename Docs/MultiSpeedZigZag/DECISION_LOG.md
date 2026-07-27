@@ -849,3 +849,83 @@ Config correctness only (this increment produces no new MQL5 code): generator pr
 ### Demo-readiness / edge-research-readiness implications
 
 Track 2 (research infrastructure) only. No Tester execution occurs in this increment, so there is nothing to verify empirically yet — that happens once Stage B execution is authorized after D021's Phase 1 review.
+
+## D021 — Exit-efficiency simulator, Phase 1
+
+**Date:** 2026-07-27
+**Status:** Accepted
+
+### Scope of this increment
+
+Stage A's exit model is fixed structural-stop N-R. The FastMedConfluence RR3.0 run held positions ~23 hours on average — inconsistent with an intraday objective, and the open question is whether a different exit converts more of the already-observed favorable excursion (MFE) into realized profit without reintroducing that holding-time problem. This increment builds and validates **Phase 1 only** (14 exit models: fixed-R, breakeven variants, one fixed-distance trail, time exits, session-close) — Phase 2 (structural: ATR trail, ZigZag confirmed-swing trails, opposite-structure exit) and Phase 3 (partial-close hybrids) are named, deferred, separate future decisions, built only after this pass is reviewed.
+
+**Explicitly out of scope:** any live EA exit-management code (`ExecuteCluster()`'s entry logic and the broker-side fixed SL/TP it submits are completely untouched); Phase 2/3 exit models; executing Stage B (D020).
+
+### Decision: replay entries offline, not live in the EA
+
+Confirmed via source inspection: nothing in this codebase does per-tick or per-bar position management after an order fills — `g_trade.Buy()/Sell()` submits a fixed broker-side SL/TP and that's the entire exit mechanism today. Implementing 14 (and eventually more) exit models as live EA behavior would mean new `OnTick()`-level position management, broker-side trailing-stop modification calls, and a full Tester re-run per model per strategy (~14 runs × several strategies). Building an **offline replay engine** instead — taking a fixed, already-captured entry set and simulating every exit model against the identical post-entry price path — is both far cheaper to run and methodologically cleaner: entries are guaranteed identical across every exit-model comparison by construction, rather than relying on separate Tester runs never producing any small nondeterminism between them.
+
+### Decision: two replay modes, not one — SIGNAL_LEVEL and PORTFOLIO_LEVEL
+
+A review of Stage A's own data caught a real flaw in an earlier draft of this design: Stage A's trade counts differ across RR values (e.g. MediumBreakout: 548 trades at RR1.0, 502 at RR3.0) **because of position occupancy, not because the entries differ** — a longer-held trade (higher RR) blocks the one-owned-position constraint from taking a later signal that a shorter-held trade would have caught. Treating any single RR's completed-trade CSV as "the" entry set for exit-model comparison would silently bake one exit model's own occupancy behavior into the entry sample being tested against a *different* exit model — comparing apples that were never actually the same signals.
+
+Two separate replays instead, using the same underlying signal stream, run against every exit model:
+- **SIGNAL_LEVEL**: every qualifying signal, independent of occupancy, overlapping trades allowed. Confirmed buildable entirely from data Stage A already captured — `MSZZ_SignalJournal.csv` already logs `EXECUTED` and `REJECT_OWNERSHIP` as distinct statuses (alongside `RAW_CANDIDATE`, `ORDER_FAILED`, `REJECT_EXPIRED`, `REJECT_SPREAD`, `REJECT_STOPS`). The union of `EXECUTED` and `REJECT_OWNERSHIP` rows is exactly "passed every other guard, blocked only by occupancy" — the immutable signal-level entry set, with no new EA instrumentation required. Answers: "given identical signals, which exit converts more MFE into realized return."
+- **PORTFOLIO_LEVEL**: the same signal stream replayed chronologically, enforcing one-owned-position + expiry, letting *each exit model's own* resolution determine when the hypothetical position frees the account for the next signal — occupancy duration is now exit-model-dependent and computed dynamically during replay, not read from whatever RR Stage A happened to have used. Answers: "what would the EA actually have executed under this exit model," including how many later signals it cost.
+
+Both modes report qualifying signals, executed trades, skipped-while-occupied, occupancy %, average time between executable trades, return per calendar day, and return per exposure-hour, for every exit model.
+
+### Decision: bid/ask execution, not mid-price plus a generic cost subtraction
+
+Long trades enter at ask and have stop/target/exit checked against executable bid; short trades enter at bid, checked against ask. Commission, swap, slippage, and tick size are modeled as separate explicit fields, not folded into one "cost" number — this is the same level of rigor D016 already applies to R-multiple computation (average fill price, not requested price) applied to the exit side. Long/short symmetry (one of the validation cases) is checked **after** spread handling is applied, which is a stricter, more honest test than checking symmetry on unspread mid-prices and hoping it survives cost modeling unexamined.
+
+### Decision: tick replay is the primary path when coverage exists — but a build-time probe found it effectively doesn't, for this window
+
+The plan for this increment specified tick data should drive the *entire* simulation (entry, stop/target detection, breakeven/trail activation, MFE/MAE, exit ordering) wherever coverage exists, not just resolve same-bar OHLC ambiguity. A read-only probe of the isolated instance's local cache before building found: `Tester/bases/Coinexx-Demo/history/XAUUSD/` has only bar-level `.hcs` files, no tick cache at all; the terminal-level `bases/Coinexx-Demo/ticks/XAUUSD/ticks.dat` exists but is only ~124KB — a tiny recent window (almost certainly from live-chart activity during this session), nowhere near enough to cover the `2025.03.01–2026.07.24` Stage A window. **Tick coverage is effectively unavailable for this historical range on this instance.** Downloading full 17-month tick history for a liquid instrument is a large, slow operation not attempted without separate authorization, since it wasn't asked for and its cost/benefit for a Phase 1 pass whose exit models don't need sub-bar precision (none of the 14 Phase 1 models depend on knowing which of two same-bar levels was touched first, except the trail-activation-timing edge case) is unclear.
+
+Consequence: all three replay-price modes are implemented and unit-tested (`TICK_RESOLVED`, `OHLC_PESSIMISTIC`, `OHLC_OPTIMISTIC`), but **`OHLC_PESSIMISTIC` is the actual primary evidence for every result in this pass** — every trade's `replay_price_mode` and `tick_coverage_pct` field records this honestly rather than the report implying tick-level precision that doesn't exist. `TICK_RESOLVED` remains available and tested for whenever real tick coverage is obtained (e.g. if a future increment explicitly downloads it).
+
+### Decision: session-close given an explicit, checkable specification
+
+Reuses `CMSZZTradeAnalyticsPolicy::SessionBucket` (D016) for the three 8-hour buckets rather than redefining session windows a second way, but the exit model itself additionally records the exact session-boundary timestamp, that DST is **not** modeled (same simplification `SessionBucket` already documents, not silently inherited), and — since no tick exists at bar boundaries when running in `OHLC_PESSIMISTIC` mode — that the boundary bar's own close price is used as the executable exit price, recorded per trade rather than left implicit.
+
+### Decision: MFE-capture percentage is null, not zero or divide-by-zero, below a threshold
+
+`surrender_r = mfe_r - realized_r` is always computed and reported. `percent_mfe_captured = realized_r / mfe_r` is only computed when `mfe_r` exceeds a configured minimum (`0.1R`) — below that, the ratio is not meaningful (a trade with `mfe_r=0.02R` "capturing" any fraction of it says nothing about exit quality) and the field is `null`, excluded from every mean/median aggregate rather than silently pulling the average toward an arbitrary value or crashing on division by a near-zero number.
+
+### Phase 1 exit models (14)
+
+Fixed 1R / 1.5R / 2R / 3R (reproduces Stage A's own exit for a clean baseline comparison against the newer models); breakeven activated at +0.5R / +0.75R / +1R; breakeven-plus-estimated-costs (stop moved to entry plus estimated round-trip commission/spread in price terms); one fixed-distance trail (0.5R trailing distance, armed only after price first reaches +1R, monotonic — the trail may only move in the profitable direction, enforced in the policy layer and covered by a dedicated test); time exits at 4h / 8h / 12h / 24h; session-close.
+
+### Design: files and output schema
+
+- `Include/MultiSpeedZigZag/Research/ExitSimulatorPolicy.mqh` — pure, static, deterministic exit-resolution functions, one per Phase-1 model family (not 14 near-duplicates), parameterized by a small struct. No MT5 API calls, directly unit-testable with hand-built synthetic bar arrays, matching this whole branch's policy/live split precedent.
+- `Scripts/MultiSpeedZigZagTools/SignalSetExporter.mq5` — reads `MSZZ_SignalJournal.csv`, emits the SIGNAL_LEVEL set.
+- `Scripts/MultiSpeedZigZagTools/ExitSimulator.mq5` — the live replay engine, both modes.
+- `Tests/MultiSpeedZigZag/Test_MSZZ_ExitSimulator.mq5` — the validation suite below.
+
+Per-trade schema: `replay_mode;strategy_id;exit_model;cluster_id;direction;entry_time;exit_time;exit_reason;entry_price;initial_stop;initial_risk;gross_r;net_r_after_costs;mfe_r;mae_r;bars_to_mfe;minutes_to_mfe;bars_held;minutes_held;surrender_r;percent_mfe_captured;reached_0_5r;reached_1r;reached_1_5r;reached_2r;reached_3r;reached_1r_then_negative;spent_time_above_breakeven;number_of_trail_updates;final_stop;commission;swap;slippage;replay_price_mode;tick_coverage_pct;fallback_reason;session;weekday;skipped_while_occupied`. `partial_exit_r`/`remainder_exit_r` declared but always `null` in Phase 1, so Phase 3's hybrid models don't require a schema migration later.
+
+Per-(strategy, exit_model, replay_mode) aggregate schema extends D017's `CMSZZRunSummaryPolicy` (reusing `WinRate`/`ProfitFactorR`/`MaxDrawdownR`/`Average`, not reimplementing them) with the occupancy/timing/MFE-capture columns listed in this session's plan file.
+
+### Validation suite
+
+Target-hit-first, stop-hit-first, same-bar ambiguity (pessimistic vs. optimistic divergence), breakeven-then-reversal, trail ratcheting, trail-never-widens, time-exit exact-boundary, session-close boundary, long/short symmetry after spread handling, commission/swap arithmetic, no-lookahead (truncated-vs-full-array produces identical results up to the shared decision point), long bid/ask path, short bid/ask path, spread-widening-before-stop, spread-widening-before-target, missing/partial tick coverage fallback, no-tick-at-time-exit-boundary, no-tick-at-session-close, signal-level identical-entry-count across models (*E2E*), portfolio-level *differing* trade count across models (*E2E* — the key assertion proving occupancy dynamics actually respond to exit-model choice, not a fixed Stage-A-inherited number), occupancy-blocking caused by a long-held trade (*E2E*), same signal stream producing different executed trades under different exits (*E2E*), deterministic replay hash (*E2E*, two runs on identical input produce byte-identical output). Structural-pivot no-lookahead case deferred to Phase 2 (no pivot-based model exists yet).
+
+### Rejected alternatives
+
+- **Using any single Stage A RR's completed-trade CSV as the fixed entry set**: rejected — see the SIGNAL_LEVEL/PORTFOLIO_LEVEL decision above; this was the actual flaw caught in the first draft of this plan.
+- **Downloading full tick history before building anything**: rejected for this pass — large, slow, not requested, and Phase 1's exit models don't need sub-bar precision badly enough to justify the cost before even knowing whether Phase 1 changes the picture. Revisit if Phase 2's structural exits (which may care more about precise intrabar sequencing) make the case stronger.
+- **Mid-price entries with one blended "cost" subtraction**: rejected — bid/ask modeling is barely more code and materially more honest, especially for comparing exit models whose holding-time distributions differ (spread cost is paid once per trade regardless of holding time; a cruder model would bias comparisons between short-holding and long-holding exit models in ways that have nothing to do with exit quality).
+
+### Migration consequences
+
+None — additive, entirely new files. Existing `MSZZ_TradeAnalytics.csv`/`MSZZ_RunSummary.csv`/`MSZZ_SignalJournal.csv` schemas are read, never written to or altered.
+
+### Testing requirements
+
+`Test_MSZZ_ExitSimulator.mq5` covering the synthetic cases above against `ExitSimulatorPolicy.mqh`'s pure functions; E2E cases verified against the actual three-strategy run output rather than synthetic data, per this branch's established distinction between what a unit test can prove and what only a real run can.
+
+### Demo-readiness / edge-research-readiness implications
+
+Track 2 (research infrastructure) only — no live EA behavior changes, D014's Phase 13 verdict untouched. This pass's headline result should be read as `OHLC_PESSIMISTIC`-derived, not tick-precise, per the tick-coverage finding above — reported plainly rather than overstated.
