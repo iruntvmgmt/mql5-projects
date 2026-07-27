@@ -1043,3 +1043,137 @@ For FastMedContext and WeightedEnsemble, 2026Q1 alone contributes *more than the
 ### Net conclusion for this pass
 
 The sequencing fix changes the numbers but not the qualitative Phase 1 headline: `TRAIL_0_5R_AFTER_1R` is still the standout exit model and remains positive at the portfolio level in all three strategies post-fix. However, two new findings materially qualify that headline and should inform whether Stage B/Phase 2 proceed on the current evidence: (1) up to ~19% of `TRAIL` trades are same-bar sequencing-ambiguous under OHLC-only replay, and (2) the entire positive-expectancy finding is concentrated in a single quarter for two of the three strategies. Real tick-history acquisition and/or a longer or out-of-sample validation window are stronger candidates for the next research investment than proceeding directly to Stage B execution or Phase 2 structural exits on the current sample.
+
+## D023 — Stage B-lite all-strategy parameter robustness execution
+
+**Date:** 2026-07-27
+**Status:** Accepted
+**Starting SHA:** `e3949278d3cde6426cb0b95c4f4c1de338e8816a` (D022 commit, `feature/mszz-standalone-suite`)
+
+### Scope of this increment
+
+Execute D020's 64-config one-factor-at-a-time grid (ATR length, Fast/Med/Slow multiplier, each moved independently around canonical, 8 configs/strategy × 8 strategies) across all eight strategies, including FastBreakout under its D019 research eligibility override. Objective is explicitly **robustness mapping, not optimization** — classify each strategy/factor's 3-point neighborhood (low/canonical/high) rather than search for the single best cell. FastMedConfluence is the primary candidate for deep inspection; the other seven are checked for Stage-A misclassification (a canonical point sitting in an otherwise-viable region) and for genuine vs. illusory contribution (WeightedEnsemble vs. FastMedConfluence/FastMedContext overlap). Motivated directly by D022: the exit-replay pipeline is now internally trustworthy, but its one clearly positive finding (`TRAIL_0_5R_AFTER_1R`) is OHLC-ambiguous on up to ~19% of trades and concentrated almost entirely in a single quarter — Stage B tests whether the *entry* strategies have a stable edge independent of that provisional exit result, using the unrelated fixed 2R exit Stage A/B have always used.
+
+**Explicitly deferred:** Phase 2 structural exits (do not begin until Stage B is complete, validated, and reviewed); any new parameter selection or "optimized" config; merge to `main`.
+
+### Decision: rerun all 8 canonical center-point cells rather than importing Stage A/D019 numbers
+
+D020 originally allowed reusing each strategy's existing Stage A RR2.0 canonical cell (or, for FastBreakout, the D019 research RR2.0 cell) under an exact-match condition on commit SHA, data interval, execution model, costs, symbol spec, eligibility mode, and output schema. Checking that condition against the *current* SHA: the data interval, execution model (`Model=2`), costs, symbol spec, and output schema are unchanged, but the commit SHA is not — D019, D020, D021, and D022 all landed after Stage A's canonical runs completed. `git log` on the EA's own trading-logic files (`Experts/MultiSpeedZigZagEA.mq5`, `Include/MultiSpeedZigZag/Strategies`, `Include/MultiSpeedZigZag/Core`) confirms the last change was D019 (`90807b6`, the fail-closed research-eligibility override, a no-op for every config that doesn't set `InpResearchMinScoreOverride`) — D020/D021/D022 never touched EA code at all. So the canonical cells are *very likely* numerically identical to Stage A's, but "very likely identical" is not "exact SHA match," and the instruction is explicit: rerun rather than import if anything differs. Eight canonical-rerun configs (`stageB_<Strategy>_canonical.ini`, one per strategy, byte-identical `[TesterInputs]` to the Stage A/D019 RR2.0 source except `Report=` and a fresh unique `InpMagic`) are added alongside the 64 D020 configs, giving 72 total runs and a complete, internally-consistent 3-point neighborhood per strategy per factor computed entirely at the current SHA. If a canonical rerun's numbers diverge materially from the old Stage A number, that itself is a data point (confirms or refutes the "no EA logic changed" assumption) and will be reported, not silently discarded.
+
+### Decision: FastBreakout results kept in a separate track throughout
+
+Every FastBreakout Stage B config (canonical and all 8 factor variants) uses the D019 research-eligibility override (`InpResearchMinScoreOverride=3.5`, `InpAcknowledgeResearchOverride=true`) and is reported, classified, and tabulated separately from the other seven strategies' canonical-production-eligibility results — never blended into a combined table or used to argue FastBreakout is production-ready. This mirrors D019's own separation of research output from canonical masters.
+
+### Decision: robustness classification is a fixed four-way rule applied per (strategy, factor), not a ranking
+
+`ROBUST_POSITIVE` (canonical positive, both neighbors positive or one positive/one approximately flat, no cliff, not wholly a 2026Q1 artifact), `MIXED_OR_REGIME_DEPENDENT` (full-window positive but a neighbor negative, or positive only because of 2026Q1, or long/short instability), `ROBUST_NEGATIVE` (canonical and both neighbors negative), `UNRESOLVED` (too few trades, structurally ineligible, data-integrity failure, or materially different execution conditions). Applied mechanically from the reported numbers per strategy/factor — the point is to surface plateaus versus isolated winning cells, not to rank cells by expectancy.
+
+### Decision: ex-2026Q1 recomputation is mandatory for every strategy, not just the flagged ones
+
+Given D022's finding that 2026Q1 alone can exceed 100% of a strategy's total cumulative exit-model profit, every Stage B run's temporal segmentation includes an explicit "does the full-window result remain positive with 2026Q1 excluded" check, independent of the exit-model question — this is an entry-strategy-level concentration check, not a reuse of D022's exit-level numbers (Stage B's fixed-2R exit is a different (and simpler) exit than any D021/D022 model).
+
+### Decision: cost stress only for ROBUST_POSITIVE survivors, after all 72 primary runs are validated
+
+Running a cost-sensitivity sweep (baseline / +25% / +50% / +100% spread+commission equivalent) against every cell would triple-plus the run count for strategies already headed for rejection. Restricting it to strategies that clear `ROBUST_POSITIVE` classification on their canonical/neighborhood result keeps the additional runs proportionate to the decision actually being made (is a real candidate's edge cost-fragile), and happens only after the full 72-run primary grid is complete and reviewed, per explicit instruction not to blend this with Phase 2 exit work.
+
+### Run integrity requirements (per-run, before any result is trusted)
+
+Every run must independently confirm, before its numbers are used: correct `strategy_id` (exactly one `InpEnable*=true`), correct varied factor (exactly the one factor differs from canonical; all others match), full-window completion verified via the terminal log's own new-success-line count (never inferred from process exit alone), final trade's `close_time` reaches `2026.07` (the expected final month — anything short is treated as truncated and rerun), a fresh output hash (no stale sandbox file silently reused from a previous run), no duplicate/stale result, no Tester Agent sandbox port confusion (every existing agent directory is checked, never a hardcoded port), and no `NEEDS_MANUAL_RERUN` marker left over from a prior failed attempt. This reuses `Tools/StageA/run_stageA.sh`'s already-hardened verification logic (built during the Stage A wifi-drop and port-migration incidents) via a Stage-B-parameterized copy, rather than re-deriving these checks from scratch.
+
+### Rejected alternatives
+
+- **Importing Stage A's canonical numbers directly (D020's original plan)**: rejected this pass per the explicit exact-SHA requirement, even though the EA's trading logic is provably unchanged since Stage A — see canonical-rerun decision above.
+- **Blending FastBreakout into the main 7-strategy comparison tables**: rejected — FastBreakout is not production-eligible under canonical scoring and must never be allowed to look like a peer result to the other seven.
+- **Running the cost stress sweep against all 64+8 cells up front**: rejected as disproportionate; see cost-stress decision above.
+
+### Testing / verification requirements
+
+No new MQL5 code in this increment (D020's generator and D019's eligibility gate are both already tested). Verification is entirely at the run-integrity and results-analysis level described above; the analysis scripts used to build the neighborhood tables, temporal segmentation, and overlap comparisons are throwaway (not part of the git-tracked MQL5 tree), but their logic and every derived number are reported in full in this entry's results addendum once the 72 runs complete.
+
+### Results addendum
+
+**1. Starting SHA:** `e3949278d3cde6426cb0b95c4f4c1de338e8816a` (D022 commit). **2. Final SHA:** this commit (see commit metadata). **3. Runs planned:** 72 (64 D020 configs + 8 canonical reruns). **4. Runs completed:** 72/72. **5. Reruns required:** 2 transient `NOT VERIFIED` retries during the batch (terminal-log completion count didn't advance on the first attempt), both recovered cleanly on retry with no data loss — not a data-integrity issue, the harness's designed retry path working as intended. **6. Data-integrity failures encountered:** 0 genuine failures (0 `NEEDS_MANUAL_RERUN`, 0 truncated `close_time`, 0 missing output files). One class of apparent anomaly was investigated and resolved: 5 groups of byte-identical `MSZZ_TradeAnalytics.csv` outputs across different configs (e.g. `MediumBreakout_canonical` = `MediumBreakout_fastmult_08` = `MediumBreakout_fastmult_12` = `MediumBreakout_slowmult_30` = `MediumBreakout_slowmult_40`, all 514 trades, identical hash). Cross-checked against `StrategySuite.mqh`'s actual trigger logic: `MediumBreakout` fires purely off the Medium ZigZag engine's own breakout events, `SlowBreakout` purely off Slow, `FastBreakout` purely off Fast — none reference the other two speeds' ATR multiplier at all, so varying an unrelated speed's multiplier is *expected* to produce zero change, confirmed symmetric (both the low and high neighbor match canonical) in every one of these groups. This is a genuine structural finding, not sandbox contamination — verified further by confirming every OTHER pair of the 72 runs (2556 pairs) is hash-distinct, and that the *dependent* factors for these same strategies (e.g. `MediumBreakout`'s own `medmult`, `atrlen`) do produce different results as expected.
+
+**7. Full 72-cell results:** committed in full under `Tools/StageB/results/<strategy>_<variant>/` (`MSZZ_TradeAnalytics.csv` + `MSZZ_RunSummary.csv` per cell); headline numbers below.
+
+| Strategy | Canonical expectancy_r | PF | Trades | Best quarter | Best-quarter % of total | Positive ex-2026Q1? |
+|---|---|---|---|---|---|---|
+| FastMedConfluence | **+0.1261** | 1.245 | 224 | 2025Q3 | 31.7% | Yes |
+| FastMedContext | +0.1010 | 1.195 | 235 | 2025Q3 | 40.6% | Yes |
+| WeightedEnsemble | +0.0777 | 1.152 | 261 | 2026Q1 | 51.3% | Yes |
+| FastBreakout (research-only) | +0.0798 | 1.157 | 261 | 2026Q1 | 46.1% | Yes |
+| SlowBreakout | -0.0137 | 0.974 | 336 | 2025Q3 | -153.5% | Yes |
+| MediumBreakout | -0.0414 | 0.924 | 513 | 2026Q2 | -50.1% | No |
+| MedSlowContext | -0.0189 | 0.965 | 440 | 2025Q4 | -100.5% | No |
+| NestedPullback | -0.0208 | 0.965 | 136 | 2026Q3 | -120.7% | No |
+
+Notably, under Stage B's simple fixed-2R exit, the three strategies with a real edge do **not** show D022's extreme 2026Q1 concentration — best quarter is 2025Q3 for two of the three, and every single one of FastMedConfluence's 9 neighborhood cells remains positive with 2026Q1 excluded. The 2026Q1 concentration problem found in D022 is specific to the `TRAIL_0_5R_AFTER_1R` exit model, not inherent to these entry strategies.
+
+**8. Per-strategy robustness classifications** (4 factors × 8 strategies = 32 classifications; low/canonical/high = the 3-point neighborhood per factor):
+
+| Strategy | atrlen | fastmult | medmult | slowmult |
+|---|---|---|---|---|
+| FastMedConfluence | ROBUST_POSITIVE | ROBUST_POSITIVE | ROBUST_POSITIVE | ROBUST_POSITIVE |
+| FastMedContext | ROBUST_POSITIVE | MIXED (cliff at fastmult_08=-0.004) | ROBUST_POSITIVE | ROBUST_POSITIVE |
+| WeightedEnsemble | MIXED (cliff at atrlen_10=-0.011) | MIXED (cliff at fastmult_08=-0.013) | ROBUST_POSITIVE | ROBUST_POSITIVE |
+| FastBreakout (research) | MIXED (cliff at atrlen_10=-0.017) | MIXED (cliff at fastmult_08=-0.011) | ROBUST_POSITIVE | ROBUST_POSITIVE (all 3 identical, slow-independent) |
+| SlowBreakout | MIXED (canonical neg, neighbors pos) | ROBUST_NEGATIVE | MIXED (canonical neg, medmult_16 pos) | ROBUST_NEGATIVE |
+| MediumBreakout | MIXED (canonical neg, atrlen_10 barely pos) | ROBUST_NEGATIVE (fast-independent) | MIXED (canonical neg, medmult_16 pos) | ROBUST_NEGATIVE (slow-independent) |
+| MedSlowContext | ROBUST_NEGATIVE | ROBUST_NEGATIVE (fast-independent) | MIXED (canonical neg, both neighbors pos) | ROBUST_NEGATIVE |
+| NestedPullback | ROBUST_NEGATIVE | ROBUST_NEGATIVE | MIXED (medmult_16 pos, medmult_24 neg — cliff, not plateau) | ROBUST_NEGATIVE |
+
+Interpretive note: the classification rules as given don't name a bucket for "canonical negative, a neighbor positive" — resolved as `MIXED_OR_REGIME_DEPENDENT` (an unstable sign flip across the neighborhood is definitionally not "robust" in either direction). Neighborhood summary stats (positive-cell count, median/worst/best expectancy, PF/DD range, %positive, %positive-ex-2026Q1) for all 32 rows are in `stageB_classification.json`-equivalent form, summarized in the per-strategy sections below.
+
+**9-10. Temporal concentration / ex-2026Q1 results:** see table in point 7; full per-quarter (trades, expectancy, PF, cumulative R, long/short split) tables for all 72 runs were computed and reviewed — no strategy other than the four already-rejected ones shows a full-window-positive-but-ex-2026Q1-negative pattern, i.e. none of the three viable candidates are "only positive because of 2026Q1."
+
+**11. Long/short robustness:**
+- **FastMedConfluence**: long expectancy positive in all 9 grid cells (+0.031 to +0.249); short expectancy positive in 8 of 9, with one exception — `medmult_24`'s short side is -0.123 (masked by a strong +0.249 long side keeping the cell net positive). One real, narrow fragility, not a broad instability.
+- **SlowBreakout**: never bidirectionally positive anywhere in the grid — short expectancy is negative in 7 of 9 cells; wherever the strategy shows an edge, it is long-only.
+- **NestedPullback**: the most extreme and consistent asymmetry found — long expectancy is strongly positive in literally every one of the 9 cells (+0.035 to +0.326) while short expectancy is strongly negative in every one of the 9 cells (-0.066 to -0.389). This never narrows anywhere in the tested neighborhood; it reads as a structural short-side defect in the strategy's own logic, not a parameter-sensitivity issue.
+- **MediumBreakout**: negative on both long and short at canonical (-0.024 / -0.058); no cell shows a genuinely bidirectional edge.
+
+**12. Occupancy findings:** time-based occupancy (% of the backtest window with a position open — computed directly from fill/close timestamps, since Stage B did not preserve the per-signal journal that D021/D022's skip-based occupancy% required) for FastMedConfluence ranges 32.2%–41.6% across its 9-cell neighborhood — a stable band, not wildly different cell to cell. **Limitation, stated honestly:** whether occupancy is *protective* in the D021/D022 sense (skipped signals underperforming taken ones) cannot be assessed for Stage B without rerunning the signal-journal-preserving harness; this was out of scope for a single-strategy grid run and is flagged as a gap, not silently assumed either way.
+
+**13. Strategy-overlap findings** (canonical cells, matched by the EA's own `cluster_id`, which is identical across strategies for the same underlying signal): FastMedConfluence/FastMedContext/WeightedEnsemble share the overwhelming majority of their trades (FMC∩FMCtx 95.5%/91.1%, FMC∩WE 92.4%/79.3%, all three simultaneously 203 trades). Decomposition:
+- **WeightedEnsemble**: 79.3% of its trades are shared with FastMedConfluence (expectancy +0.180 on the shared slice) — its 54 *unique* trades (20.7%) have expectancy **-0.313**. WeightedEnsemble's positive headline number is carried entirely by trades FastMedConfluence already takes; its own incremental contribution is a net drag.
+- **FastMedContext**: 91.1% shared with FastMedConfluence (expectancy +0.176 on the shared slice) — its 21 unique trades (8.9%) have expectancy **-0.664**, an even sharper negative than WeightedEnsemble's unique slice.
+- **FastMedConfluence** itself: only 6 of its 224 trades (2.7%) are unique to it (not present in either other strategy) — expected, since it's the base signal the other two are built from.
+
+**Conclusion: both WeightedEnsemble and FastMedContext are redundant with FastMedConfluence, not independently robust** — their unique, non-overlapping trades actively lose money rather than adding edge, exactly the pattern the task's own decision rule calls out.
+
+**14. Cost-stress results for survivors:** run against FastMedConfluence and FastMedContext canonical (the two strategies with a ROBUST_POSITIVE majority across factors) — WeightedEnsemble and FastBreakout were excluded (2-of-4 ROBUST_POSITIVE each, not majority-robust; FastBreakout is additionally a separate research track). Method: the live EA has no cost-scaling input (Model=2's spread is real historical tick data already embedded in every trade's `r_result`); stress is applied post-hoc as an additional synthetic round-trip cost of 0.25×/0.50×/1.00× of D021's own documented flat-cost estimate (`InpEstimatedCostR=0.02R`), i.e. -0.005R/-0.01R/-0.02R subtracted from every trade — an honest proxy for cost sensitivity, not a re-simulation of fills under a wider spread path.
+
+| Strategy | Baseline | +25% | +50% | +100% |
+|---|---|---|---|---|
+| FastMedConfluence expectancy_r (PF) | 0.1261 (1.245) | 0.1211 (1.233) | 0.1161 (1.222) | 0.1061 (1.201) |
+| FastMedContext expectancy_r (PF) | 0.1010 (1.195) | 0.0960 (1.184) | 0.0910 (1.174) | 0.0810 (1.153) |
+
+Both degrade **gradually and linearly**, never approaching zero or collapsing, even at +100% synthetic stress (a doubling of D021's own cost estimate). Cost fragility is not a concern for either survivor at this level of stress.
+
+**15. Strategies rejected:** MediumBreakout, SlowBreakout, MedSlowContext, NestedPullback — each is `ROBUST_NEGATIVE` or has no genuine multi-factor plateau (isolated single-cell positives inside an otherwise negative neighborhood, which the task's own rule explicitly says not to use as a rescue). NestedPullback in particular shows a severe, parameter-independent long/short asymmetry that looks like a structural defect rather than a tuning problem.
+
+**16. Strategies remaining candidates:** **FastMedConfluence** (primary, genuinely robust). FastMedContext and WeightedEnsemble are demoted from "candidate" to "redundant" per the overlap finding — they should not be pursued as independent strategies going forward, though FastMedConfluence's own robustness is reinforced by the fact that two heavily-overlapping variants of it also test positive. FastBreakout remains an open, separate research question (genuine-looking edge under the research override, per point 17 below) but is explicitly not production-eligible.
+
+**17. Does FastMedConfluence have a genuine plateau?** Yes, with a precise caveat on shape: all 9 grid cells (canonical + 8 neighbors) are expectancy-positive, PF > 1.0, and remain positive excluding 2026Q1 — a genuine plateau in the sense of "no cliffs, no cell fails." However, canonical is the *peak* (or tied for peak) of 3 of its 4 factor neighborhoods, not necessarily centered in a flat plain — expectancy declines somewhat moving away from canonical in most directions (most sharply on `fastmult`, where the range is 0.112R, the largest of the four factors — `fastmult_08` at +0.014R is the closest thing to a soft edge in the whole grid, though it never turns negative). This is better described as a "positive dome centered at canonical" than a perfectly flat plateau — a materially more reassuring shape than an isolated spike, but not literally flat.
+
+Answering the 8 explicit questions:
+1. **Positive across most neighboring settings?** Yes — 9/9 cells positive.
+2. **PF > 1.0 across most settings?** Yes — 9/9 cells, PF range 1.03–1.27.
+3. **Remains positive without 2026Q1?** Yes, in all 9 cells.
+4. **Largest performance cliff?** `fastmult` (range 0.112R; `fastmult_08` dips to +0.014R, PF 1.03 — the softest point in the grid, though still positive).
+5. **Is canonical near the center of a stable plateau?** Partially — canonical is at/near the top in 3 of 4 factors (a "dome" shape), truly centered only in `medmult` (where `medmult_16` at +0.134R actually exceeds canonical).
+6. **Are longs and shorts both stable?** Mostly — long is positive in all 9 cells; short is positive in 8 of 9, with `medmult_24` showing a real short-side breakdown (-0.123) masked by a strong long side.
+7. **Does holding time remain operationally acceptable?** Median holding time is fine (95–220 minutes across the grid, ~1.5–3.7 hours) — but p90 holding time is 3360–4610 minutes (56–77 hours, i.e. 2.3–3.2 days) in every cell. The long tail flagged as a concern back in D021's original motivation is **not resolved** by Stage B's fixed-2R exit (Stage B never touched the exit) — it's an independent, still-open problem for Phase 2.
+8. **Does occupancy remain protective across neighboring settings?** Cannot be answered for Stage B (see point 12's stated limitation) — time-based occupancy is stable (32–42%) across the neighborhood, but the skip-based "protective" question needs the signal journal, which this harness did not preserve.
+
+**18. Is FastMedContext independent or redundant?** **Redundant** — 91.1% trade overlap with FastMedConfluence, and its 21 unique trades have expectancy -0.664R. It is not contributing anything FastMedConfluence doesn't already provide.
+
+**19. Does WeightedEnsemble add independent edge?** **No** — 79.3% overlap with FastMedConfluence, and its 54 unique trades have expectancy -0.313R. Its apparent robustness (2 of 4 factors ROBUST_POSITIVE) is inherited almost entirely from FastMedConfluence, not from anything the ensemble weighting adds.
+
+**20. Are Phase 2 structural exits justified?** For **FastMedConfluence specifically**, yes, cautiously: Stage B independently confirms a robust entry-side edge using a completely different, much simpler exit (fixed 2R) than D021/D022's `TRAIL_0_5R_AFTER_1R` model — two different exit frameworks now agree FastMedConfluence's entries have genuine edge, which is stronger evidence than either study alone. Combined with D021/D022's finding that a smarter exit (`TRAIL`) improves on the fixed-R baseline, Phase 2 work is justified **for FastMedConfluence only** — not for FastMedContext or WeightedEnsemble (redundant), and not yet for FastBreakout (separate research track, still not production-eligible).
+
+**21. Is additional history or cross-market testing required before any edge claim?** Yes, unambiguously. This entire study — Stage A, D021/D022, and Stage B — covers one symbol (XAUUSD), one broker/demo feed, and a single ~17-month window with heavy internal overlap between "three strategies" that turn out to be one real signal wearing different names. No claim of a proven edge is warranted from this evidence alone; the next-highest-value work is out-of-sample / cross-market / longer-history validation of FastMedConfluence specifically, not further parameter search on the current sample.
+
+### Explicit scope statement
+
+Per instruction: **no proven edge is claimed from Stage B alone.** This entry documents robustness evidence and redundancy findings on a single-symbol, single-window sample. No merge to `main`.

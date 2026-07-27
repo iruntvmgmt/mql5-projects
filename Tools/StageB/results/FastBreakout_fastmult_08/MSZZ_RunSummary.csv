@@ -1,0 +1,2 @@
+symbol;timeframe;magic;risk_reward;enabled_strategies;first_signal_time;last_close_time;trades;win_rate;expectancy_r;profit_factor_r;max_drawdown_r;avg_mfe_r;avg_mae_r;avg_bars_held;long_expectancy_r;long_trades;short_expectancy_r;short_trades
+XAUUSD;PERIOD_M5;26072803;2.00;FastBreakout;2025.03.04 19:55:00;2026.07.21 04:59:58;270;0.3222;-0.0114;0.9787;22.9339;1.0604;-0.7984;222.97;0.0068;129;-0.0279;141
