@@ -983,3 +983,63 @@ New deterministic cases in `Test_MSZZ_ExitSimulator.mq5`: old stop touched befor
 ### Demo-readiness / edge-research-readiness implications
 
 Track 2 (research infrastructure) only. This does not change whether Stage B or Phase 2 are worth pursuing on its own — it changes whether the numbers used to decide that are trustworthy. Per explicit instruction, Stage B and Phase 2 remain paused until the corrected D021 results (this entry's rerun) are reviewed.
+
+### Results (post-implementation rerun, all three strategies, all 14 models)
+
+Compile: 0 errors/0 warnings, live tree and isolated instance, for `ExitSimulatorPolicy.mqh`, `Test_MSZZ_ExitSimulator.mq5`, `Scripts/MultiSpeedZigZagTools/ExitSimulator.mq5`. Tests: 34/34 assertions pass, `failures=0` (one test-authoring bug found and fixed during verification — `TestTimeExitAnchoredToEntryTime`'s original synthetic bar spacing didn't actually straddle a bar boundary between the old and new time-anchor, so the two anchors coincidentally agreed; corrected the entry-time offset so the two anchors provably disagree by a full bar, which is what the test claims to check).
+
+**Trade-level changes:** of 22,278 (strategy, model, signal) SIGNAL_LEVEL resolutions compared 1:1 against the D021 originals, exactly **987 changed** (exit_time, exit_reason, or net_r differed) — all 987 fell within the 5 affected models, confirmed by zero changes in any of the 9 unaffected models (`FIXED_*`, `TIME_*`, `SESSION_CLOSE`), which is the expected internal-consistency proof that the fix is correctly scoped. Changed-row counts per (strategy, model): `TRAIL_0_5R_AFTER_1R` 112–122, `BE_0_5R` 92–99, `BE_0_75R` 48–54, `BE_1R`/`BE_PLUS_COSTS` 30–35, consistent across all three strategies.
+
+**Expectancy/PF before vs. after (PORTFOLIO_LEVEL):**
+
+| Strategy | Model | D021 expectancy_r (trades) | D022 expectancy_r (trades) | D021 PF | D022 PF |
+|---|---|---|---|---|---|
+| FastMedConfluence | BE_0_5R | -0.1354 (208) | -0.0200 (203) | 0.58 | 0.94 |
+| FastMedConfluence | BE_0_75R | -0.0708 (177) | **+0.0029** (175) | 0.84 | 1.01 |
+| FastMedConfluence | BE_1R | -0.0263 (160) | **+0.0303** (159) | 0.95 | 1.06 |
+| FastMedConfluence | BE_PLUS_COSTS | -0.0326 (160) | **+0.0226** (159) | 0.93 | 1.05 |
+| FastMedConfluence | TRAIL_0_5R_AFTER_1R | +0.0461 (173) | +0.0565 (170) | 1.10 | 1.11 |
+| FastMedContext | BE_0_5R | -0.1675 (217) | -0.0577 (212) | 0.51 | 0.85 |
+| FastMedContext | BE_0_75R | -0.0953 (186) | -0.0309 (184) | 0.79 | 0.93 |
+| FastMedContext | BE_1R | -0.0614 (169) | -0.0140 (168) | 0.88 | 0.97 |
+| FastMedContext | BE_PLUS_COSTS | -0.0671 (169) | -0.0211 (168) | 0.86 | 0.96 |
+| FastMedContext | TRAIL_0_5R_AFTER_1R | +0.0406 (180) | +0.0232 (177) | 1.08 | 1.04 |
+| WeightedEnsemble | BE_0_5R | -0.1292 (229) | -0.0379 (223) | 0.63 | 0.90 |
+| WeightedEnsemble | BE_0_75R | -0.0860 (197) | -0.0303 (194) | 0.81 | 0.94 |
+| WeightedEnsemble | BE_1R | -0.0535 (179) | -0.0144 (178) | 0.89 | 0.97 |
+| WeightedEnsemble | BE_PLUS_COSTS | -0.0587 (179) | -0.0209 (178) | 0.88 | 0.96 |
+| WeightedEnsemble | TRAIL_0_5R_AFTER_1R | +0.0397 (195) | +0.0134 (192) | 1.08 | 1.03 |
+
+The sequencing bug was biasing BE/TRAIL results **pessimistically, not optimistically** — every affected model's expectancy improved after the fix (the bug was manufacturing phantom same-bar stop-outs that a correct next-bar-only activation wouldn't have hit). `BE_0_75R`, `BE_1R`, and `BE_PLUS_COSTS` flipped from negative to positive expectancy for FastMedConfluence specifically; for FastMedContext/WeightedEnsemble they moved from clearly negative to near-breakeven but did not flip. `TRAIL_0_5R_AFTER_1R` **remains positive at the portfolio level in all three strategies**, but the direction of the change was mixed: it strengthened for FastMedConfluence (+0.046→+0.057, PF 1.10→1.11) and weakened for FastMedContext (+0.041→+0.023, PF 1.08→1.04) and WeightedEnsemble (+0.040→+0.013, PF 1.08→1.03, now only marginally profitable).
+
+**Holding-time / occupancy changes:** trade counts for affected models each dropped by 1–5 trades per strategy (a small number of previously-mis-sequenced same-bar exits shifted to a different, later resolution), which nudged occupancy percentages up by roughly 0.2–1.3 points across the board (e.g. FastMedConfluence `BE_0_5R` occupancy 56.67%→57.71%, `TRAIL` 64.48%→65.09%) — a minor second-order effect of correcting the primary sequencing bug, not a new finding on its own.
+
+**Ambiguity counts** (`sequencing_ambiguous=true` rows, i.e. bars where the old stop survived but a same-bar proposed new BE/trail stop would also have been touched — genuinely unknowable without ticks): `TRAIL_0_5R_AFTER_1R` 92–99 per strategy, `BE_0_5R` 80–84, `BE_0_75R` 39–42, `BE_1R`/`BE_PLUS_COSTS` 21–23, out of 470–580 signal-level trades per model. This is a non-trivial fraction (up to ~19% for `TRAIL`) of trades where the OHLC-only replay cannot determine same-bar ordering — a material caveat on precision, honestly bounded rather than silently resolved, and a strong argument for prioritizing real tick-history acquisition before treating Phase 1 numbers as final.
+
+### Portfolio-selection effect (rule 12 analysis, `TRAIL_0_5R_AFTER_1R`, the one model positive at portfolio level in all three strategies)
+
+**Taken vs. occupancy-skipped expectancy** — the one-owned-position constraint is not a neutral drag, it is actively protective: signals *skipped* because the account was occupied have substantially *worse* SIGNAL_LEVEL expectancy than signals actually taken, in all three strategies:
+
+| Strategy | Taken (n, expectancy_r) | Skipped (n, expectancy_r) |
+|---|---|---|
+| FastMedConfluence | 170, +0.0565 | 317, **-0.1056** |
+| FastMedContext | 177, +0.0232 | 324, **-0.1291** |
+| WeightedEnsemble | 192, +0.0134 | 381, **-0.1594** |
+
+This suggests occupancy is incidentally filtering toward better setups (e.g. avoiding correlated re-entries into an already-adverse move), not merely capping opportunity — a meaningfully different interpretation than "occupancy costs edge," and relevant to any future decision about relaxing the one-owned-position constraint.
+
+**Long/short (taken trades):** roughly balanced in all three strategies — FastMedConfluence long +0.087 / short +0.029 (a real long-side skew), FastMedContext long +0.000 / short +0.045, WeightedEnsemble long +0.018 / short +0.009. No strategy shows a broken or reversed side.
+
+**Quarterly concentration — the most important caveat in this entire study:** cumulative profit is extremely concentrated in a single quarter, 2026Q1, across all three strategies:
+
+| Strategy | 2026Q1 pct of total cumulative sum_r | Quarters net negative |
+|---|---|---|
+| FastMedConfluence | 75.8% | 2025Q2, 2025Q4, 2026Q3 |
+| FastMedContext | 202.1% (total sum_r is only +4.1R) | 2025Q2, 2025Q4, 2026Q2, 2026Q3 |
+| WeightedEnsemble | 242.5% (total sum_r is only +2.6R) | 2025Q2, 2025Q4, 2026Q2, 2026Q3 |
+
+For FastMedContext and WeightedEnsemble, 2026Q1 alone contributes *more than the entire net profit* — every other quarter combined is a net loser, and the headline "TRAIL is positive at portfolio level" result is carried almost entirely by one quarter's performance rather than being broadly distributed across the ~17-month window. This does not necessarily mean the edge is fake (2026Q1 could reflect a genuine regime the strategy is suited to), but it means the current positive-expectancy finding should be treated as **fragile and regime-dependent, not a robust standalone result**, until either a longer/out-of-sample window is tested or the 2026Q1 period is understood (e.g. an unusually strong trending period in gold).
+
+### Net conclusion for this pass
+
+The sequencing fix changes the numbers but not the qualitative Phase 1 headline: `TRAIL_0_5R_AFTER_1R` is still the standout exit model and remains positive at the portfolio level in all three strategies post-fix. However, two new findings materially qualify that headline and should inform whether Stage B/Phase 2 proceed on the current evidence: (1) up to ~19% of `TRAIL` trades are same-bar sequencing-ambiguous under OHLC-only replay, and (2) the entire positive-expectancy finding is concentrated in a single quarter for two of the three strategies. Real tick-history acquisition and/or a longer or out-of-sample validation window are stronger candidates for the next research investment than proceeding directly to Stage B execution or Phase 2 structural exits on the current sample.

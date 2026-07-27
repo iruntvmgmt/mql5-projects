@@ -1,4 +1,22 @@
-# Exit-Efficiency Study — Phase 1 (D021)
+# Exit-Efficiency Study — Phase 1 (D021, corrected by D022)
+
+**D022 correction notice:** the original D021 results below for `BE_0_5R`,
+`BE_0_75R`, `BE_1R`, `BE_PLUS_COSTS`, and `TRAIL_0_5R_AFTER_1R` were computed
+with a same-bar activation-sequencing bug (the simulator updated a bar's stop
+from its own favorable extreme, then tested that same bar's adverse extreme
+against the newly-moved stop). This has been fixed — see `DECISION_LOG.md`
+D022 for the full writeup and corrected numbers. The corrected trade/summary
+CSVs live alongside the originals in each strategy's results folder as
+`MSZZ_ExitSim_Trades_d022.csv` / `MSZZ_ExitSim_Summary_d022.csv`; the 9
+unaffected models (`FIXED_*`, `TIME_*`, `SESSION_CLOSE`) are byte-identical
+between D021 and D022 (confirmed programmatically). Headline conclusion is
+unchanged — `TRAIL_0_5R_AFTER_1R` remains the standout, positive at the
+portfolio level in all three strategies post-fix — but D022 also found that
+up to ~19% of `TRAIL` trades are same-bar sequencing-ambiguous under
+OHLC-only replay, and that the entire positive-expectancy finding is
+concentrated in a single quarter (2026Q1) for two of the three strategies.
+Treat the numbers below as superseded for the 5 affected models; the D021
+narrative is preserved here for history.
 
 Answers: does a smarter exit convert more of a trade's favorable excursion
 (MFE) into realized profit than Stage A's fixed structural-stop N-R exit,

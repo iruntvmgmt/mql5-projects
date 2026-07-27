@@ -13,6 +13,15 @@
 //| read from that same stored resolution -- occupancy never changes  |
 //| what a trade's own outcome would have been, only whether it       |
 //| counts as "taken" given what the account was doing at the time.   |
+//|                                                                    |
+//| D022: SimulateExit() now takes entry_time explicitly (anchors     |
+//| time exits correctly) and returns two excursion pairs: MFE/MAE    |
+//| UNTIL EXIT (excludes anything after the trade closed) versus the  |
+//| existing reference-horizon MFE/MAE (full InpForwardWindowDays     |
+//| path, shared across all models for comparability). Sequencing-    |
+//| ambiguous bars (old stop survives but a same-bar new BE/trail     |
+//| stop would also have been touched) are flagged and their          |
+//| alternate bound recorded rather than silently resolved.           |
 //+------------------------------------------------------------------+
 #property strict
 #property script_show_inputs
@@ -55,8 +64,13 @@ double   g_net_r[MODEL_COUNT][MAX_SIGNALS];
 int      g_bars_held[MODEL_COUNT][MAX_SIGNALS];
 double   g_final_stop[MODEL_COUNT][MAX_SIGNALS];
 int      g_trail_updates[MODEL_COUNT][MAX_SIGNALS];
-double   g_mfe_r[MAX_SIGNALS];
-double   g_mae_r[MAX_SIGNALS];
+bool     g_sequencing_ambiguous[MODEL_COUNT][MAX_SIGNALS];
+datetime g_alt_bound_exit_time[MODEL_COUNT][MAX_SIGNALS];
+double   g_alt_bound_exit_price[MODEL_COUNT][MAX_SIGNALS];
+double   g_mfe_until_exit_r[MODEL_COUNT][MAX_SIGNALS];
+double   g_mae_until_exit_r[MODEL_COUNT][MAX_SIGNALS];
+double   g_mfe_r[MAX_SIGNALS];      // reference-horizon MFE (full InpForwardWindowDays path)
+double   g_mae_r[MAX_SIGNALS];      // reference-horizon MAE
 int      g_bars_to_mfe[MAX_SIGNALS];
 datetime g_time_to_mfe[MAX_SIGNALS];
 string   g_session_text[MAX_SIGNALS];
@@ -70,6 +84,7 @@ double   g_port_r_acc[MODEL_COUNT][MAX_SIGNALS];
 int      g_port_r_count[MODEL_COUNT];
 int      g_port_skipped[MODEL_COUNT];
 int      g_port_qualifying[MODEL_COUNT];
+int      g_ambiguous_count[MODEL_COUNT]; // resolved signals flagged sequencing_ambiguous by this model
 
 int ParseDirection(const string s) { return (s=="L" || s=="LONG") ? 1 : -1; }
 
@@ -184,33 +199,50 @@ void WriteTradeRow(const int h,const string replay_mode,const int s,const int m,
 {
    if(skipped)
    {
+      // 8 real fields (replay_mode..exit_reason) + 30 empty placeholders
+      // (entry_price..weekday) + skipped_while_occupied="true" = 39,
+      // matching the header column count exactly.
+      string empty30[30]; for(int e=0;e<30;e++) empty30[e]="";
       FileWrite(h,replay_mode,g_sig_strategy_id[s],model_name,g_sig_cluster_id[s],
                 (g_sig_direction[s]>0?"L":"S"),TimeToString(g_entry_time[s],TIME_DATE|TIME_SECONDS),
-                "","SKIPPED_WHILE_OCCUPIED","","","","","","","","","","","","","","","","","","","","","","true");
+                "","SKIPPED_WHILE_OCCUPIED",
+                empty30[0],empty30[1],empty30[2],empty30[3],empty30[4],empty30[5],empty30[6],empty30[7],
+                empty30[8],empty30[9],empty30[10],empty30[11],empty30[12],empty30[13],empty30[14],empty30[15],
+                empty30[16],empty30[17],empty30[18],empty30[19],empty30[20],empty30[21],empty30[22],empty30[23],
+                empty30[24],empty30[25],empty30[26],empty30[27],empty30[28],empty30[29],
+                "true");
       return;
    }
    if(!g_resolved[m][s]) return; // insufficient forward data -- not written as a row at all, not faked
 
    double risk=MathAbs(g_sig_entry[s]-g_sig_stop[s]);
    int minutes_held=(int)((g_exit_time[m][s]-g_entry_time[s])/60);
-   double surrender_r=g_mfe_r[s]-g_net_r[m][s];
-   double pct_captured=0.0;
-   bool pct_valid=CMSZZExitSimulatorPolicy::PercentMfeCaptured(g_net_r[m][s],g_mfe_r[s],InpMinMfeThresholdR,pct_captured);
-   bool r_0_5=(g_mfe_r[s]>=0.5), r_1=(g_mfe_r[s]>=1.0), r_1_5=(g_mfe_r[s]>=1.5), r_2=(g_mfe_r[s]>=2.0), r_3=(g_mfe_r[s]>=3.0);
-   bool r_1_then_neg=(g_mfe_r[s]>=1.0 && g_net_r[m][s]<0.0);
+   double mfe_until_exit=g_mfe_until_exit_r[m][s];
+   double surrender_r=mfe_until_exit-g_net_r[m][s];
+   double pct_open_captured=0.0, pct_ref_captured=0.0;
+   bool pct_open_valid=CMSZZExitSimulatorPolicy::PercentMfeCaptured(g_net_r[m][s],mfe_until_exit,InpMinMfeThresholdR,pct_open_captured);
+   bool pct_ref_valid=CMSZZExitSimulatorPolicy::PercentMfeCaptured(g_net_r[m][s],g_mfe_r[s],InpMinMfeThresholdR,pct_ref_captured);
+   bool r_0_5=(mfe_until_exit>=0.5), r_1=(mfe_until_exit>=1.0), r_1_5=(mfe_until_exit>=1.5), r_2=(mfe_until_exit>=2.0), r_3=(mfe_until_exit>=3.0);
+   bool r_1_then_neg=(mfe_until_exit>=1.0 && g_net_r[m][s]<0.0);
 
    FileWrite(h,replay_mode,g_sig_strategy_id[s],model_name,g_sig_cluster_id[s],
              (g_sig_direction[s]>0?"L":"S"),TimeToString(g_entry_time[s],TIME_DATE|TIME_SECONDS),
              TimeToString(g_exit_time[m][s],TIME_DATE|TIME_SECONDS),g_exit_reason[m][s],
              DoubleToString(g_sig_entry[s],5),DoubleToString(g_sig_stop[s],5),DoubleToString(risk,5),
              DoubleToString(g_gross_r[m][s],4),DoubleToString(g_net_r[m][s],4),
+             DoubleToString(mfe_until_exit,4),DoubleToString(g_mae_until_exit_r[m][s],4),
              DoubleToString(g_mfe_r[s],4),DoubleToString(g_mae_r[s],4),
              g_bars_to_mfe[s],(int)((g_time_to_mfe[s]-g_entry_time[s])/60),
              g_bars_held[m][s],minutes_held,DoubleToString(surrender_r,4),
-             (pct_valid?DoubleToString(pct_captured,4):"null"),
+             (pct_open_valid?DoubleToString(pct_open_captured,4):"null"),
+             (pct_ref_valid?DoubleToString(pct_ref_captured,4):"null"),
              (r_0_5?"true":"false"),(r_1?"true":"false"),(r_1_5?"true":"false"),(r_2?"true":"false"),(r_3?"true":"false"),
              (r_1_then_neg?"true":"false"),g_trail_updates[m][s],DoubleToString(g_final_stop[m][s],5),
-             EnumToString(InpAmbiguityMode),g_session_text[s],g_weekday_text[s],"false");
+             EnumToString(InpAmbiguityMode),g_session_text[s],g_weekday_text[s],
+             (g_sequencing_ambiguous[m][s]?"true":"false"),
+             (g_sequencing_ambiguous[m][s]?TimeToString(g_alt_bound_exit_time[m][s],TIME_DATE|TIME_SECONDS):""),
+             (g_sequencing_ambiguous[m][s]?DoubleToString(g_alt_bound_exit_price[m][s],5):""),
+             "false");
 }
 
 void OnStart()
@@ -265,9 +297,13 @@ void OnStart()
          if(p.model==MSZZ_EXIT_SESSION_CLOSE) p.session_boundary=SessionBoundary(entry_time);
 
          MSZZExitResult r;
-         CMSZZExitSimulatorPolicy::SimulateExit(dir,entry,stop,risk,target,bars,copied,p,InpAmbiguityMode,r);
+         CMSZZExitSimulatorPolicy::SimulateExit(dir,entry,stop,risk,target,entry_time,bars,copied,p,InpAmbiguityMode,r);
 
          g_resolved[m][s]=r.resolved;
+         g_sequencing_ambiguous[m][s]=r.sequencing_ambiguous;
+         g_alt_bound_exit_time[m][s]=r.alt_bound_exit_time;
+         g_alt_bound_exit_price[m][s]=r.alt_bound_exit_price;
+         if(r.sequencing_ambiguous) g_ambiguous_count[m]++;
          if(!r.resolved) continue;
 
          g_exit_time[m][s]=r.exit_time;
@@ -275,6 +311,8 @@ void OnStart()
          g_exit_reason[m][s]=r.exit_reason;
          g_final_stop[m][s]=r.final_stop;
          g_trail_updates[m][s]=r.number_of_trail_updates;
+         g_mfe_until_exit_r[m][s]=r.mfe_until_exit_r;
+         g_mae_until_exit_r[m][s]=r.mae_until_exit_r;
          g_gross_r[m][s]=CMSZZExitSimulatorPolicy::RMultiple(r.exit_price,entry,risk,dir);
          g_net_r[m][s]=g_gross_r[m][s]-InpEstimatedCostR;
          int bars_held=0;
@@ -288,10 +326,13 @@ void OnStart()
    int trade_h=FileOpen(InpTradeOutputFile,FILE_WRITE|FILE_CSV|FILE_ANSI,';');
    if(trade_h==INVALID_HANDLE) { PrintFormat("MSZZ ExitSimulator: trade output open failed error=%d",GetLastError()); return; }
    FileWrite(trade_h,"replay_mode","strategy_id","exit_model","cluster_id","direction","entry_time","exit_time",
-             "exit_reason","entry_price","initial_stop","initial_risk","gross_r","net_r_after_costs","mfe_r","mae_r",
-             "bars_to_mfe","minutes_to_mfe","bars_held","minutes_held","surrender_r","percent_mfe_captured",
+             "exit_reason","entry_price","initial_stop","initial_risk","gross_r","net_r_after_costs",
+             "mfe_until_exit_r","mae_until_exit_r","mfe_reference_horizon_r","mae_reference_horizon_r",
+             "bars_to_mfe","minutes_to_mfe","bars_held","minutes_held","surrender_r",
+             "pct_open_trade_mfe_captured","pct_reference_horizon_mfe_captured",
              "reached_0_5r","reached_1r","reached_1_5r","reached_2r","reached_3r","reached_1r_then_negative",
-             "number_of_trail_updates","final_stop","replay_price_mode","session","weekday","skipped_while_occupied");
+             "number_of_trail_updates","final_stop","replay_price_mode","session","weekday",
+             "sequencing_ambiguous","alt_bound_exit_time","alt_bound_exit_price","skipped_while_occupied");
 
    // Per-model accumulators for the summary pass (SIGNAL_LEVEL and PORTFOLIO_LEVEL).
    for(int m=0;m<model_count;m++)
@@ -329,7 +370,7 @@ void OnStart()
    int summary_h=FileOpen(InpSummaryOutputFile,FILE_WRITE|FILE_CSV|FILE_ANSI,';');
    if(summary_h==INVALID_HANDLE) { PrintFormat("MSZZ ExitSimulator: summary output open failed error=%d",GetLastError()); return; }
    FileWrite(summary_h,"replay_mode","exit_model","trades","win_rate","expectancy_r","profit_factor_r",
-             "max_drawdown_r","qualifying_signals","skipped_while_occupied","occupancy_pct");
+             "max_drawdown_r","qualifying_signals","skipped_while_occupied","occupancy_pct","ambiguous_count");
 
    for(int m=0;m<model_count;m++)
    {
@@ -342,7 +383,7 @@ void OnStart()
                    DoubleToString(CMSZZRunSummaryPolicy::Average(vals,g_sig_r_count[m]),4),
                    DoubleToString(CMSZZRunSummaryPolicy::ProfitFactorR(vals,g_sig_r_count[m]),4),
                    DoubleToString(CMSZZRunSummaryPolicy::MaxDrawdownR(vals,g_sig_r_count[m]),4),
-                   g_sig_r_count[m],"","");
+                   g_sig_r_count[m],"","",g_ambiguous_count[m]);
       }
       if(g_port_qualifying[m]>0 && g_port_r_count[m]>0)
       {
@@ -354,7 +395,7 @@ void OnStart()
                    DoubleToString(CMSZZRunSummaryPolicy::Average(vals,g_port_r_count[m]),4),
                    DoubleToString(CMSZZRunSummaryPolicy::ProfitFactorR(vals,g_port_r_count[m]),4),
                    DoubleToString(CMSZZRunSummaryPolicy::MaxDrawdownR(vals,g_port_r_count[m]),4),
-                   g_port_qualifying[m],g_port_skipped[m],DoubleToString(occ_pct,2));
+                   g_port_qualifying[m],g_port_skipped[m],DoubleToString(occ_pct,2),g_ambiguous_count[m]);
       }
    }
    FileClose(summary_h);
