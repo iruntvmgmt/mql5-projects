@@ -1177,3 +1177,53 @@ Answering the 8 explicit questions:
 ### Explicit scope statement
 
 Per instruction: **no proven edge is claimed from Stage B alone.** This entry documents robustness evidence and redundancy findings on a single-symbol, single-window sample. No merge to `main`.
+
+## D024 — FastMedConfluence Phase 2 exit and holding-tail study
+
+**Date:** 2026-07-27
+**Status:** Accepted
+
+### Scope of this increment
+
+Following D023's acceptance, FastMedConfluence is now the sole primary production research candidate; FastMedContext and WeightedEnsemble are demoted (redundant, not independent); MediumBreakout/SlowBreakout/MedSlowContext/NestedPullback are rejected from the active path; FastBreakout stays a clearly separate research-only track. This increment builds and offline-replays 12 causal exit models against FastMedConfluence's canonical entries only, to try to reduce the ~56-77h p90 holding time found in D021/D022/D023 without materially damaging expectancy, PF, or drawdown. **Entry logic, canonical ATR settings, score logic, signal eligibility, one-owned-position policy, and the structural-stop definition are frozen — this pass changes exits only, never re-tunes entries.** No live EA changes and no merge to `main` in this pass; at most 2 survivors get selected for a *future* live-wiring pass.
+
+### Decision: reuse the ZigZag engine's algorithm via a duplicated, equivalence-tested causal scan, never modify the live engine
+
+`CMSZZTripleZigZagEngine::Rebuild()` is already a single forward O(n) pass over a full rates array that only ever uses `rates[0..i]` to confirm a pivot at step `i` (verified by reading `BuildSpeed()` in full: ATR lookback is bounded, extreme-tracking is monotonic from a directional start, `ConfirmHigh`/`ConfirmLow` fire exactly once per confirmed swing in chronological scan order) — the engine is therefore already fully causal and non-repainting by construction, exactly as documented in earlier decision log entries. Its public API, however, only exposes the *final* snapshot (last two highs/lows) after a full `Rebuild()`, not the intermediate timeline of every pivot confirmed along the way — which Phase 2's structural exits need (to know, bar by bar during replay, "what was the most recently confirmed swing at this point in history").
+
+Rather than modify `TripleZigZagEngine.mqh` (live-EA-critical, extensively tested, and the entire point of this session's discipline has been never touching that class without exhaustive regression), a new research-only file duplicates `BuildSpeed`'s scanning loop verbatim into a function that appends every confirmed pivot (with its `pivot_time` and `confirmed_time`) to an output array instead of only keeping the last two. A dedicated test asserts the duplicated scan's *final* state (last high/low/leg direction) is byte-identical to the real engine's `Snapshot()` on the same input across multiple synthetic and real-data cases — this is the safeguard against silent algorithmic drift between the two copies. The live engine file is not touched in this increment.
+
+### Decision: ground every structural model definition in the code that already exists, not a fresh invention
+
+`CMSZZStrategySuite::LongStop`/`ShortStop` (used for every FastMedConfluence entry today) derive the initial structural stop from the **Medium** engine's last confirmed low/high (falling back to Fast only if Medium is invalid). This grounds two design choices:
+- The **ATR Chandelier trail** (model 1) uses the same canonical Medium ATR configuration (`MedATRLen=14`, `MedATRMult=2.0`) as its basis — trail = highest-high-since-entry minus `MedATRMult × ATR(MedATRLen)` for longs (mirror for shorts), never widening. This reuses an already-canonical constant rather than inventing a new one.
+- **Model 3 (Medium ZigZag confirmed-swing trail)** and **model 4 (previous confirmed HL/LH trail)** are deliberately distinct, not duplicates: model 3 ratchets to the Medium engine's latest same-direction swing extreme *regardless of its HH/HL/LH/LL classification* (any new low for a long, any new high for a short); model 4 only ratchets when the newly confirmed swing carries the *constructive* structure label (`MSZZ_STRUCT_HL` for a long, `MSZZ_STRUCT_LH` for a short) — i.e. model 4 requires the market to be making a confirmed higher-low (long) / lower-high (short), not merely any new extreme, which can differ meaningfully during a choppy or reversing leg.
+- **Model 2 (Fast ZigZag confirmed-swing trail)** is model 3's same logic against the **Fast** engine instead of Medium.
+- **Model 5 (opposite Fast-structure exit)** reuses the *exact* breakout-detection the live EA already uses for entries (`bullish_break`/`bearish_break`, a confirmed close beyond the Fast engine's projected structure line) — exit a long the moment Fast's `bearish_break` fires, exit a short the moment `bullish_break` fires. This is "the same signal that would make the EA enter the opposite direction," not a new invented reversal rule.
+- **Model 10 (trail only after +1R)** reuses D021/D022's already-implemented and already-sequencing-fixed `TRAIL_0_5R_AFTER_1R` model verbatim (trigger 1.0R, distance 0.5R) — chosen deliberately for direct comparability with the D021/D022 finding, not a new untested distance.
+- **Model 9 (fixed 2R plus stale-trade timeout)** combines the existing `FIXED_2R` model with a 24h time cap (first of target/stop/24h wins) — reuses D021/D022's `FIXED_2R` and `TIME_24H` logic combined, not new logic.
+- **Model 11 (breakeven at +1R plus structural trail)** combines D021/D022's `BE_1R` arming with model 3's Medium-swing ratchet applied only once armed and only ever improving the stop.
+- **Model 12 (session-aware overnight exit)** is deliberately distinct from D021's `SESSION_CLOSE` (which exits at *every* 8h session boundary): model 12 exits only at the transition into the lowest-liquidity session bucket (reusing D016's `CMSZZTradeAnalyticsPolicy::SessionBucket`), i.e. targets genuine overnight/gap risk once per calendar day rather than every session change.
+- **Models 6-8** (max holding time 8h/12h/24h) are D021/D022's already-implemented, already-`entry_time`-anchored `TIME_8H/12H/24H` models, reused verbatim.
+
+### Decision: every structural model inherits D022's exact same-bar sequencing discipline, uniformly
+
+The same-bar activation bug D022 fixed for `BE_*`/`TRAIL_0_5R_AFTER_1R` generalizes directly to every structural model here: a bar's stop is evaluated **as it stood at that bar's open** against old-stop/target first (pessimistic: adverse wins on ambiguity, deferred exit-only-not-BE-arm on old-stop-hit); only a bar that survives may use a pivot **confirmed at or before that bar's own close** to compute a candidate new stop, which becomes executable no earlier than the *next* bar — never the bar that produced the confirming pivot, and never widened once armed. Any bar where the old stop survives but the same-bar proposed new stop would also have been touched is flagged `sequencing_ambiguous` with both bounds reported, exactly as D022 established. Tick-resolved replay remains declared-but-unavailable (D021's tick-coverage probe already found none for this window) — `OHLC_PESSIMISTIC` is the primary evidence path for every model; `OHLC_OPTIMISTIC` is computed as the explicit upper bound only.
+
+### Decision: fresh signal/journal capture, not reuse of D021's or D023's exports
+
+Neither D021's original FastMedConfluence signal set nor D023's Stage B rerun preserved `MSZZ_SignalJournal.csv` out of the Tester sandbox (D023's harness only copied `MSZZ_TradeAnalytics.csv`/`MSZZ_RunSummary.csv`, discovered as a gap while writing that entry's occupancy-findings section). A fresh Tester run of FastMedConfluence's canonical Stage B config additionally preserves the signal journal this time, and `SignalSetExporter.mq5` (D021, unmodified) builds a fresh SIGNAL_LEVEL set from it at the current commit SHA — consistent with D023's own exact-SHA discipline rather than importing an older export.
+
+### Metrics and success criteria
+
+Every required metric (expectancy_R, PF, max drawdown_R, median/p90 holding time, %>8h/12h/24h, return/exposure-hour, occupancy%, skipped-signal count, MFE-until-exit, peak-to-exit surrender, long/short split, quarterly results, ex-best-quarter results, cost stress, ambiguity count) is computed per model, both SIGNAL_LEVEL and PORTFOLIO_LEVEL, reusing D021/D022's already-built aggregation helpers (`CMSZZRunSummaryPolicy`) wherever the shape matches. Success criteria applied mechanically before any model is called a survivor: expectancy ≥ 80% of the fixed-2R canonical baseline (+0.1261R × 0.8 = **+0.1009R** floor), PF > 1.10, p90 holding time materially reduced from baseline (56-77h), no single-quarter dependency (must remain positive ex-best-quarter), no new long/short breakdown beyond what canonical already shows, no immediate cliff at neighboring trigger/distance choices tested. No more than 2 models are selected as survivors for a future live-wiring pass; nothing is wired into the live EA in this increment.
+
+### Rejected alternatives
+
+- **Modifying `TripleZigZagEngine.mqh` to expose pivot history directly**: rejected — touching the live-critical, already-tested engine class for a research-only need is disproportionate risk; a verified-equivalent duplicate is safer and keeps the live EA provably untouched.
+- **Reusing D021's original FastMedConfluence signal set**: rejected per the same exact-SHA reasoning D023 already established for canonical cells.
+- **Letting every model pick its own arbitrary ATR/distance constants**: rejected in favor of reusing already-canonical values (Medium ATR config, D021/D022's 0.5R/1.0R trail constants) wherever a reasonable reuse exists, to avoid introducing untested new parameters disguised as exit "logic."
+
+### Testing requirements
+
+Structural-scan equivalence test (duplicated scan vs. real engine, multiple synthetic + real-data cases). Deterministic causal-sequencing tests for every new model family (Chandelier ratchet-never-widens, Fast/Medium swing-trail activation-bar-survives-first, HL/LH-label-filtering distinguishing model 3 from model 4, opposite-structure-exit fires exactly on `bearish_break`/`bullish_break`, combined models 9/11 resolve ties correctly, session-aware model 12 only fires at the lowest-liquidity transition not every boundary), plus the full D022-style sequencing-ambiguity suite (old-stop-before-activation, same-bar trigger-and-new-stop-touch, pessimistic-vs-optimistic divergence, no-lookahead) applied per new model family.
