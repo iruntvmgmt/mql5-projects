@@ -2148,3 +2148,96 @@ remain outside the repository under established size discipline. Stage 6
 changes no EA code. No live deployment occurred and there was no merge to
 `main`. Remaining work is the dedicated regime-filter stage,
 anti-overfitting/decision categories, and the final report.
+
+### Stage 7 results — frozen regime-filter research
+
+**Predeclared scope:** the dedicated filter stage runs exactly five fixed-2R
+standalone comparisons, one for each default-off D027 strategy S1–S5. The
+only change from its Stage 4 control is
+`InpRegimeEligibilityMode=1` (`RESEARCH_FILTER`), plus report and magic
+identity. There is no combinatorial regime search, parameter optimization,
+or threshold change. A and E are not gated or rerun. The policy remains the
+six frozen family/strategy hypotheses implemented and deterministically
+tested in Stage 1; classifier-level `FAILED_BREAK` remains unimplemented.
+
+Tracked configs use magics `26072951`–`26072955`, XAUUSD M5, `Model=2`,
+2025-03-01 through 2026-07-24, fixed 2R, structural stops, canonical
+costs/execution, exactly one enabled D027 strategy, and no score override,
+trailing, partial close, or fixed-target suppression. The live-tree and
+isolated EA binaries retain matching SHA-256
+`a91c59506db7e7ef4a10cb060d5bc1cd8e782d6331b20e07ee9bf87b34482840`.
+
+An initial launcher invocation referenced the Stage 4 config directory with a
+Stage 7 filename. MT5 rejected that nonexistent config before initialization;
+it produced no report or research artifact. The path was corrected before
+the evidence batch. The valid AlignedFastPullback test then completed but
+legitimately produced no RunSummary or TradeAnalytics because it had zero
+trades; its native report and signal/regime journals were preserved rather
+than rerunning it. The collector was made zero-trade-aware and resumed at
+BreakoutRetest, so each valid Stage 7 config ran exactly once.
+
+**Trigger and attribution integrity:** for every strategy, the ordered raw
+candidate stream is identical to Stage 4 across 20 causal fields: decision
+time, symbol/timeframe, strategy/setup/direction, score, entry/stop/target,
+origin/event/reason, explicit family, snapshot ID, and all entry-time regime
+labels. Counts are 210 AlignedFastPullback, 402 BreakoutRetest, 376
+SweepReclaim, 966 CompressionBreakout, and 242 StructureTransition. Thus the
+filter changes eligibility only, never the frozen trigger.
+
+Native HTML reports agree with analytics at 0/0 trades/deals for
+AlignedFastPullback, 96/192 for BreakoutRetest, 0/0 for SweepReclaim, 73/146
+for CompressionBreakout, and 21/42 for StructureTransition. Every nonzero
+trade joins uniquely to one executed signal and one original entry-time
+regime snapshot; missing or ambiguous joins are zero. Filtered cluster IDs
+are strict subsets of their controls. One retained BreakoutRetest trade and
+four retained CompressionBreakout trades have causally different close/R
+paths because filtering an opposite signal changes position duration; this
+is reported, not treated as arithmetic subset performance.
+
+**Eligibility action:** all 210 AlignedFastPullback candidates are rejected.
+The classifier's causal `PULLBACK` phase requires fast structure to oppose
+slow, while the frozen pullback policy additionally requires aligned
+structure; that conjunction is unreachable in actual classifier output even
+though the pure policy can accept a synthetic state. All 376 SweepReclaim
+candidates are rejected for the explicitly predeclared reason that
+`FAILED_BREAK` is unavailable. BreakoutRetest rejects 297 of 402 raw
+candidates and executes 96. CompressionBreakout rejects only 11 of 966 raw
+candidates; clustering/ownership still reduces the remainder to 73 trades.
+StructureTransition rejects none by regime and reproduces all 21 trades, so
+its filter is behaviorally redundant with its trigger.
+
+**Performance:** AlignedFastPullback goes from 110 trades / -6.9288R to zero.
+BreakoutRetest goes from 354 / -37.7759R to 96 / -8.9922R and remains
+negative. SweepReclaim's positive 190-trade / +28.6117R standalone is
+entirely suppressed. CompressionBreakout goes from 84 / -2.7367R to 73 /
++4.4115R, +0.0604R expectancy, PF 1.1257, and 6.7882R drawdown.
+StructureTransition remains exactly 21 / -2.1892R.
+
+**Chronology and concentration:** filtered BreakoutRetest development /
+validation / holdout R is +3.0032 / -18.0004 / +6.0050, with only 12 holdout
+trades. Filtered CompressionBreakout is +0.7874 / -0.0146 / +3.6387; its
+holdout has only 15 trades. CompressionBreakout becomes -1.5885R without its
+top three trades and -0.1801R without its best quarter. It therefore fails
+the project's no-rescue and concentration safeguards despite a positive
+headline. StructureTransition retains only 21 full-window trades and remains
+negative. Validation and holdout are the already-declared within-history
+partitions, not independent out-of-sample evidence.
+
+**Decision:** no Stage 7 filter is promoted, accepted for production, or
+applied to A/E. AlignedFastPullback's filter hypothesis is `REJECTED` as
+causally unreachable; BreakoutRetest is `REJECTED`; the SweepReclaim filter
+is `UNAVAILABLE` under the honest classifier limitation and is not replaced
+with a post-hoc proxy; CompressionBreakout remains `REJECTED` rather than
+being rescued by a concentrated subset; StructureTransition is `REJECTED`
+and its filter is redundant. Standalone SweepReclaim 2R remains
+`RESEARCH_ONLY` evidence, but its Stage 6 portfolio addition and Stage 7
+frozen filter are both rejected/unavailable. `LABEL_ONLY` remains the
+default and no production behavior changes.
+
+Configs are `Tools/D027/d027_stage7_*_Filter.ini`. Deterministic analysis,
+config/trigger/status/join/path audits, full and window comparisons, outlier
+checks, findings, and hashes are under `Tools/D027/Stage7/`. Raw artifacts
+remain at `/Users/matt/MT5-MSZZ-TEST/D027_Stage7_Results`. Stage 7 changes no
+EA code, frozen trigger, regime definition, A, or E. No live deployment
+occurred and there was no merge to `main`. Remaining work is the final
+anti-overfitting/decision-category pass and D027 report.

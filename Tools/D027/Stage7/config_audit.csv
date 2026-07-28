@@ -1,0 +1,6 @@
+strategy,strategy_id,family,magic,enabled_input,research_filter,other_research_features_off,status
+AlignedFastPullback,1031,PULLBACK,26072951,InpEnableAlignedFastPullback,true,true,PASS
+BreakoutRetest,1040,RETEST,26072952,InpEnableBreakoutRetest,true,true,PASS
+SweepReclaim,1050,REVERSAL,26072953,InpEnableSweepReclaim,true,true,PASS
+CompressionBreakout,1060,COMPRESSION,26072954,InpEnableCompressionBreakout,true,true,PASS
+StructureTransition,1070,REVERSAL,26072955,InpEnableStructureTransition,true,true,PASS

@@ -1,0 +1,6 @@
+strategy,control_trades,filtered_trades,retention_rate,control_cumulative_r,filtered_cumulative_r,cumulative_r_change,control_expectancy_r,filtered_expectancy_r,control_max_drawdown_r,filtered_max_drawdown_r
+AlignedFastPullback,110,0,0.000000,-6.928800,0.000000,6.928800,-0.062989,,17.681000,0.000000
+BreakoutRetest,354,96,0.271186,-37.775900,-8.992200,28.783700,-0.106712,-0.093669,49.518900,24.997700
+SweepReclaim,190,0,0.000000,28.611700,0.000000,-28.611700,0.150588,,18.294100,0.000000
+CompressionBreakout,84,73,0.869048,-2.736700,4.411500,7.148200,-0.032580,0.060432,11.415100,6.788200
+StructureTransition,21,21,1.000000,-2.189200,-2.189200,0.000000,-0.104248,-0.104248,8.000000,8.000000
