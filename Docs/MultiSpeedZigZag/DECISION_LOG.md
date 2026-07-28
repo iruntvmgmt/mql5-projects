@@ -1996,3 +1996,71 @@ deployment and no merge to `main`. Remaining work is Stage 5's one qualified
 3R SweepReclaim run, Stage 6 incremental portfolio analysis, the dedicated
 regime-filter stage, anti-overfitting/decision categories, and the final
 report.
+
+### Stage 5 results — limited SweepReclaim 3R screen
+
+**Eligibility and scope:** SweepReclaim was the only Stage 4 family permitted
+one fixed-3R run. At 2R it met all seven frozen admission criteria: positive
+expectancy, PF above 1.05, 190 trades, both directions positive, +22.6117R
+after its top three trades, no integrity issue, and 162 same-bar-unique trades
+worth +15.1882R beyond FastMedConfluence. No other family was run at 3R.
+
+The Stage 5 config uses XAUUSD M5, `Model=2`, 2025-03-01 through 2026-07-24,
+magic `26072936`, only SweepReclaim enabled, structural stop, fixed 3R target,
+`InpExitOwnedOpposite=true`, and the same canonical costs/execution settings.
+`LABEL_ONLY` remains active. Research score override, regime filter, trailing,
+partial exits, and fixed-target suppression remain disabled. The test
+completed once in the isolated MT5 instance; no parameter sweep or rerun was
+performed.
+
+**Trigger and integrity equivalence:** both 2R and 3R emit exactly 376 raw
+SweepReclaim candidates with identical decision time, strategy/direction,
+score, entry, stop, origin/event identity, reason, and entry-time regime
+labels. Their `MSZZ_SequenceJournal.csv` files are byte-identical. Thus the
+3R result does not modify or retune the frozen trigger. Execution differs
+causally because the wider target occupies position ownership longer: 187
+cluster IDs are common, three occur only at 2R, and none occur only at 3R.
+
+RunSummary, TradeAnalytics, and native HTML agree exactly at 190 trades /
+380 deals for 2R and 187 / 374 for 3R. Every trade joins uniquely to one
+executed signal and one original entry-time regime snapshot. Missing or
+duplicate joins, eligibility mismatches, trade-count mismatches, and unknown
+exits are all zero. The 3R exit inventory is 113 stop, 45 target, and 29
+own-family opposite exits; cross-family and test-end exits are zero.
+
+**Headline comparison:** 2R records 190 trades, +28.6117R cumulative,
++0.1506R expectancy, PF 1.2688, and 18.2941R maximum drawdown. The sole 3R
+run records 187 trades, +24.3583R cumulative, +0.1303R expectancy, PF 1.2041,
+and 27.6952R drawdown. Median / p90 hold rises from 5.0 / 40.2 bars at 2R to
+6.0 / 70.4 at 3R; wall-clock exposure rises from 3.1295% to 5.0420%.
+Both 3R directions remain positive but weaker: long +0.0841R over 94 trades
+and short +0.1769R over 93.
+
+**Frozen-window and concentration result:** 3R development / validation /
+final-holdout performance is +26.6608R / +1.4506R / -3.7531R, compared with
+2R's +17.5830R / +4.4695R / +6.5592R. The wider target improves known
+development but degrades validation and turns the final holdout negative.
+Although 3R remains +15.3583R after its top three trades, it becomes -2.9085R
+without its best quarter and -11.7694R without its best two. Five quarters
+are positive and two negative, but 2025-Q2 contributes +27.2668R—more than
+the full result. Monthly and quarterly tables are tracked explicitly.
+
+**Unique contribution and decision:** 3R has 29 same-bar overlaps with the
+core worth +23.4235R and 158 same-bar-unique trades worth only +0.9348R
+(+0.0059R expectancy). This is substantially weaker than 2R's +15.1882R
+unique contribution (+0.0938R). Consequently the 3R target is formally
+`REJECTED`: it lowers cumulative R, expectancy, PF, unique expectancy, and
+holdout performance while increasing drawdown and best-quarter dependence.
+Frozen 2R remains `RESEARCH_ONLY` for Stage 6 actual combined-EA portfolio
+testing. It is not yet an out-of-sample, portfolio, or production candidate.
+
+**Artifacts and boundary:** the tracked config is
+`Tools/D027/d027_stage5_SweepReclaim_3R.ini`; deterministic analysis, audits,
+tables, findings, and hashes are under `Tools/D027/Stage5/`. Raw artifacts
+remain at
+`/Users/matt/MT5-MSZZ-TEST/D027_Stage5_Results/SweepReclaim_3R` under size
+discipline. Stage 5 changes no EA code, strategy trigger, regime threshold,
+history split, canonical A, or canonical E. No live deployment occurred and
+there was no merge to `main`. Remaining work is Stage 6 incremental portfolio
+analysis, the dedicated regime-filter stage, anti-overfitting/decision
+categories, and the final report.
