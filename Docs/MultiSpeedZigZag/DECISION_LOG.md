@@ -1607,3 +1607,78 @@ Only **T5 and T8** materially reduce two-quarter concentration versus F (26.7pp 
 ### Commit and artifacts
 
 Starting SHA for this results addendum: `d7ab166` (this entry's own decision-log-only commit). Final SHA is this results commit. New/modified files: `Include/MultiSpeedZigZag/Research/ResearchTrailPolicy.mqh`, `Experts/MultiSpeedZigZagEA.mq5`, `Tests/MultiSpeedZigZag/Test_MSZZ_ResearchTrail.mq5`, `Tools/D026/` (13 `.ini` configs plus `README.md`), `Tools/D026/results/` (all 13 runs' `MSZZ_TradeAnalytics.csv`/`MSZZ_SignalJournal.csv`/`MSZZ_RunSummary.csv`/`MSZZ_TrailJournal.csv` where applicable, and MT5 `.htm` reports). No merge to `main`. No production/live deployment of any trail. Two infrastructure bugs were found and fixed during execution and are worth recording for future batch scripts on this machine: macOS ships bash 3.2 (no associative arrays — use indexed parallel arrays); MT5's own `/config:` argument parser splits on `/`, silently truncating a relative subdirectory path at the first slash — pass the absolute Windows path with backslash separators instead (`Z:\Users\...\Dir\file.ini`), exactly as this branch's D023 `${cfg}` bash-escaping fix already established for a related reason.
+
+## D027 — Regime architecture and strategy-family expansion
+
+**Date:** 2026-07-27
+**Status:** In progress (staged; this entry is written before implementation per this branch's established discipline, and will be extended with results as each stage completes — later stages are tracked as pending work, not silently skipped)
+
+### Mission and scope
+
+Build a causal, auditable market-regime classifier as an **observer layer** (Layer 1), an explicit strategy-family taxonomy (Layer 2), and a regime-eligibility policy (Layer 3) that starts in `LABEL_ONLY` mode everywhere. On top of that architecture, implement five new, structurally distinct strategy-family candidates (S1–S5) and test whether any of them contains expectancy independent of FastMedConfluence, either standalone or in combination with the existing A/E core. **A and E are the control group and are not modified by this decision** — no entry, ATR, score, stop, or opposite-signal logic change; no regime gate added to A/E in this pass. This is research and architecture, not optimization of the proven core. No merge to `main`, no live deployment, no production promotion of anything built in this entry.
+
+Given the size of the full brief (six execution stages, five new strategies, a portfolio-interaction study, a regime-filter stage, and a 40-point final report), this entry is being delivered the same way every other multi-stage decision on this branch has been: in bounded, independently-verified increments, each committed once it is genuinely done, rather than claimed complete in one pass. This entry currently covers **Stage 0 (baseline integrity) and the architecture/design decisions for Layers 1–3**; Stages 1–6 and the strategy implementations are tracked explicitly as pending and will extend this same entry (append-only, per file convention) as they land.
+
+### Stage 0 — Baseline integrity (satisfied by direct inheritance from D026)
+
+The branch head at the start of this entry is `5ed1e67`, exactly the SHA D027 was instructed to start from — confirmed via `git log`/`git rev-parse`, zero commits or working-tree drift since D026's own commit. D026's own verification, performed against this exact same commit, already proved: canonical (A) reproduces 224 trades/+0.1261R/PF 1.2446/DD 15.1583R; E reproduces 213 trades/+0.1467R/PF 1.2532/DD 16.9205R; all 15 pre-existing `Test_MSZZ_*` suites pass at 0 failures; both shadow regressions (113/46 short, 431/178 long candidates/clusters, zero orders/deals) are unchanged; every D026 trailing input is confirmed default-off. Since zero code has changed between that verification and this entry, re-running the same 17-month backtests would produce byte-identical numbers for no new information — Stage 0 is satisfied by citing that evidence directly rather than mechanically repeating it, consistent with this project's own precedent (D023's exact-SHA-match reuse policy for canonical cells is a *stricter* bar than this, since D023 was willing to reuse across "same commit family"; here it is the literal same commit).
+
+### Out-of-sample window declaration, and an honest data-availability limitation
+
+Per instruction, the development/validation/holdout boundaries must be declared before any candidate is tested, and older data should be used where the broker's history permits. A direct probe (`check_history` script requesting 100,000 M5 bars back from the most recent available bar) found: **`earliest=2025.02.26 05:00`, `latest=2026.07.24 23:55`** — i.e., this account/feed's actual usable M5 history for XAUUSD begins only **three days before** the existing D018–D026 research window's own start (`2025.03.01`). There is no materially older unseen block available. Per the instruction's own explicit fallback ("If sufficient older data is unavailable, state that clearly rather than reusing the same sample and calling it out of sample"), this is stated plainly here rather than glossed over: **D027 cannot construct a genuine fresh-history out-of-sample split.** What it can do, and will do, is a **within-window chronological split**, which is a real (if weaker) safeguard against overfitting the *new* regime definitions and strategy rules specifically — none of the regime classifier or S1–S5 strategies have been evaluated against any of this data yet, unlike A/E/D019–D026's existing strategies, which have already been fit to the reader's knowledge of the whole window:
+
+- **Development window:** `2025.03.01`–`2025.12.31` (10 months) — regime definitions, strategy trigger logic, and thresholds are designed and iterated against this slice only.
+- **Validation window:** `2026.01.01`–`2026.04.30` (4 months) — used once definitions are frozen, to check stability; does not feed back into threshold changes.
+- **Final holdout:** `2026.05.01`–`2026.07.24` (~3 months) — untouched until every regime definition, strategy rule, and threshold is frozen in this document; used only for final confirmation.
+
+This is disclosed as a **within-sample chronological holdout, not independent out-of-sample data**, and every later results section will state which window(s) a given number comes from rather than silently mixing them.
+
+### Layer 1 — Regime classifier: exact definitions
+
+All definitions below are frozen before any strategy or regime-filter result is inspected, per the anti-overfitting rules. `CMSZZRegimeClassifier::Evaluate()` is a pure function of `(fast, medium, slow, rates[], closed_count)` — the same three `MSZZSpeedSnapshot`s `ProcessClosedBar()` already computes for signal evaluation, plus the same closed-bar `rates[]` array — with no MT5 API calls and no persistent classifier-side state, so "same input produces byte-identical output" is true by construction, not by testing luck.
+
+- **Direction** (`BULLISH`/`BEARISH`/`NEUTRAL`): taken from the **slow** speed's `leg_direction` (the dominant structural bias) — `MSZZ_DIR_LONG`→`BULLISH`, `MSZZ_DIR_SHORT`→`BEARISH`, `MSZZ_DIR_NONE`→`NEUTRAL`.
+- **Structural alignment** (`FULLY_ALIGNED`/`PARTIALLY_ALIGNED`/`MIXED`/`OPPOSED`), checked in this fixed priority order (documented precisely because the four categories are not mutually exclusive without one):
+  1. `FULLY_ALIGNED` if `fast.leg_direction == medium.leg_direction == slow.leg_direction` and none is `NONE`.
+  2. Else `OPPOSED` if `fast.leg_direction` is the exact opposite of `slow.leg_direction` (both non-`NONE`) — checked before the "two agree" rule below so a direct fast-vs-slow contradiction is never masked by medium happening to agree with one side.
+  3. Else `PARTIALLY_ALIGNED` if any two of the three speeds agree (non-`NONE`).
+  4. Else `MIXED`.
+- **Trend strength** (`WEAK`/`NORMAL`/`STRONG`): driven by `directional_efficiency` (below) with predeclared boundaries `WEAK <0.35`, `NORMAL 0.35–0.65`, `STRONG >0.65`. (The instruction only predeclared volatility boundaries explicitly; these trend-strength boundaries are this entry's own predeclared, documented, not-tuned-after-results choice, stated here before any result is computed.)
+- **Volatility state** (`CONTRACTING`/`NORMAL`/`EXPANDING`): `normalized_atr = ATR(14) / median(ATR(14) over the previous 100 closed bars)`, boundaries exactly as suggested: `CONTRACTING <0.80`, `NORMAL 0.80–1.20`, `EXPANDING >1.20`.
+- **Directional efficiency**: Kaufman-style efficiency ratio over a fixed, predeclared lookback of **20 closed bars**: `abs(close[t] - close[t-19]) / sum(abs(close[i]-close[i-1]) for i in [t-19, t])`. One lookback, not optimized in D027, per instruction.
+- **Compression ratio**: `fast_swing_amplitude_r / medium_swing_amplitude_r` (guarded against zero). `market_phase = COMPRESSION` requires this ratio `< 0.35` (predeclared) **and** `volatility_state != EXPANDING` **and** the fast amplitude is non-increasing versus its own immediately preceding confirmed swing.
+- **Swing amplitude** (fast/medium/slow, in R): `abs(last_high.price - last_low.price) / atr` for that speed — normalizes the latest confirmed swing leg by that speed's own current ATR, both already present on `MSZZSpeedSnapshot`.
+- **Swing duration** (fast/medium/slow, in bars): `abs(last_high.confirmed_time - last_low.confirmed_time) / PeriodSeconds()` — the gap between that speed's most recent confirmed high and most recent confirmed low, regardless of which came first. A simpler, equally causal definition than sorting all four available pivots by time; documented exactly so a reviewer can recompute it by hand.
+- **Market phase** (`BREAKOUT`/`TREND_CONTINUATION`/`PULLBACK`/`COMPRESSION`/`TRANSITION`/`RANGE`/`FAILED_BREAK`/`UNCLASSIFIED`), evaluated in this order, first match wins:
+  1. `BREAKOUT`: the current closed bar has `fast.bullish_break` or `fast.bearish_break` set, and alignment is `FULLY_ALIGNED` or `PARTIALLY_ALIGNED` in that break's direction.
+  2. `TREND_CONTINUATION`: alignment `FULLY_ALIGNED`, `volatility_state` is `NORMAL` or `EXPANDING`, and this bar is *not* itself a fresh break (excludes double-counting with #1).
+  3. `PULLBACK`: slow direction is non-`NONE`, medium agrees with slow, fast opposes slow — the same structural precondition S1 (below) requires, computed once here and reused.
+  4. `COMPRESSION`: as defined above.
+  5. `TRANSITION`: uses the **fast** speed's four most recent confirmed pivots (`prior_high`, `last_high`, `prior_low`, `last_low`, all must be `valid`), sorted by `confirmed_time` ascending; if the resulting chronological `structure_label` sequence is exactly `LL,LH,HL,HH` (bullish) or `HH,HL,LH,LL` (bearish), **and** medium's `leg_direction` matches the new direction (fast = timing, medium = validation, exactly per instruction) → `TRANSITION`. Requires at least two structural confirmations by construction (four labeled pivots, not one).
+  6. `RANGE`: none of the above, alignment is `MIXED`, and volatility is not `EXPANDING` — an intentionally coarse residual bucket, not a validated range-detection algorithm; used only as a descriptive label in this entry, never as a strategy precondition (matches the instruction's own deferral of range mean-reversion).
+  7. Otherwise `UNCLASSIFIED`.
+
+  **`FAILED_BREAK` is explicitly not implemented in this pass and is never emitted by the classifier.** A causal, well-tested `FAILED_BREAK` definition needs short-term memory of a breakout's own origin level beyond what the two-pivot-per-side snapshot exposes; rather than add under-tested mutable classifier state to hit every enum value, this is deferred and disclosed here rather than faked. This does not block S3 (Sweep and Reclaim, below), which implements its own fully self-contained excursion/reclaim detection at the strategy layer and does not depend on a classifier-level `FAILED_BREAK` label.
+
+### Causality proof
+
+Every input to `Evaluate()` is drawn exclusively from `fast`/`medium`/`slow` (the same already-certified, non-repainting `CMSZZTripleZigZagEngine::Snapshot()` output `ProcessClosedBar()` uses for live signal evaluation) and `rates[0..closed_count-1]` (closed bars only — `closed_count` is `ProcessClosedBar()`'s own `copied-1`, which already excludes the forming bar, exactly as every existing strategy in `StrategySuite.mqh` relies on). No pivot's `confirmed_time` can exceed the evaluation bar's own close time, because the engine itself only confirms a pivot once its defining reversal has closed — the same non-repainting contract `NON_REPAINTING_CONTRACT.md` already documents and `Test_MSZZ_Determinism.mq5`/`Test_MSZZ_StructuralReplay.mq5` already certify. The classifier adds no new access path to price/time data — it is a pure reducer over data the engine already proved causal.
+
+### Layer 2 — Strategy-family taxonomy and existing-eight classification (recorded in full in `STRATEGY_CATALOG.md`)
+
+`ENUM_MSZZ_STRATEGY_FAMILY` as specified. Existing eight strategies classified exactly per instruction: FastBreakout/MediumBreakout/SlowBreakout/FastMedConfluence/FastMedContext/MedSlowContext → `BREAKOUT`; NestedPullback → `PULLBACK`; WeightedEnsemble → `ENSEMBLE`. Every candidate gains `family_id` alongside its existing `strategy_id` — family is assigned explicitly at declaration, never inferred later from the setup name.
+
+### Layer 3 — Regime eligibility policy: two modes, `LABEL_ONLY` default
+
+`CMSZZRegimeEligibilityPolicy::IsEligible()` is pure and stateless. `LABEL_ONLY` (default, and the only mode active anywhere in this entry's Stage 1 work) always returns eligible — every existing strategy's behavior is provably unchanged, matching this branch's universal "new research input defaults to a no-op" rule (D019, D025, D026). `RESEARCH_FILTER` mode is defined but not activated until the dedicated regime-filter stage, and even then only for the six predeclared per-family hypotheses in the instruction — no combinatorial search, no gating of A/E.
+
+### Rejected alternatives
+
+- **Inferring `market_phase` from a single confidence score**: rejected per instruction's own explicit requirement for auditable, named fields rather than one opaque number.
+- **Implementing `FAILED_BREAK` via a quick heuristic** (e.g., "any close back through the last pivot within N bars"): rejected as under-specified and untestable to the same standard as the other six phases; explicit deferral is more honest than a plausible-looking guess.
+- **Using fresh out-of-sample history for the holdout split**: not available — see the data-availability finding above. A within-window chronological split is used instead, disclosed as weaker than genuine unseen data.
+- **Combining Stage 0 with a fresh 17-month rerun of A/E**: rejected as computationally wasteful and epistemically redundant — the exact same commit already has that evidence from D026.
+
+### Status of remaining stages
+
+Not yet started, tracked explicitly rather than silently deferred: Stage 1 (wire the classifier in `LABEL_ONLY` mode, journal `MSZZ_RegimeJournal.csv`, attach regime snapshot IDs to the signal/trade journals, prove zero behavior change via full + shadow regression), Stage 2 (descriptive regime attribution of the existing eight strategies), Stage 3 (implement S1–S5), Stage 4 (standalone fixed-2R screen), Stage 5 (qualified 3R screen), Stage 6 (incremental portfolio analysis against A/E), the regime-filter research stage, the anti-overfitting/decision-category pass, and the final 40-point report. This entry will be extended (append-only) as each lands, exactly as D023/D024/D025/D026 each grew from a decision-only commit into a full results entry.
