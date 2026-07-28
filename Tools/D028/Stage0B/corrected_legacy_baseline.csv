@@ -1,0 +1,13 @@
+result_set,scope,trades,deals,wins,losses,cumulative_r,expectancy_r,profit_factor_r,max_drawdown_r,long_trades,short_trades,analytics_html_reconciled
+B0_A_2R,Full window,224,448,81,143,28.244700,0.126092,1.244622,15.158100,107,117,true
+B0_A_2R,Development,133,,45,88,13.936800,0.104788,1.203044,15.158100,69,64,
+B0_A_2R,Validation,52,,20,32,6.884300,0.132390,1.240600,8.205700,20,32,
+B0_A_2R,Final holdout,39,,16,23,7.423600,0.190349,1.407655,4.921700,18,21,
+B1_SweepReclaim_2R,Full window,190,380,70,120,28.611700,0.150588,1.268759,18.294100,96,94,true
+B1_SweepReclaim_2R,Development,123,,44,79,17.583000,0.142951,1.249698,18.294100,60,63,
+B1_SweepReclaim_2R,Validation,29,,11,18,4.469500,0.154121,1.272877,4.032000,15,14,
+B1_SweepReclaim_2R,Final holdout,38,,15,23,6.559200,0.172611,1.333589,8.421300,21,17,
+B2_Corrected_Legacy_A_plus_Sweep_2R,Full window,372,744,125,247,23.015700,0.061870,1.125336,25.279800,177,195,true
+B2_Corrected_Legacy_A_plus_Sweep_2R,Development,229,,75,154,13.363800,0.058357,1.117887,25.279800,112,117,
+B2_Corrected_Legacy_A_plus_Sweep_2R,Validation,79,,26,53,1.566300,0.019827,1.036623,9.458400,36,43,
+B2_Corrected_Legacy_A_plus_Sweep_2R,Final holdout,64,,24,40,8.085600,0.126337,1.293995,8.284500,29,35,

@@ -151,6 +151,10 @@ public:
          AddCandidate(out,n,MSZZ_STRAT_WEIGHTED_ENSEMBLE,MSZZ_DIR_SHORT,MSZZ_ORIGIN_FAST_BREAK,signal_time,close_price,short_stop,
                       3.0+1.4*bear_votes,bear_votes,MSZZ_EVIDENCE_TRIGGER|MSZZ_EVIDENCE_CONTEXT,"Weighted Three-Speed Ensemble",
                       f.bearish_event_id,"WE|"+f.bearish_event_id,StringFormat("Bearish vote score %d/3",bear_votes));
+      // D028 Stage 0B: capacity is an implementation detail inside Evaluate.
+      // Every returned handoff array is compact and exactly matches its
+      // logical count.
+      ArrayResize(out,n);
       return n;
    }
 

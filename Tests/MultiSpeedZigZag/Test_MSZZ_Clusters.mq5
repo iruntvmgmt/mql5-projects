@@ -9,8 +9,12 @@
 void InitCandidate(MSZZCandidate &c,const ENUM_MSZZ_STRATEGY_ID strategy,const double score,
                    const string origin,const string event_id,const double stop,const int evidence)
 {
+   ZeroMemory(c);
    c.valid=true;
    c.strategy_id=strategy;
+   c.family_id=(strategy==MSZZ_STRAT_NESTED_PULLBACK ? MSZZ_FAMILY_PULLBACK :
+                strategy==MSZZ_STRAT_WEIGHTED_ENSEMBLE ? MSZZ_FAMILY_ENSEMBLE :
+                MSZZ_FAMILY_BREAKOUT);
    c.direction=MSZZ_DIR_LONG;
    c.origin_type=MSZZ_ORIGIN_FAST_BREAK;
    c.signal_time=D'2026.01.01 10:00';

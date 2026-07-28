@@ -2,10 +2,13 @@
 #define __MSZZ_OPPORTUNITY_CLUSTER_ENGINE_MQH__
 
 #include <MultiSpeedZigZag/Core/Types.mqh>
+#include <MultiSpeedZigZag/Core/CandidateHandoff.mqh>
 
 class CMSZZOpportunityClusterEngine
 {
 private:
+   string m_last_diagnostic;
+
    string LenPrefix(const string value) const
    {
       return StringFormat("%d:%s",StringLen(value),value);
@@ -95,6 +98,8 @@ private:
    }
 
 public:
+   string LastDiagnostic() const { return m_last_diagnostic; }
+
    // Format (see DECISION_LOG.md D004): MSZZC1|<len>:<symbol>|<len>:<timeframe>|<len>:<direction>|<len>:<origin_type>|<len>:<origin_id>
    // Every field is length-prefixed so a "|" or ":" inside origin_id can never be
    // mistaken for a field delimiter. Do not construct or parse cluster IDs by ad hoc
@@ -132,6 +137,9 @@ public:
              const int candidate_count,MSZZOpportunityCluster &clusters[])
    {
       ArrayResize(clusters,0);
+      m_last_diagnostic="";
+      if(!CMSZZCandidateHandoff::ValidateCollection(candidates,candidate_count,m_last_diagnostic))
+         return -1;
       int cluster_count=0;
 
       for(int i=0;i<candidate_count;i++)
@@ -152,6 +160,7 @@ public:
          {
             target=cluster_count++;
             ArrayResize(clusters,cluster_count);
+            ZeroMemory(clusters[target]);
             clusters[target].valid=true;
             clusters[target].origin_id=(candidates[i].origin_id!="" ? candidates[i].origin_id : candidates[i].event_id);
             clusters[target].origin_type=candidates[i].origin_type;

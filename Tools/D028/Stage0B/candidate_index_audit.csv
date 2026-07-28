@@ -1,0 +1,13 @@
+audit,strategy,raw_candidates,valid_initialized_candidates,malformed_candidates,selected_cluster_events,unique_cluster_ids,executions,status
+D027_historical_combined,ALL,1037,1018,19,,,371,INVALIDATED_FOR_COMBINED_BASELINE_COMPARISON
+D028_stage0_prefixed_combined,ALL,1042,1018,24,,,372,NONDETERMINISTIC_PRE_FIX_EVIDENCE
+D028_stage0b_corrected_combined,ALL,1093,1093,0,1018,867,372,PASS
+D028_stage0b_corrected_combined,FastMedConfluence,717,717,0,,,246,PASS
+D028_stage0b_corrected_combined,SweepReclaim,376,376,0,,,126,PASS
+D028_stage0b_rejection_or_execution,EXECUTED,,,,,,372,PASS
+D028_stage0b_rejection_or_execution,ORDER_FAILED,,,,,,1,PASS
+D028_stage0b_rejection_or_execution,REJECT_DUPLICATE_CLUSTER,,,,,,139,PASS
+D028_stage0b_rejection_or_execution,REJECT_EXPIRED,,,,,,2,PASS
+D028_stage0b_rejection_or_execution,REJECT_OWNERSHIP,,,,,,318,PASS
+D028_stage0b_rejection_or_execution,REJECT_SPREAD,,,,,,6,PASS
+D028_stage0b_rejection_or_execution,REJECT_STOPS,,,,,,180,PASS

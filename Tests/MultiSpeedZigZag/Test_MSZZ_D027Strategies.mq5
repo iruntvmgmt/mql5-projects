@@ -167,7 +167,7 @@ void TestTransitionAndClustering()
    candidates[0].family_id=MSZZ_FAMILY_BREAKOUT; candidates[0].direction=MSZZ_DIR_LONG;
    candidates[0].origin_type=MSZZ_ORIGIN_FAST_BREAK; candidates[0].origin_id="SHARED";
    candidates[0].event_id="A"; candidates[0].signal_time=t; candidates[0].expiry_time=t+900;
-   candidates[0].entry=110; candidates[0].stop=100; candidates[0].score=8;
+   candidates[0].entry=110; candidates[0].stop=100; candidates[0].target=130; candidates[0].score=8;
    candidates[1]=candidates[0]; candidates[1].strategy_id=MSZZ_STRAT_BREAKOUT_RETEST;
    candidates[1].family_id=MSZZ_FAMILY_RETEST; candidates[1].event_id="B"; candidates[1].score=7.5;
    CMSZZOpportunityClusterEngine clusters_engine; MSZZOpportunityCluster clusters[];

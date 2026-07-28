@@ -138,3 +138,126 @@ proceed when baseline parity fails.
    logical trade analytics.
 
 No D028 strategy or exit result is claimed by this checkpoint.
+
+## Stage 0B integrity addendum — 2026-07-28
+
+The owner authorized a bounded repair of the candidate-index defect. Historical
+D027 artifacts and commits were not changed.
+
+### Root cause and affected scope
+
+`CMSZZStrategySuite::AddCandidate()` grew its internal array in blocks of 16.
+The EA treated `ArraySize(candidates)` as the next logical index when appending
+a D027-family candidate, even though `candidate_count` could be 1. In an
+A+SweepReclaim bar, SweepReclaim was placed at physical index 16 while the
+processing loop read logical index 1. That uninitialized slot could pass or
+fail unpredictably depending on its incidental memory contents.
+
+The defect affected combined execution whenever at least one legacy-suite
+candidate and one D027-family candidate shared a handoff. It did not affect:
+
+- canonical A alone, because only the legacy candidate at logical index 0 was
+  processed;
+- SweepReclaim alone, because the empty legacy array had physical size zero
+  and the D027 candidate occupied index 0;
+- certified standalone A, E, and SweepReclaim evidence.
+
+The full audit covered `StrategySuite`, `D027StrategyFamilies`, the EA combined
+append/filter loop, `OpportunityClusterEngine`, and every candidate
+count/index handoff found by repository search. D027's emitter already returned
+an exact-size array. The faulty cross-suite append was the only path mixing
+allocated size with logical count.
+
+### Correction
+
+`Include/MultiSpeedZigZag/Core/CandidateHandoff.mqh` now defines the subsystem
+boundary contract:
+
+- collections must be compact (`logical_count == ArraySize`);
+- append uses and returns the logical appended index;
+- every processed candidate must be explicitly valid and carry a known
+  strategy, family, direction, event/origin identity, finite score, and
+  positive entry/stop/target;
+- negative, oversized, or sparse counts fail closed with deterministic
+  diagnostics.
+
+`StrategySuite::Evaluate()` shrinks internal capacity to its exact logical
+count before returning. The EA validates both source collections, appends D027
+candidates through the handoff contract, validates the filtered collection,
+and checks the returned index. `OpportunityClusterEngine::Build()` validates
+the complete collection before reading it and returns `-1` plus
+`LastDiagnostic()` on failure. Newly allocated cluster records are explicitly
+zero-initialized.
+
+The validator deliberately does not require provisional signal-close geometry
+to match final fill geometry. Existing candidates can carry a structural stop
+on the other side of the signal close and are normalized later by the
+unchanged execution preparation path. Enforcing that additional assumption
+changed the standing shadow count and was removed before final testing.
+
+No trigger, score, clustering priority, execution preparation, cost, exit,
+window, A/E definition, or standalone configuration changed.
+
+### Deterministic tests
+
+`Test_MSZZ_CandidateHandoff.mq5` adds 36 passing assertions covering:
+
+- first append and real index 16 append;
+- sparse/uninitialized rejection;
+- exact initialized/logical counts;
+- two-strategy identity and enabled-order independence;
+- preservation of strategy, family, direction, event, origin, score, entry,
+  stop, and target;
+- invalid required identities;
+- count beyond array size;
+- cluster-boundary rejection and deterministic diagnostics.
+
+The EA and all 22 `Test_MSZZ_*` scripts compiled in the isolated instance with
+zero errors and zero warnings. All 22 runtime suites passed with zero
+assertion failures. Final shadows reproduced 113/46 (short) and 431/178 (long)
+raw candidates/unique clusters, with zero malformed candidates and zero
+trades.
+
+### Corrected baselines
+
+| Result set | Trades | Deals | Cumulative R | Expectancy R | PF | Max DD R |
+|---|---:|---:|---:|---:|---:|---:|
+| B0 canonical A 2R | 224 | 448 | 28.2447 | 0.1261 | 1.2446 | 15.1581 |
+| B1 SweepReclaim 2R | 190 | 380 | 28.6117 | 0.1506 | 1.2688 | 18.2941 |
+| B2 corrected legacy A+Sweep 2R | 372 | 744 | 23.0157 | 0.0619 | 1.1253 | 25.2798 |
+
+B0 and B1 match their certified trade-analytics rows exactly.
+
+B2 contains 1,093 raw candidates: 717 A and 376 SweepReclaim. All 1,093 are
+valid and initialized. There are 1,018 selected-cluster events, 867 unique
+cluster IDs, 372 executions/trades, and 744 deals. A owns 246 trades and
+SweepReclaim owns 126. Exit attribution is 153 SL, 97 TP, 56 own-family
+opposite exits, 66 cross-family opposite exits, and zero unknown exits. Against
+B0, the shared lifecycle retains 215 core clusters, displaces 9, and newly
+executes 31.
+
+Frozen-window B2 results are:
+
+- Development: 229 trades, +13.3638R, 0.0584R expectancy.
+- Validation: 79 trades, +1.5663R, 0.0198R expectancy.
+- Final holdout: 64 trades, +8.0856R, 0.1263R expectancy.
+
+All analytics/native-report trade counts, deal counts, window totals, owner
+counts, candidate outcomes, and exit classes reconcile.
+
+### Historical status and forward gate
+
+D027 Stage 6's historical A+Sweep result remains stored exactly as originally
+produced: 371 trades and +20.7400R. Its journal contains 19 malformed raw
+candidates caused by undefined index reads. A separate fresh pre-fix D028 run
+contains 24 malformed rows, demonstrating the memory-dependent path.
+
+The D027 Stage 6 combined result is therefore formally:
+
+`INVALIDATED_FOR_COMBINED_BASELINE_COMPARISON`
+
+It is not deleted, regenerated, rewritten, or retroactively replaced. B2 is the
+new authoritative D028 legacy shared-ownership control. Standalone D027 A, E,
+and SweepReclaim evidence remains valid and unchanged.
+
+Stage 1 is now unblocked. It was not started in the Stage 0B change set.

@@ -8,6 +8,7 @@
 #include <Trade/Trade.mqh>
 #include <MultiSpeedZigZag/Core/TripleZigZagEngine.mqh>
 #include <MultiSpeedZigZag/Strategies/StrategySuite.mqh>
+#include <MultiSpeedZigZag/Core/CandidateHandoff.mqh>
 #include <MultiSpeedZigZag/Strategies/D027StrategyFamilies.mqh>
 #include <MultiSpeedZigZag/Arbitration/OpportunityClusterEngine.mqh>
 #include <MultiSpeedZigZag/Execution/EventStore.mqh>
@@ -978,10 +979,33 @@ void ProcessClosedBar()
    int candidate_count=g_suite.Evaluate(fast,med,slow,rates[closed_count-1].time,rates[closed_count-1].close,candidates);
    MSZZCandidate d027_candidates[];
    int d027_count=g_d027_suite.Evaluate(fast,med,slow,g_last_regime,rates[closed_count-1],d027_candidates);
+   string handoff_diagnostic;
+   if(!CMSZZCandidateHandoff::ValidateCollection(candidates,candidate_count,handoff_diagnostic))
+   {
+      Print("MSZZ CANDIDATE HANDOFF REJECTED stage=legacy reason=",handoff_diagnostic);
+      return;
+   }
+   if(!CMSZZCandidateHandoff::ValidateCollection(d027_candidates,d027_count,handoff_diagnostic))
+   {
+      Print("MSZZ CANDIDATE HANDOFF REJECTED stage=d027 reason=",handoff_diagnostic);
+      return;
+   }
    for(int i=0;i<d027_count;i++)
    {
-      int at=ArraySize(candidates); ArrayResize(candidates,at+1);
-      candidates[at]=d027_candidates[i]; candidate_count++;
+      int appended_index=-1;
+      if(!CMSZZCandidateHandoff::Append(candidates,candidate_count,d027_candidates[i],
+                                       appended_index,handoff_diagnostic))
+      {
+         PrintFormat("MSZZ CANDIDATE HANDOFF REJECTED stage=append source_index=%d reason=%s",
+                     i,handoff_diagnostic);
+         return;
+      }
+      if(appended_index<0 || appended_index>=candidate_count)
+      {
+         PrintFormat("MSZZ CANDIDATE HANDOFF REJECTED stage=append_index index=%d count=%d",
+                     appended_index,candidate_count);
+         return;
+      }
    }
    if(candidate_count<=0) return;
    MSZZCandidate eligible_candidates[]; int eligible_count=0;
@@ -1008,10 +1032,20 @@ void ProcessClosedBar()
    for(int i=0;i<eligible_count;i++) candidates[i]=eligible_candidates[i];
    candidate_count=eligible_count;
    if(candidate_count<=0) return;
+   if(!CMSZZCandidateHandoff::ValidateCollection(candidates,candidate_count,handoff_diagnostic))
+   {
+      Print("MSZZ CANDIDATE HANDOFF REJECTED stage=eligible reason=",handoff_diagnostic);
+      return;
+   }
 
    MSZZOpportunityCluster clusters[];
    int cluster_count=g_cluster_engine.Build(_Symbol,_Period,candidates,candidate_count,clusters);
-   if(cluster_count<=0) return;
+   if(cluster_count<0)
+   {
+      Print("MSZZ CANDIDATE HANDOFF REJECTED stage=cluster reason=",g_cluster_engine.LastDiagnostic());
+      return;
+   }
+   if(cluster_count==0) return;
    int best_cluster=g_cluster_engine.SelectBest(clusters,cluster_count);
    if(best_cluster<0 || !clusters[best_cluster].valid) return;
 
