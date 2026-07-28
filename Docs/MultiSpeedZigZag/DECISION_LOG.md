@@ -1698,3 +1698,120 @@ Implementation: `Include/MultiSpeedZigZag/Research/RegimeClassifier.mqh` (Layer 
 ### Status of remaining stages
 
 Stage 1 is complete as of this addendum. Not yet started, tracked explicitly rather than silently deferred: Stage 2 (descriptive regime attribution of the existing eight strategies), Stage 3 (implement S1–S5, including the `MSZZCandidate.family_id` field deferred above), Stage 4 (standalone fixed-2R screen), Stage 5 (qualified 3R screen), Stage 6 (incremental portfolio analysis against A/E), the regime-filter research stage, the anti-overfitting/decision-category pass, and the final 40-point report. This entry will be extended (append-only) as each lands, exactly as D023/D024/D025/D026 each grew from a decision-only commit into a full results entry.
+
+### Stage 2 results — descriptive entry-time regime attribution of the existing eight
+
+**Run inventory and configuration integrity:** the already-completed isolated
+MT5 batch was reused, not rerun. Its source is
+`/Users/matt/MT5-MSZZ-TEST/D027_Stage2_Results`, with one directory each for
+FastBreakout, MediumBreakout, SlowBreakout, FastMedConfluence,
+FastMedContext, MedSlowContext, NestedPullback, and WeightedEnsemble. Every
+directory contains a non-empty native HTML report, `MSZZ_RunSummary.csv`,
+`MSZZ_TradeAnalytics.csv`, `MSZZ_SignalJournal.csv`, and
+`MSZZ_RegimeJournal.csv`. All HTML reports state XAUUSD, M5,
+`2025.03.01–2026.07.24`, 99% history quality, 98,944 bars, 387,894 real ticks,
+and their unique magic number. The tracked configs use `Model=2`, fixed 2R,
+one enabled strategy, no trailing research input, and `LABEL_ONLY`. Magics are
+`26072893`–`26072899`, plus `26072901` for FastBreakout. Only FastBreakout
+uses the already-authorized D019 `InpResearchMinScoreOverride=3.5` with the
+required acknowledgement; the other seven have no test score override.
+
+**LABEL_ONLY equivalence proof:** FastBreakout matches its authorized Stage B
+research canonical baseline exactly. MediumBreakout, FastMedConfluence,
+FastMedContext, MedSlowContext, NestedPullback, and WeightedEnsemble match
+their accepted Stage B canonical summaries and trade analytics exactly
+(ignoring intentionally unique magic). FastMedConfluence also exactly matches
+D026 canonical A: 224 trades, +0.1261R expectancy, PF 1.2446, 15.1583R maximum
+drawdown, 107 long and 117 short. SlowBreakout preserves all 336 Stage B
+canonical trades byte-for-byte, then includes one position opened
+`2026.07.21 05:35` and closed at tester end `2026.07.23 23:59:59` for
++0.1635R. HTML, RunSummary, and analytics all agree on 337 trades. This
+explicit test-end completion explains the small headline change
+(-0.0137R to -0.0131R expectancy); it is preserved rather than omitted and
+does not indicate a Stage 1 no-op regression.
+
+**Attribution join audit:** `Tools/D027/Stage2/analyze_stage2_regimes.py`
+performs the deterministic join
+`TradeAnalytics.cluster_id -> EXECUTED SignalJournal row ->
+regime_snapshot_id -> RegimeJournal.time`. It requires the snapshot ID to
+equal original signal time and cross-checks direction/alignment/phase labels.
+Exit-time regimes are never used. All 2,407 trades are preserved and uniquely
+attributed: FastBreakout 261, MediumBreakout 513, SlowBreakout 337,
+FastMedConfluence 224, FastMedContext 235, MedSlowContext 440,
+NestedPullback 136, and WeightedEnsemble 261. Missing signals, duplicate
+signals, missing snapshots, duplicate snapshots, unmatched trades, and
+non-`LABEL_ONLY` rows are all zero.
+
+**Regime distribution and full-window strategy results:** the emitted
+entry-time phase set is BREAKOUT, TREND_CONTINUATION, PULLBACK, COMPRESSION,
+and UNCLASSIFIED; no `FAILED_BREAK` is invented. Full-window expectancy is
+FastBreakout +0.0798R, MediumBreakout -0.0414R, SlowBreakout -0.0131R,
+FastMedConfluence +0.1261R, FastMedContext +0.1010R, MedSlowContext -0.0189R,
+NestedPullback -0.0208R, and WeightedEnsemble +0.0777R. Exact distributions
+for direction, trend strength, volatility, alignment, and every emitted phase
+are in `strategy_regime_distribution.csv`; all required bucket metrics are in
+the summary CSVs.
+
+**Window-separated findings:** cumulative R for development / validation /
+final holdout is: FastBreakout +11.2100 / +10.5939 / -0.9636;
+MediumBreakout -22.8771 / +2.0789 / -0.4654; SlowBreakout -3.4447 /
+-13.2258 / +12.2441; FastMedConfluence +13.9368 / +6.8843 / +7.4236;
+FastMedContext +11.8657 / +9.2538 / +2.6125; MedSlowContext -10.6094 /
++5.8309 / -3.5288; NestedPullback -8.5741 / +0.2900 / +5.4561; and
+WeightedEnsemble +9.8691 / +11.3825 / -0.9636. These are a
+within-history chronological split, not independent out-of-sample evidence.
+No threshold was changed after inspection.
+
+**Per-strategy descriptive interpretation:** FastMedConfluence remains the
+breakout benchmark. FastMedContext is positive but previously shown to
+overlap the core. FastBreakout remains a raw research trigger under its
+authorized override. MediumBreakout remains potential context evidence;
+SlowBreakout potential regime/transition evidence; MedSlowContext potential
+higher-order context; NestedPullback the existing pullback prototype; and
+WeightedEnsemble a potential evidence/arbitration layer that is already known
+to overlap the core. No losing strategy is rescued by a profitable subgroup.
+
+**Core FastMedConfluence:** strongest adequately populated descriptors were
+NORMAL trend strength (57 trades, +0.4054R expectancy), EXPANDING volatility
+(107, +0.2553R), OPPOSED alignment (123, +0.2188R), and PULLBACK phase
+(63, +0.2685R). Weak descriptors were CONTRACTING volatility (35,
+-0.3387R), BREAKOUT phase (38, -0.1659R), TREND_CONTINUATION (31, -0.1341R),
+and STRONG trend strength (11, -0.1096R); these negative findings are mostly
+small samples. Removing the strongest cumulative bucket, EXPANDING
+volatility (+27.3122R), leaves the core +0.9325R; removing OPPOSED alignment
+(+26.9070R) leaves +1.3377R. The remainder is positive but thin.
+
+NORMAL trend strength and EXPANDING volatility were positive in development,
+validation, and holdout, so they are causal descriptive evidence potentially
+relevant to later T6/T8 opportunity research. That does **not** establish a
+runner filter: STRONG regimes are rare (11/224) and negative, while
+FULLY_ALIGNED regimes are 64/224 and approximately flat. Phase/alignment
+rankings are not window-stable; for example PULLBACK is positive in
+development/validation but negative in holdout. The core itself remains
+positive in all three windows.
+
+**Sample and robustness warnings:** fixed labels are `<20 INSUFFICIENT`,
+`20–49 EXPLORATORY`, `50–99 MODERATE_SAMPLE`, and `100+
+STRONGER_DESCRIPTIVE_SAMPLE`. They are descriptive, not statistical proof.
+Validation contains only 52 core trades and final holdout 39. Monthly,
+quarterly, side, best-period, best-trade, and top-three-trade exclusion
+descriptors are recorded in the machine-readable artifacts. Concentrated
+subsets do not authorize promotion, rescue, or gating.
+
+**Artifacts:** tracked inputs are `Tools/D027/d027_stage2_*.ini`. Analysis and
+derived results are under `Tools/D027/Stage2/`: `README.md`,
+`analyze_stage2_regimes.py`, `strategy_regime_summary.csv`,
+`strategy_regime_window_summary.csv`, `strategy_regime_monthly.csv`,
+`strategy_regime_quarterly.csv`, `strategy_regime_outlier_checks.csv`,
+`strategy_regime_join_audit.csv`, `strategy_regime_distribution.csv`,
+`strategy_regime_concentration.csv`, `stage2_findings.md`, and
+`output_sha256.txt`. Raw files remain at the exact isolated-instance path
+above; they are not duplicated because the eight regime journals alone are
+approximately 120 MB.
+
+**Decision boundary:** Stage 2 gates no strategy, promotes no strategy,
+modifies neither canonical A nor E, changes no frozen regime threshold, and
+deploys nothing live. There is no merge to `main`. Remaining work is Stage 3
+(S1–S5), Stage 4 (standalone fixed-2R screen), Stage 5 (qualified 3R screen),
+Stage 6 (incremental portfolio analysis), the dedicated regime-filter stage,
+anti-overfitting/decision-category pass, and final report.

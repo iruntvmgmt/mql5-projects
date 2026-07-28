@@ -1,0 +1,9 @@
+strategy,summary_trades,analytics_trades,matched_trades,missing_signal_joins,duplicate_signal_joins,missing_regime_joins,duplicate_regime_joins,unmatched_trades,status
+FastBreakout,261,261,261,0,0,0,0,0,PASS
+MediumBreakout,513,513,513,0,0,0,0,0,PASS
+SlowBreakout,337,337,337,0,0,0,0,0,PASS
+FastMedConfluence,224,224,224,0,0,0,0,0,PASS
+FastMedContext,235,235,235,0,0,0,0,0,PASS
+MedSlowContext,440,440,440,0,0,0,0,0,PASS
+NestedPullback,136,136,136,0,0,0,0,0,PASS
+WeightedEnsemble,261,261,261,0,0,0,0,0,PASS
