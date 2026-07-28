@@ -1,0 +1,12 @@
+feature,category,rationale
+direction,RETAINED,Causal slow-structure observer; useful descriptive side/context label.
+alignment_state,EXPLORATORY,Auditable but strongest buckets are counterintuitive and window rankings unstable.
+trend_strength,EXPLORATORY,NORMAL/WEAK descriptors carry information; STRONG is often too sparse.
+volatility_state,RETAINED,EXPANDING is stable for the core and adjacent-boundary sensitivity is reported; not production-gated.
+market_phase,EXPLORATORY,"Causal phase labels are informative, but filter hypotheses did not validate robust entries."
+directional_efficiency,EXPLORATORY,Deterministic continuous input; categorical economic meaning remains unvalidated.
+compression_ratio,EXPLORATORY,Causal continuous input; filtered compression result is concentrated.
+swing_amplitudes,EXPLORATORY,Retained for audit and future research; no independent edge established.
+swing_durations,EXPLORATORY,Retained for audit and future research; no independent edge established.
+FAILED_BREAK,REJECTED,Not causally implemented in D027 and never emitted; no proxy substituted.
+RESEARCH_FILTER_policy,REJECTED,No family filter met promotion standards; LABEL_ONLY remains default.

@@ -1,0 +1,6 @@
+strategy,summary_trades,analytics_trades,html_trades,html_deals,matched_trades,missing_signal,duplicate_signal,missing_regime,duplicate_regime,status
+AlignedFastPullback,110,110,110,220,110,0,0,0,0,PASS
+BreakoutRetest,354,354,354,708,354,0,0,0,0,PASS
+SweepReclaim,190,190,190,380,190,0,0,0,0,PASS
+CompressionBreakout,84,84,84,168,84,0,0,0,0,PASS
+StructureTransition,21,21,21,42,21,0,0,0,0,PASS

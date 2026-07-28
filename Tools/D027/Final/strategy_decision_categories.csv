@@ -1,0 +1,14 @@
+strategy,category,rationale
+FastBreakout,RESEARCH_ONLY,Positive only under the separately authorized score override; holdout negative.
+MediumBreakout,CONTEXT_SIGNAL_ONLY,Negative direct entry; retained only as a causal context event.
+SlowBreakout,CONTEXT_SIGNAL_ONLY,Weak direct entry with possible transition/context information.
+FastMedConfluence,STANDALONE_VALIDATION_CANDIDATE,Robust benchmark and untouched A/E core; still lacks genuine independent OOS.
+FastMedContext,CONTEXT_SIGNAL_ONLY,Positive headline but 91.1% core overlap and negative unique expectancy.
+MedSlowContext,CONTEXT_SIGNAL_ONLY,Negative direct entry; possible higher-order context only.
+NestedPullback,REDESIGN_REQUIRED,Negative overall with persistent long/short structural asymmetry.
+WeightedEnsemble,CONTEXT_SIGNAL_ONLY,Positive headline inherited from core overlap; unique trades lose.
+AlignedFastPullback,REDESIGN_REQUIRED,Negative standalone and frozen filter conjunction is unreachable.
+BreakoutRetest,REJECTED,Negative standalone and still negative under its sole frozen filter.
+SweepReclaim,RESEARCH_ONLY,"Positive robust standalone evidence, but no genuine OOS, failed portfolio addition, unavailable frozen filter."
+CompressionBreakout,REJECTED,Control negative; filtered positive subset fails top-three and best-quarter exclusions.
+StructureTransition,REJECTED,"Negative, only 21 trades, and filter is redundant."

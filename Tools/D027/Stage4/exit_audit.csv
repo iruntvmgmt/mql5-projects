@@ -1,0 +1,6 @@
+strategy,sl,tp,own_family_opposite,cross_family_opposite,test_end,unknown_other
+AlignedFastPullback,66,32,12,0,0,0
+BreakoutRetest,246,104,4,0,0,0
+SweepReclaim,100,66,24,0,0,0
+CompressionBreakout,38,19,27,0,0,0
+StructureTransition,14,6,0,0,1,0

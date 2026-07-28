@@ -1,0 +1,3 @@
+variant,summary_trades,analytics_trades,html_trades,html_deals,matched_signals,matched_entry_regimes,ambiguous_joins,status
+A_plus_SweepReclaim_2R,371,371,371,742,371,371,0,PASS
+E_plus_SweepReclaim_3R,353,353,353,706,353,353,0,PASS

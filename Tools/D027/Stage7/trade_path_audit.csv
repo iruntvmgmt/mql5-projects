@@ -1,0 +1,6 @@
+strategy,control_trades,filtered_trades,retained_cluster_ids,removed_cluster_ids,new_cluster_ids,retained_close_or_r_changed,status
+AlignedFastPullback,110,0,0,110,0,0,PASS
+BreakoutRetest,354,96,96,258,0,1,PATH_DEPENDENT
+SweepReclaim,190,0,0,190,0,0,PASS
+CompressionBreakout,84,73,73,11,0,4,PATH_DEPENDENT
+StructureTransition,21,21,21,0,0,0,PASS

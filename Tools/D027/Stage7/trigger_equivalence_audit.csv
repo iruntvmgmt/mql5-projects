@@ -1,0 +1,6 @@
+strategy,control_raw_candidates,filtered_raw_candidates,field_count_compared,ordered_stream_identical,status
+AlignedFastPullback,210,210,20,true,PASS
+BreakoutRetest,402,402,20,true,PASS
+SweepReclaim,376,376,20,true,PASS
+CompressionBreakout,966,966,20,true,PASS
+StructureTransition,242,242,20,true,PASS

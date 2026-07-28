@@ -1,0 +1,6 @@
+strategy,html_trades,html_deals,analytics_trades,executed_signal_joins,entry_regime_joins,missing_or_ambiguous,status
+AlignedFastPullback,0,0,0,0,0,0,PASS
+BreakoutRetest,96,192,96,96,96,0,PASS
+SweepReclaim,0,0,0,0,0,0,PASS
+CompressionBreakout,73,146,73,73,73,0,PASS
+StructureTransition,21,42,21,21,21,0,PASS

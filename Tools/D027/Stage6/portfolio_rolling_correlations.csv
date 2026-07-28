@@ -1,0 +1,9 @@
+pair,period,window_periods,comparison,observations,mean_correlation,median_correlation,minimum_correlation,maximum_correlation
+A_2R_pair,week,8,core_new,57,0.098714,0.187472,-0.801240,0.699776
+A_2R_pair,week,8,core_combined,56,0.666208,0.782267,0.009655,0.966640
+A_2R_pair,month,3,core_new,15,0.555117,0.737917,-0.478425,0.999993
+A_2R_pair,month,3,core_combined,15,0.698190,0.857518,-0.576883,0.999989
+E_3R_pair,week,8,core_new,55,0.134127,0.121868,-0.623007,0.717460
+E_3R_pair,week,8,core_combined,54,0.735673,0.790356,0.064620,0.954100
+E_3R_pair,month,3,core_new,15,0.458660,0.571644,-0.813466,0.997806
+E_3R_pair,month,3,core_combined,15,0.799358,0.934506,-0.170680,0.999982

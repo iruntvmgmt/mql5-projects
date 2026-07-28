@@ -1,0 +1,2 @@
+symbol;timeframe;magic;risk_reward;enabled_strategies;first_signal_time;last_close_time;trades;win_rate;expectancy_r;profit_factor_r;max_drawdown_r;avg_mfe_r;avg_mae_r;avg_bars_held;long_expectancy_r;long_trades;short_expectancy_r;short_trades
+XAUUSD;PERIOD_M5;26072852;2.00;NestedPullback;2025.03.04 23:10:00;2026.07.22 04:09:58;134;0.3134;-0.0467;0.9218;11.1844;1.1027;-0.8133;503.65;0.2018;65;-0.2808;69

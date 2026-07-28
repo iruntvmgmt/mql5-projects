@@ -1,0 +1,6 @@
+strategy,magic,enabled,status
+AlignedFastPullback,26072931,InpEnableAlignedFastPullback,PASS
+BreakoutRetest,26072932,InpEnableBreakoutRetest,PASS
+SweepReclaim,26072933,InpEnableSweepReclaim,PASS
+CompressionBreakout,26072934,InpEnableCompressionBreakout,PASS
+StructureTransition,26072935,InpEnableStructureTransition,PASS

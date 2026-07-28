@@ -1,0 +1,6 @@
+strategy,raw_candidates,reject_regime,executed,reject_ownership,reject_duplicate_cluster,reject_spread,regime_rejection_reasons
+AlignedFastPullback,210,210,0,0,0,0,pullback family: eligibility hypothesis not met [210]
+BreakoutRetest,402,297,96,8,0,1,retest family: eligibility hypothesis not met [297]
+SweepReclaim,376,376,0,0,0,0,"sweep/reclaim family: requires FAILED_BREAK, not implemented by the classifier in this pass [376]"
+CompressionBreakout,966,11,73,444,438,0,compression family: eligibility hypothesis not met [11]
+StructureTransition,242,0,21,5,216,0,
