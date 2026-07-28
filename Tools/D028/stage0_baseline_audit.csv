@@ -1,0 +1,5 @@
+control,source,trades,cumulative_r,expectancy_r,profit_factor_r,max_drawdown_r,trade_rows_equal,status
+FastMedConfluence_A_2R,D028_fresh,224,28.2447,0.1261,1.2446,15.1583,true,PASS
+SweepReclaim_2R,D028_fresh,190,28.6117,0.1506,1.2688,18.2941,true,PASS
+Legacy_A_plus_Sweep_2R,D027_reference,371,20.7400,0.0559,1.1129,25.2798,,REFERENCE
+Legacy_A_plus_Sweep_2R,D028_fresh,372,23.0157,0.0619,1.1253,25.2800,false,FAIL
