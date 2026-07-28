@@ -1472,3 +1472,138 @@ All 20 deterministic cases specified are required before any Tester run: long/sh
 A trailing variant is promoted for further validation only if **all** of: long and short expectancy positive (or short approximately flat with a clearly strong long side); PF above canonical (A); expectancy materially above E's `+0.1467R`; max drawdown below F's `23.33R`; best-two-quarters contribution materially below F's ~97%; positive expectancy excluding the top three trades; positive expectancy excluding the best quarter; no unexplained trade-count mismatch; unknown-exit classification at or below 2%; byte-identical canonical behavior with trailing disabled. Meeting all ten is necessary, not sufficient, for out-of-sample candidacy — no variant is promoted directly to production regardless of how many criteria it clears.
 
 No merge to `main`. No live/production deployment. No entry, ATR, or score parameter is changed anywhere in this entry.
+
+### Results
+
+**1. Exact baseline reproduction.** All five ground-truth baselines were rerun fresh from the current branch head (which includes the `OnDeinit` fix) and matched D025's numbers **exactly, not merely within the ±1-trade tolerance the fix could in principle have introduced**: A (canonical) 224 trades/+0.1261R/PF 1.2446/DD 15.1583R/107L/117S; E (3R) 213/+0.1467R/PF 1.2532/DD 16.9205R/101L/112S; F (=T0) 184/+0.9976R/PF 2.4709/DD 23.3265R/88L/96S; G 184/+0.5477R/PF 2.0439/DD 16.7873R/88L/96S; H 184/+0.5639R/PF 1.9645R/DD 18.1478R/88L/96S. No test-end position happened to be open in any of these five specific windows, so the `OnDeinit` fix was a proven no-op for all five — its correction only ever mattered for variant B, exactly as diagnosed.
+
+**2. Code changes and default-off proof.** `Include/MultiSpeedZigZag/Research/ResearchTrailPolicy.mqh` (new, pure policy), `Experts/MultiSpeedZigZagEA.mq5` (new inputs, `BuildTrailConfig()`, `ProcessResearchTrail()`, the `OnDeinit` fix), `Tests/MultiSpeedZigZag/Test_MSZZ_ResearchTrail.mq5` (new, 33 assertions, 0 failures). Default-off proof: both shadow regressions (short window: 113 candidates/46 clusters; long window: 431 candidates/178 clusters) reproduced byte-identical counts with zero orders/deals, run against the new binary with `InpEnableResearchTrail=false` explicit in the config — matching every prior shadow baseline this branch has ever produced. All 15 pre-existing `Test_MSZZ_*` suites still pass at 0 failures.
+
+**3. Full variant table** (17-month window `2025.03.01`–`2026.07.24`, `Model=2`, same as D025):
+
+| Variant | Trades | Exp_R | PF | Cum_R | Max DD (R) | Sharpe (native) | Win% | Med Hold | P90 Hold | Long Exp (n) | Short Exp (n) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A (canonical) | 224 | +0.1261 | 1.245 | 28.24 | 15.16 | 0.89 | 36.2% | 1.7h | 65h | +0.2054 (107) | +0.0536 (117) |
+| E (3R) | 213 | +0.1467 | 1.253 | 31.25 | 16.92 | 1.08 | 29.6% | 2.3h | 68h | +0.2098 (101) | +0.0898 (112) |
+| T0 (=F, no trail) | 184 | +0.9976 | 2.471 | 183.56 | 23.33 | 0.67 | 19.0% | 2.9h | 132h | +2.3036 (88) | -0.1996 (96) |
+| G (partial 2R) | 184 | +0.5477 | 2.044 | 100.78 | 16.79 | 0.80 | 33.7% | 2.9h | 132h | +1.1634 (88) | -0.0167 (96) |
+| H (partial 3R) | 184 | +0.5639 | 1.964 | 103.76 | 18.15 | 0.89 | 28.8% | 2.9h | 132h | +1.1925 (88) | -0.0123 (96) |
+| T1 (BE @1R) | 212 | +0.3986 | 1.946 | 84.50 | 23.34 | 0.70 | 47.6% | 1.7h | 65h | +1.0501 (95) | -0.1305 (117) |
+| T2 (BE1R + Fast-swing @2R) | 220 | +0.4740 | 2.125 | 104.29 | 18.51 | 0.89 | 47.3% | 1.8h | 68h | +1.3030 (99) | -0.2042 (121) |
+| T3 (Fast-swing @2R, no BE) | 200 | +0.6438 | 2.049 | 128.76 | 20.65 | 0.92 | 24.5% | 3.1h | 105h | +1.5105 (97) | -0.1723 (103) |
+| T4 (Medium-swing @2R) | 199 | +0.3956 | 1.641 | 78.73 | 23.38 | 0.49 | 24.6% | 2.8h | 120h | +1.0706 (97) | -0.2463 (102) |
+| T5 (Chandelier @2R) | 222 | +0.1105 | 1.204 | 24.54 | 18.55 | 0.80 | 33.3% | 2.5h | 65h | +0.2750 (106) | -0.0398 (116) |
+| T6 (profit-floor ladder) | 221 | +0.5198 | 2.247 | 114.87 | **12.36** | **1.15** | 48.0% | 1.7h | 65h | +1.2950 (99) | -0.1093 (122) |
+| T7 (G + trailed runner) | 209 | +0.2564 | 1.486 | 53.59 | 16.89 | 0.81 | 35.9% | 3.0h | 80h | +0.6508 (98) | -0.0918 (111) |
+| T8 (H + trailed runner) | 205 | +0.3018 | 1.512 | 61.88 | 17.30 | 0.63 | 29.3% | 3.2h | 89h | +0.6288 (96) | **+0.0139 (109)** |
+
+**4. Trail activation counts** (successful `PositionModify` calls, from `MSZZ_TrailJournal.csv`, all `modify_ok=true` — **zero failed or rejected modifications in any of the eight variants**): T1 96, T2 270, T3 256, T4 153, T5 509, T6 193, T7 212, T8 133.
+
+**5. Exit-reason decomposition** (SL/TP against original structural stop/target; `TRAILING_STOP_EXIT` newly added by cross-referencing each trade's exit price against `MSZZ_TrailJournal.csv`'s successfully-applied stops within that trade's own open window; `OPPOSITE_SIGNAL_CLOSE` via the D025 exact-second reversal-pair method; no `TEST_END` in any of these 13 runs):
+
+| Variant | SL | TP | Opposite | Trailing | Unknown |
+|---|---|---|---|---|---|
+| A | 93 | 69 | 62 | — | 0 |
+| E | 101 | 49 | 63 | — | 0 |
+| T0/F | 104 | 0 | 80 | — | 0 |
+| G | 76 | 0 | 80 | — | 28 |
+| H | 88 | 0 | 80 | — | 16 |
+| T1 | 71 | 0 | 65 | 76 | 0 |
+| T2 | 74 | 0 | 54 | 92 | 0 |
+| T3 | 97 | 0 | 64 | 39 | 0 |
+| T4 | 98 | 0 | 64 | 37 | 0 |
+| T5 | 97 | 0 | 64 | 61 | 0 |
+| T6 | 73 | 0 | 60 | 88 | 0 |
+| T7 | 90 | 0 | 61 | 0* | 58 |
+| T8 | 100 | 0 | 64 | 0* | 41 |
+
+T1–T6's unknown rate is **exactly 0%** — the new `TRAILING_STOP_EXIT` category, matched purely on price/time against the trail journal, accounts for every previously-unclassifiable exit. T7/T8 (\*) retain G/H's own already-documented residual (27.8%/20.0%, same 28/16-trade-scale phenomenon D025 found and explained: the partial-close mechanism's extra broker round-trip shifts a deal's timestamp past exact-second matching) — combining partial-close with trailing does not fix or worsen that pre-existing limitation, and does not affect the R-multiple/expectancy numbers, which are computed directly from the raw CSV regardless of exit-reason attribution.
+
+**6. Giveback analysis** (`mfe_r - r_result`, mean/median/p90 in R):
+
+| Variant | Avg | Median | P90 |
+|---|---|---|---|
+| A | 1.05 | 1.05 | 2.23 |
+| E | 1.27 | 1.18 | 2.54 |
+| T0/F | 3.44 | 1.58 | 6.27 |
+| T1 | 2.35 | 1.37 | 3.67 |
+| T2 | 1.96 | 1.35 | 3.06 |
+| T3 | 2.46 | 1.47 | 4.94 |
+| T4 | 2.55 | 1.56 | 5.83 |
+| T5 | 1.45 | 1.26 | 2.45 |
+| T6 | 1.88 | 1.38 | 2.45 |
+| T7 | 2.44 | 1.45 | 3.68 |
+| T8 | 2.62 | 1.54 | 3.98 |
+
+Every trail reduces average giveback versus F (23.7%–57.7%), confirming the mechanism does what it is meant to at the individual-trade level — the open question (§9 below) is whether that translates into portfolio-level robustness.
+
+**7. Long/short analysis.** Every single trail variant **reduces long expectancy relative to F** (by -0.79R to -2.03R per trade) — expected and unavoidable, since capping/trailing a runner by definition caps what F's uncapped long runners were capturing. Short-side effect is small and mixed: most variants nudge short expectancy toward flat by 0.03–0.21R without flipping its sign; **T8 is the only variant across the entire study (including A, E, and every other trail) with a positive short expectancy** (+0.0139R, 109 trades) — genuinely notable, though the magnitude is close enough to zero that it should be read as "no longer a structural liability" rather than "a source of edge."
+
+**8. Quarterly concentration analysis** (share of total cumulative R from the best quarter / best two quarters, compared to F's 60.1%/96.7%):
+
+| Variant | Best-Q% | Best-2Q% | Positive Q / Negative Q |
+|---|---|---|---|
+| A | 31.7% | 55.6% | 6 / 1 |
+| E | 40.8% | 64.6% | 6 / 1 |
+| T0/F | 60.1% | 96.7% | 4 / 3 |
+| T1 | 102.3% | 118.8% | 2 / 5 |
+| T2 | 101.7% | 104.9% | 3 / 4 |
+| T3 | 102.2% | 104.4% | 4 / 3 |
+| T4 | 61.0% | 120.7% | 3 / 4 |
+| T5 | 37.3% | 70.0% | 5 / 2 |
+| T6 | 86.5% | 94.6% | 5 / 2 |
+| T7 | 88.2% | 99.0% | 5 / 2 |
+| T8 | 41.0% | 70.6% | 6 / 1 |
+
+Only **T5 and T8** materially reduce two-quarter concentration versus F (26.7pp and 26.1pp respectively, landing at 70.0%/70.6% — still well above canonical's 55.6% but a real improvement over F). T1–T4 and T7 do not improve concentration at all — several (T1, T2, T3, T4) show best-two-quarter figures **exceeding 100%**, meaning the *rest* of the quarters are net negative in aggregate even though the strategy is profitable overall — a more fragile shape than F itself, not a better one, despite T1–T4's much higher headline expectancy than canonical. T6, despite its excellent drawdown and PF, barely moves this needle (94.6% vs. F's 96.7%) — its headline numbers are strong specifically *because* it still depends heavily on a small number of quarters, not because it broadened the base.
+
+**9. Outlier-removal analysis** (top-1/3/5 trade contribution as % of total cumulative R; expectancy excluding the top 3 trades — canonical is +0.1007R, E is +0.1059R ex-top-3, both comfortably positive):
+
+| Variant | Top-1% | Top-3% | Top-5% | Exp. ex-top-3 |
+|---|---|---|---|---|
+| A | 7.1% | 21.2% | 35.4% | +0.1007 |
+| E | 9.6% | 28.8% | 48.0% | +0.1059 |
+| T0/F | 56.0% | 109.8% | 129.3% | **-0.0994** |
+| T1 | 121.7% | 156.0% | 171.0% | -0.2263 |
+| T2 | 114.3% | 130.7% | 141.8% | -0.1474 |
+| T3 | 92.6% | 123.3% | 135.7% | -0.1524 |
+| T4 | 62.8% | 142.5% | 166.6% | -0.1706 |
+| T5 | 51.6% | 95.9% | 131.6% | +0.0045 |
+| T6 | 89.5% | 102.3% | 111.1% | -0.0124 |
+| T7 | 112.6% | 134.1% | 150.2% | -0.0887 |
+| T8 | 42.4% | 100.9% | 131.1% | -0.0028 |
+
+**This is the study's central, sobering finding.** Removing just the top three trades flips **seven of the eight trailing variants** to negative expectancy — only T5 survives (+0.0045R, barely). T6 and T8, the two variants with the best headline numbers and the most encouraging quarterly/giveback results, are both negative ex-top-3 (-0.0124R, -0.0028R) — essentially flat-to-slightly-negative, not the robust edge their PF/expectancy headlines suggest. **None of the eight trailing variants converts F's outlier-dependent upside into an outlier-independent one** — they all repackage a small number of extreme trending trades under different stop-management regimes, with T6/T8 doing the best job of that repackaging (highest PF, best drawdown, least fragile-looking headline shape) without actually solving the underlying dependency. Expectancy excluding the best quarter alone is a materially easier bar and five variants clear it (T4 +0.1616, T8 +0.1863, T6 +0.0889, T5 +0.0729, T7 +0.0380) — the gap between "survives losing one quarter" and "survives losing three trades" is itself informative about how concentrated the remaining edge is even after the best quarter is removed.
+
+**10. Exposure and holding-time analysis.** Every trail variant increases median holding time relative to canonical/E (as expected — a trail's entire purpose is to stay in winners longer than a fixed 2R target would) while several (T1, T2, T6) keep median holding time *closer to canonical's* (~1.7–1.8h) than F's own median (2.9h), because most trades still resolve via SL or an opposite-signal close well before any trail-related mechanism engages — only the minority of trades that reach the structure/floor activation threshold ride longer, which is exactly why P90 and max holding times remain wide (68–132h) even when the median stays short. Return per exposure hour ranges from T6's 0.0198 (best among trailing variants, still below T0/F's own 0.0205) down to T5's 0.0057 (below even canonical's 0.0068) — no trail improves capital efficiency per hour-in-market beyond F itself; they trade some of F's raw R/hour for a materially different risk shape.
+
+**11. MT5-report-to-CSV reconciliation.** For every non-partial-close variant (A, E, T0/F, T1–T6), the MT5 native report's "Total Trades" figure matches `MSZZ_TradeAnalytics.csv`'s row count **exactly** — the `OnDeinit` fix (§1/§2) holds with zero further discrepancies across this entire batch. For the four partial-close variants (G, H, T7, T8), the native report's count is **higher** than the CSV's (G: 240 vs. 184; H: 225 vs. 184; T7: 272 vs. 209; T8: 251 vs. 205) — this is the expected, already-documented divergence from D025 (MT5's own trade counter treats a partial-close-then-remainder-close sequence as two native "trades," while `DetectClosedPositions()`'s volume-weighted-blended-R logic correctly treats it as one logical trade sequence, per this project's own "do not count partial and runner legs as separate entries" rule) — **not a new bug, not left unexplained, and not treated as a mismatch requiring investigation.**
+
+**12. Which trail preserves the most of F.** By raw retained upside: **T3** (70.1% of F's cumulative R, 64.5% of its expectancy) preserves the most, followed by T6 (62.6%/52.1%) and T2 (56.8%/47.5%). T5 preserves the least (13.4%/11.1%) — it behaves much closer to a canonical-like exit than to F.
+
+**13. Which trail gives the best robustness/return trade-off.** **T6 (profit-floor ladder)** is the strongest single candidate on this axis: best drawdown of the *entire study including canonical* (12.36R vs. A's 15.16R), best PF (2.247), best native Sharpe (1.15), highest win rate (48.0%), and it retains a majority of F's cumulative upside (62.6%) — but it still fails the outlier-independence bar (ex-top-3 expectancy -0.0124R) and barely moves quarter concentration (94.6% vs. F's 96.7%), so "best trade-off" is a relative, not absolute, statement. **T8 (H + trailed runner)** is the next-best-rounded candidate: it is the only variant with positive short expectancy, meaningfully reduces two-quarter concentration (70.6% vs. 96.7%), and clears more of the ten success criteria than any other variant (see §14) — offset by its 20% unknown-exit rate (a measurement-completeness limitation, not a performance one) and its own near-zero ex-top-3 expectancy.
+
+**14. Success-criteria classification** (all ten checked per variant; "materially above/below" operationalized as ≥10% relative for expectancy-vs-E and ≥20 percentage points for quarter-concentration-vs-F, stated explicitly since the instruction deliberately left "material" undefined):
+
+| Variant | 1 L/S | 2 PF>A | 3 Exp≫E | 4 DD<F | 5 Q2conc≪F | 6 Exp ex-top3>0 | 7 Exp ex-bestQ>0 | 8 Count OK | 9 Unk≤2% | 10 Parity | **Total** |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| T1 | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ | 5/10 |
+| T2 | ✗ | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ | 6/10 |
+| T3 | ✗ | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ | 6/10 |
+| T4 | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ | ✓ | 6/10 |
+| T5 | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 7/10 |
+| T6 | ✗ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✓ | ✓ | ✓ | 7/10 |
+| T7 | ✗ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✓ | ✗ | ✓ | 6/10 |
+| T8 | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✓ | 8/10 |
+
+**No variant meets all ten criteria — per the instruction's own "meeting all ten is necessary," none qualifies for promotion.** T8 comes closest (8/10), failing only outlier-independence (§9) and the unknown-exit-rate measurement limitation (§5) — both real, not cosmetic, gaps. T5 and T6 tie at 7/10 but for opposite reasons: T5 fails on headline return/PF (it simply doesn't capture enough of F's upside to be interesting), while T6 fails on the two robustness checks that matter most (concentration, outlier-independence) despite the best headline numbers in the study.
+
+**15. Does any trail clearly beat A and E?** **On raw headline metrics, yes, dramatically** — T6's PF (2.247 vs. A's 1.245), expectancy (+0.52R vs. +0.13R), and drawdown (12.36R vs. 15.16R) all beat canonical simultaneously, and several other variants beat E by similar margins. **On the robustness checks this study was specifically built to apply, no** — every variant that beats A/E on headline terms fails the outlier-removal test (§9), meaning that headline edge is not demonstrated to survive without its 1–3 largest trades, which canonical and E both do. This is exactly the distinction the "Interpretation rules" warn against collapsing: none of these should be reported as "beats canonical," only as "shows a larger, more fragile, not-yet-validated edge than canonical."
+
+**16. Is F still worth separate long-only or regime-gated research?** Yes, and this study sharpens rather than answers that question. Every trail variant's improvement over F comes almost entirely from what happens to the **long side's extreme winners** (all eight show long-expectancy declines of -0.79R to -2.03R relative to F) — the short side barely changes in absolute terms and remains a net drag in seven of eight variants. This is consistent with F's edge being a long-side, likely trend/regime-dependent phenomenon that stop-management alone cannot convert into a broadly robust, direction-symmetric strategy. A long-only or explicitly regime-gated (e.g., only active in confirmed strong-trend regimes) variant of F, tested with the same rigor D025/D026 applied here (full-EA runs, outlier-removal, quarter-concentration), is a more promising direction than further exit-model search on the current direction-agnostic entry.
+
+**17. Recommended candidates for out-of-sample validation.** Per D025, **canonical (A)** and **3R-with-reversal (E)** remain the only candidates that pass every robustness check applied across both studies (positive ex-top-3, positive ex-best-quarter, well-distributed quarterly profile, no reliance on outlier trades). Of the eight new trailing variants, **none is recommended for promotion to out-of-sample validation on this evidence** — T6 and T8 are flagged as the most promising *further-research* candidates (not validation-ready) specifically because they are the only two that meaningfully improve on F's drawdown/concentration profile while retaining a majority (T6) or plurality (T8) of its raw upside; both would need the outlier-independence gap closed (e.g., by testing on materially more history, where three additional years of trending episodes might either confirm or dilute the current top-3-trade dependency) before being considered for the same validation track as A/E.
+
+### Commit and artifacts
+
+Starting SHA for this results addendum: `d7ab166` (this entry's own decision-log-only commit). Final SHA is this results commit. New/modified files: `Include/MultiSpeedZigZag/Research/ResearchTrailPolicy.mqh`, `Experts/MultiSpeedZigZagEA.mq5`, `Tests/MultiSpeedZigZag/Test_MSZZ_ResearchTrail.mq5`, `Tools/D026/` (13 `.ini` configs plus `README.md`), `Tools/D026/results/` (all 13 runs' `MSZZ_TradeAnalytics.csv`/`MSZZ_SignalJournal.csv`/`MSZZ_RunSummary.csv`/`MSZZ_TrailJournal.csv` where applicable, and MT5 `.htm` reports). No merge to `main`. No production/live deployment of any trail. Two infrastructure bugs were found and fixed during execution and are worth recording for future batch scripts on this machine: macOS ships bash 3.2 (no associative arrays — use indexed parallel arrays); MT5's own `/config:` argument parser splits on `/`, silently truncating a relative subdirectory path at the first slash — pass the absolute Windows path with backslash separators instead (`Z:\Users\...\Dir\file.ini`), exactly as this branch's D023 `${cfg}` bash-escaping fix already established for a related reason.

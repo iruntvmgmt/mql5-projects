@@ -21,6 +21,7 @@
 #include <MultiSpeedZigZag/Execution/AccountSafeguard.mqh>
 #include <MultiSpeedZigZag/Diagnostics/TradeAnalyticsExporter.mqh>
 #include <MultiSpeedZigZag/Research/ResearchEligibilityPolicy.mqh>
+#include <MultiSpeedZigZag/Research/ResearchTrailPolicy.mqh>
 
 // D019: hardcoded, not user-suppliable -- see DECISION_LOG.md D019 for why
 // the authorized login is a compile-time constant rather than an input.
@@ -76,6 +77,21 @@ input double InpPartialCloseAtR=0.0;          // 0=disabled; else close InpParti
 input double InpPartialCloseFraction=0.5;
 input int    InpMaxPersistentEvents=2000;
 input double InpMarginBufferRatio=1.0;
+// D026: research-only trailing-stop inputs, all default to a no-op so
+// canonical (and D025 variant) behavior is byte-identical unless explicitly
+// opted in. See DECISION_LOG.md D026.
+input group "═══ D026 Research Trailing Stop ═══"
+input bool   InpEnableResearchTrail=false;
+input double InpTrailRung1TriggerR=0.0;  input double InpTrailRung1FloorR=0.0;
+input double InpTrailRung2TriggerR=0.0;  input double InpTrailRung2FloorR=0.0;
+input double InpTrailRung3TriggerR=0.0;  input double InpTrailRung3FloorR=0.0;
+input double InpTrailRung4TriggerR=0.0;  input double InpTrailRung4FloorR=0.0;
+input double InpTrailRung5TriggerR=0.0;  input double InpTrailRung5FloorR=0.0;
+input double InpTrailCostEstimateR=0.02;
+input int    InpTrailStructureMode=0; // 0=NONE,1=FAST_SWING,2=MEDIUM_SWING,3=CHANDELIER
+input double InpTrailStructureActivationR=0.0;
+input int    InpTrailChandelierATRLen=14;
+input double InpTrailChandelierATRMult=3.0;
 
 input group "═══ Account Safeguards ═══"
 input bool   InpKillSwitchEngaged=false;
@@ -114,6 +130,12 @@ bool                           g_research_mode_active=false;
 // explicitly out of scope for a bounded mechanism-decomposition study.
 // See DECISION_LOG.md D025.
 ulong                          g_partial_closed_tickets[];
+// D026: research-only, in-memory (non-persistent across restarts, see
+// DECISION_LOG.md D026 "restart persistence") per-ticket trailing-stop
+// state. g_trail_config is built once in OnInit() from the Inp* rung/
+// structure inputs.
+MSZZTrailState                 g_trail_states[];
+MSZZTrailConfig                g_trail_config;
 
 bool LiveExecutionAuthorized(){ return (!InpShadowOnly && InpAllowLiveExecution && InpAcknowledgeRisk); }
 bool EventConsumed(const string id){ return g_event_store.Contains(id); }
@@ -613,6 +635,230 @@ void ProcessPartialCloses(const MqlRates &bar)
    }
 }
 
+// D026: builds the immutable trail configuration once from Inp* inputs.
+// Fails closed (false) if rungs are not supplied in strictly ascending
+// trigger_r order -- a config-authoring guard, not a runtime concern (see
+// DECISION_LOG.md D026). TriggerR<=0.0 means "this rung slot is unused",
+// matching this project's established non-positive-disables convention
+// (D012/D013/D015).
+bool BuildTrailConfig(MSZZTrailConfig &config,string &reason)
+{
+   reason="";
+   config.enabled=InpEnableResearchTrail;
+   config.cost_r_estimate=InpTrailCostEstimateR;
+   config.structure_mode=(ENUM_MSZZ_TRAIL_STRUCTURE)InpTrailStructureMode;
+   config.structure_activation_r=InpTrailStructureActivationR;
+   config.chandelier_atr_len=InpTrailChandelierATRLen;
+   config.chandelier_atr_mult=InpTrailChandelierATRMult;
+
+   double triggers[MSZZ_TRAIL_MAX_RUNGS]={InpTrailRung1TriggerR,InpTrailRung2TriggerR,InpTrailRung3TriggerR,
+                                           InpTrailRung4TriggerR,InpTrailRung5TriggerR};
+   double floors[MSZZ_TRAIL_MAX_RUNGS]={InpTrailRung1FloorR,InpTrailRung2FloorR,InpTrailRung3FloorR,
+                                         InpTrailRung4FloorR,InpTrailRung5FloorR};
+   config.rung_count=0;
+   double last_trigger=-DBL_MAX;
+   for(int i=0;i<MSZZ_TRAIL_MAX_RUNGS;i++)
+   {
+      if(triggers[i]<=0.0) continue;
+      if(triggers[i]<=last_trigger)
+      {
+         reason=StringFormat("trail rung %d trigger_r=%.4f is not strictly ascending",i+1,triggers[i]);
+         return false;
+      }
+      last_trigger=triggers[i];
+      int n=config.rung_count;
+      config.rungs[n].trigger_r=triggers[i];
+      config.rungs[n].floor_r=floors[i];
+      config.rung_count=n+1;
+   }
+   if(!config.enabled) return true;
+   if(config.rung_count==0 && config.structure_mode==MSZZ_TRAIL_STRUCT_NONE)
+   {
+      reason="InpEnableResearchTrail=true but no rungs and no structure mode configured";
+      return false;
+   }
+   if(config.structure_mode!=MSZZ_TRAIL_STRUCT_NONE && config.structure_activation_r<=0.0)
+   {
+      reason="structure trail mode configured but InpTrailStructureActivationR<=0.0";
+      return false;
+   }
+   if(config.structure_mode==MSZZ_TRAIL_STRUCT_CHANDELIER &&
+      (config.chandelier_atr_len<1 || config.chandelier_atr_mult<=0.0))
+   {
+      reason="Chandelier structure mode requires InpTrailChandelierATRLen>=1 and InpTrailChandelierATRMult>0.0";
+      return false;
+   }
+   return true;
+}
+
+// D026: iterates the durable intent store for the ACTIVE intent whose
+// position_ticket matches -- same iteration pattern DetectClosedPositions()
+// already uses. Entry/original_stop are read from here (never from the
+// live position's current SL/TP, which trailing itself mutates), so the R
+// basis survives an EA restart even though in-memory trail bookkeeping
+// does not. See DECISION_LOG.md D026 "restart persistence" note.
+bool FindIntentByTicket(const ulong ticket,MSZZExecutionIntent &out)
+{
+   int count=g_intent_store.Count();
+   for(int i=0;i<count;i++)
+   {
+      MSZZExecutionIntent intent;
+      if(!g_intent_store.IntentAt(i,intent)) continue;
+      if(intent.position_ticket==ticket && intent.execution_state==(int)MSZZ_INTENT_POSITION_ACTIVE)
+      { out=intent; return true; }
+   }
+   return false;
+}
+
+int FindOrCreateTrailState(const ulong ticket,const ENUM_MSZZ_DIRECTION direction,
+                            const double entry,const double original_stop,const double current_broker_stop)
+{
+   for(int i=0;i<ArraySize(g_trail_states);i++)
+      if(g_trail_states[i].active && g_trail_states[i].ticket==ticket) return i;
+   int n=ArraySize(g_trail_states);
+   ArrayResize(g_trail_states,n+1);
+   CMSZZResearchTrailPolicy::InitState(g_trail_states[n],ticket,direction,entry,original_stop,current_broker_stop);
+   return n;
+}
+
+void JournalTrailUpdate(const ulong ticket,const double old_stop,const double new_stop,
+                         const double fav_r,const string reason,const bool ok)
+{
+   if(!InpWriteCSV) return;
+   int h=FileOpen("MSZZ_TrailJournal.csv",FILE_READ|FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_SHARE_READ,';');
+   if(h==INVALID_HANDLE){ PrintFormat("MSZZ trail journal open failed error=%d",GetLastError()); return; }
+   if(FileSize(h)==0) FileWriteString(h,"ticket;time;old_stop;new_stop;fav_r;reason;modify_ok\r\n");
+   FileSeek(h,0,SEEK_END);
+   FileWrite(h,ticket,TimeToString(TimeCurrent(),TIME_DATE|TIME_SECONDS),
+             DoubleToString(old_stop,8),DoubleToString(new_stop,8),DoubleToString(fav_r,4),reason,(ok?"true":"false"));
+   FileFlush(h); FileClose(h);
+}
+
+// D026: checked once per closed bar, after the engine rebuild (needs
+// fast/med for the structure trail) and before g_suite.Evaluate()/
+// ExecuteCluster() -- see DECISION_LOG.md D026 "same-bar ordering" for why
+// this position in ProcessClosedBar() satisfies the required
+// detect-closure -> trail-update -> evaluate-opposite-signal -> reverse
+// sequence.
+void ProcessResearchTrail(const MqlRates &rates[],const int closed_count,
+                           const MSZZSpeedSnapshot &fast,const MSZZSpeedSnapshot &med)
+{
+   if(!g_trail_config.enabled) return;
+   string reason;
+   if(!RefreshOwnership(reason)) return; // best-effort for this research-only feature, matches ProcessPartialCloses
+   MqlTick tick;
+   if(!SymbolInfoTick(_Symbol,tick)) return;
+   double min_distance=(double)MathMax(SymbolInfoInteger(_Symbol,SYMBOL_TRADE_STOPS_LEVEL),
+                                        SymbolInfoInteger(_Symbol,SYMBOL_TRADE_FREEZE_LEVEL))*_Point;
+
+   const MqlRates last_bar=rates[closed_count-1];
+   double atr=0.0;
+   if(g_trail_config.structure_mode==MSZZ_TRAIL_STRUCT_CHANDELIER)
+   {
+      double high[],low[],close[];
+      ArrayResize(high,closed_count); ArrayResize(low,closed_count); ArrayResize(close,closed_count);
+      for(int i=0;i<closed_count;i++){ high[i]=rates[i].high; low[i]=rates[i].low; close[i]=rates[i].close; }
+      atr=CMSZZResearchTrailPolicy::SimpleATR(high,low,close,closed_count-1,g_trail_config.chandelier_atr_len);
+   }
+
+   int count=g_ownership.RecordCount();
+   for(int i=0;i<count;i++)
+   {
+      MSZZPositionRecord record;
+      if(!g_ownership.RecordAt(i,record)) continue;
+      if(!record.valid || record.owner!=MSZZ_OWNER_OWNED) continue;
+      if(record.stop_loss<=0.0) continue;
+
+      MSZZExecutionIntent intent;
+      if(!FindIntentByTicket(record.ticket,intent)) continue;
+      double entry=intent.average_fill_price;
+      double original_stop=intent.requested_stop;
+      if(entry<=0.0 || original_stop<=0.0) continue;
+
+      int idx=FindOrCreateTrailState(record.ticket,record.direction,entry,original_stop,record.stop_loss);
+      double risk=MathAbs(entry-original_stop);
+      if(risk<=0.0) continue;
+      double fav_r=CMSZZResearchTrailPolicy::FavorableR(record.direction,entry,risk,last_bar.high,last_bar.low);
+      if(fav_r>g_trail_states[idx].max_favorable_r) g_trail_states[idx].max_favorable_r=fav_r;
+
+      double market_price=(record.direction==MSZZ_DIR_LONG ? tick.bid : tick.ask);
+      double effective_stop=g_trail_states[idx].effective_stop;
+      double best_candidate=effective_stop;
+      bool have_candidate=false;
+
+      double floor_candidate;
+      if(CMSZZResearchTrailPolicy::EvaluateFloorRung(g_trail_config,g_trail_states[idx],fav_r,floor_candidate))
+      {
+         double tightened;
+         if(CMSZZResearchTrailPolicy::ResolveTightening(record.direction,effective_stop,floor_candidate,
+                                                          market_price,min_distance,tightened))
+         {
+            best_candidate=tightened; have_candidate=true;
+         }
+      }
+
+      if(g_trail_config.structure_mode!=MSZZ_TRAIL_STRUCT_NONE && fav_r>=g_trail_config.structure_activation_r)
+      {
+         if(!g_trail_states[idx].structure_activated)
+         {
+            g_trail_states[idx].structure_activated=true;
+            g_trail_states[idx].highest_since_activation=last_bar.high;
+            g_trail_states[idx].lowest_since_activation=last_bar.low;
+         }
+         else
+         {
+            if(last_bar.high>g_trail_states[idx].highest_since_activation) g_trail_states[idx].highest_since_activation=last_bar.high;
+            if(last_bar.low<g_trail_states[idx].lowest_since_activation) g_trail_states[idx].lowest_since_activation=last_bar.low;
+         }
+
+         double structure_candidate=0.0; bool structure_valid=false;
+         if(g_trail_config.structure_mode==MSZZ_TRAIL_STRUCT_FAST_SWING)
+            structure_valid=CMSZZResearchTrailPolicy::SwingTrailCandidate(record.direction,last_bar.close,
+                              (record.direction==MSZZ_DIR_LONG ? fast.last_low.valid : fast.last_high.valid),
+                              (record.direction==MSZZ_DIR_LONG ? fast.last_low.price : fast.last_high.price),
+                              structure_candidate);
+         else if(g_trail_config.structure_mode==MSZZ_TRAIL_STRUCT_MEDIUM_SWING)
+            structure_valid=CMSZZResearchTrailPolicy::SwingTrailCandidate(record.direction,last_bar.close,
+                              (record.direction==MSZZ_DIR_LONG ? med.last_low.valid : med.last_high.valid),
+                              (record.direction==MSZZ_DIR_LONG ? med.last_low.price : med.last_high.price),
+                              structure_candidate);
+         else if(g_trail_config.structure_mode==MSZZ_TRAIL_STRUCT_CHANDELIER && atr>0.0)
+         {
+            double extreme=(record.direction==MSZZ_DIR_LONG ? g_trail_states[idx].highest_since_activation
+                                                              : g_trail_states[idx].lowest_since_activation);
+            structure_candidate=CMSZZResearchTrailPolicy::ChandelierCandidate(record.direction,extreme,atr,
+                                                                                g_trail_config.chandelier_atr_mult);
+            structure_valid=true;
+         }
+
+         if(structure_valid)
+         {
+            double tightened;
+            if(CMSZZResearchTrailPolicy::ResolveTightening(record.direction,effective_stop,structure_candidate,
+                                                             market_price,min_distance,tightened))
+            {
+               bool structure_is_tighter=(!have_candidate) ||
+                  (record.direction==MSZZ_DIR_LONG ? tightened>best_candidate : tightened<best_candidate);
+               if(structure_is_tighter){ best_candidate=tightened; have_candidate=true; }
+            }
+         }
+      }
+
+      if(!have_candidate) continue;
+      double normalized=NormalizeDouble(best_candidate,_Digits);
+      if(MathAbs(normalized-effective_stop)<_Point/2.0) continue; // duplicate-modification suppression
+
+      bool ok=g_trade.PositionModify(record.ticket,normalized,record.take_profit);
+      string mod_reason=(ok ? "trail applied" : StringFormat("retcode=%u %s",g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription()));
+      JournalTrailUpdate(record.ticket,effective_stop,normalized,fav_r,mod_reason,ok);
+      g_trail_states[idx].last_modification_time=TimeCurrent();
+      g_trail_states[idx].last_modification_ok=ok;
+      g_trail_states[idx].last_modification_reason=mod_reason;
+      if(ok) g_trail_states[idx].effective_stop=normalized;
+      else PrintFormat("MSZZ WARNING: trail stop modification failed ticket=%I64u %s",record.ticket,mod_reason);
+   }
+}
+
 void ProcessClosedBar()
 {
    DetectClosedPositions();
@@ -629,6 +875,8 @@ void ProcessClosedBar()
    MSZZSpeedSnapshot fast=g_engine.Snapshot(MSZZ_SPEED_FAST);
    MSZZSpeedSnapshot med=g_engine.Snapshot(MSZZ_SPEED_MEDIUM);
    MSZZSpeedSnapshot slow=g_engine.Snapshot(MSZZ_SPEED_SLOW);
+
+   ProcessResearchTrail(rates,closed_count,fast,med);
 
    g_suite.SetRiskReward(InpRiskReward);
    g_suite.SetSignalValidityBars(InpSignalValidityBars);
@@ -690,6 +938,16 @@ int OnInit()
       g_research_mode_active=true;
       PrintFormat("MSZZ WARNING: RESEARCH ELIGIBILITY MODE ACTIVE -- effective min score overridden from %.2f to %.2f",
                   InpMinScore,g_effective_min_score);
+   }
+
+   // D026: fail closed on a malformed trail configuration rather than
+   // silently ignoring it or guessing an intended order. See
+   // DECISION_LOG.md D026.
+   string trail_reason;
+   if(!BuildTrailConfig(g_trail_config,trail_reason))
+   {
+      PrintFormat("MSZZ RESEARCH TRAIL CONFIG REJECTED: %s -- refusing to start. See DECISION_LOG.md D026.",trail_reason);
+      return INIT_FAILED;
    }
 
    g_trade.SetExpertMagicNumber(InpMagic);
@@ -861,6 +1119,17 @@ void WriteResearchManifest()
 
 void OnDeinit(const int reason)
 {
+   // D026: the Strategy Tester force-closes any still-open position at the
+   // literal end of the test window to finalize equity -- a real closing
+   // deal the MT5 native report counts, but one that happens after the
+   // EA's last new-bar OnTick() has already run, so ProcessClosedBar()'s
+   // own DetectClosedPositions() call never sees it. A second call here,
+   // before WriteRunSummary(), is a no-op for the live/non-Tester case
+   // (DetectClosedPositions() already skips any ticket that still resolves
+   // via PositionSelectByTicket(), which it always will for an EA removed
+   // mid-trade on a live/demo chart) and only does new work in the
+   // Tester-forced-liquidation case. See DECISION_LOG.md D026.
+   DetectClosedPositions();
    g_trade_analytics.WriteRunSummary(_Symbol,InpMagic,_Period,InpRiskReward,EnabledStrategiesSummary());
    if(g_research_mode_active) WriteResearchManifest();
    PrintFormat("MSZZ deinitialized reason=%d",reason);

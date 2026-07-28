@@ -1,0 +1,2 @@
+symbol;timeframe;magic;risk_reward;enabled_strategies;first_signal_time;last_close_time;trades;win_rate;expectancy_r;profit_factor_r;max_drawdown_r;avg_mfe_r;avg_mae_r;avg_bars_held;long_expectancy_r;long_trades;short_expectancy_r;short_trades
+XAUUSD;PERIOD_M5;26072888;2.00;FastMedConfluence;2025.03.05 15:45:00;2026.07.21 04:39:58;199;0.2462;0.3956;1.6410;23.3784;2.9487;-0.9558;457.67;1.0706;97;-0.2463;102
