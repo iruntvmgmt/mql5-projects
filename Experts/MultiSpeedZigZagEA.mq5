@@ -22,6 +22,8 @@
 #include <MultiSpeedZigZag/Diagnostics/TradeAnalyticsExporter.mqh>
 #include <MultiSpeedZigZag/Research/ResearchEligibilityPolicy.mqh>
 #include <MultiSpeedZigZag/Research/ResearchTrailPolicy.mqh>
+#include <MultiSpeedZigZag/Research/RegimeClassifier.mqh>
+#include <MultiSpeedZigZag/Research/RegimeEligibilityPolicy.mqh>
 
 // D019: hardcoded, not user-suppliable -- see DECISION_LOG.md D019 for why
 // the authorized login is a compile-time constant rather than an input.
@@ -93,6 +95,14 @@ input double InpTrailStructureActivationR=0.0;
 input int    InpTrailChandelierATRLen=14;
 input double InpTrailChandelierATRMult=3.0;
 
+// D027: Layer 1/3 regime architecture. InpRegimeEligibilityMode defaults to
+// LABEL_ONLY -- every existing strategy behaves exactly as before, every
+// candidate/trade still receives regime labels, nothing is filtered.
+// RESEARCH_FILTER exists for later stages and is not consumed by any
+// existing strategy today. See DECISION_LOG.md D027.
+input group "═══ D027 Regime Architecture ═══"
+input int    InpRegimeEligibilityMode=0; // 0=LABEL_ONLY, 1=RESEARCH_FILTER
+
 input group "═══ Account Safeguards ═══"
 input bool   InpKillSwitchEngaged=false;
 input int    InpMaxTradesPerDay=20;
@@ -136,10 +146,44 @@ ulong                          g_partial_closed_tickets[];
 // structure inputs.
 MSZZTrailState                 g_trail_states[];
 MSZZTrailConfig                g_trail_config;
+// D027: the current closed bar's regime label, recomputed once per bar in
+// ProcessClosedBar() before any candidate is evaluated, and referenced by
+// every JournalCandidate() call for that same bar. g_last_regime_id is a
+// stable, human-readable snapshot reference (the bar's own timestamp) --
+// deliberately not a duplicated serialization of the full struct into
+// every journal row. See DECISION_LOG.md D027.
+MSZZRegimeState                g_last_regime;
+string                         g_last_regime_id="";
 
 bool LiveExecutionAuthorized(){ return (!InpShadowOnly && InpAllowLiveExecution && InpAcknowledgeRisk); }
 bool EventConsumed(const string id){ return g_event_store.Contains(id); }
 bool ConsumeEvent(const string id){ return g_event_store.Add(id); }
+
+// D027: one row per closed bar, every bar -- independent of whether any
+// candidate fired that bar. Required for Stage 2's regime-distribution and
+// per-strategy regime-attribution work, which needs the full population,
+// not just signal-time snapshots. See DECISION_LOG.md D027 Stage 1.
+void JournalRegime(const MSZZRegimeState &r)
+{
+   if(!InpWriteCSV) return;
+   int h=FileOpen("MSZZ_RegimeJournal.csv",FILE_READ|FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_SHARE_READ,';');
+   if(h==INVALID_HANDLE){ PrintFormat("MSZZ regime journal open failed error=%d",GetLastError()); return; }
+   if(FileSize(h)==0)
+      FileWriteString(h,"time;symbol;timeframe;direction;trend_strength;volatility_state;alignment_state;market_phase;"+
+                       "normalized_atr;directional_efficiency;compression_ratio;fast_swing_amplitude;medium_swing_amplitude;"+
+                       "slow_swing_amplitude;fast_duration;medium_duration;slow_duration;valid;reason\r\n");
+   FileSeek(h,0,SEEK_END);
+   FileWrite(h,TimeToString(r.evaluation_time,TIME_DATE|TIME_SECONDS),_Symbol,EnumToString(_Period),
+             MSZZRegimeDirectionText(r.direction),MSZZTrendStrengthText(r.trend_strength),
+             MSZZVolatilityStateText(r.volatility_state),MSZZAlignmentStateText(r.alignment_state),
+             MSZZMarketPhaseText(r.market_phase),DoubleToString(r.normalized_atr,4),
+             DoubleToString(r.directional_efficiency,4),DoubleToString(r.compression_ratio,4),
+             DoubleToString(r.fast_swing_amplitude_r,4),DoubleToString(r.medium_swing_amplitude_r,4),
+             DoubleToString(r.slow_swing_amplitude_r,4),DoubleToString(r.fast_duration_bars,2),
+             DoubleToString(r.medium_duration_bars,2),DoubleToString(r.slow_duration_bars,2),
+             (r.valid?"true":"false"),r.reason);
+   FileFlush(h); FileClose(h);
+}
 
 void JournalCandidate(const MSZZCandidate &c,const string status,const string cluster_id="")
 {
@@ -147,15 +191,29 @@ void JournalCandidate(const MSZZCandidate &c,const string status,const string cl
       PrintFormat("MSZZ %s %s cluster=%s score=%.2f entry=%.*f stop=%.*f target=%.*f origin=%s event=%s reason=%s",
                   status,c.setup_name,cluster_id,c.score,_Digits,c.entry,_Digits,c.stop,_Digits,c.target,c.origin_id,c.event_id,c.reason);
    if(!InpWriteCSV) return;
+   // D027: eligibility is evaluated and journaled for every candidate, but
+   // in the only mode active today (LABEL_ONLY) it is always true by
+   // construction -- see CMSZZRegimeEligibilityPolicy::IsEligible(). The
+   // family argument is a placeholder (MSZZ_FAMILY_NONE) because
+   // MSZZCandidate does not yet carry a family_id (deferred to Stage 3,
+   // when S1-S5 are implemented and family flows through journaling for
+   // real) -- LABEL_ONLY's result does not depend on family at all, so
+   // this is not a correctness gap for the mode actually in effect.
+   ENUM_MSZZ_ELIGIBILITY_MODE elig_mode=(ENUM_MSZZ_ELIGIBILITY_MODE)InpRegimeEligibilityMode;
+   string elig_reason;
+   bool elig_result=CMSZZRegimeEligibilityPolicy::IsEligible(elig_mode,MSZZ_FAMILY_NONE,c.strategy_id,g_last_regime,elig_reason);
    int h=FileOpen("MSZZ_SignalJournal.csv",FILE_READ|FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_SHARE_READ,';');
    if(h==INVALID_HANDLE){ PrintFormat("MSZZ journal open failed error=%d",GetLastError()); return; }
    if(FileSize(h)==0)
-      FileWrite(h,"time","symbol","timeframe","status","cluster_id","strategy_id","setup","direction","score","entry","stop","target","origin_id","event_id","reason");
+      FileWrite(h,"time","symbol","timeframe","status","cluster_id","strategy_id","setup","direction","score","entry","stop","target","origin_id","event_id","reason",
+                "regime_snapshot_id","regime_direction","regime_alignment","regime_phase","eligibility_mode","eligibility_result","eligibility_reason");
    FileSeek(h,0,SEEK_END);
    FileWrite(h,TimeToString(c.signal_time,TIME_DATE|TIME_SECONDS),_Symbol,EnumToString(_Period),status,cluster_id,
              (int)c.strategy_id,c.setup_name,MSZZDirectionText(c.direction),DoubleToString(c.score,2),
              DoubleToString(c.entry,_Digits),DoubleToString(c.stop,_Digits),DoubleToString(c.target,_Digits),
-             c.origin_id,c.event_id,c.reason);
+             c.origin_id,c.event_id,c.reason,
+             g_last_regime_id,MSZZRegimeDirectionText(g_last_regime.direction),MSZZAlignmentStateText(g_last_regime.alignment_state),
+             MSZZMarketPhaseText(g_last_regime.market_phase),MSZZEligibilityModeText(elig_mode),(elig_result?"true":"false"),elig_reason);
    FileFlush(h); FileClose(h);
 }
 
@@ -875,6 +933,16 @@ void ProcessClosedBar()
    MSZZSpeedSnapshot fast=g_engine.Snapshot(MSZZ_SPEED_FAST);
    MSZZSpeedSnapshot med=g_engine.Snapshot(MSZZ_SPEED_MEDIUM);
    MSZZSpeedSnapshot slow=g_engine.Snapshot(MSZZ_SPEED_SLOW);
+
+   // D027: regime classification happens once per bar, immediately after
+   // the engine rebuild (it needs fast/med/slow) and before any candidate
+   // is evaluated -- every JournalCandidate() call this bar reads
+   // g_last_regime/g_last_regime_id. LABEL_ONLY mode (the default and only
+   // mode active anywhere in this branch today) never filters anything;
+   // this is purely an observer. See DECISION_LOG.md D027.
+   CMSZZRegimeClassifier::Evaluate(fast,med,slow,rates,closed_count,PeriodSeconds(),g_last_regime);
+   g_last_regime_id=TimeToString(g_last_regime.evaluation_time,TIME_DATE|TIME_SECONDS);
+   JournalRegime(g_last_regime);
 
    ProcessResearchTrail(rates,closed_count,fast,med);
 

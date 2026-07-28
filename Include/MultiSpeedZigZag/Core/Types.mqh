@@ -40,14 +40,46 @@ enum ENUM_MSZZ_STRATEGY_ID
    MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE = 1010,
    MSZZ_STRAT_FAST_WITH_MEDIUM_CONTEXT = 1011,
    MSZZ_STRAT_MEDIUM_WITH_SLOW_CONTEXT = 1012,
-   MSZZ_STRAT_SEQUENTIAL_CONFIRMATION = 1020,
+   MSZZ_STRAT_SEQUENTIAL_CONFIRMATION = 1020, // reserved since original architecture; a distinct future hypothesis ("fast break followed by medium within a window"), NOT D027's S1 -- see DECISION_LOG.md D027
    MSZZ_STRAT_NESTED_PULLBACK = 1030,
-   MSZZ_STRAT_BREAKOUT_RETEST = 1040,
-   MSZZ_STRAT_SWEEP_RECLAIM = 1050,
-   MSZZ_STRAT_COMPRESSION_BREAKOUT = 1060,
-   MSZZ_STRAT_STRUCTURE_TRANSITION = 1070,
+   MSZZ_STRAT_ALIGNED_FAST_PULLBACK = 1031, // D027 S1 -- new ID, does not collide with the reserved 1020 slot above
+   MSZZ_STRAT_BREAKOUT_RETEST = 1040,       // D027 S2 -- reserved since original architecture, matches STRATEGY_CATALOG.md exactly
+   MSZZ_STRAT_SWEEP_RECLAIM = 1050,         // D027 S3
+   MSZZ_STRAT_COMPRESSION_BREAKOUT = 1060,  // D027 S4
+   MSZZ_STRAT_STRUCTURE_TRANSITION = 1070,  // D027 S5
    MSZZ_STRAT_WEIGHTED_ENSEMBLE = 1080
 };
+
+// D027 Layer 2: explicit strategy-family identity, separate from
+// strategy_id and never inferred later from a setup name. See
+// DECISION_LOG.md D027 and Docs/MultiSpeedZigZag/STRATEGY_CATALOG.md for
+// the full existing-eight and new-five family assignments.
+enum ENUM_MSZZ_STRATEGY_FAMILY
+{
+   MSZZ_FAMILY_NONE = 0,
+   MSZZ_FAMILY_BREAKOUT = 1,
+   MSZZ_FAMILY_PULLBACK = 2,
+   MSZZ_FAMILY_RETEST = 3,
+   MSZZ_FAMILY_REVERSAL = 4,
+   MSZZ_FAMILY_COMPRESSION = 5,
+   MSZZ_FAMILY_RANGE = 6,
+   MSZZ_FAMILY_ENSEMBLE = 7
+};
+
+string MSZZFamilyText(const ENUM_MSZZ_STRATEGY_FAMILY f)
+{
+   switch(f)
+   {
+      case MSZZ_FAMILY_BREAKOUT:   return "BREAKOUT";
+      case MSZZ_FAMILY_PULLBACK:   return "PULLBACK";
+      case MSZZ_FAMILY_RETEST:     return "RETEST";
+      case MSZZ_FAMILY_REVERSAL:   return "REVERSAL";
+      case MSZZ_FAMILY_COMPRESSION:return "COMPRESSION";
+      case MSZZ_FAMILY_RANGE:      return "RANGE";
+      case MSZZ_FAMILY_ENSEMBLE:   return "ENSEMBLE";
+      default:                     return "NONE";
+   }
+}
 
 enum ENUM_MSZZ_ORIGIN_TYPE
 {
