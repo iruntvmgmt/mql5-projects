@@ -60,6 +60,7 @@ private:
       {
          case MSZZ_STRAT_BREAKOUT_RETEST: return 100;
          case MSZZ_STRAT_SWEEP_RECLAIM: return 95;
+         case MSZZ_STRAT_ALIGNED_FAST_PULLBACK: return 92;
          case MSZZ_STRAT_NESTED_PULLBACK: return 90;
          case MSZZ_STRAT_SEQUENTIAL_CONFIRMATION: return 85;
          case MSZZ_STRAT_STRUCTURE_TRANSITION: return 80;
@@ -76,6 +77,15 @@ private:
    }
 
    void AppendStrategyId(string &csv,const ENUM_MSZZ_STRATEGY_ID id) const
+   {
+      string value=IntegerToString((int)id);
+      if(csv=="") { csv=value; return; }
+      string needle=","+value+",";
+      string haystack=","+csv+",";
+      if(StringFind(haystack,needle)<0) csv=csv+","+value;
+   }
+
+   void AppendFamilyId(string &csv,const ENUM_MSZZ_STRATEGY_FAMILY id) const
    {
       string value=IntegerToString((int)id);
       if(csv=="") { csv=value; return; }
@@ -158,6 +168,7 @@ public:
             clusters[target].preferred_index=i;
             clusters[target].owner_strategy_id=candidates[i].strategy_id;
             clusters[target].supporting_strategy_ids=IntegerToString((int)candidates[i].strategy_id);
+            clusters[target].supporting_family_ids=IntegerToString((int)candidates[i].family_id);
             clusters[target].cluster_id=EncodeClusterId(symbol,timeframe,candidates[i].direction,
                                                         candidates[i].origin_type,clusters[target].origin_id);
             continue;
@@ -170,6 +181,7 @@ public:
          clusters[target].support_count++;
          clusters[target].evidence_mask|=candidates[i].evidence_mask;
          AppendStrategyId(clusters[target].supporting_strategy_ids,candidates[i].strategy_id);
+         AppendFamilyId(clusters[target].supporting_family_ids,candidates[i].family_id);
 
          double support_bonus=MathMin(1.5,0.25*(double)(clusters[target].support_count-1));
          clusters[target].combined_score=MathMax(clusters[target].combined_score,candidates[i].score)+support_bonus;

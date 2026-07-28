@@ -11,7 +11,18 @@ private:
    double m_rr;
    int m_validity_bars;
 
-   void ClearCandidate(MSZZCandidate &c) const { MSZZCandidate blank; c=blank; c.strategy_id=MSZZ_STRAT_NONE; }
+   void ClearCandidate(MSZZCandidate &c) const { ZeroMemory(c); c.strategy_id=MSZZ_STRAT_NONE; c.family_id=MSZZ_FAMILY_NONE; }
+
+   ENUM_MSZZ_STRATEGY_FAMILY FamilyFor(const ENUM_MSZZ_STRATEGY_ID id) const
+   {
+      if(id==MSZZ_STRAT_NESTED_PULLBACK || id==MSZZ_STRAT_ALIGNED_FAST_PULLBACK) return MSZZ_FAMILY_PULLBACK;
+      if(id==MSZZ_STRAT_BREAKOUT_RETEST) return MSZZ_FAMILY_RETEST;
+      if(id==MSZZ_STRAT_SWEEP_RECLAIM || id==MSZZ_STRAT_STRUCTURE_TRANSITION) return MSZZ_FAMILY_REVERSAL;
+      if(id==MSZZ_STRAT_COMPRESSION_BREAKOUT) return MSZZ_FAMILY_COMPRESSION;
+      if(id==MSZZ_STRAT_WEIGHTED_ENSEMBLE) return MSZZ_FAMILY_ENSEMBLE;
+      if(id!=MSZZ_STRAT_NONE) return MSZZ_FAMILY_BREAKOUT;
+      return MSZZ_FAMILY_NONE;
+   }
 
    void AddCandidate(MSZZCandidate &out[],int &count,const ENUM_MSZZ_STRATEGY_ID id,
                      const ENUM_MSZZ_DIRECTION dir,const ENUM_MSZZ_ORIGIN_TYPE origin_type,
@@ -22,7 +33,7 @@ private:
       if(origin_id=="" || event_id=="" || entry<=0.0 || stop<=0.0 || entry==stop) return;
       if(count>=ArraySize(out)) ArrayResize(out,count+16);
       MSZZCandidate c; ClearCandidate(c);
-      c.valid=true; c.strategy_id=id; c.direction=dir; c.origin_type=origin_type;
+      c.valid=true; c.strategy_id=id; c.family_id=FamilyFor(id); c.direction=dir; c.origin_type=origin_type;
       c.signal_time=t; c.entry=entry; c.stop=stop; c.score=score;
       c.supporting_models=models; c.evidence_mask=evidence_mask;
       c.setup_name=name; c.origin_id=origin_id; c.event_id=event_id; c.reason=reason;
@@ -145,7 +156,8 @@ public:
 
    int SelectBestClustered(const MSZZCandidate &in[],const int count,MSZZCandidate &selected) const
    {
-      MSZZCandidate blank; selected=blank; if(count<=0) return -1;
+      ZeroMemory(selected); selected.strategy_id=MSZZ_STRAT_NONE; selected.family_id=MSZZ_FAMILY_NONE;
+      if(count<=0) return -1;
       int best=-1; double best_score=-1.0e100;
       for(int i=0;i<count;i++)
       {

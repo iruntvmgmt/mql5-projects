@@ -1815,3 +1815,85 @@ deploys nothing live. There is no merge to `main`. Remaining work is Stage 3
 (S1–S5), Stage 4 (standalone fixed-2R screen), Stage 5 (qualified 3R screen),
 Stage 6 (incremental portfolio analysis), the dedicated regime-filter stage,
 anti-overfitting/decision-category pass, and final report.
+
+### Stage 3 results — five distinct default-off strategy families
+
+**Scope and frozen definitions:** Stage 3 implements, but does not screen,
+gate, or promote, the five predeclared hypotheses: S1 Aligned Fast Pullback
+(`1031`, `PULLBACK`), S2 Breakout Retest (`1040`, `RETEST`), S3 Sweep and
+Reclaim (`1050`, `REVERSAL`), S4 Compression Breakout (`1060`,
+`COMPRESSION`), and S5 Confirmed Structure Transition (`1070`, `REVERSAL`).
+Their five independent EA inputs all default to `false`. Before any Stage 4
+result, the stateful constants were frozen as follows: retest = 12 bars,
+0.15 fast-ATR touch/reclaim tolerance, 0.30 fast-ATR close invalidation;
+sweep = six bars, 0.10 fast-ATR minimum excursion, 0.05 fast-ATR reclaim,
+0.50 fast-ATR maximum failure; compression = three consecutive causal
+`COMPRESSION` bars and a six-bar release window. These are compile-time
+constants, not optimizer inputs. No D027 regime definition or window changed.
+
+**Implementation:** `D027StrategyFamilies.mqh` is a closed-bar-only evaluator
+with independent enable flags, structural stops, immutable event/origin IDs,
+explicit reasons, mirrored directions, and serialized retest/sweep/compression
+state keyed by symbol/timeframe/magic. S1 requires slow direction, non-neutral
+medium context, a confirmed fast HL/LH, and its close-confirmed reversal
+break. S2 freezes the compatible fast breakout level and cannot count the
+breakout bar as its own retest. S3 requires a confirmed pivot shelf, minimum
+excursion, closed-bar reclaim, and fast structural confirmation; a wick alone
+cannot trigger. S4 reuses the already-frozen causal classifier features and
+freezes fast boundaries after compression persistence. S5 accepts only the
+classifier's four-pivot `LL,LH,HL,HH` or inverse sequence with medium
+validation; a single pivot change cannot trigger. Classifier-level
+`FAILED_BREAK` remains deliberately unimplemented.
+
+**Family identity, arbitration, and filtering boundary:** every
+`MSZZCandidate` now carries an explicit `family_id`; all existing eight and
+all new five assignments are made in code, never inferred from display names.
+Clusters retain unique supporting strategy and family IDs. S1 receives the
+predeclared owner priority between BreakoutRetest/SweepReclaim and
+NestedPullback; the pre-existing priorities for S2–S5 are unchanged.
+`RESEARCH_FILTER` applies only to explicitly enabled D027 candidates. It
+cannot filter canonical A/E or any existing-eight candidate. `LABEL_ONLY`
+remains the default.
+
+**Audit journals and persistence:** `MSZZ_SignalJournal.csv` now includes
+strategy family, full entry-time regime fields, cluster owner, overlapping
+strategy/family IDs, execution status, and rejection reason.
+`MSZZ_SequenceJournal.csv` records sequence ID, strategy/family, state,
+direction, origin time/level, confirmation/expiry/invalidation time, exact
+final event ID, and reason. Retest, sweep, and compression nonterminal state
+is saved after every closed-bar evaluation and on deinitialization. A malformed
+existing state file fails EA initialization when any D027 family is enabled;
+an absent file is a valid first start.
+
+**Deterministic and compile evidence:** the new
+`Test_MSZZ_D027Strategies.mq5` suite passes 20/20 assertions, covering both
+directions, premature and invalid paths, retest expiry, exact save/load
+continuity, sweep-without-reclaim rejection, compression persistence,
+four-pivot transition confirmation, cross-family clustering, existing-family
+assignment, and default-off behavior. The EA and all 21 `Test_MSZZ_*` source
+files compile in the isolated MT5 tree with **0 errors and 0 warnings**. The
+complete runtime suite and parity export were then rerun from those freshly
+compiled binaries; every suite reports zero failures and parity export
+completed successfully.
+
+**Final default-off regressions:** on the final EA binary,
+`shadow_d027_short.ini` reproduces 113 raw candidates / 46 shadow clusters and
+`shadow_d027_long.ini` reproduces 431 / 178. Both native reports contain zero
+trades and zero deals. Canonical A reproduces 224 trades, +0.1261R expectancy,
+PF 1.2446, and 15.1583R maximum drawdown. Canonical E reproduces 213 trades,
++0.1467R expectancy, PF 1.2532, and 16.9205R maximum drawdown. Thus family
+identity, journal expansion, and five disabled evaluators are no-ops for the
+accepted baselines.
+
+**Artifacts and boundary:** implementation is in
+`Include/MultiSpeedZigZag/Strategies/D027StrategyFamilies.mqh`, with wiring in
+the EA, types, existing strategy suite, and cluster engine. Deterministic
+coverage is in `Tests/MultiSpeedZigZag/Test_MSZZ_D027Strategies.mq5`; the
+frozen Stage 3 summary is `Tools/D027/Stage3/README.md`. Raw compiler logs,
+tester reports, journals, and terminal logs remain under
+`/Users/matt/MT5-MSZZ-TEST`. Stage 3 inspected no S1–S5 performance result,
+promoted no strategy, gated no strategy, altered neither A nor E, placed no
+live order, and did not merge to `main`. Remaining work is Stage 4 standalone
+fixed-2R screening, Stage 5 limited qualified 3R screening, Stage 6
+incremental portfolio analysis, the dedicated regime-filter stage,
+anti-overfitting/decision categories, and the final report.

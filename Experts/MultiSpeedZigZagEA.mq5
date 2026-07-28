@@ -2,12 +2,13 @@
 //| MultiSpeedZigZagEA.mq5                                           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "0.410"
+#property version   "1.420"
 #property description "Standalone Multi-Speed ZigZag strategy suite"
 
 #include <Trade/Trade.mqh>
 #include <MultiSpeedZigZag/Core/TripleZigZagEngine.mqh>
 #include <MultiSpeedZigZag/Strategies/StrategySuite.mqh>
+#include <MultiSpeedZigZag/Strategies/D027StrategyFamilies.mqh>
 #include <MultiSpeedZigZag/Arbitration/OpportunityClusterEngine.mqh>
 #include <MultiSpeedZigZag/Execution/EventStore.mqh>
 #include <MultiSpeedZigZag/Execution/ExecutionGuard.mqh>
@@ -55,6 +56,13 @@ input bool InpEnableFastMedContext=true;
 input bool InpEnableMedSlowContext=true;
 input bool InpEnableNestedPullback=true;
 input bool InpEnableWeightedEnsemble=true;
+// D027 Stage 3 research families. All default disabled: canonical A/E and
+// every existing-eight configuration remain behaviorally unchanged.
+input bool InpEnableAlignedFastPullback=false;
+input bool InpEnableBreakoutRetest=false;
+input bool InpEnableSweepReclaim=false;
+input bool InpEnableCompressionBreakout=false;
+input bool InpEnableStructureTransition=false;
 
 input group "═══ Structure & Signal ═══"
 input int    InpMinBarsBetween=3;
@@ -98,8 +106,8 @@ input double InpTrailChandelierATRMult=3.0;
 // D027: Layer 1/3 regime architecture. InpRegimeEligibilityMode defaults to
 // LABEL_ONLY -- every existing strategy behaves exactly as before, every
 // candidate/trade still receives regime labels, nothing is filtered.
-// RESEARCH_FILTER exists for later stages and is not consumed by any
-// existing strategy today. See DECISION_LOG.md D027.
+// RESEARCH_FILTER applies only to explicitly enabled D027 research
+// candidates; existing A/E and existing-eight candidates are never gated.
 input group "═══ D027 Regime Architecture ═══"
 input int    InpRegimeEligibilityMode=0; // 0=LABEL_ONLY, 1=RESEARCH_FILTER
 
@@ -114,6 +122,7 @@ input bool InpVerboseLog=true;
 
 CMSZZTripleZigZagEngine       g_engine;
 CMSZZStrategySuite            g_suite;
+CMSZZD027StrategyFamilies     g_d027_suite;
 CMSZZOpportunityClusterEngine g_cluster_engine;
 CMSZZEventStore                g_event_store;
 CMSZZExecutionGuard            g_execution_guard;
@@ -185,44 +194,58 @@ void JournalRegime(const MSZZRegimeState &r)
    FileFlush(h); FileClose(h);
 }
 
+string g_journal_cluster_owner="";
+string g_journal_cluster_strategies="";
+string g_journal_cluster_families="";
+
 void JournalCandidate(const MSZZCandidate &c,const string status,const string cluster_id="")
 {
    if(InpVerboseLog)
       PrintFormat("MSZZ %s %s cluster=%s score=%.2f entry=%.*f stop=%.*f target=%.*f origin=%s event=%s reason=%s",
                   status,c.setup_name,cluster_id,c.score,_Digits,c.entry,_Digits,c.stop,_Digits,c.target,c.origin_id,c.event_id,c.reason);
    if(!InpWriteCSV) return;
-   // D027: eligibility is evaluated and journaled for every candidate, but
-   // in the only mode active today (LABEL_ONLY) it is always true by
-   // construction -- see CMSZZRegimeEligibilityPolicy::IsEligible(). The
-   // family argument is a placeholder (MSZZ_FAMILY_NONE) because
-   // MSZZCandidate does not yet carry a family_id (deferred to Stage 3,
-   // when S1-S5 are implemented and family flows through journaling for
-   // real) -- LABEL_ONLY's result does not depend on family at all, so
-   // this is not a correctness gap for the mode actually in effect.
    ENUM_MSZZ_ELIGIBILITY_MODE elig_mode=(ENUM_MSZZ_ELIGIBILITY_MODE)InpRegimeEligibilityMode;
    string elig_reason;
-   bool elig_result=CMSZZRegimeEligibilityPolicy::IsEligible(elig_mode,MSZZ_FAMILY_NONE,c.strategy_id,g_last_regime,elig_reason);
+   bool elig_result=CMSZZRegimeEligibilityPolicy::IsEligible(elig_mode,c.family_id,c.strategy_id,g_last_regime,elig_reason);
    int h=FileOpen("MSZZ_SignalJournal.csv",FILE_READ|FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_SHARE_READ,';');
    if(h==INVALID_HANDLE){ PrintFormat("MSZZ journal open failed error=%d",GetLastError()); return; }
    if(FileSize(h)==0)
       FileWrite(h,"time","symbol","timeframe","status","cluster_id","strategy_id","setup","direction","score","entry","stop","target","origin_id","event_id","reason",
-                "regime_snapshot_id","regime_direction","regime_alignment","regime_phase","eligibility_mode","eligibility_result","eligibility_reason");
+                "strategy_family","regime_snapshot_id","regime_direction","regime_strength","regime_volatility","regime_alignment","regime_phase",
+                "eligibility_mode","eligibility_result","eligibility_reason","cluster_owner_strategy_id",
+                "overlap_strategy_ids","overlap_family_ids","execution_status","rejection_reason");
    FileSeek(h,0,SEEK_END);
    FileWrite(h,TimeToString(c.signal_time,TIME_DATE|TIME_SECONDS),_Symbol,EnumToString(_Period),status,cluster_id,
              (int)c.strategy_id,c.setup_name,MSZZDirectionText(c.direction),DoubleToString(c.score,2),
              DoubleToString(c.entry,_Digits),DoubleToString(c.stop,_Digits),DoubleToString(c.target,_Digits),
-             c.origin_id,c.event_id,c.reason,
-             g_last_regime_id,MSZZRegimeDirectionText(g_last_regime.direction),MSZZAlignmentStateText(g_last_regime.alignment_state),
-             MSZZMarketPhaseText(g_last_regime.market_phase),MSZZEligibilityModeText(elig_mode),(elig_result?"true":"false"),elig_reason);
+             c.origin_id,c.event_id,c.reason,MSZZFamilyText(c.family_id),
+             g_last_regime_id,MSZZRegimeDirectionText(g_last_regime.direction),MSZZTrendStrengthText(g_last_regime.trend_strength),
+             MSZZVolatilityStateText(g_last_regime.volatility_state),MSZZAlignmentStateText(g_last_regime.alignment_state),
+             MSZZMarketPhaseText(g_last_regime.market_phase),MSZZEligibilityModeText(elig_mode),(elig_result?"true":"false"),elig_reason,
+             (cluster_id=="" ? "" : g_journal_cluster_owner),
+             (cluster_id=="" ? "" : g_journal_cluster_strategies),
+             (cluster_id=="" ? "" : g_journal_cluster_families),status,
+             (StringFind(status,"REJECT")==0 || status=="ORDER_FAILED" ? c.reason : ""));
    FileFlush(h); FileClose(h);
 }
 
 void JournalCluster(const MSZZOpportunityCluster &cluster,const string status)
 {
+   g_journal_cluster_owner=IntegerToString((int)cluster.owner_strategy_id);
+   g_journal_cluster_strategies=cluster.supporting_strategy_ids;
+   g_journal_cluster_families=cluster.supporting_family_ids;
    if(InpVerboseLog)
-      PrintFormat("MSZZ CLUSTER %s id=%s owner=%d score=%.2f support=%d evidence=%d stop_disagreement=%.*f",
-                  status,cluster.cluster_id,(int)cluster.owner_strategy_id,cluster.combined_score,
+      PrintFormat("MSZZ CLUSTER %s id=%s owner=%d strategies=%s families=%s score=%.2f support=%d evidence=%d stop_disagreement=%.*f",
+                  status,cluster.cluster_id,(int)cluster.owner_strategy_id,
+                  cluster.supporting_strategy_ids,cluster.supporting_family_ids,cluster.combined_score,
                   cluster.support_count,cluster.evidence_mask,_Digits,cluster.stop_disagreement);
+}
+
+bool IsD027Strategy(const ENUM_MSZZ_STRATEGY_ID id)
+{
+   return id==MSZZ_STRAT_ALIGNED_FAST_PULLBACK || id==MSZZ_STRAT_BREAKOUT_RETEST ||
+          id==MSZZ_STRAT_SWEEP_RECLAIM || id==MSZZ_STRAT_COMPRESSION_BREAKOUT ||
+          id==MSZZ_STRAT_STRUCTURE_TRANSITION;
 }
 
 void JournalOwnership(const MSZZOwnershipSnapshot &snapshot,const string status)
@@ -953,8 +976,38 @@ void ProcessClosedBar()
                                InpEnableNestedPullback,InpEnableWeightedEnsemble);
    MSZZCandidate candidates[];
    int candidate_count=g_suite.Evaluate(fast,med,slow,rates[closed_count-1].time,rates[closed_count-1].close,candidates);
+   MSZZCandidate d027_candidates[];
+   int d027_count=g_d027_suite.Evaluate(fast,med,slow,g_last_regime,rates[closed_count-1],d027_candidates);
+   for(int i=0;i<d027_count;i++)
+   {
+      int at=ArraySize(candidates); ArrayResize(candidates,at+1);
+      candidates[at]=d027_candidates[i]; candidate_count++;
+   }
    if(candidate_count<=0) return;
-   for(int i=0;i<candidate_count;i++) if(candidates[i].valid) JournalCandidate(candidates[i],"RAW_CANDIDATE");
+   MSZZCandidate eligible_candidates[]; int eligible_count=0;
+   for(int i=0;i<candidate_count;i++)
+   {
+      if(!candidates[i].valid) continue;
+      JournalCandidate(candidates[i],"RAW_CANDIDATE");
+      bool eligible=true;
+      if(IsD027Strategy(candidates[i].strategy_id) &&
+         (ENUM_MSZZ_ELIGIBILITY_MODE)InpRegimeEligibilityMode==MSZZ_ELIGIBILITY_RESEARCH_FILTER)
+      {
+         string eligibility_reason;
+         eligible=CMSZZRegimeEligibilityPolicy::IsEligible(MSZZ_ELIGIBILITY_RESEARCH_FILTER,
+                    candidates[i].family_id,candidates[i].strategy_id,g_last_regime,eligibility_reason);
+         if(!eligible){ MSZZCandidate rejected=candidates[i]; rejected.reason=eligibility_reason; JournalCandidate(rejected,"REJECT_REGIME"); }
+      }
+      if(eligible)
+      {
+         ArrayResize(eligible_candidates,eligible_count+1);
+         eligible_candidates[eligible_count++]=candidates[i];
+      }
+   }
+   ArrayResize(candidates,eligible_count);
+   for(int i=0;i<eligible_count;i++) candidates[i]=eligible_candidates[i];
+   candidate_count=eligible_count;
+   if(candidate_count<=0) return;
 
    MSZZOpportunityCluster clusters[];
    int cluster_count=g_cluster_engine.Build(_Symbol,_Period,candidates,candidate_count,clusters);
@@ -1032,6 +1085,16 @@ int OnInit()
 
    g_event_store.Configure(_Symbol,_Period,InpMagic,InpMaxPersistentEvents);
    if(!g_event_store.Load()) return INIT_FAILED;
+
+   string d027_state_file=StringFormat("MSZZ_D027_State_%s_%d_%I64d.csv",_Symbol,(int)_Period,InpMagic);
+   g_d027_suite.Configure(InpEnableAlignedFastPullback,InpEnableBreakoutRetest,InpEnableSweepReclaim,
+                          InpEnableCompressionBreakout,InpEnableStructureTransition,InpRiskReward,
+                          InpSignalValidityBars,PeriodSeconds(),InpWriteCSV,d027_state_file);
+   if(g_d027_suite.AnyEnabled() && !g_d027_suite.LoadState())
+   {
+      Print("MSZZ D027 sequence-state load failed; refusing to start enabled multi-step research.");
+      return INIT_FAILED;
+   }
 
    g_instance_id=StringFormat("%d-%d-%d",(int)AccountInfoInteger(ACCOUNT_LOGIN),(int)TimeLocal(),MathRand());
    if(!g_intent_store.Configure(_Symbol,_Period,InpMagic,g_instance_id))
@@ -1158,6 +1221,11 @@ string EnabledStrategiesSummary()
    if(InpEnableMedSlowContext)     out+=(out=="" ? "" : ",")+"MedSlowContext";
    if(InpEnableNestedPullback)     out+=(out=="" ? "" : ",")+"NestedPullback";
    if(InpEnableWeightedEnsemble)   out+=(out=="" ? "" : ",")+"WeightedEnsemble";
+   if(InpEnableAlignedFastPullback) out+=(out=="" ? "" : ",")+"AlignedFastPullback";
+   if(InpEnableBreakoutRetest)      out+=(out=="" ? "" : ",")+"BreakoutRetest";
+   if(InpEnableSweepReclaim)        out+=(out=="" ? "" : ",")+"SweepReclaim";
+   if(InpEnableCompressionBreakout) out+=(out=="" ? "" : ",")+"CompressionBreakout";
+   if(InpEnableStructureTransition) out+=(out=="" ? "" : ",")+"StructureTransition";
    return (out=="" ? "NONE" : out);
 }
 
@@ -1187,6 +1255,8 @@ void WriteResearchManifest()
 
 void OnDeinit(const int reason)
 {
+   if(g_d027_suite.AnyEnabled() && !g_d027_suite.SaveState())
+      Print("MSZZ WARNING: D027 sequence-state save failed during deinitialization.");
    // D026: the Strategy Tester force-closes any still-open position at the
    // literal end of the test window to finalize equity -- a real closing
    // deal the MT5 native report counts, but one that happens after the

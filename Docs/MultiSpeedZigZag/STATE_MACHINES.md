@@ -1,4 +1,4 @@
-# Reserved Strategy State Machines
+# Strategy State Machines
 
 This document defines compile-independent behavioral contracts for the five reserved strategies. Implementations must preserve these states and transitions exactly unless a later decision log entry supersedes them.
 
@@ -28,6 +28,17 @@ Allowed terminal states:
 - `CONSUMED`
 
 A setup may trigger once only.
+
+---
+
+## 1031 — Aligned Fast Pullback Continuation
+
+This D027 S1 trigger is deliberately stateless. Slow structure defines the
+primary direction, medium must be non-neutral (aligned or the active
+correction), and a confirmed fast HL/LH plus its close-confirmed reversal
+break emits one candidate. The confirmed fast pullback pivot is the structural
+stop. Candidate and family identity are `1031` and `PULLBACK`; the strategy is
+disabled by default.
 
 ---
 
@@ -97,6 +108,11 @@ The retest must use either:
 
 These are separate variants and must not be mixed silently.
 
+D027 freezes the implemented variant before Stage 4 results: frozen breakout
+level, 12-bar maximum wait, 0.15 fast-ATR touch/reclaim tolerance, and 0.30
+fast-ATR close invalidation. An opposite fast breakout also invalidates it.
+The setup is serialized after every closed-bar evaluation.
+
 ---
 
 ## 1050 — Sweep and Reclaim
@@ -128,6 +144,10 @@ Short logic mirrors using high shelves/resistance.
 ### Separation rule
 
 A wick through a level and a close through a level are distinct sweep variants. Results must be journaled separately.
+
+D027 implements the confirmed-pivot-shelf variant only: minimum excursion
+0.10 fast ATR, closed-bar reclaim buffer 0.05 fast ATR, maximum close failure
+0.50 fast ATR, and six bars to reclaim. A wick alone never emits a candidate.
 
 ---
 
@@ -167,6 +187,13 @@ At least two of the following must be available as raw journal features:
 
 Raw compression features must be journaled before optimizing a composite threshold.
 
+D027 uses the already-frozen causal classifier features rather than a new
+optimized score: three consecutive `COMPRESSION` bars arm confirmed fast
+support/resistance boundaries, followed by a close outside within six bars.
+The boundaries are frozen at arming and medium/slow context must support the
+release. The classifier's raw compression ratio, normalized ATR, swing
+amplitudes, and swing durations remain in the regime journal.
+
 ---
 
 ## 1070 — Structure Transition
@@ -197,6 +224,11 @@ A confirmed sequence change in HH/HL/LH/LL conveys more structural information t
    - Maximum transition duration exceeded.
 
 Short logic mirrors.
+
+D027 implements the classifier's strict four-pivot sequence only:
+`LL,LH,HL,HH` or `HH,HL,LH,LL`, with medium direction validating the new
+direction. One pivot change cannot emit a candidate. The confirmed fast
+opposite-side pivot is the structural stop.
 
 ## Persistence contract
 

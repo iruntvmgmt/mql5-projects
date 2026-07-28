@@ -153,6 +153,7 @@ struct MSZZCandidate
 {
    bool                    valid;
    ENUM_MSZZ_STRATEGY_ID   strategy_id;
+   ENUM_MSZZ_STRATEGY_FAMILY family_id;
    ENUM_MSZZ_DIRECTION     direction;
    ENUM_MSZZ_ORIGIN_TYPE   origin_type;
    datetime                signal_time;
@@ -188,6 +189,7 @@ struct MSZZOpportunityCluster
    int                     preferred_index;
    ENUM_MSZZ_STRATEGY_ID   owner_strategy_id;
    string                  supporting_strategy_ids;
+   string                  supporting_family_ids;
 };
 
 string MSZZDirectionText(const ENUM_MSZZ_DIRECTION dir)

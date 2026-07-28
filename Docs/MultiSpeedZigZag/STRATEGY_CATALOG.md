@@ -12,11 +12,11 @@ Every strategy is a separately measured hypothesis even when multiple strategies
 | 1012 | Medium with Slow Context | Medium break | Slow supportive | BREAKOUT | Implemented |
 | 1020 | Sequential Confirmation | Fast break followed by medium within a window | Optional slow alignment | BREAKOUT | Reserved (distinct from D027 S1 — see note below) |
 | 1030 | Nested Pullback | Fast reversal break | Slow trend, medium correction | PULLBACK | Implemented |
-| 1031 | Aligned Fast Pullback Continuation (D027 S1) | Confirmed fast HL/LH after countertrend correction, close through reversal trigger | Slow trend, medium aligned/correcting | PULLBACK | Reserved (Stage 3) |
-| 1040 | Breakout Retest (D027 S2) | Retest after confirmed break | Original break remains valid | RETEST | Reserved (Stage 3) |
-| 1050 | Sweep and Reclaim (D027 S3) | Pivot/line sweep then close back through | Structural context | REVERSAL | Reserved (Stage 3) |
-| 1060 | Compression Breakout (D027 S4) | Contracted fast structure expands | Medium/slow context | COMPRESSION | Reserved (Stage 3) |
-| 1070 | Structure Transition (D027 S5) | LL/LH to HL/HH or inverse | Multi-speed transition | REVERSAL | Reserved (Stage 3) |
+| 1031 | Aligned Fast Pullback Continuation (D027 S1) | Confirmed fast HL/LH after countertrend correction, close through reversal trigger | Slow trend, medium aligned/correcting | PULLBACK | Implemented, default disabled (D027 Stage 3) |
+| 1040 | Breakout Retest (D027 S2) | Retest after confirmed break | Original break remains valid | RETEST | Implemented, default disabled (D027 Stage 3) |
+| 1050 | Sweep and Reclaim (D027 S3) | Pivot/line sweep then close back through | Structural context | REVERSAL | Implemented, default disabled (D027 Stage 3) |
+| 1060 | Compression Breakout (D027 S4) | Contracted fast structure expands | Medium/slow context | COMPRESSION | Implemented, default disabled (D027 Stage 3) |
+| 1070 | Structure Transition (D027 S5) | LL/LH to HL/HH or inverse | Multi-speed transition | REVERSAL | Implemented, default disabled (D027 Stage 3) |
 | 1080 | Weighted Ensemble | Weighted votes reach threshold | Three-speed evidence | ENSEMBLE | Implemented |
 
 ## D027 family classification notes (see DECISION_LOG.md D027 for full rationale)
