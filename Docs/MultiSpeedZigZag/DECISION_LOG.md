@@ -2241,3 +2241,36 @@ remain at `/Users/matt/MT5-MSZZ-TEST/D027_Stage7_Results`. Stage 7 changes no
 EA code, frozen trigger, regime definition, A, or E. No live deployment
 occurred and there was no merge to `main`. Remaining work is the final
 anti-overfitting/decision-category pass and D027 report.
+
+### Final anti-overfitting pass and D027 closeout
+
+Adjacent-threshold checks were performed offline from continuous entry-time
+regime measurements, never by changing the frozen classifier or selecting a
+winning neighbor. Volatility was inspected at 0.75/0.80/0.85 and
+1.15/1.20/1.25, directional efficiency at 0.30/0.35/0.40 and
+0.60/0.65/0.70, and compression ratio at 0.30/0.35/0.40.
+FastMedConfluence's EXPANDING subset stays positive across all three
+expansion boundaries (+0.2535/+0.2553/+0.1991R expectancy); SweepReclaim
+changes sign (+0.0988/+0.0098/-0.0461R), so no expanding-volatility gate is
+justified for it.
+
+The required outlier, temporal, direction, regime, uniqueness, overlap,
+portfolio, correlation, exit, persistence, and reconciliation evidence is
+consolidated in the numbered 40-point
+`Docs/MultiSpeedZigZag/D027_FINAL_REPORT.md`. Machine-readable formal
+categories and the full neighborhood table are under `Tools/D027/Final/`.
+
+Final new-family categories are: AlignedFastPullback `REDESIGN_REQUIRED`;
+BreakoutRetest `REJECTED`; SweepReclaim `RESEARCH_ONLY`; CompressionBreakout
+`REJECTED`; StructureTransition `REJECTED`. No new family is a standalone or
+portfolio validation candidate and none adds accepted incremental edge beyond
+FastMedConfluence. FastMedConfluence remains the sole
+`STANDALONE_VALIDATION_CANDIDATE` benchmark, pending genuinely independent
+data. The regime observer is retained with `LABEL_ONLY`; no
+`RESEARCH_FILTER` is accepted for current use.
+
+D027 is complete as a bounded research program. It produced a causal,
+auditable architecture and one interesting standalone research signal
+(SweepReclaim 2R), but no production promotion. A/E remain unchanged, all new
+families remain default-off, no merge to `main` occurred, and no live or
+production deployment occurred.

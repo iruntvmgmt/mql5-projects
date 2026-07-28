@@ -35,6 +35,29 @@ Per D027's explicit instruction to classify the existing eight and record it her
 
 Candidates sharing the same structural origin are supporting interpretations, not automatically separate trades. The suite selects one best candidate for the current event. Future clustering work may combine evidence more formally, but duplicate order placement remains forbidden.
 
+## D027 final research categories
+
+These are research decisions, not implementation-state or production labels:
+
+| Strategy | Final category |
+|---|---|
+| FastBreakout | RESEARCH_ONLY |
+| MediumBreakout | CONTEXT_SIGNAL_ONLY |
+| SlowBreakout | CONTEXT_SIGNAL_ONLY |
+| FastMedConfluence | STANDALONE_VALIDATION_CANDIDATE |
+| FastMedContext | CONTEXT_SIGNAL_ONLY |
+| MedSlowContext | CONTEXT_SIGNAL_ONLY |
+| NestedPullback | REDESIGN_REQUIRED |
+| WeightedEnsemble | CONTEXT_SIGNAL_ONLY |
+| AlignedFastPullback | REDESIGN_REQUIRED |
+| BreakoutRetest | REJECTED |
+| SweepReclaim | RESEARCH_ONLY |
+| CompressionBreakout | REJECTED |
+| StructureTransition | REJECTED |
+
+No D027 family is a `PORTFOLIO_VALIDATION_CANDIDATE`. Full rationales and
+regime-feature categories are machine-readable under `Tools/D027/Final/`.
+
 ## Required metrics
 
 Each strategy must retain its own count, expectancy, win rate, average adverse excursion, average favorable excursion, holding time, regime, symbol, timeframe, spread, and execution mode. Combined-suite results may never substitute for per-strategy evidence.
