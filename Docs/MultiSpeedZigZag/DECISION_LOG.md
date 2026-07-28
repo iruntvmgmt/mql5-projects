@@ -1897,3 +1897,102 @@ live order, and did not merge to `main`. Remaining work is Stage 4 standalone
 fixed-2R screening, Stage 5 limited qualified 3R screening, Stage 6
 incremental portfolio analysis, the dedicated regime-filter stage,
 anti-overfitting/decision categories, and the final report.
+
+### Stage 4 results — standalone fixed-2R screen
+
+**Inventory and immutable screen:** five single-family tests completed once in
+the isolated `/Users/matt/MT5-MSZZ-TEST` instance: AlignedFastPullback
+(`1031`, magic `26072931`), BreakoutRetest (`1040`, `26072932`),
+SweepReclaim (`1050`, `26072933`), CompressionBreakout (`1060`, `26072934`),
+and StructureTransition (`1070`, `26072935`). All use XAUUSD M5, tester
+`Model=2`, 2025-03-01 through 2026-07-24, structural stops, fixed 2R,
+`InpExitOwnedOpposite=true`, canonical costs/execution, and exactly one new
+family enabled. Existing strategies and the other new families are disabled.
+`LABEL_ONLY` is retained; the research score override, partial close, fixed
+target suppression, research trail, and all regime filtering are disabled.
+No parameter sweep or rerun occurred, and no frozen Stage 3 trigger or D027
+regime definition changed after inspection.
+
+**Run and attribution integrity:** all five native reports and all required
+CSV artifacts are non-empty. RunSummary, TradeAnalytics, and native HTML agree
+exactly: 110/220 trades/deals for AlignedFastPullback, 354/708 for
+BreakoutRetest, 190/380 for SweepReclaim, 84/168 for CompressionBreakout, and
+21/42 for StructureTransition. The deterministic join
+`TradeAnalytics.cluster_id -> one EXECUTED SignalJournal row ->
+regime_snapshot_id -> RegimeJournal.time` uniquely preserves all 759 trades.
+Missing or duplicate signal joins, missing or duplicate regime joins,
+non-entry-time snapshots, and non-`LABEL_ONLY` trades are all zero. One
+StructureTransition position was explicitly closed on the broker's final
+modeled tester tick (`2026.07.23 23:59:59`) and is retained.
+
+**Full-window results:** AlignedFastPullback records 110 trades, -6.9288R,
+-0.0630R expectancy, PF 0.9023, and 17.6810R maximum drawdown. BreakoutRetest
+records 354, -37.7759R, -0.1067R, PF 0.8470, and 49.5189R. SweepReclaim
+records 190, +28.6117R, +0.1506R, PF 1.2688, and 18.2941R.
+CompressionBreakout records 84, -2.7367R, -0.0326R, PF 0.9353, and 11.4151R.
+StructureTransition records 21, -2.1892R, -0.1042R, PF 0.8457, and 8.0000R.
+Exact win rate, median R, MFE/MAE, hold-time, exposure, and side metrics are
+tracked in `strategy_summary.csv`.
+
+**Frozen-window evidence:** development / validation / final-holdout
+cumulative R is AlignedFastPullback -9.0086 / +4.7310 / -2.6512;
+BreakoutRetest -18.4909 / -14.9881 / -4.2969; SweepReclaim +17.5830 /
++4.4695 / +6.5592; CompressionBreakout -3.8395 / -0.0146 / +1.1174; and
+StructureTransition -5.0000 / 0.0000 / +2.8108. SweepReclaim is the only
+family positive in all three chronological windows. Validation and holdout
+remain within-history partitions, not independent out-of-sample evidence.
+
+**Concentration and direction:** SweepReclaim remains +22.6117R after its top
+three trades and +13.3449R after its best quarter. It has five positive and
+two negative quarters. Its long side is +0.0808R expectancy over 96 trades
+and its short side +0.2219R over 94, so the result is not dependent on one
+direction. Every other family is negative after excluding its top three and
+after excluding its best quarter. Full top-1/top-3/top-5, best-one/best-two
+quarter, quarterly, and side descriptors are machine-readable.
+
+**Regime description:** no regime is used as a gate. SweepReclaim is positive
+in both BULLISH (89 trades, +0.2002R expectancy) and BEARISH (101, +0.1069R)
+entry-time regimes. WEAK trend strength is the largest positive trend bucket
+(143, +0.2286R), while NORMAL (40, -0.0567R) and the seven-trade STRONG bucket
+are negative. OPPOSED alignment is strong descriptively (84, +0.5064R), but
+FULLY_ALIGNED (46) and PARTIALLY_ALIGNED (60) are negative. CONTRACTING
+volatility is strongest but exploratory (22, +0.4565R); NORMAL is positive
+(79, +0.2241R), while EXPANDING is approximately flat (89, +0.0098R).
+Every actual phase, the fixed D027 sample label, and its distribution are in
+`strategy_regime_summary.csv`; `FAILED_BREAK` is not invented.
+
+**Overlap and unique contribution:** overlap is reported using two explicit
+causal descriptors against the preserved canonical FastMedConfluence Stage 2
+baseline: same entry-decision bar plus direction, and exact shared structural
+origin. SweepReclaim overlaps 28 core decisions for +13.4235R and has 162
+same-bar-unique trades for +15.1882R (+0.0938R expectancy); exact shared
+origins are zero. AlignedFastPullback's 62 same-bar-unique trades are +3.7627R
+despite a negative standalone total, so it is not rescued or promoted.
+BreakoutRetest, CompressionBreakout, and StructureTransition have negative
+same-bar-unique contribution. These overlap definitions are descriptive and
+do not claim statistical independence.
+
+**Exit and cost audit:** own-family opposite exits are 12 / 4 / 24 / 27 / 0
+in S1–S5 order. Cross-family exits are structurally impossible in these
+single-family tests and equal zero. Unknown exits equal zero; the sole
+test-end exit is recorded separately. Spread is present in actual tester
+fills; the canonical 80-point spread guard and 30-point deviation are
+unchanged. No unsupported commission-R estimate is invented.
+
+**Stage 5 eligibility decision:** only SweepReclaim qualifies for the single
+predeclared 3R follow-up: positive expectancy, PF above 1.05, 190 trades,
+positive after the top three, both directions positive, no integrity failure,
+and profitable unique contribution beyond the core. The other four are not
+eligible. This authorizes one fixed 3R research run only; it does not promote,
+gate, deploy, or rescue any strategy.
+
+**Artifacts and boundary:** tracked configs are
+`Tools/D027/d027_stage4_*.ini`. Deterministic analysis, audits, tables, hashes,
+and findings are under `Tools/D027/Stage4/`. Raw artifacts remain at
+`/Users/matt/MT5-MSZZ-TEST/D027_Stage4_Results` under repository size
+discipline. Stage 4 changes no EA code, canonical A, canonical E, frozen
+history window, strategy trigger, or regime threshold. There was no live
+deployment and no merge to `main`. Remaining work is Stage 5's one qualified
+3R SweepReclaim run, Stage 6 incremental portfolio analysis, the dedicated
+regime-filter stage, anti-overfitting/decision categories, and the final
+report.

@@ -1,0 +1,6 @@
+strategy,trades,cumulative_r,excluding_top_1_r,excluding_top_3_r,excluding_top_5_r,excluding_best_quarter_r,excluding_best_two_quarters_r,positive_quarters,negative_quarters
+AlignedFastPullback,110,-6.928800,-8.928800,-12.928800,-16.928800,-11.601200,-15.601200,3,4
+BreakoutRetest,354,-37.775900,-39.790600,-43.807100,-47.819700,-46.814500,-47.601900,2,5
+SweepReclaim,190,28.611700,26.611700,22.611700,18.611700,13.344900,3.484000,5,2
+CompressionBreakout,84,-2.736700,-4.736700,-8.736700,-12.736700,-6.328300,-8.865600,4,3
+StructureTransition,21,-2.189200,-4.189200,-8.189200,-12.189200,-5.189200,-7.189200,3,4

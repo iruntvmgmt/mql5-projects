@@ -1,0 +1,6 @@
+strategy,trades,same_bar_direction_core_trades,same_bar_direction_core_r,shared_origin_core_trades,shared_origin_core_r,unique_vs_core_same_bar_trades,unique_vs_core_same_bar_r,unique_vs_core_same_bar_expectancy_r
+AlignedFastPullback,110,48,-10.691500,0,0.000000,62,3.762700,0.060689
+BreakoutRetest,354,2,-2.000000,120,-8.193000,352,-35.775900,-0.101636
+SweepReclaim,190,28,13.423500,0,0.000000,162,15.188200,0.093754
+CompressionBreakout,84,1,-1.000000,0,0.000000,83,-1.736700,-0.020924
+StructureTransition,21,0,0.000000,0,0.000000,21,-2.189200,-0.104248
