@@ -1,0 +1,3 @@
+pair,combined_sweep_owned_trades,same_bar_direction_core_overlap,same_bar_overlap_r,unique_added_trades,profitable_unique_trades,unique_added_cumulative_r,unique_added_expectancy_r,core_trades_retained,core_trades_displaced,core_trades_newly_executed
+A_2R_pair,126,0,0.000000,126,43,11.067700,0.087839,214,10,31
+E_3R_pair,123,0,0.000000,123,33,5.214200,0.042392,199,14,31

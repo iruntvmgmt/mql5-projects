@@ -1,0 +1,5 @@
+pair,owner,trades,wins,cumulative_r,expectancy_r
+A_2R_pair,FastMedConfluence,245,81,9.672300,0.039479
+A_2R_pair,SweepReclaim,126,43,11.067700,0.087839
+E_3R_pair,FastMedConfluence,230,66,15.379100,0.066866
+E_3R_pair,SweepReclaim,123,33,5.214200,0.042392

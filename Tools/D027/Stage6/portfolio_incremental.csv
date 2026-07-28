@@ -1,0 +1,3 @@
+pair,core_variant,new_variant,combined_variant,core_trades,new_standalone_trades,combined_trades,frequency_change_vs_core,core_cumulative_r,new_standalone_cumulative_r,combined_cumulative_r,incremental_r_vs_core,core_max_drawdown_r,combined_max_drawdown_r,drawdown_change_r
+A_2R_pair,A_2R,SweepReclaim_2R,A_plus_SweepReclaim_2R,224,190,371,147,28.244700,28.611700,20.740000,-7.504700,15.158100,25.279800,10.121700
+E_3R_pair,E_3R,SweepReclaim_3R,E_plus_SweepReclaim_3R,213,187,353,140,31.246500,24.358300,20.593300,-10.653200,16.920400,28.116400,11.196000

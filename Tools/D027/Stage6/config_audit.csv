@@ -1,0 +1,3 @@
+variant,magic,risk_reward,enabled,research_features_off,label_only,status
+A_plus_SweepReclaim_2R,26072941,2.00,"InpEnableFastMedConfluence,InpEnableSweepReclaim",true,true,PASS
+E_plus_SweepReclaim_3R,26072942,3.00,"InpEnableFastMedConfluence,InpEnableSweepReclaim",true,true,PASS

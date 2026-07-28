@@ -2064,3 +2064,87 @@ history split, canonical A, or canonical E. No live deployment occurred and
 there was no merge to `main`. Remaining work is Stage 6 incremental portfolio
 analysis, the dedicated regime-filter stage, anti-overfitting/decision
 categories, and the final report.
+
+### Stage 6 results — actual combined-EA portfolio analysis
+
+**Design and inventory:** the EA exposes one global reward/risk input, so the
+portfolio comparison is target matched rather than an invalid arithmetic sum:
+canonical A, SweepReclaim, and the actual A+SweepReclaim combination at fixed
+2R; canonical E, SweepReclaim, and actual E+SweepReclaim at fixed 3R. Certified
+standalone artifacts are reused from D027 Stages 2, 4, and 5 and D026. The two
+new combined tests ran once in the isolated MT5 instance and are stored at
+`/Users/matt/MT5-MSZZ-TEST/D027_Stage6_Results/A_plus_SweepReclaim_2R`
+and `E_plus_SweepReclaim_3R`.
+
+Both configs use XAUUSD M5, tester `Model=2`, 2025-03-01 through 2026-07-24,
+canonical costs/execution, structural stops, fixed target, and
+`InpExitOwnedOpposite=true`. Only FastMedConfluence and SweepReclaim are
+enabled. A uses magic `26072941` and 2R; E uses `26072942` and 3R.
+`LABEL_ONLY` remains active. Score override, trailing, partial close, fixed
+target suppression, and regime filtering are off. No trigger, score,
+threshold, frozen window, canonical A, or canonical E definition changed.
+
+**Run and join integrity:** every required native HTML and CSV artifact is
+present and non-empty. A+SweepReclaim reconciles at 371 trades / 742 deals in
+HTML, RunSummary, and TradeAnalytics; E+SweepReclaim reconciles at 353 / 706.
+Every combined trade joins to exactly one executed signal and exactly one
+original entry-time regime snapshot. Missing, duplicate, ambiguous, non-entry
+snapshot, eligibility, and trade-count mismatches are zero. The A run has
+1,037 raw candidates, 371 executions, 317 ownership rejections, 139 duplicate
+cluster rejections, and two expirations. E has 1,036 / 353 / 337 / 138 / two.
+
+**Headline incremental result:** canonical A records 224 trades, +28.2447R,
+15.1581R drawdown; actual A+SweepReclaim records 371, +20.7400R, 25.2798R
+drawdown. The addition therefore loses 7.5047R versus A while adding 147
+trades and 10.1217R drawdown. Canonical E records 213 trades, +31.2465R,
+16.9204R drawdown; E+SweepReclaim records 353, +20.5933R, 28.1164R drawdown.
+It loses 10.6532R, adds 140 trades, and adds 11.1960R drawdown.
+
+**Window and concentration evidence:** A+SweepReclaim development /
+validation / final-holdout R is +13.0881 / +1.5663 / +6.0856, below A's
++13.9368 / +6.8843 / +7.4236 in every window. E+SweepReclaim is +13.3488 /
++6.4847 / +0.7598 versus E's +7.5366 / +14.8843 / +8.8256: development
+improves, but validation and holdout deteriorate sharply. Both combinations
+remain positive without their top three trades (+14.7400R and +11.5933R),
+but excluding the best quarter leaves only +6.8464R and +4.4775R. They do not
+improve the matched cores on total return, drawdown, or holdout behavior.
+
+**Ownership, uniqueness, and exits:** the actual A combination executes 126
+SweepReclaim-owned trades worth +11.0677R (+0.0878R expectancy), retains 214
+baseline core clusters, displaces ten, and newly executes 31 core clusters.
+The E combination executes 123 SweepReclaim-owned trades worth +5.2142R
+(+0.0424R), retains 199, displaces 14, and newly executes 31. Executed
+SweepReclaim-owned trades have no same-bar/direction core overlap in either
+combined run; exact executed cluster overlap is also zero because ownership
+has already resolved candidate overlap. Positive new-owner contribution is
+therefore real, but it does not compensate for altered core paths.
+
+The A exit inventory is 153 stops, 96 targets, 56 own-family opposite exits,
+and 66 cross-family opposite exits. E is 161 / 63 / 59 / 70. Unknown exits
+are zero. These actual cross-family reversals explain why standalone
+contributions cannot be added and why the core outcome changes.
+
+**Diversification descriptors:** matched standalone A/SweepReclaim and
+E/SweepReclaim trade-return correlations are 0.4606 and 0.4749 over 28 and 29
+overlaps. Daily return correlations are 0.1357 and 0.1947; weekly 0.0517 and
+0.1397; monthly 0.4687 and 0.4079; daily drawdown-level correlations 0.1963
+and 0.1767. Rolling eight-week and three-month descriptors are tracked rather
+than reduced to one full-period number. During core-negative months, the A
+combination improves two of five and worsens three; E improves two of four
+and worsens two. It does not robustly repair weak core periods.
+
+**Decision:** SweepReclaim as an actual combined portfolio addition to A or E
+under the frozen shared-ownership architecture is `REJECTED`. The result is
+not promoted or rescued by its positive standalone or owner-only subset.
+Frozen standalone SweepReclaim 2R remains `RESEARCH_ONLY` for the dedicated
+regime-filter stage; no strategy is gated, promoted, or deployed here.
+
+Tracked configs are `Tools/D027/d027_stage6_A_plus_SweepReclaim_2R.ini` and
+`Tools/D027/d027_stage6_E_plus_SweepReclaim_3R.ini`. Deterministic analysis,
+config/join/arbitration/exit audits, full and window results, incremental and
+owner contributions, uniqueness, outlier checks, correlations, weak-month
+evidence, findings, and hashes are under `Tools/D027/Stage6/`. Raw reports
+remain outside the repository under established size discipline. Stage 6
+changes no EA code. No live deployment occurred and there was no merge to
+`main`. Remaining work is the dedicated regime-filter stage,
+anti-overfitting/decision categories, and the final report.

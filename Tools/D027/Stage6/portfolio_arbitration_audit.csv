@@ -1,0 +1,3 @@
+variant,raw_candidates,executed,reject_ownership,reject_duplicate_cluster,reject_expired,executed_exact_cluster_overlap,status
+A_plus_SweepReclaim_2R,1037,371,317,139,2,0,PASS
+E_plus_SweepReclaim_3R,1036,353,337,138,2,0,PASS

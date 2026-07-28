@@ -1,0 +1,11 @@
+pair,period,core_new_return_correlation,core_combined_return_correlation,observations_core_new,observations_core_combined
+A_2R_pair,matched_trade,0.460587,0.893026,28,214
+A_2R_pair,day,0.135736,0.666386,135,133
+A_2R_pair,week,0.051745,0.706826,64,63
+A_2R_pair,month,0.468682,0.653981,17,17
+A_2R_pair,daily_drawdown_level,0.196308,0.623692,135,133
+E_3R_pair,matched_trade,0.474878,0.872241,29,199
+E_3R_pair,day,0.194705,0.693786,132,130
+E_3R_pair,week,0.139743,0.707546,62,61
+E_3R_pair,month,0.407886,0.698345,17,17
+E_3R_pair,daily_drawdown_level,0.176739,0.710320,132,130
