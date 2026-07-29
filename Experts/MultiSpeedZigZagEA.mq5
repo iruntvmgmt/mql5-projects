@@ -626,6 +626,36 @@ bool PrepareMarketCandidate(const MSZZCandidate &source,MSZZCandidate &prepared,
 // bookkeeping -- never the flat requested percent -- per the D029 handoff's
 // explicit "portfolio approval must use actual normalized initial risk"
 // requirement. See DECISION_LOG.md D029 Phase 1.
+// D029 audit remediation, Finding E: broker-authoritative loss-per-lot via
+// OrderCalcProfit(), replacing PositionSizing.mqh's former internal
+// (stop_distance/tick_size)*tick_value linear formula -- wrong for any
+// instrument whose P&L is not a strict linear function of price distance
+// (FX crosses needing account-currency conversion, tiered tick values,
+// etc). OrderCalcProfit() naturally handles long/short via ORDER_TYPE_BUY/
+// ORDER_TYPE_SELL and account-currency conversion internally. Fails closed
+// (false, loss_per_lot=0.0, reason populated) on an OrderCalcProfit()
+// failure or a nonpositive resulting loss -- never silently falls back to
+// the old formula. See DECISION_LOG.md D029 audit remediation.
+bool CalculateBrokerLossPerLot(const string symbol,const ENUM_MSZZ_DIRECTION direction,
+                               const double entry,const double stop,
+                               double &loss_per_lot,string &reason)
+{
+   loss_per_lot=0.0; reason="";
+   if(direction!=MSZZ_DIR_LONG && direction!=MSZZ_DIR_SHORT)
+   { reason="invalid direction for loss-per-lot calculation"; return false; }
+   if(entry<=0.0 || stop<=0.0 || MathAbs(entry-stop)<=0.0)
+   { reason="invalid entry/stop for loss-per-lot calculation"; return false; }
+   ENUM_ORDER_TYPE order_type=(direction==MSZZ_DIR_LONG ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+   double profit=0.0;
+   if(!OrderCalcProfit(order_type,symbol,1.0,entry,stop,profit))
+   { reason=StringFormat("OrderCalcProfit failed error=%d",GetLastError()); return false; }
+   double loss=-profit;
+   if(loss<=0.0)
+   { reason=StringFormat("OrderCalcProfit returned a nonpositive loss (%.4f) for a stop-out move -- refusing to size",loss); return false; }
+   loss_per_lot=loss;
+   return true;
+}
+
 bool ComputeSizedVolume(const MSZZCandidate &prepared,const long book_id,
                         const ENUM_MSZZ_STRATEGY_ID strategy_id,const long magic,
                         const string logical_position_id,
@@ -658,10 +688,23 @@ bool ComputeSizedVolume(const MSZZCandidate &prepared,const long book_id,
    double tvalue=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
    double equity=AccountInfoDouble(ACCOUNT_EQUITY);
 
+   // D029 audit remediation, Finding E: broker-authoritative loss-per-lot
+   // computed first and fed into the pure sizing module -- see
+   // CalculateBrokerLossPerLot()'s header comment. Fails closed exactly
+   // like every other sizing-rejection path in this function.
+   double loss_per_lot=0.0; string loss_reason;
+   if(!CalculateBrokerLossPerLot(_Symbol,prepared.direction,prepared.entry,prepared.stop,
+                                 loss_per_lot,loss_reason))
+   {
+      volume=0.0; risk_pct_for_book=0.0; partial_capable=false;
+      reject_reason=loss_reason;
+      return false;
+   }
+
    MSZZSizingResult sizing;
    bool ok=CMSZZPositionSizing::Calculate(equity,InpPortfolioRiskPerBookPct,
-                                          prepared.entry,prepared.stop,tsize,tvalue,
-                                          vmin,vstep,vmax,sizing);
+                                          prepared.entry,prepared.stop,loss_per_lot,
+                                          tsize,tvalue,vmin,vstep,vmax,sizing);
    if(InpWriteCSV)
       g_portfolio_journals.JournalSizing(TimeCurrent(),logical_position_id,strategy_id,
                                          book_id,magic,sizing,0.0,0.0,0.0);

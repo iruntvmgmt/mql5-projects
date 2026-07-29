@@ -104,14 +104,25 @@ public:
       return true;
    }
 
-   // Fails closed (returns false, sizing_result=MSZZ_SIZING_REJECTED,
-   // reject_reason populated) on: invalid equity/risk percent, invalid
-   // tick metadata, invalid volume metadata, zero/negative stop distance,
-   // nonpositive loss-per-lot, normalized volume below the broker minimum,
-   // or (defense-in-depth; unreachable by construction given the
-   // normalize-down rule) normalized actual risk exceeding requested risk.
+   // D029 audit remediation, Finding E: loss_per_lot is now supplied by the
+   // caller (a broker-authoritative OrderCalcProfit() quote for one lot
+   // from entry to stop -- see the EA's CalculateBrokerLossPerLot()) rather
+   // than derived internally from a generic (stop_distance/tick_size)*
+   // tick_value linear formula, which is wrong for any instrument whose
+   // profit/loss is not a strict linear function of price distance (FX
+   // crosses requiring conversion, instruments with tiered/step tick
+   // values, etc). tick_size/tick_value are now purely informational --
+   // recorded on the result for the existing sizing-journal CSV schema,
+   // not used in the calculation itself. Fails closed (returns false,
+   // sizing_result=MSZZ_SIZING_REJECTED, reject_reason populated) on:
+   // invalid equity/risk percent, invalid tick metadata, invalid volume
+   // metadata, zero/negative stop distance, nonpositive loss-per-lot,
+   // normalized volume below the broker minimum, or (defense-in-depth;
+   // unreachable by construction given the normalize-down rule) normalized
+   // actual risk exceeding requested risk.
    static bool Calculate(const double equity,const double risk_pct,
                           const double entry_price,const double stop_price,
+                          const double loss_per_lot_input,
                           const double tick_size,const double tick_value,
                           const double volume_min,const double volume_step,
                           const double volume_max,
@@ -139,7 +150,7 @@ public:
       { result.reject_reason="stop distance is zero or negative"; return false; }
 
       result.requested_risk_money=equity*risk_pct/100.0;
-      double loss_per_lot=(stop_distance/tick_size)*tick_value;
+      double loss_per_lot=loss_per_lot_input;
       result.loss_per_lot=loss_per_lot;
       if(loss_per_lot<=0.0)
       { result.reject_reason="calculated loss per lot is nonpositive"; return false; }

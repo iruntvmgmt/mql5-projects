@@ -30,14 +30,28 @@ void AssertNear(const double a,const double b,const double tol,const string mess
 #define VOL_STEP 0.01
 #define VOL_MAX 100.00
 
+// D029 audit remediation, Finding E: Calculate() now takes loss_per_lot as
+// a caller-supplied (broker-authoritative, in production -- OrderCalcProfit())
+// input rather than deriving it internally from tick_size/tick_value. These
+// tests are not broker-connected, so they reproduce the exact same
+// (distance/TICK_SIZE)*TICK_VALUE arithmetic the old internal formula used,
+// preserving every existing numeric expectation in this file, while
+// TestUsesProvidedLossPerLot (below) is the one test that specifically
+// proves Calculate() uses whatever loss_per_lot it is given, rather than
+// recomputing it -- the actual behavior change Finding E requires.
+double LossPerLot(const double stop_distance)
+{
+   return (stop_distance/TICK_SIZE)*TICK_VALUE;
+}
+
 //--- Basic sizing ---------------------------------------------------
 
 void TestLongShortSymmetry()
 {
    MSZZSizingResult r_long,r_short;
-   bool ok_long=CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,
+   bool ok_long=CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,LossPerLot(10.0),
                    TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r_long);
-   bool ok_short=CMSZZPositionSizing::Calculate(100000.0,0.25,1990.0,2000.0,
+   bool ok_short=CMSZZPositionSizing::Calculate(100000.0,0.25,1990.0,2000.0,LossPerLot(10.0),
                    TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r_short);
    AssertTrue(ok_long && ok_short,"long and short sizing both succeed for a 10-point stop");
    AssertNear(r_long.normalized_volume,r_short.normalized_volume,1e-9,
@@ -49,28 +63,44 @@ void TestLongShortSymmetry()
 void TestExactStopDistanceCalculation()
 {
    MSZZSizingResult r;
-   CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,
+   CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,LossPerLot(10.0),
       TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r);
    AssertNear(r.stop_distance_points,10.0,1e-9,"stop distance is exactly |2000-1990|=10");
 }
 
-void TestCorrectTickValueUse()
+// D029 audit remediation, Finding E: Calculate() no longer derives
+// loss_per_lot internally from tick_size/tick_value -- it uses exactly
+// whatever loss_per_lot the caller supplies (in production, a broker-
+// authoritative OrderCalcProfit() quote). This test proves the pass-
+// through directly: two different supplied loss_per_lot values, same
+// entry/stop/tick metadata, produce the reported loss_per_lot and
+// normalized volume the supplied value implies -- not a value recomputed
+// from tick_size/tick_value.
+void TestUsesProvidedLossPerLot()
 {
-   MSZZSizingResult r_tv1,r_tv2;
-   CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,
-      TICK_SIZE,1.0,VOL_MIN,VOL_STEP,VOL_MAX,r_tv1);
-   CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,
-      TICK_SIZE,2.0,VOL_MIN,VOL_STEP,VOL_MAX,r_tv2);
-   AssertNear(r_tv1.loss_per_lot,1000.0,1e-6,"loss_per_lot=(10/0.01)*1.00=1000 for tick_value=1.00");
-   AssertNear(r_tv2.loss_per_lot,2000.0,1e-6,"doubling tick_value doubles loss_per_lot (2000)");
-   AssertTrue(r_tv2.normalized_volume<r_tv1.normalized_volume,
-              "doubling tick_value strictly reduces normalized volume for the same requested risk");
+   MSZZSizingResult r_lpl1,r_lpl2;
+   CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,1000.0,
+      TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r_lpl1);
+   CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,2000.0,
+      TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r_lpl2);
+   AssertNear(r_lpl1.loss_per_lot,1000.0,1e-6,"Calculate() reports exactly the supplied loss_per_lot (1000)");
+   AssertNear(r_lpl2.loss_per_lot,2000.0,1e-6,"Calculate() reports exactly the supplied loss_per_lot (2000), not a recomputed value");
+   AssertTrue(r_lpl2.normalized_volume<r_lpl1.normalized_volume,
+              "a larger supplied loss_per_lot strictly reduces normalized volume for the same requested risk");
+   MSZZSizingResult r_zero;
+   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,0.0,
+                 TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r_zero),
+              "a zero supplied loss_per_lot is rejected (fail closed, e.g. an OrderCalcProfit failure upstream)");
+   MSZZSizingResult r_neg;
+   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,-500.0,
+                 TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r_neg),
+              "a negative supplied loss_per_lot is rejected");
 }
 
 void TestCorrectPercentToMoneyConversion()
 {
    MSZZSizingResult r;
-   CMSZZPositionSizing::Calculate(50000.0,1.0,2000.0,1990.0,
+   CMSZZPositionSizing::Calculate(50000.0,1.0,2000.0,1990.0,LossPerLot(10.0),
       TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r);
    AssertNear(r.requested_risk_money,500.0,1e-6,"1.0% of 50000 equity = 500 requested risk money");
 }
@@ -79,7 +109,7 @@ void TestNormalizationDown()
 {
    // stop_distance=27 -> loss_per_lot=2700; risk_money=250 -> raw=0.0925925...
    MSZZSizingResult r;
-   bool ok=CMSZZPositionSizing::Calculate(100000.0,0.25,2027.0,2000.0,
+   bool ok=CMSZZPositionSizing::Calculate(100000.0,0.25,2027.0,2000.0,LossPerLot(27.0),
               TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r);
    AssertTrue(ok,"non-exact-step raw volume still produces a valid (rounded down) sizing result");
    AssertNear(r.raw_volume,0.0925925926,0.0001,"sanity: raw_volume = 250/2700 = 0.0925925926");
@@ -95,7 +125,7 @@ void TestNoNormalizationUp()
    for(int i=0;i<5;i++)
    {
       MSZZSizingResult r;
-      CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0+stop_distances[i],2000.0,
+      CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0+stop_distances[i],2000.0,LossPerLot(stop_distances[i]),
          TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r);
       AssertTrue(r.normalized_volume<=r.raw_volume+1e-9,
                  StringFormat("normalized volume never exceeds raw volume (stop_distance=%.1f)",stop_distances[i]));
@@ -106,7 +136,7 @@ void TestMinimumVolumeRejection()
 {
    // Tiny equity + huge stop distance -> raw volume far below 0.01.
    MSZZSizingResult r;
-   bool ok=CMSZZPositionSizing::Calculate(1000.0,0.25,3000.0,2000.0,
+   bool ok=CMSZZPositionSizing::Calculate(1000.0,0.25,3000.0,2000.0,LossPerLot(1000.0),
               TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r);
    AssertTrue(!ok,"a raw volume far below the broker minimum is rejected, not silently floored to zero");
    AssertTrue(!r.minimum_volume_ok,"minimum_volume_ok is false on rejection");
@@ -121,7 +151,7 @@ void TestMinimumVolumeNeverSilentlyForcedUp()
    // must reject, never silently substitute the broker minimum lot (which
    // would exceed the requested risk).
    MSZZSizingResult r;
-   bool ok=CMSZZPositionSizing::Calculate(100.0,0.25,3000.0,1000.0,
+   bool ok=CMSZZPositionSizing::Calculate(100.0,0.25,3000.0,1000.0,LossPerLot(2000.0),
               TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r);
    AssertTrue(!ok,"a near-zero raw volume case is rejected");
    AssertNear(r.normalized_volume,0.0,1e-9,
@@ -131,16 +161,16 @@ void TestMinimumVolumeNeverSilentlyForcedUp()
 void TestInvalidMetadataRejection()
 {
    MSZZSizingResult r1,r2,r3,r4;
-   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,
+   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,LossPerLot(10.0),
                  0.0,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r1),
               "zero tick_size is rejected");
-   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,
+   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,LossPerLot(10.0),
                  TICK_SIZE,0.0,VOL_MIN,VOL_STEP,VOL_MAX,r2),
               "zero tick_value is rejected");
-   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,
+   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,LossPerLot(10.0),
                  TICK_SIZE,TICK_VALUE,0.0,VOL_STEP,VOL_MAX,r3),
               "zero volume_min is rejected");
-   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,
+   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,1990.0,LossPerLot(10.0),
                  TICK_SIZE,TICK_VALUE,VOL_MIN,0.0,VOL_MAX,r4),
               "zero volume_step is rejected");
 }
@@ -148,7 +178,7 @@ void TestInvalidMetadataRejection()
 void TestZeroStopDistanceRejection()
 {
    MSZZSizingResult r;
-   bool ok=CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,2000.0,
+   bool ok=CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0,2000.0,100.0,
               TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r);
    AssertTrue(!ok,"entry price equal to stop price (zero stop distance) is rejected");
    AssertTrue(StringFind(r.reject_reason,"stop distance")>=0,
@@ -161,7 +191,7 @@ void TestActualRiskNeverExceedsRequested()
    for(int i=0;i<6;i++)
    {
       MSZZSizingResult r;
-      bool ok=CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0+stop_distances[i],2000.0,
+      bool ok=CMSZZPositionSizing::Calculate(100000.0,0.25,2000.0+stop_distances[i],2000.0,LossPerLot(stop_distances[i]),
                  TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r);
       if(ok)
          AssertTrue(r.actual_risk_money<=r.requested_risk_money+1e-6,
@@ -173,10 +203,10 @@ void TestActualRiskNeverExceedsRequested()
 void TestInvalidEquityOrRiskPercentRejection()
 {
    MSZZSizingResult r1,r2;
-   AssertTrue(!CMSZZPositionSizing::Calculate(0.0,0.25,2000.0,1990.0,
+   AssertTrue(!CMSZZPositionSizing::Calculate(0.0,0.25,2000.0,1990.0,LossPerLot(10.0),
                  TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r1),
               "zero equity is rejected");
-   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.0,2000.0,1990.0,
+   AssertTrue(!CMSZZPositionSizing::Calculate(100000.0,0.0,2000.0,1990.0,LossPerLot(10.0),
                  TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r2),
               "zero risk percent is rejected");
 }
@@ -186,7 +216,7 @@ void TestVolumeMaxClamp()
    // Enormous equity + tiny stop distance would otherwise produce a raw
    // volume far above the broker maximum.
    MSZZSizingResult r;
-   bool ok=CMSZZPositionSizing::Calculate(100000000.0,0.25,2000.10,2000.0,
+   bool ok=CMSZZPositionSizing::Calculate(100000000.0,0.25,2000.10,2000.0,LossPerLot(0.10),
               TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,10.0,r);
    AssertTrue(ok,"an oversized raw volume clamps to volume_max rather than rejecting");
    AssertNear(r.normalized_volume,10.0,1e-9,"normalized volume clamps exactly to volume_max=10.0");
@@ -196,12 +226,12 @@ void TestPartialCapableFlag()
 {
    MSZZSizingResult r_capable,r_not_capable;
    // stop_distance=10 -> loss_per_lot=1000; risk_money=250 -> raw=0.25 (>=0.02, partial-capable)
-   CMSZZPositionSizing::Calculate(100000.0,0.25,2010.0,2000.0,
+   CMSZZPositionSizing::Calculate(100000.0,0.25,2010.0,2000.0,LossPerLot(10.0),
       TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r_capable);
    AssertTrue(r_capable.partial_capable,"normalized_volume=0.25 is partial-capable (>=0.02)");
    // stop_distance=150 -> loss_per_lot=15000 -> raw=250/15000=0.01666...,
    // normalizes DOWN to exactly 0.01 (not partial-capable)
-   CMSZZPositionSizing::Calculate(100000.0,0.25,2150.0,2000.0,
+   CMSZZPositionSizing::Calculate(100000.0,0.25,2150.0,2000.0,LossPerLot(150.0),
       TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,r_not_capable);
    AssertNear(r_not_capable.normalized_volume,0.01,1e-9,"sanity: this case normalizes to exactly 0.01");
    AssertTrue(!r_not_capable.partial_capable,"normalized_volume=0.01 is NOT partial-capable (<0.02)");
@@ -244,7 +274,7 @@ CMSZZPortfolioRiskManager MakeConfiguredManager()
 void TestOneBookAtActualRiskApproved()
 {
    MSZZSizingResult sizing;
-   CMSZZPositionSizing::Calculate(100000.0,0.25,2010.0,2000.0,
+   CMSZZPositionSizing::Calculate(100000.0,0.25,2010.0,2000.0,LossPerLot(10.0),
       TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,sizing);
    CMSZZPortfolioRiskManager mgr=MakeConfiguredManager();
    MSZZStrategyBookState books[]; ArrayResize(books,1);
@@ -292,7 +322,7 @@ void TestActualNormalizedRiskUsedNotRequested()
    // caller is expected to pass sizing.actual_risk_pct, not a flat assumed
    // value, exactly as D029's wiring in the EA does.
    MSZZSizingResult sizing;
-   CMSZZPositionSizing::Calculate(100000.0,0.25,2027.0,2000.0,
+   CMSZZPositionSizing::Calculate(100000.0,0.25,2027.0,2000.0,LossPerLot(27.0),
       TICK_SIZE,TICK_VALUE,VOL_MIN,VOL_STEP,VOL_MAX,sizing);
    AssertTrue(sizing.actual_risk_pct<0.25,
               StringFormat("this sizing case genuinely under-allocates vs the flat 0.25%% requested (actual=%.4f%%)",
@@ -516,7 +546,7 @@ void OnStart()
 {
    TestLongShortSymmetry();
    TestExactStopDistanceCalculation();
-   TestCorrectTickValueUse();
+   TestUsesProvidedLossPerLot();
    TestCorrectPercentToMoneyConversion();
    TestNormalizationDown();
    TestNoNormalizationUp();

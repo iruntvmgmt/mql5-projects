@@ -207,7 +207,57 @@ across the board, including `Test_MSZZ_StrategyBook` and
 `Test_MSZZ_PositionSizing`), and `MultiSpeedZigZagEA.mq5` compiles with 0
 errors/0 warnings.
 
-## Next: Finding C completion, Finding E, reruns, final certification
+## Finding E — broker-authoritative loss-per-lot via OrderCalcProfit()
+
+`CMSZZPositionSizing::Calculate()` previously derived `loss_per_lot`
+internally from a generic `(stop_distance/tick_size)*tick_value` linear
+formula — wrong for any instrument whose P&L is not a strict linear
+function of price distance (FX crosses needing account-currency
+conversion, tiered tick values, etc). `Calculate()` now takes
+`loss_per_lot` as a required parameter supplied by the caller;
+`tick_size`/`tick_value` remain inputs purely for the existing
+`MSZZ_SizingJournal.csv` schema (unchanged column layout), no longer used
+in the arithmetic. A new EA function, `CalculateBrokerLossPerLot()`, computes
+the real value via `OrderCalcProfit(ORDER_TYPE_BUY/SELL, symbol, 1.0,
+entry, stop, profit)` (loss = `-profit`), naturally handling long/short via
+order type and any account-currency conversion the broker applies
+internally. Fails closed (rejects the entry, `reject_reason` populated)
+on an `OrderCalcProfit()` failure or a nonpositive resulting loss — never
+silently falls back to the old formula. Fixed-lot mode (`MSZZ_SIZE_FIXED_LOT`)
+never calls `Calculate()` at all and is untouched.
+
+**Empirically verified, not just architecturally argued**: a new
+read-only probe script, `FindingE_LossPerLotProbe.mq5`
+(`Scripts/MultiSpeedZigZagTools/`), ran on the isolated demo terminal
+against live XAUUSD quotes and compared the old formula's result to
+`OrderCalcProfit()`'s result for both a long and a short 10-point stop:
+
+```text
+FindingE probe LONG:  formula_loss=1000.000000 broker_loss=1000.000000 abs_diff=0.00000000
+FindingE probe SHORT: formula_loss=1000.000000 broker_loss=1000.000000 abs_diff=0.00000000
+```
+
+**Result: zero difference.** XAUUSD/Coinexx-Demo is a linear instrument
+for this broker (`tick_value` is constant, no currency-conversion step
+applies), so Finding E's fix produces **byte-identical** `loss_per_lot`,
+and therefore byte-identical sizing volumes, to every existing D029 run.
+This closes the correctness gap for any future non-linear
+instrument/symbol without requiring a rerun of any existing D029 evidence
+— confirmed empirically, not merely assumed from the architecture.
+
+10 tests updated/added in `Test_MSZZ_PositionSizing.mq5`: every existing
+`Calculate()` call site now supplies a precomputed `loss_per_lot` via a
+local `LossPerLot()` helper reproducing the old formula (preserving every
+prior numeric expectation exactly), and a new `TestUsesProvidedLossPerLot()`
+proves `Calculate()` uses exactly whatever `loss_per_lot` it is given
+(not a recomputed value) and rejects zero/negative supplied values. Full
+75-assertion suite passes: `Test_MSZZ_PositionSizing: failures=0`.
+
+**Regression**: all 29 `Test_MSZZ_*`/`Export_MSZZ_Parity` suites pass
+(`failures=0`) on the isolated instance, `MultiSpeedZigZagEA.mq5` compiles
+0 errors/0 warnings.
+
+## Next: Finding F/G, rerun decision, final certification
 
 See later sections of this document (added incrementally as each finding
 is remediated) and `D029_AUDIT_FINAL_REPORT.md` for the full certification.
