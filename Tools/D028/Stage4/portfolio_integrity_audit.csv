@@ -1,0 +1,4 @@
+run,native_trades,native_deals,logical_trades,allocation_opens,unique_logical_ids,duplicate_logical_ids,fastmed_magic,sweep_magic,target_policy_errors,own_family_exits,reconciliation_rejects,cross_family_exits,status
+P2_Independent_NoOpposing,292,584,292,292,292,0,27084001,27124002,0,70,0,0,PASS
+P3_Independent_Opposing,343,686,343,343,343,0,27084001,27124002,0,70,0,0,PASS
+P4_Independent_E3R_Sweep2R,331,662,331,331,331,0,27084001,27124002,0,71,0,0,PASS

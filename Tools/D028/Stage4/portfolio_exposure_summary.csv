@@ -1,0 +1,4 @@
+run,max_open_books,multi_book_episodes,multi_book_hours,multi_book_time_pct,opposing_hours,same_direction_hours,max_initial_risk_pct
+P2_Independent_NoOpposing,1,0,0.0,0.0,0.0,0.0,0.25
+P3_Independent_Opposing,2,69,57.29638888888889,0.47456650513485804,57.29638888888889,0.0,0.5
+P4_Independent_E3R_Sweep2R,2,74,60.794444444444444,0.5035397097636317,60.794444444444444,0.0,0.5

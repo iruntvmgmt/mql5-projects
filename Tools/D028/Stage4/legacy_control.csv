@@ -1,0 +1,2 @@
+run,trades,cumulative_r,expectancy_r,profit_factor_r,max_drawdown_r,wins,losses,long_trades,short_trades,status
+P1_Legacy_A_Sweep_2R,372,23.0157,0.06187016129032258,1.1253359980831226,25.2798,125,247,177,195,PASS

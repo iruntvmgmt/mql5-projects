@@ -32,6 +32,7 @@
 #include <MultiSpeedZigZag/Portfolio/ExecutionCoordinator.mqh>
 #include <MultiSpeedZigZag/Portfolio/VirtualNettingLedger.mqh>
 #include <MultiSpeedZigZag/Portfolio/PortfolioJournals.mqh>
+#include <MultiSpeedZigZag/Portfolio/PortfolioBookRouting.mqh>
 
 // D019: hardcoded, not user-suppliable -- see DECISION_LOG.md D019 for why
 // the authorized login is a compile-time constant rather than an input.
@@ -196,11 +197,31 @@ CMSZZExecutionCoordinator      g_execution_coordinator;
 CMSZZVirtualNettingLedger      g_virtual_ledger;
 CMSZZPortfolioJournals         g_portfolio_journals;
 bool                           g_portfolio_single_book_active=false;
+bool                           g_portfolio_multi_book_active=false;
 ENUM_MSZZ_STRATEGY_ID          g_portfolio_strategy_id=MSZZ_STRAT_NONE;
 
 bool LiveExecutionAuthorized(){ return (!InpShadowOnly && InpAllowLiveExecution && InpAcknowledgeRisk); }
 bool EventConsumed(const string id){ return g_event_store.Contains(id); }
 bool ConsumeEvent(const string id){ return g_event_store.Add(id); }
+
+string PortfolioConsumedKey(const ENUM_MSZZ_STRATEGY_ID strategy_id,
+                            const string cluster_id)
+{
+   return CMSZZPortfolioBookRouting::ConsumedKey(strategy_id,cluster_id);
+}
+
+bool PortfolioEventConsumed(const ENUM_MSZZ_STRATEGY_ID strategy_id,
+                            const string cluster_id)
+{
+   return EventConsumed(PortfolioConsumedKey(strategy_id,cluster_id));
+}
+
+bool ConsumePortfolioEvent(const ENUM_MSZZ_STRATEGY_ID strategy_id,
+                           const string cluster_id)
+{
+   if(PortfolioEventConsumed(strategy_id,cluster_id)) return true;
+   return ConsumeEvent(PortfolioConsumedKey(strategy_id,cluster_id));
+}
 
 int EnabledStrategyCount()
 {
@@ -279,7 +300,8 @@ bool PortfolioAssignPendingLogicalPositionId(const string logical_position_id,
 
 double PortfolioTargetR(const ENUM_MSZZ_STRATEGY_ID strategy_id)
 {
-   if(!g_portfolio_single_book_active) return InpRiskReward;
+   if(!g_portfolio_single_book_active && !g_portfolio_multi_book_active)
+      return InpRiskReward;
    if(strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE) return InpFastMedBookTargetR;
    if(strategy_id==MSZZ_STRAT_SWEEP_RECLAIM) return InpSweepBookTargetR;
    return 0.0;
@@ -300,18 +322,24 @@ bool ConfigurePortfolioArchitecture(string &reason)
       reason="Stage 3 single-book mode requires INDEPENDENT_BOOKS policy";
       return false;
    }
-   if(EnabledStrategyCount()!=1)
+   int enabled_count=EnabledStrategyCount();
+   bool supported_pair=(enabled_count==2 && InpEnableFastMedConfluence &&
+                        InpEnableSweepReclaim);
+   if(!CMSZZPortfolioBookRouting::IsSupportedSelection(
+         enabled_count,InpEnableFastMedConfluence,InpEnableSweepReclaim))
    {
-      reason="Stage 3 requires exactly one enabled strategy";
+      reason="portfolio strategy selection is unsupported";
       return false;
    }
-   if(InpEnableFastMedConfluence)
+   if(enabled_count==1 && InpEnableFastMedConfluence)
       g_portfolio_strategy_id=MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE;
-   else if(InpEnableSweepReclaim)
+   else if(enabled_count==1 && InpEnableSweepReclaim)
       g_portfolio_strategy_id=MSZZ_STRAT_SWEEP_RECLAIM;
+   else if(supported_pair)
+      g_portfolio_strategy_id=MSZZ_STRAT_NONE;
    else
    {
-      reason="Stage 3 supports only FastMedConfluence or SweepReclaim";
+      reason="portfolio mode requires one supported book or the exact FastMed+Sweep pair";
       return false;
    }
    if(!g_execution_coordinator.Configure(_Symbol,InpPortfolioBaseMagic,policy,reason))
@@ -329,7 +357,21 @@ bool ConfigurePortfolioArchitecture(string &reason)
    // Stage 3 deliberately reuses the certified run's InpMagic for its one
    // physical book, keeping all legacy ownership/intent/analytics machinery
    // identical. Stage 4 will assign distinct per-book magics.
-   if(g_portfolio_strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
+   if(supported_pair)
+   {
+      long fastmed_magic=g_execution_coordinator.BookMagic(
+         MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,1);
+      long sweep_magic=g_execution_coordinator.BookMagic(MSZZ_STRAT_SWEEP_RECLAIM,2);
+      if(fastmed_magic<=0 || sweep_magic<=0 || fastmed_magic==sweep_magic)
+      { reason="multi-book magic derivation failed"; return false; }
+      if(!g_fastmed_book.Configure(1,MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,
+                                   MSZZ_FAMILY_BREAKOUT,fastmed_magic,true,
+                                   fastmed_exit,reason)) return false;
+      if(!g_sweep_book.Configure(2,MSZZ_STRAT_SWEEP_RECLAIM,
+                                 MSZZ_FAMILY_REVERSAL,sweep_magic,true,
+                                 sweep_exit,reason)) return false;
+   }
+   else if(g_portfolio_strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
    {
       if(!g_fastmed_book.Configure(1,MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,
                                    MSZZ_FAMILY_BREAKOUT,InpMagic,true,
@@ -371,7 +413,8 @@ bool ConfigurePortfolioArchitecture(string &reason)
       reason="D028 portfolio journal initialization failed";
       return false;
    }
-   g_portfolio_single_book_active=true;
+   g_portfolio_multi_book_active=supported_pair;
+   g_portfolio_single_book_active=!supported_pair;
    return true;
 }
 
@@ -1278,9 +1321,353 @@ void ProcessResearchTrail(const MqlRates &rates[],const int closed_count,
    }
 }
 
+MSZZStrategyBookState PortfolioBookStateFor(const ENUM_MSZZ_STRATEGY_ID strategy_id)
+{
+   if(strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE) return g_fastmed_book.State();
+   return g_sweep_book.State();
+}
+
+bool PortfolioBookMarkFlatFor(const ENUM_MSZZ_STRATEGY_ID strategy_id,
+                              const string reason)
+{
+   if(strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
+      return g_fastmed_book.MarkFlat(reason);
+   if(strategy_id==MSZZ_STRAT_SWEEP_RECLAIM)
+      return g_sweep_book.MarkFlat(reason);
+   return false;
+}
+
+bool PortfolioBookMarkPendingFor(const ENUM_MSZZ_STRATEGY_ID strategy_id,
+                                 const MSZZCandidate &candidate,
+                                 const double volume,const double risk_pct,
+                                 const string logical_id,string &reason)
+{
+   bool ok=false;
+   if(strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
+   {
+      ok=g_fastmed_book.MarkEntryPending(candidate,volume,risk_pct,reason);
+      if(ok) ok=g_fastmed_book.AssignPendingLogicalPositionId(logical_id,reason);
+   }
+   else if(strategy_id==MSZZ_STRAT_SWEEP_RECLAIM)
+   {
+      ok=g_sweep_book.MarkEntryPending(candidate,volume,risk_pct,reason);
+      if(ok) ok=g_sweep_book.AssignPendingLogicalPositionId(logical_id,reason);
+   }
+   else reason="unsupported portfolio strategy";
+   return ok;
+}
+
+bool PortfolioBookMarkOpenFor(const ENUM_MSZZ_STRATEGY_ID strategy_id,
+                              const string logical_id,const ulong position_ticket,
+                              const ulong order_ticket,const datetime entry_time,
+                              const double entry_price,const double stop_price,
+                              const double target_price,const double risk_pct,
+                              string &reason)
+{
+   if(strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
+      return g_fastmed_book.MarkOpen(logical_id,position_ticket,order_ticket,
+                                     entry_time,entry_price,stop_price,target_price,
+                                     risk_pct,reason);
+   if(strategy_id==MSZZ_STRAT_SWEEP_RECLAIM)
+      return g_sweep_book.MarkOpen(logical_id,position_ticket,order_ticket,
+                                   entry_time,entry_price,stop_price,target_price,
+                                   risk_pct,reason);
+   reason="unsupported portfolio strategy";
+   return false;
+}
+
+bool ExportAndFlattenPortfolioBook(const ENUM_MSZZ_STRATEGY_ID strategy_id,
+                                   const string exit_reason)
+{
+   MSZZStrategyBookState book=PortfolioBookStateFor(strategy_id);
+   if(!book.position_open || book.broker_position_ticket==0) return true;
+   if(PositionSelectByTicket(book.broker_position_ticket)) return false;
+   if(!HistorySelect(book.entry_time-3600,TimeCurrent())) return false;
+
+   double exit_volume=0.0,exit_price_volume=0.0;
+   datetime exit_time=0;
+   int deals=HistoryDealsTotal();
+   for(int i=0;i<deals;i++)
+   {
+      ulong deal=HistoryDealGetTicket(i);
+      if(deal==0 ||
+         (ulong)HistoryDealGetInteger(deal,DEAL_POSITION_ID)!=book.broker_position_ticket)
+         continue;
+      long entry_type=HistoryDealGetInteger(deal,DEAL_ENTRY);
+      if(entry_type!=DEAL_ENTRY_OUT && entry_type!=DEAL_ENTRY_OUT_BY) continue;
+      double volume=HistoryDealGetDouble(deal,DEAL_VOLUME);
+      exit_volume+=volume;
+      exit_price_volume+=HistoryDealGetDouble(deal,DEAL_PRICE)*volume;
+      datetime deal_time=(datetime)HistoryDealGetInteger(deal,DEAL_TIME);
+      if(deal_time>exit_time) exit_time=deal_time;
+   }
+   if(exit_volume<=0.0 || exit_time<=0) return false;
+   double exit_price=exit_price_volume/exit_volume;
+   double realized_r=(book.direction==MSZZ_DIR_LONG ?
+                      exit_price-book.entry_price :
+                      book.entry_price-exit_price)/book.initial_risk_price;
+   if(InpWriteCSV)
+      g_portfolio_journals.JournalTrade(book,exit_time,exit_price,0.0,
+                                        realized_r,exit_reason,g_last_regime_id);
+   g_portfolio_journals.JournalBook(exit_time,book,"CLOSED",exit_reason,
+                                   g_execution_coordinator.AccountMode(),
+                                   g_last_regime_id);
+   return PortfolioBookMarkFlatFor(strategy_id,exit_reason);
+}
+
+bool ExportClosedPortfolioBookFromTrade(const ENUM_MSZZ_STRATEGY_ID strategy_id,
+                                        const string exit_reason,
+                                        const double exit_price,
+                                        const datetime exit_time)
+{
+   MSZZStrategyBookState book=PortfolioBookStateFor(strategy_id);
+   if(!book.position_open || book.broker_position_ticket==0 ||
+      exit_price<=0.0 || exit_time<=0)
+      return false;
+   double realized_r=(book.direction==MSZZ_DIR_LONG ?
+                      exit_price-book.entry_price :
+                      book.entry_price-exit_price)/book.initial_risk_price;
+   if(InpWriteCSV)
+      g_portfolio_journals.JournalTrade(book,exit_time,exit_price,0.0,
+                                        realized_r,exit_reason,g_last_regime_id);
+   g_portfolio_journals.JournalBook(exit_time,book,"CLOSED",exit_reason,
+                                   g_execution_coordinator.AccountMode(),
+                                   g_last_regime_id);
+   return PortfolioBookMarkFlatFor(strategy_id,exit_reason);
+}
+
+void DetectClosedPortfolioBooks()
+{
+   if(!g_portfolio_multi_book_active) return;
+   MSZZStrategyBookState fastmed=g_fastmed_book.State();
+   if(fastmed.position_open && !PositionSelectByTicket(fastmed.broker_position_ticket))
+      ExportAndFlattenPortfolioBook(MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,
+                                    "BROKER_SL_TP_OR_TEST_END");
+   MSZZStrategyBookState sweep=g_sweep_book.State();
+   if(sweep.position_open && !PositionSelectByTicket(sweep.broker_position_ticket))
+      ExportAndFlattenPortfolioBook(MSZZ_STRAT_SWEEP_RECLAIM,
+                                    "BROKER_SL_TP_OR_TEST_END");
+}
+
+bool ExecutePortfolioBookCandidate(const MSZZOpportunityCluster &cluster,
+                                   const MSZZCandidate &owner)
+{
+   ENUM_MSZZ_STRATEGY_ID strategy_id=owner.strategy_id;
+   MSZZStrategyBookState book=PortfolioBookStateFor(strategy_id);
+   if(!book.valid || book.strategy_id!=strategy_id) return false;
+   if(cluster.combined_score<g_effective_min_score)
+   {
+      JournalCandidate(owner,"REJECT_SCORE",cluster.cluster_id);
+      return false;
+   }
+   if(PortfolioEventConsumed(strategy_id,cluster.cluster_id))
+   {
+      JournalCandidate(owner,"REJECT_DUPLICATE_CLUSTER",cluster.cluster_id);
+      return false;
+   }
+   if(!LiveExecutionAuthorized())
+   {
+      JournalCandidate(owner,"SHADOW",cluster.cluster_id);
+      return true;
+   }
+
+   string reason;
+   if(!g_execution_guard.TradingAllowed(reason))
+   {
+      MSZZCandidate rejected=owner; rejected.reason=reason;
+      JournalCandidate(rejected,"REJECT_TRADING_DISABLED",cluster.cluster_id);
+      return false;
+   }
+   double spread_points=0.0;
+   if(!g_execution_guard.SpreadAllowed(InpMaxSpreadPoints,spread_points))
+   {
+      MSZZCandidate rejected=owner;
+      rejected.reason=StringFormat("spread %.1f exceeds maximum %.1f points",
+                                   spread_points,InpMaxSpreadPoints);
+      JournalCandidate(rejected,"REJECT_SPREAD",cluster.cluster_id);
+      return false;
+   }
+   string safeguard_reason;
+   MSZZStrategyBookState safeguard_book=PortfolioBookStateFor(strategy_id);
+   if(!g_safeguard.CheckSafeguards(_Symbol,safeguard_book.magic,
+                                    InpMaxTradesPerDay,InpMaxDailyLossAmount,
+                                    InpKillSwitchEngaged,safeguard_reason))
+   {
+      MSZZCandidate rejected=owner; rejected.reason=safeguard_reason;
+      JournalCandidate(rejected,"REJECT_ACCOUNT_SAFEGUARD",cluster.cluster_id);
+      return false;
+   }
+   MSZZCandidate prepared;
+   if(!PrepareMarketCandidate(owner,prepared,reason))
+   {
+      prepared=owner; prepared.reason=reason;
+      JournalCandidate(prepared,"REJECT_STOPS",cluster.cluster_id);
+      return false;
+   }
+   double volume=g_execution_guard.NormalizeVolume(InpFixedLots);
+   if(volume<=0.0) return false;
+
+   book=PortfolioBookStateFor(strategy_id);
+   if(book.position_open)
+   {
+      if(book.direction==prepared.direction)
+      {
+         JournalCandidate(prepared,"REJECT_OWN_BOOK_OPEN",cluster.cluster_id);
+         return false;
+      }
+      g_trade.SetExpertMagicNumber(book.magic);
+      g_trade.SetDeviationInPoints(InpDeviationPoints);
+      if(!g_trade.PositionClose(book.broker_position_ticket))
+      {
+         prepared.reason="own-book opposite close failed";
+         JournalCandidate(prepared,"REJECT_OWN_BOOK_CLOSE",cluster.cluster_id);
+         return false;
+      }
+      const double close_price=g_trade.ResultPrice();
+      const datetime close_time=TimeCurrent();
+      if(!ExportClosedPortfolioBookFromTrade(
+            strategy_id,
+            CMSZZPortfolioBookRouting::CloseReason(true),
+            close_price,close_time))
+      {
+         prepared.reason="own-book close attribution failed";
+         JournalCandidate(prepared,"REJECT_OWN_BOOK_RECONCILIATION",cluster.cluster_id);
+         return false;
+      }
+   }
+
+   MSZZStrategyBookState books[];
+   ArrayResize(books,2);
+   books[0]=g_fastmed_book.State();
+   books[1]=g_sweep_book.State();
+   MSZZPortfolioRiskSnapshot snapshot;
+   int physical_positions=(books[0].position_open?1:0)+(books[1].position_open?1:0);
+   if(!g_portfolio_risk.BuildSnapshot(books,2,physical_positions,0.0,0.0,snapshot) ||
+      !g_portfolio_risk.ApproveOpen(snapshot,books,2,strategy_id,owner.family_id,
+                                    prepared.direction,InpPortfolioRiskPerBookPct,
+                                    volume,reason))
+   {
+      prepared.reason=(reason!="" ? reason : snapshot.reason);
+      JournalCandidate(prepared,"REJECT_PORTFOLIO_RISK",cluster.cluster_id);
+      g_portfolio_journals.JournalRisk(TimeCurrent(),book.book_id,"OPEN",false,
+                                       prepared.reason,snapshot,
+                                       InpPortfolioRiskPerBookPct);
+      return false;
+   }
+
+   if(!PortfolioBookMarkPendingFor(strategy_id,owner,volume,
+                                   InpPortfolioRiskPerBookPct,
+                                   cluster.cluster_id,reason))
+   {
+      prepared.reason=reason;
+      JournalCandidate(prepared,"REJECT_PORTFOLIO_BOOK",cluster.cluster_id);
+      return false;
+   }
+   book=PortfolioBookStateFor(strategy_id);
+   MSZZExecutionPlan plan;
+   if(!g_execution_coordinator.BuildOpenPlan(book,0.0,plan,reason) ||
+      plan.action!=MSZZ_COORDINATOR_OPEN_PHYSICAL)
+   {
+      PortfolioBookMarkFlatFor(strategy_id,"physical plan rejected");
+      return false;
+   }
+
+   ENUM_ORDER_TYPE order_type=(prepared.direction==MSZZ_DIR_LONG ?
+                               ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+   double required_margin,free_margin;
+   if(!g_margin.CheckMargin(_Symbol,order_type,volume,prepared.entry,
+                            InpMarginBufferRatio,required_margin,free_margin,reason))
+   {
+      PortfolioBookMarkFlatFor(strategy_id,"margin rejected");
+      return false;
+   }
+   g_trade.SetExpertMagicNumber(book.magic);
+   g_trade.SetDeviationInPoints(InpDeviationPoints);
+   string comment="PB"+MSZZCorrelationToken(cluster.cluster_id);
+   if(!ConsumePortfolioEvent(strategy_id,cluster.cluster_id))
+   {
+      PortfolioBookMarkFlatFor(strategy_id,"event persistence failed");
+      prepared.reason="portfolio event persistence failed";
+      JournalCandidate(prepared,"REJECT_INTENT_PERSISTENCE",cluster.cluster_id);
+      return false;
+   }
+   bool ok=(prepared.direction==MSZZ_DIR_LONG ?
+            g_trade.Buy(volume,_Symbol,0.0,prepared.stop,prepared.target,comment) :
+            g_trade.Sell(volume,_Symbol,0.0,prepared.stop,prepared.target,comment));
+   if(!ok)
+   {
+      PortfolioBookMarkFlatFor(strategy_id,"broker order failed");
+      prepared.reason=g_trade.ResultRetcodeDescription();
+      JournalCandidate(prepared,"ORDER_FAILED",cluster.cluster_id);
+      return false;
+   }
+
+   ulong order_ticket=g_trade.ResultOrder();
+   ulong position_ticket=order_ticket;
+   double entry_price=g_trade.ResultPrice();
+   if(entry_price<=0.0) entry_price=prepared.entry;
+   if(!PortfolioBookMarkOpenFor(strategy_id,cluster.cluster_id,position_ticket,
+                                order_ticket,TimeCurrent(),entry_price,
+                                prepared.stop,prepared.target,
+                                InpPortfolioRiskPerBookPct,reason))
+   {
+      Print("MSZZ D028 MULTI BOOK OPEN RECONCILIATION FAILED: ",reason);
+      return false;
+   }
+   book=PortfolioBookStateFor(strategy_id);
+   g_portfolio_journals.JournalRisk(TimeCurrent(),book.book_id,"OPEN",true,
+                                    "approved",snapshot,InpPortfolioRiskPerBookPct);
+   g_portfolio_journals.JournalBook(TimeCurrent(),book,"OPEN","",
+                                    g_execution_coordinator.AccountMode(),
+                                    g_last_regime_id);
+   plan.owned_ticket=position_ticket;
+   plan.logical_position_id=cluster.cluster_id;
+   g_portfolio_journals.JournalAllocation(TimeCurrent(),plan,g_trade.ResultDeal(),
+                                          "OPEN","NONE",0.0,0.0);
+   JournalCluster(cluster,"EXECUTED");
+   JournalCandidate(prepared,"EXECUTED",cluster.cluster_id);
+   return true;
+}
+
+void ProcessPortfolioStrategyCandidates(const ENUM_MSZZ_STRATEGY_ID strategy_id,
+                                        const MSZZCandidate &candidates[],
+                                        const int candidate_count)
+{
+   MSZZCandidate subset[];
+   int count=0;
+   for(int i=0;i<candidate_count;i++)
+   {
+      if(candidates[i].strategy_id!=strategy_id) continue;
+      ArrayResize(subset,count+1);
+      subset[count++]=candidates[i];
+   }
+   if(count<=0) return;
+   MSZZOpportunityCluster clusters[];
+   int cluster_count=g_cluster_engine.Build(_Symbol,_Period,subset,count,clusters);
+   if(cluster_count<=0) return;
+   int best=g_cluster_engine.SelectBest(clusters,cluster_count);
+   if(best<0 || !clusters[best].valid) return;
+   int owner_index=clusters[best].preferred_index;
+   if(owner_index<0 || owner_index>=count) return;
+   ExecutePortfolioBookCandidate(clusters[best],subset[owner_index]);
+}
+
+void ProcessMultiBookCandidates(const MSZZCandidate &candidates[],
+                                const int candidate_count)
+{
+   // Frozen deterministic arbitration for Stage 4: core book first, then
+   // SweepReclaim. Portfolio policy—not cross-family mutation—decides whether
+   // the second book may coexist.
+   ProcessPortfolioStrategyCandidates(MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,
+                                      candidates,candidate_count);
+   ProcessPortfolioStrategyCandidates(MSZZ_STRAT_SWEEP_RECLAIM,
+                                      candidates,candidate_count);
+}
+
 void ProcessClosedBar()
 {
    DetectClosedPositions();
+   DetectClosedPortfolioBooks();
 
    MqlRates rates[]; ArraySetAsSeries(rates,false);
    int copied=CopyRates(_Symbol,_Period,0,MathMax(300,InpHistoryBars),rates);
@@ -1374,6 +1761,11 @@ void ProcessClosedBar()
       Print("MSZZ CANDIDATE HANDOFF REJECTED stage=eligible reason=",handoff_diagnostic);
       return;
    }
+   if(g_portfolio_multi_book_active)
+   {
+      ProcessMultiBookCandidates(candidates,candidate_count);
+      return;
+   }
 
    MSZZOpportunityCluster clusters[];
    int cluster_count=g_cluster_engine.Build(_Symbol,_Period,candidates,candidate_count,clusters);
@@ -1427,9 +1819,16 @@ int OnInit()
                "to the isolated HEDGING account.");
          return INIT_FAILED;
       }
-      PrintFormat("MSZZ D028 STAGE 3 SINGLE BOOK ACTIVE strategy_id=%d magic=%I64d target_r=%.2f",
-                  (int)g_portfolio_strategy_id,InpMagic,
-                  PortfolioTargetR(g_portfolio_strategy_id));
+      if(g_portfolio_multi_book_active)
+         PrintFormat("MSZZ D028 STAGE 4 MULTI BOOK ACTIVE fastmed_magic=%I64d "
+                     "sweep_magic=%I64d opposing=%s same_direction=%s",
+                     g_fastmed_book.State().magic,g_sweep_book.State().magic,
+                     (InpPortfolioAllowOpposingBooks?"true":"false"),
+                     (InpPortfolioAllowSameDirectionStacking?"true":"false"));
+      else
+         PrintFormat("MSZZ D028 STAGE 3 SINGLE BOOK ACTIVE strategy_id=%d magic=%I64d target_r=%.2f",
+                     (int)g_portfolio_strategy_id,InpMagic,
+                     PortfolioTargetR(g_portfolio_strategy_id));
    }
 
    // D019: fail-closed research-eligibility authorization. All-or-nothing --
@@ -1665,6 +2064,7 @@ void OnDeinit(const int reason)
    // mid-trade on a live/demo chart) and only does new work in the
    // Tester-forced-liquidation case. See DECISION_LOG.md D026.
    DetectClosedPositions();
+   DetectClosedPortfolioBooks();
    g_trade_analytics.WriteRunSummary(_Symbol,InpMagic,_Period,InpRiskReward,EnabledStrategiesSummary());
    if(g_research_mode_active) WriteResearchManifest();
    PrintFormat("MSZZ deinitialized reason=%d",reason);

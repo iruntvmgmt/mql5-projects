@@ -390,3 +390,101 @@ new authoritative D028 legacy shared-ownership control. Standalone D027 A, E,
 and SweepReclaim evidence remains valid and unchanged.
 
 Stage 1 is now unblocked. It was not started in the Stage 0B change set.
+
+## Stage 4 independent-book portfolio tests — 2026-07-28
+
+Stage 4 extends the exact Stage 3 single-book path to the supported
+FastMedConfluence plus SweepReclaim pair. On the isolated HEDGING account each
+book has its own physical ticket and magic:
+
+- FastMedConfluence: `27084001`;
+- SweepReclaim: `27124002`.
+
+The direct path processes FastMed first and Sweep second, clusters each
+strategy independently, consumes a strategy-qualified durable event key, and
+allows a book to close only its own ticket. Portfolio approval is applied
+after any own-family close. The fixed research limits are 0.25% recorded
+initial risk per book, 0.50% total, two books, and one book per strategy.
+Cross-family close and reverse actions are disabled.
+
+Per-book target selection is active in one actual combined run:
+FastMedConfluence E retains 3R while SweepReclaim retains 2R. Legacy/default-off
+execution and the corrected shared-ownership policy remain unchanged.
+
+### Actual combined results
+
+| Run | Trades | Cumulative R | Expectancy R | PF | Max DD R |
+|---|---:|---:|---:|---:|---:|
+| P1 corrected legacy A2R + Sweep2R | 372 | 23.0157 | 0.0619 | 1.1253 | 25.2798 |
+| P2 independent A2R + Sweep2R, no opposing | 292 | 21.9900 | 0.0753 | 1.1381 | 18.1583 |
+| P3 independent A2R + Sweep2R, opposing | 343 | 39.9275 | 0.1164 | 1.2132 | 23.5883 |
+| P4 independent E3R + Sweep2R, opposing | 331 | 45.9294 | 0.1388 | 1.2389 | 24.2455 |
+
+These are actual EA results, not arithmetic sums. Portfolio constraints change
+which standalone opportunities execute.
+
+P3 contributes 209 FastMed trades/+23.4386R and 134 Sweep trades/+16.4889R.
+It exceeds A alone by +11.6828R, with 8.4302R more drawdown. Against P1 it
+adds +16.9118R while drawdown is 1.6915R lower.
+
+P4 contributes 199 FastMed trades/+27.4405R and 132 Sweep trades/+18.4889R.
+It exceeds E alone by +14.6829R, with 7.3251R more drawdown. P4 proves that
+different fixed targets coexist in one executed portfolio.
+
+P2's no-opposing constraint leaves SweepReclaim nearly flat: 77 trades and
++0.3146R. P3 permits 69 simultaneous-book episodes (57.2964 hours); P4
+permits 74 (60.7944 hours). Every simultaneous interval is opposing, none is
+same-direction, and maximum recorded initial risk is 0.50%. P2 has no
+simultaneous exposure and reaches 0.25%.
+
+Development, validation, and final holdout cumulative R are positive for all
+three independent configurations. P3 is +20.5393R/+5.8524R/+13.5358R; P4 is
++17.1392R/+12.8524R/+15.9378R.
+
+### Integrity and reconciliation
+
+Native reports reconcile exactly:
+
+| Run | Native trades | Native deals | Logical closes | Allocation opens |
+|---|---:|---:|---:|---:|
+| P2 | 292 | 584 | 292 | 292 |
+| P3 | 343 | 686 | 343 | 343 |
+| P4 | 331 | 662 | 331 | 331 |
+
+All logical IDs are unique. There are zero per-book target errors, zero
+own-book reconciliation rejects, and zero cross-family actions. Own-family
+opposite exits are 70/70/71 for P2/P3/P4.
+
+During integrity review, an April 10 Sweep own-family close was initially
+recorded one bar late because MT5 history was not visible immediately after a
+successful `PositionClose`. This produced a generic exit label and rejected
+the replacement entry. The implementation now journals the successful close
+directly from the trade result before risk evaluation. P2–P4 were rerun; the
+event is explicitly `OWN_FAMILY_OPPOSITE`, the replacement is independently
+rejected by the configured same-direction rule, and no reconciliation reject
+remains. This was not a cross-family close.
+
+Each final run reports one broker `ORDER_FAILED` candidate with an
+`invalid stops` retcode. It creates no trade or deal and does not break any
+reconciliation. Six spread rejects and the unchanged stop-preparation rejects
+are also preserved in the signal journals.
+
+The EA and all 28 test scripts compile with zero errors/warnings. All 28
+runtime suites pass, including routing 11/11, portfolio risk 15/15, strategy
+book 16/16, and virtual netting 18/18. Default-off shadows remain 113/46 and
+431/178 candidates/clusters, zero malformed candidates, and zero trades.
+The Stage 4 analyzer ran twice with byte-identical outputs.
+
+Tracked evidence is under `Tools/D028/Stage4`; exact raw reports and journals
+remain under `/Users/matt/MT5-MSZZ-TEST/D028_Stage4_Results`.
+
+### Stage decision
+
+Independent hedging books preserve ticket ownership, eliminate unauthorized
+cross-family exits, respect the fixed risk cap, and materially improve the
+actual A and E portfolio results when opposing books are permitted. This
+passes the Stage 4 engineering/research gate only. It does not approve
+production use, select an architecture category, or promote SweepReclaim.
+
+Stage 5 remains the bounded SweepReclaim exit-management study. No Stage 5
+variant was implemented or run in this checkpoint.
