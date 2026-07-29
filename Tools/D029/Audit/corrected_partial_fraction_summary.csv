@@ -1,0 +1,5 @@
+variant,partial_events,exact_50_0000pct_count,exact_50_0000pct_pct,within_1pp_count,within_1pp_pct,within_2pp_count,within_2pp_pct,outside_2pp_count,outside_2pp_pct,min_fraction,max_fraction,mean_fraction,median_fraction
+SR3_PCT,86,42,48.8372,26,30.2326,9,10.4651,9,10.4651,0.444444,0.5,0.493181,0.498004
+SR4_PCT,82,36,43.9024,25,30.4878,9,10.9756,12,14.6341,0.444444,0.5,0.491772,0.496737
+P3_SR3,64,37,57.8125,15,23.4375,9,14.0625,3,4.6875,0.470588,0.5,0.495526,0.5
+P4_SR3,63,32,50.7937,16,25.3968,11,17.4603,4,6.3492,0.470588,0.5,0.494611,0.5

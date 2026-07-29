@@ -257,7 +257,82 @@ proves `Calculate()` uses exactly whatever `loss_per_lot` it is given
 (`failures=0`) on the isolated instance, `MultiSpeedZigZagEA.mq5` compiles
 0 errors/0 warnings.
 
-## Next: Finding F/G, rerun decision, final certification
+## Finding G — corrected partial-fraction terminology
+
+The original Phase 3 analyzer (`Tools/D029/Phase3/analyze_partials.py`)
+computed `abs(f-0.5)<0.02` and stored it in a variable named `exact_50` —
+a 2-percentage-point *tolerance* bucket, not floating-point exactness. Its
+own printed label ("within_2pct_of_50%") was more honest than the variable
+name, but the underlying bucketing itself still collapsed everything from
+a perfect 50.0000% split down to a 48.00% split into one undifferentiated
+number, and no report anywhere separated "landed exactly on 50%" from
+"came close because of step-rounding" from "meaningfully skewed."
+
+`Tools/D029/Audit/corrected_partial_fraction_analysis.py` reprocesses the
+same `MSZZ_PartialCloseJournal.csv` data (SR3_PCT, SR4_PCT, P3_SR3, P4_SR3)
+with the categories the handoff requires: exact 50.0000% (floating
+tolerance 1e-6), within 1 percentage point (excluding exact), within 2
+percentage points (excluding within-1pp), outside 2 percentage points, and
+min/max/mean/median of the executed fraction. Output:
+`corrected_partial_fraction_summary.csv`.
+
+| variant | n | exact 50.0000% | within 1pp | within 2pp | outside 2pp | min | max | mean | median |
+|---|---|---|---|---|---|---|---|---|---|
+| SR3_PCT | 86 | 42 (48.84%) | 26 (30.23%) | 9 (10.47%) | 9 (10.47%) | 0.4444 | 0.5000 | 0.4932 | 0.4980 |
+| SR4_PCT | 82 | 36 (43.90%) | 25 (30.49%) | 9 (10.98%) | 12 (14.63%) | 0.4444 | 0.5000 | 0.4918 | 0.4967 |
+| P3_SR3  | 64 | 37 (57.81%) | 15 (23.44%) | 9 (14.06%) | 3 (4.69%)   | 0.4706 | 0.5000 | 0.4955 | 0.5000 |
+| P4_SR3  | 63 | 32 (50.79%) | 16 (25.40%) | 11 (17.46%) | 4 (6.35%)   | 0.4706 | 0.5000 | 0.4946 | 0.5000 |
+
+The finer breakdown reveals something the collapsed bucket hid: 10-15% of
+partials in every variant land **outside** even a 2pp tolerance of 50%
+(e.g. SR4_PCT's minimum observed fraction is 44.44%, not "approximately
+50%"). This is expected and benign — volume-step rounding on small
+positions can legitimately produce splits well short of 50/50 (the same
+phenomenon Phase 3's own doc already described qualitatively, e.g. "a
+0.07-lot position splits 0.03/0.04, not 0.035/0.035") — but the original
+collapsed "within 2%" number obscured the actual shape of the
+distribution. No conclusion in D029 rested on the exact fraction
+distribution (the frozen decision was always "50% target, broker-clamped
+by volume step," never "exactly 50% achieved"), so this is a
+terminology/reporting correction, not a finding that changes any D029
+result.
+
+## Finding F — production-gap disclosure (documentation only, nothing built)
+
+Per the handoff: "Do not optimize these" / build these — document only.
+Percentage-of-equity sizing (`MSZZ_SIZE_PERCENT_EQUITY`) is
+**research-validated only**. Before any live/demo deployment beyond the
+isolated sandbox, the following production-grade guards are required and
+do **not** currently exist anywhere in this codebase:
+
+- **Max lots per order** — no ceiling independent of the risk-percent
+  calculation; a sizing bug or extreme equity/stop-distance combination
+  could request an arbitrarily large single order (bounded today only by
+  `SYMBOL_VOLUME_MAX`, which is a broker limit, not a risk control).
+- **Max gross lots per symbol** — no aggregate cap across all open
+  books/positions for one symbol; `CMSZZPortfolioRiskManager` caps
+  *percentage risk*, not raw volume exposure.
+- **Max gross notional exposure** — no dollar/account-currency notional
+  ceiling independent of percentage risk (percentage risk assumes the
+  stop is honored; notional exposure is what's actually at stake between
+  now and the stop being hit).
+- **Max margin utilization** — `MarginGuard.mqh` (D012) checks margin
+  *before an individual order*, not aggregate portfolio-wide utilization
+  as a standing limit.
+- **Max expected slippage guard** — no check that a fill's actual price
+  didn't move the realized risk materially beyond what was sized for.
+- **Stop-distance anomaly guard** — no sanity check rejecting a
+  candidate whose stop distance is implausibly tiny (produces an
+  oversized volume) or implausibly huge (produces a near-zero, barely
+  meaningful position) relative to the instrument's typical range.
+
+These are standing gaps, not defects introduced by D029 or this audit —
+percentage sizing was always scoped as research-only
+(`DUAL_MODE_RECOMMENDED`, per D029's final decision). Listed here so the
+final certification's "remaining production gaps" section has a concrete,
+itemized list rather than a vague caveat.
+
+## Next: rerun decision, final certification
 
 See later sections of this document (added incrementally as each finding
 is remediated) and `D029_AUDIT_FINAL_REPORT.md` for the full certification.

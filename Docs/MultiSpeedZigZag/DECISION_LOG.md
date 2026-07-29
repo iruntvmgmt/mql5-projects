@@ -2341,3 +2341,63 @@ a child-ticket design was evaluated and rejected as unnecessary). No
 exit-management change to SweepReclaim is recommended. No merge to `main`,
 no live deployment, no entry optimization of A/E/SweepReclaim at any point
 in D029.
+
+## D029 audit remediation — evidence certification and execution-safety pass
+
+Full record in `Docs/MultiSpeedZigZag/D029_AUDIT_REMEDIATION.md`, on
+`feature/d029-audit-remediation`, forked from D029's final SHA
+`64f2e29f20a20f3fe362e073c8873262f2183d3e`. This is not a new strategy
+study — it independently verifies D029's evidence claims, repairs a real
+execution-safety defect found in the process, and will issue a corrected
+certification. **In progress; this entry will be superseded by a final
+entry once the rerun decision and certification are complete — do not
+treat this as the closing record.**
+
+Findings resolved so far:
+
+- **Finding A** (candidate-stream identity) — independently proven, not
+  merely inferred from counts: all three SR0/SR3_PCT/SR4_PCT
+  `RAW_CANDIDATE` streams are byte-for-byte identical (SHA-256 hash
+  match), confirming D029's original claim.
+- **Finding C** (partial-close/protection atomicity) — found a real,
+  historical, confirmed defect: exactly one partial close per run (SR3_PCT,
+  SR4_PCT, P3_SR3, P4_SR3 — same underlying trade, 2025.03.25 15:25:00) had
+  its breakeven/target-removal protection modify rejected by the broker
+  with no retry, leaving the remainder running at its original stop. Built
+  a `ENUM_MSZZ_PARTIAL_PROTECTION_STATE` state machine, retry/emergency-
+  close handling, and closed a separate pre-existing gap (multi-book path
+  never checked `g_recovery_required`). Restart persistence was
+  investigated and found blocked by a larger pre-existing architecture gap
+  (no broker-side book-state rehydration at all in the multi-book
+  architecture) — documented as a required production gap rather than
+  built, since fixing it is out of this pass's bounded scope. Per this
+  finding, **a full rerun of D29_SR0/SR3_PCT/SR4_PCT/D29_P3/D29_P4/
+  P3_SR3/P4_SR3 is required** once the architecture patch is complete.
+- **Finding D** (generic volume-min vs. volume-step eligibility) — fixed a
+  real correctness gap: the partial-split helper assumed `volume_min==
+  volume_step`, silently wrong for any broker/symbol where they differ.
+  No effect on any D029 run (XAUUSD's `volume_min==volume_step` on this
+  account), but closes the gap for the future.
+- **Finding E** (broker-authoritative sizing) — replaced the generic
+  `(stop_distance/tick_size)*tick_value` loss-per-lot formula with
+  `OrderCalcProfit()`. Verified empirically on the isolated demo terminal:
+  zero difference from the old formula for XAUUSD long and short — no
+  D029 volumes change.
+- **Finding F** (production-gap disclosure) — documented, not built: the
+  production-grade guards percentage-equity sizing still lacks before any
+  live/demo deployment (max lots/order, max gross lots/symbol, max gross
+  notional, max margin utilization, max slippage guard, stop-distance
+  anomaly guard).
+- **Finding G** (corrected partial-fraction terminology) — replaced the
+  original Phase 3 analyzer's `abs(f-0.5)<0.02` bucket (internally named
+  "exact_50", a tolerance not an exactness check) with exact 50.0000%/
+  within 1pp/within 2pp/outside 2pp/min/max/mean/median categories,
+  applied to the same SR3_PCT/SR4_PCT/P3_SR3/P4_SR3 data. Reporting
+  correction only — no D029 conclusion rested on the exact fraction
+  distribution.
+
+Still open: Finding B (independent deal-level R reconciliation, blocked on
+a new durable per-deal export journal), the remaining Finding C runtime
+tests requiring live broker round-trips, Finding H's broader certification
+scripts, executing the required rerun, and the final certification report.
+No merge to `main`, no live deployment at any point in this pass.
