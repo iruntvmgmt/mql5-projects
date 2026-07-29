@@ -57,31 +57,50 @@ public:
       return normalized;
    }
 
-   // D029 Phase 3: deterministic 50%-partial volume split, reused by the
-   // EA's SR3-PCT/SR4-PCT partial-close handling so this arithmetic is
-   // defined and tested in exactly one place. partial_out is the original
-   // volume's requested fraction normalized down to the broker step;
-   // remaining_out is whatever is left (original - partial_out), NOT a
-   // separately normalized value -- the remainder is always already a
-   // valid step multiple because original_volume itself is always a valid
-   // step multiple (it came from CMSZZPositionSizing::Calculate() or
-   // InpFixedLots, both already normalized). Returns false (both outputs
-   // zero) if original_volume or volume_step is invalid, or if the
-   // resulting partial leg would be zero or would consume the entire
-   // position (matching the "no full-close masquerading as partial"
-   // requirement).
+   // D029 audit remediation, Finding D: the original signature checked
+   // only `>= 2*volume_step`, silently assuming volume_min==volume_step.
+   // This is wrong whenever the broker's minimum tradable size exceeds its
+   // step size (e.g. min=0.10, step=0.01) -- a split could pass the old
+   // check while producing a leg below the broker's actual minimum, which
+   // would be rejected at the broker, not caught here. volume_min is now a
+   // required, independently-checked parameter: BOTH legs must individually
+   // clear it, not just the whole position clearing 2x the step. Reused by
+   // the EA's SR3-PCT/SR4-PCT partial-close handling and the entry-time
+   // eligibility gate so this arithmetic is defined and tested in exactly
+   // one place. remaining_out is `original - partial_out`, not separately
+   // re-normalized -- it is always already a valid step multiple because
+   // original_volume itself is always a valid step multiple (it came from
+   // CMSZZPositionSizing::Calculate() or InpFixedLots, both already
+   // normalized). Returns false (both outputs zero, reason populated) on
+   // any invalid input, a partial leg that would be zero or consume the
+   // entire position, or either leg falling below volume_min.
    static bool ComputePartialSplit(const double original_volume,const double fraction,
-                                    const double volume_step,
-                                    double &partial_out,double &remaining_out)
+                                    const double volume_min,const double volume_step,
+                                    double &partial_out,double &remaining_out,string &reason)
    {
-      partial_out=0.0; remaining_out=0.0;
-      if(original_volume<=0.0 || volume_step<=0.0 || fraction<=0.0 || fraction>=1.0)
-         return false;
+      partial_out=0.0; remaining_out=0.0; reason="";
+      if(original_volume<=0.0)
+      { reason="invalid original volume"; return false; }
+      if(volume_min<=0.0 || volume_step<=0.0)
+      { reason="invalid volume metadata"; return false; }
+      if(fraction<=0.0 || fraction>=1.0)
+      { reason="fraction must be strictly between 0 and 1"; return false; }
+
       double partial=NormalizeDown(original_volume*fraction,volume_step,0.0);
-      if(partial<=0.0 || partial>=original_volume-1e-9)
-         return false;
+      if(partial<=0.0)
+      { reason="partial leg normalizes to zero"; return false; }
+      if(partial>=original_volume-1e-9)
+      { reason="partial leg would consume the entire position -- not a valid split"; return false; }
+      double remaining=NormalizeDouble(original_volume-partial,8);
+      if(remaining<=0.0)
+      { reason="remaining leg is zero or negative"; return false; }
+      if(partial<volume_min-1e-9)
+      { reason="partial leg falls below broker minimum volume"; return false; }
+      if(remaining<volume_min-1e-9)
+      { reason="remaining leg falls below broker minimum volume"; return false; }
+
       partial_out=partial;
-      remaining_out=NormalizeDouble(original_volume-partial,8);
+      remaining_out=remaining;
       return true;
    }
 
@@ -152,7 +171,17 @@ public:
          return false;
       }
 
-      result.partial_capable=(normalized>=2.0*volume_step-1e-9);
+      // D029 audit remediation, Finding D: partial_capable now reuses the
+      // SAME corrected split logic as ComputePartialSplit() (both legs
+      // individually >= volume_min, not just the whole position >= 2x
+      // step) at the frozen D029 Phase 0 partial fraction (0.5) -- fixes
+      // the prior "normalized>=2*volume_step" check, which silently
+      // assumed volume_min==volume_step.
+      {
+         double dummy_partial,dummy_remaining; string dummy_reason;
+         result.partial_capable=ComputePartialSplit(normalized,0.5,volume_min,volume_step,
+                                                     dummy_partial,dummy_remaining,dummy_reason);
+      }
       result.sizing_result=MSZZ_SIZING_OK;
       result.reject_reason="";
       return true;

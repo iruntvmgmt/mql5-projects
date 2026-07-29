@@ -345,50 +345,50 @@ void TestSameStrategySecondBookRejected()
 
 void TestPartialSplit_002_SplitsEvenly()
 {
-   double partial,remaining;
-   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.02,0.5,VOL_STEP,partial,remaining);
-   AssertTrue(ok,"0.02 volume at 50% is splittable");
+   double partial,remaining; string reason;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.02,0.5,VOL_MIN,VOL_STEP,partial,remaining,reason);
+   AssertTrue(ok,"min=.01 step=.01 original=.02 -> valid split: "+reason);
    AssertNear(partial,0.01,1e-9,"0.02 splits into partial=0.01");
    AssertNear(remaining,0.01,1e-9,"0.02 splits into remaining=0.01");
 }
 
 void TestPartialSplit_004_SplitsEvenly()
 {
-   double partial,remaining;
-   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.04,0.5,VOL_STEP,partial,remaining);
-   AssertTrue(ok,"0.04 volume at 50% is splittable");
+   double partial,remaining; string reason;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.04,0.5,VOL_MIN,VOL_STEP,partial,remaining,reason);
+   AssertTrue(ok,"0.04 volume at 50% is splittable: "+reason);
    AssertNear(partial,0.02,1e-9,"0.04 splits into partial=0.02");
    AssertNear(remaining,0.02,1e-9,"0.04 splits into remaining=0.02");
 }
 
 void TestPartialSplit_OddStep_Deterministic()
 {
-   double partial,remaining;
-   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.03,0.5,VOL_STEP,partial,remaining);
-   AssertTrue(ok,"0.03 (odd number of steps) volume at 50% is splittable");
+   double partial,remaining; string reason;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.03,0.5,VOL_MIN,VOL_STEP,partial,remaining,reason);
+   AssertTrue(ok,"min=.01 step=.01 original=.03 -> deterministic split: "+reason);
    AssertNear(partial,0.01,1e-9,"0.03*0.5=0.015 normalizes DOWN to partial=0.01, not up to 0.02");
    AssertNear(remaining,0.02,1e-9,"0.03 remainder after a 0.01 partial is 0.02 (not re-normalized, just subtracted)");
 
-   double partial2,remaining2;
-   bool ok2=CMSZZPositionSizing::ComputePartialSplit(0.05,0.5,VOL_STEP,partial2,remaining2);
-   AssertTrue(ok2,"0.05 (odd number of steps) volume at 50% is splittable");
+   double partial2,remaining2; string reason2;
+   bool ok2=CMSZZPositionSizing::ComputePartialSplit(0.05,0.5,VOL_MIN,VOL_STEP,partial2,remaining2,reason2);
+   AssertTrue(ok2,"0.05 (odd number of steps) volume at 50% is splittable: "+reason2);
    AssertNear(partial2,0.02,1e-9,"0.05*0.5=0.025 normalizes DOWN to partial=0.02");
    AssertNear(remaining2,0.03,1e-9,"0.05 remainder after a 0.02 partial is 0.03");
 
    // Determinism: repeated calls with identical inputs produce identical outputs.
-   double partial3,remaining3;
-   CMSZZPositionSizing::ComputePartialSplit(0.03,0.5,VOL_STEP,partial3,remaining3);
+   double partial3,remaining3; string reason3;
+   CMSZZPositionSizing::ComputePartialSplit(0.03,0.5,VOL_MIN,VOL_STEP,partial3,remaining3,reason3);
    AssertNear(partial,partial3,1e-9,"0.03 split is deterministic across repeated calls (partial)");
    AssertNear(remaining,remaining3,1e-9,"0.03 split is deterministic across repeated calls (remaining)");
 }
 
 void TestPartialSplit_NoFullCloseMasqueradingAsPartial()
 {
-   double partial,remaining;
+   double partial,remaining; string reason;
    // A single-step volume (0.01) can never produce a nonzero partial leg
    // that leaves a nonzero remainder -- must reject, not clamp to a
    // full close labeled as "partial."
-   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.01,0.5,VOL_STEP,partial,remaining);
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.01,0.5,VOL_MIN,VOL_STEP,partial,remaining,reason);
    AssertTrue(!ok,"a single-step (0.01) volume cannot be validly split -- rejected, not silently full-closed");
    AssertNear(partial,0.0,1e-9,"rejected split reports partial=0.0");
    AssertNear(remaining,0.0,1e-9,"rejected split reports remaining=0.0");
@@ -396,16 +396,18 @@ void TestPartialSplit_NoFullCloseMasqueradingAsPartial()
 
 void TestPartialSplit_InvalidInputsRejected()
 {
-   double partial,remaining;
-   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.0,0.5,VOL_STEP,partial,remaining),
+   double partial,remaining; string reason;
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.0,0.5,VOL_MIN,VOL_STEP,partial,remaining,reason),
               "zero original volume is rejected");
-   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,0.5,0.0,partial,remaining),
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,0.5,VOL_MIN,0.0,partial,remaining,reason),
               "zero volume_step is rejected");
-   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,0.0,VOL_STEP,partial,remaining),
-              "zero fraction is rejected");
-   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,1.0,VOL_STEP,partial,remaining),
-              "fraction=1.0 (would consume the entire position) is rejected");
-   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,1.5,VOL_STEP,partial,remaining),
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,0.5,0.0,VOL_STEP,partial,remaining,reason),
+              "zero volume_min is rejected");
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,0.0,VOL_MIN,VOL_STEP,partial,remaining,reason),
+              "fraction=0 is rejected (Finding D required case)");
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,1.0,VOL_MIN,VOL_STEP,partial,remaining,reason),
+              "fraction=1.0 (would consume the entire position) is rejected (Finding D required case)");
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,1.5,VOL_MIN,VOL_STEP,partial,remaining,reason),
               "fraction>1.0 is rejected");
 }
 
@@ -414,12 +416,100 @@ void TestPartialSplit_LargeVolumeStillDeterministic()
    // Sanity check against the actual large volumes Phase 2 observed
    // (up to ~15 lots) to confirm the split logic behaves the same way at
    // realistic percent-equity position sizes, not just small examples.
-   double partial,remaining;
-   bool ok=CMSZZPositionSizing::ComputePartialSplit(15.04,0.5,VOL_STEP,partial,remaining);
-   AssertTrue(ok,"a large (15.04 lot) volume at 50% is splittable");
+   double partial,remaining; string reason;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(15.04,0.5,VOL_MIN,VOL_STEP,partial,remaining,reason);
+   AssertTrue(ok,"a large (15.04 lot) volume at 50% is splittable: "+reason);
    AssertNear(partial,7.52,1e-9,"15.04 splits evenly into partial=7.52");
    AssertNear(remaining,7.52,1e-9,"15.04 splits evenly into remaining=7.52");
    AssertNear(partial+remaining,15.04,1e-9,"partial+remaining reconciles exactly to the original volume");
+}
+
+//--- D029 audit remediation, Finding D: volume_min vs volume_step eligibility ---
+// Required test matrix from D029_Audit_Remediation_Claude_Handoff.md Finding D.
+// Prior to this fix, ComputePartialSplit() only checked volume_step, silently
+// assuming volume_min==volume_step -- wrong whenever a broker's minimum
+// tradable size exceeds its step size (e.g. min=0.10, step=0.01).
+
+void TestPartialSplit_MinGreaterThanStep_ExactHalf_Invalid()
+{
+   // min=.10 step=.01 original=.10 -> invalid (partial=.05 < min)
+   double partial,remaining; string reason;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.10,0.5,0.10,0.01,partial,remaining,reason);
+   AssertTrue(!ok,"min=.10 step=.01 original=.10 at 50% is invalid (partial leg would fall below min): "+reason);
+   AssertTrue(StringFind(reason,"partial leg")>=0,
+              "reason names the partial-leg-below-minimum cause: "+reason);
+}
+
+void TestPartialSplit_MinGreaterThanStep_Double_Valid()
+{
+   // min=.10 step=.01 original=.20 -> valid .10/.10
+   double partial,remaining; string reason;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.20,0.5,0.10,0.01,partial,remaining,reason);
+   AssertTrue(ok,"min=.10 step=.01 original=.20 at 50% is valid: "+reason);
+   AssertNear(partial,0.10,1e-9,"0.20 at 50% splits into partial=0.10");
+   AssertNear(remaining,0.10,1e-9,"0.20 at 50% splits into remaining=0.10");
+}
+
+void TestPartialSplit_MinGreaterThanStep_LargerStep_Valid()
+{
+   // min=.10 step=.05 original=.20 -> valid .10/.10
+   double partial,remaining; string reason;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.20,0.5,0.10,0.05,partial,remaining,reason);
+   AssertTrue(ok,"min=.10 step=.05 original=.20 at 50% is valid: "+reason);
+   AssertNear(partial,0.10,1e-9,"0.20 at 50% (step=.05) splits into partial=0.10");
+   AssertNear(remaining,0.10,1e-9,"0.20 at 50% (step=.05) splits into remaining=0.10");
+}
+
+void TestPartialSplit_MinGreaterThanStep_LargerStep_Invalid()
+{
+   // min=.10 step=.05 original=.15 -> invalid (partial normalizes to .05 < min)
+   double partial,remaining; string reason;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.15,0.5,0.10,0.05,partial,remaining,reason);
+   AssertTrue(!ok,"min=.10 step=.05 original=.15 at 50% is invalid (partial leg would fall below min): "+reason);
+   AssertTrue(StringFind(reason,"partial leg")>=0,
+              "reason names the partial-leg-below-minimum cause: "+reason);
+}
+
+void TestPartialSplit_RemainderBelowMinimum_Invalid()
+{
+   // A case that isolates the REMAINDER-below-minimum check, distinct from
+   // the partial-below-minimum check: min=.10 step=.01 original=.15
+   // fraction=0.7 -> raw=.105 -> normalizes down to partial=.10 (clears
+   // min), but remaining=.15-.10=.05 falls below the .10 minimum.
+   double partial,remaining; string reason;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.15,0.7,0.10,0.01,partial,remaining,reason);
+   AssertTrue(!ok,"min=.10 step=.01 original=.15 fraction=0.7 is invalid (remainder leg below min): "+reason);
+   AssertTrue(StringFind(reason,"remaining leg")>=0,
+              "reason names the remaining-leg-below-minimum cause, distinct from the partial-leg case: "+reason);
+}
+
+void TestPartialSplit_FractionZeroOrOne_Invalid()
+{
+   // Finding D explicitly requires fraction=0 and fraction=1 both invalid,
+   // independent of the general TestPartialSplit_InvalidInputsRejected case.
+   double partial,remaining; string reason;
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.20,0.0,0.10,0.01,partial,remaining,reason),
+              "fraction=0.0 is invalid regardless of otherwise-valid min/step/original");
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.20,1.0,0.10,0.01,partial,remaining,reason),
+              "fraction=1.0 (full consumption) is invalid regardless of otherwise-valid min/step/original");
+}
+
+void TestPartialSplit_OddStepDeterministic_MinGreaterThanStep()
+{
+   // Odd-step determinism repeated under a min>step regime (min=.10
+   // step=.05 original=.35, fraction=0.5): raw=.175 normalizes DOWN to
+   // .15 (3 steps of .05); remaining=.20. Both clear the .10 minimum.
+   // Repeated calls must be identical.
+   double partial,remaining; string reason;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.35,0.5,0.10,0.05,partial,remaining,reason);
+   AssertTrue(ok,"min=.10 step=.05 original=.35 at 50% is valid: "+reason);
+   AssertNear(partial,0.15,1e-9,"0.35*0.5=0.175 normalizes DOWN to partial=0.15 (step=.05)");
+   AssertNear(remaining,0.20,1e-9,"0.35 remainder after a 0.15 partial is 0.20");
+
+   double partial2,remaining2; string reason2;
+   CMSZZPositionSizing::ComputePartialSplit(0.35,0.5,0.10,0.05,partial2,remaining2,reason2);
+   AssertNear(partial,partial2,1e-9,"min>step odd-step split is deterministic across repeated calls (partial)");
+   AssertNear(remaining,remaining2,1e-9,"min>step odd-step split is deterministic across repeated calls (remaining)");
 }
 
 void OnStart()
@@ -453,6 +543,14 @@ void OnStart()
    TestPartialSplit_NoFullCloseMasqueradingAsPartial();
    TestPartialSplit_InvalidInputsRejected();
    TestPartialSplit_LargeVolumeStillDeterministic();
+
+   TestPartialSplit_MinGreaterThanStep_ExactHalf_Invalid();
+   TestPartialSplit_MinGreaterThanStep_Double_Valid();
+   TestPartialSplit_MinGreaterThanStep_LargerStep_Valid();
+   TestPartialSplit_MinGreaterThanStep_LargerStep_Invalid();
+   TestPartialSplit_RemainderBelowMinimum_Invalid();
+   TestPartialSplit_FractionZeroOrOne_Invalid();
+   TestPartialSplit_OddStepDeterministic_MinGreaterThanStep();
 
    PrintFormat("Test_MSZZ_PositionSizing: failures=%d",g_failures);
 }

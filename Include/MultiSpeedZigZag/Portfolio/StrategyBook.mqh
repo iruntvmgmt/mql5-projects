@@ -37,6 +37,24 @@ enum ENUM_MSZZ_SWEEP_EXIT_POLICY
    MSZZ_SWEEP_EXIT_SR5_TIME_STOP = 5
 };
 
+// D029 audit remediation, Finding C: a successful partial close and its
+// required breakeven/target-removal protection are two separate broker
+// calls, not one atomic operation. Without this state machine, a partial
+// that succeeds while its protection modify fails would previously be
+// marked "done" anyway, leaving the remainder running at its ORIGINAL
+// stop instead of breakeven -- found as a real, confirmed historical
+// event during the audit (one occurrence each in SR3_PCT/SR4_PCT/P3_SR3/
+// P4_SR3, same underlying trade, broker rejected the modify). See
+// DECISION_LOG.md D029 audit remediation.
+enum ENUM_MSZZ_PARTIAL_PROTECTION_STATE
+{
+   MSZZ_PARTIAL_NOT_STARTED                  = 0,
+   MSZZ_PARTIAL_CLOSE_PENDING                = 1,
+   MSZZ_PARTIAL_EXECUTED_PROTECTION_PENDING  = 2,
+   MSZZ_PARTIAL_PROTECTED                    = 3,
+   MSZZ_PARTIAL_PROTECTION_FAILED            = 4
+};
+
 struct MSZZBookExitConfig
 {
    int    policy_id;
@@ -91,6 +109,17 @@ struct MSZZStrategyBookState
    double                    lowest_since_activation;
    double                    effective_stop;
    bool                      time_stop_evaluated_done;
+   // D029 audit remediation, Finding C: tracks whether a successful partial
+   // close's required protection (breakeven stop / target removal) has
+   // actually been confirmed by the broker -- see
+   // ENUM_MSZZ_PARTIAL_PROTECTION_STATE above. Reset on every new entry;
+   // reconstructed from broker-side stop vs. entry price on restart (never
+   // trusted from memory alone -- see DECISION_LOG.md D029 audit
+   // remediation, "restart persistence").
+   int                       protection_state;
+   int                       protection_retry_count;
+   double                    protection_target_stop;
+   bool                      protection_remove_target;
 };
 
 class CMSZZStrategyBook
@@ -124,6 +153,10 @@ private:
       m_state.lowest_since_activation=0.0;
       m_state.effective_stop=0.0;
       m_state.time_stop_evaluated_done=false;
+      m_state.protection_state=MSZZ_PARTIAL_NOT_STARTED;
+      m_state.protection_retry_count=0;
+      m_state.protection_target_stop=0.0;
+      m_state.protection_remove_target=false;
    }
 
 public:
@@ -257,6 +290,68 @@ public:
       m_state.effective_stop=effective_stop;
       m_state.partial_close_done=partial_close_done;
       m_state.time_stop_evaluated_done=time_stop_evaluated_done;
+      m_state.last_update_time=TimeCurrent();
+      return true;
+   }
+
+   // D029 audit remediation, Finding C: persists the partial-protection
+   // state machine's transition. The caller is responsible for the actual
+   // broker call (PositionModify for protection, PositionClose for
+   // emergency-close) succeeding or failing first -- this only records the
+   // outcome, mirroring UpdateExitManagementState()'s same discipline.
+   bool UpdatePartialProtectionState(const int protection_state,
+                                     const int protection_retry_count,
+                                     const double protection_target_stop,
+                                     const bool protection_remove_target)
+   {
+      if(!m_state.valid || m_state.status!=MSZZ_BOOK_OPEN) return false;
+      m_state.protection_state=protection_state;
+      m_state.protection_retry_count=protection_retry_count;
+      m_state.protection_target_stop=protection_target_stop;
+      m_state.protection_remove_target=protection_remove_target;
+      m_state.last_update_time=TimeCurrent();
+      return true;
+   }
+
+   // D029 audit remediation, Finding C restart persistence: reconstructs
+   // protection_state from broker-side truth -- never trusts in-memory
+   // state alone, matching this project's established restart-safety
+   // discipline (D026/D028 precedent for effective_stop). Only acts if the
+   // book is open, a partial was recorded (logical_volume < the broker's
+   // reported volume implies a partial already happened this position --
+   // callers pass current_broker_volume and original_volume explicitly so
+   // this stays a pure function of its inputs), and protection_state is
+   // still MSZZ_PARTIAL_NOT_STARTED (i.e. genuinely never reconciled this
+   // session). If the broker's current stop already sits at the recorded
+   // protection_target_stop, protection is treated as already confirmed
+   // (MSZZ_PARTIAL_PROTECTED); otherwise it is treated as still pending
+   // and will be retried on the next closed bar. Ambiguous cases (no
+   // recorded target_stop to compare against) fail closed --
+   // MSZZ_PARTIAL_EXECUTED_PROTECTION_PENDING, forcing a fresh protection
+   // attempt rather than assuming safety.
+   bool ReconstructProtectionStateOnRestart(const double current_broker_volume,
+                                            const double current_broker_stop,
+                                            const double price_tolerance)
+   {
+      if(!m_state.valid || m_state.status!=MSZZ_BOOK_OPEN) return false;
+      if(m_state.protection_state!=MSZZ_PARTIAL_NOT_STARTED) return false; // already reconciled this session
+      bool volume_shows_partial=(current_broker_volume>0.0 &&
+                                 current_broker_volume<m_state.logical_volume-1e-9);
+      if(!volume_shows_partial) return false; // no partial happened -- nothing to reconstruct
+      if(m_state.protection_target_stop<=0.0)
+      {
+         // No recorded target to compare against -- fail closed.
+         m_state.protection_state=MSZZ_PARTIAL_EXECUTED_PROTECTION_PENDING;
+      }
+      else if(MathAbs(current_broker_stop-m_state.protection_target_stop)<=price_tolerance)
+      {
+         m_state.protection_state=MSZZ_PARTIAL_PROTECTED;
+         m_state.effective_stop=current_broker_stop;
+      }
+      else
+      {
+         m_state.protection_state=MSZZ_PARTIAL_EXECUTED_PROTECTION_PENDING;
+      }
       m_state.last_update_time=TimeCurrent();
       return true;
    }

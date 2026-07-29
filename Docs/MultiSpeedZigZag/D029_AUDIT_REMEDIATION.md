@@ -74,7 +74,90 @@ affected runs (`D29_SR0`, `SR3_PCT`, `SR4_PCT`, `D29_P3`, `D29_P4`,
 `P3_SR3`, `P4_SR3`) is required once the architecture patch below lands,
 per "do not selectively rerun favorable variants."
 
-## Next: architecture patch (Findings C/D/E), reruns, final certification
+## Finding C — partial-protection state machine (architecture patch, partial)
+
+Added `ENUM_MSZZ_PARTIAL_PROTECTION_STATE` (`MSZZ_PARTIAL_NOT_STARTED`,
+`MSZZ_PARTIAL_CLOSE_PENDING`, `MSZZ_PARTIAL_EXECUTED_PROTECTION_PENDING`,
+`MSZZ_PARTIAL_PROTECTED`, `MSZZ_PARTIAL_PROTECTION_FAILED`) and four new
+`MSZZStrategyBookState` fields (`protection_state`,
+`protection_retry_count`, `protection_target_stop`,
+`protection_remove_target`) in `StrategyBook.mqh`, persisted via a new
+`UpdatePartialProtectionState()` method guarded identically to the
+existing `UpdateExitManagementState()`.
+
+`MultiSpeedZigZagEA.mq5`'s partial-close handling now attempts the
+protection `PositionModify()` (or `STRUCTURAL_TRAIL` removal for SR4)
+**immediately inline** after a successful `PositionClosePartial()`, in the
+same decision-bar call — this is what the historical journal already did,
+just without a state to fall back on when the modify failed. On modify
+failure the book now enters `MSZZ_PARTIAL_EXECUTED_PROTECTION_PENDING`
+instead of being silently marked complete. A new `ProcessPendingProtection()`
+function retries the modify on every subsequent closed bar
+(`MSZZ_PROTECTION_MAX_RETRIES=3`, frozen), journaling every attempt via the
+existing `JournalExitManagement()` call with a new `PROTECTION_RETRY`
+action label. `ProcessOneBookExit()` skips calling
+`CMSZZBookExitManager::Evaluate()` entirely while a book is in
+`EXECUTED_PROTECTION_PENDING` — this blocks SR4's runner-phase progression
+by construction, without any change to the already-tested pure
+`CMSZZBookExitManager` class. After retry exhaustion, the remainder is
+emergency-closed via `g_trade.PositionClose()`
+(`PROTECTION_EMERGENCY_CLOSE` journal action); if that close also fails,
+`g_recovery_required` is set and a `CRITICAL` journal line is written —
+new entries are blocked project-wide via the existing D009
+`g_recovery_required` mechanism.
+
+**Side-effect gap found and fixed**: `ExecutePortfolioBookCandidate()`
+(the multi-book path used by P3-SR3/P4-SR3) never checked
+`g_recovery_required` at all — only the single-book `ExecuteCluster()`
+path did. Since P3-SR3/P4-SR3 run exclusively through the multi-book path,
+the new emergency-close-failure block would have been silently
+unenforceable for exactly the configs Finding C targets. Fixed by adding
+the identical guard to the top of `ExecutePortfolioBookCandidate()`.
+
+**Still open for Finding C** (not yet done as of this commit): restart
+persistence wiring (`ReconstructProtectionStateOnRestart()` exists on
+`CMSZZStrategyBook` but is not yet called from `OnInit()`), and the 12
+required runtime tests (partial+modify success/failure combinations, retry
+exhaustion, emergency close, SR4 target-removal confirmation, runner
+blocked before protection, restart-after-partial, own-family/broker
+SL-TP races during pending protection, no duplicate partial/journal rows).
+These will land in a follow-up checkpoint before any rerun is executed.
+
+## Finding D — generic volume-min vs volume-step eligibility, fixed
+
+`CMSZZPositionSizing::ComputePartialSplit()` previously took only
+`volume_step` and silently assumed `volume_min==volume_step` — wrong
+whenever a broker's minimum tradable size exceeds its step (e.g.
+`min=0.10, step=0.01`), a case the original code never rejected. The
+signature now requires `volume_min` and returns a `reason` string;
+**both** legs (partial and remaining) are independently checked against
+`volume_min`, not just the whole position against `2*volume_step`.
+`Calculate()`'s `partial_capable` flag and the EA's
+`ComputeSizedVolume()`/`ProcessOneBookExit()` call sites were updated to
+fetch `SYMBOL_VOLUME_MIN` and use the corrected logic; the EA's
+skipped-volume journal entry now records the actual rejection reason
+instead of a generic hardcoded string.
+
+All ten required test cases from the handoff (min==step splits, min>step
+valid/invalid at two different step sizes, fraction 0/1 rejection, full-
+consumption rejection, remainder-below-minimum isolated from
+partial-below-minimum, odd-step determinism under min>step) were added to
+`Tests/MultiSpeedZigZag/Test_MSZZ_PositionSizing.mq5` and pass:
+`Test_MSZZ_PositionSizing: failures=0` (75 assertions total, including the
+pre-existing D029 Phase 1/3 suite). XAUUSD's actual broker metadata has
+`volume_min==volume_step==0.01`, so this fix changes no behavior for any
+run XAUUSD ever produced under D029 — it only closes a latent correctness
+gap for brokers/symbols where the two differ. Since no D029 volumes
+change, this alone does not trigger a rerun; the rerun trigger is Finding
+C's historical atomicity failure (see above).
+
+**Regression**: all 29 `Test_MSZZ_*`/`Export_MSZZ_Parity` suites compiled
+clean and passed on the isolated instance after this commit (`failures=0`
+across the board, including `Test_MSZZ_StrategyBook` and
+`Test_MSZZ_PositionSizing`), and `MultiSpeedZigZagEA.mq5` compiles with 0
+errors/0 warnings.
+
+## Next: Finding C completion, Finding E, reruns, final certification
 
 See later sections of this document (added incrementally as each finding
 is remediated) and `D029_AUDIT_FINAL_REPORT.md` for the full certification.

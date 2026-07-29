@@ -638,7 +638,16 @@ bool ComputeSizedVolume(const MSZZCandidate &prepared,const long book_id,
    {
       volume=g_execution_guard.NormalizeVolume(InpFixedLots);
       risk_pct_for_book=InpPortfolioRiskPerBookPct;
-      partial_capable=(vstep>0.0 && volume>=2.0*vstep-1e-9);
+      // D029 audit remediation, Finding D: partial_capable now checks the
+      // broker's actual minimum tradable size, not just 2x the step --
+      // fixed-lot mode's InpFixedLots=0.01 at this account's 0.01 min/0.01
+      // step is still never partial-capable (0.005 rounds down to 0.00),
+      // but the check itself no longer silently assumes min==step.
+      {
+         double vmin_fixed=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN);
+         double dp,dr; string dreason;
+         partial_capable=CMSZZPositionSizing::ComputePartialSplit(volume,0.5,vmin_fixed,vstep,dp,dr,dreason);
+      }
       if(volume<=0.0){ reject_reason="volume normalization failed"; return false; }
       return true;
    }
@@ -1631,6 +1640,20 @@ bool ExecutePortfolioBookCandidate(const MSZZOpportunityCluster &cluster,
    ENUM_MSZZ_STRATEGY_ID strategy_id=owner.strategy_id;
    MSZZStrategyBookState book=PortfolioBookStateFor(strategy_id);
    if(!book.valid || book.strategy_id!=strategy_id) return false;
+   // D029 audit remediation, Finding C: the multi-book path never checked
+   // g_recovery_required at all (only ExecuteCluster()'s single-book path
+   // did) -- found while wiring the protection-failure emergency-close
+   // path, which sets this flag. Without this guard, a book with an
+   // emergency-close failure (protection permanently unresolved) could
+   // still open brand-new entries in the SAME multi-book portfolio. See
+   // DECISION_LOG.md D009 (original mechanism) and D029 audit remediation.
+   if(g_recovery_required)
+   {
+      MSZZCandidate rejected=owner;
+      rejected.reason="one or more execution intents require manual recovery (see MSZZ RECONCILE/PROTECTION log)";
+      JournalCandidate(rejected,"REJECT_RECOVERY_REQUIRED",cluster.cluster_id);
+      return false;
+   }
    if(cluster.combined_score<g_effective_min_score)
    {
       JournalCandidate(owner,"REJECT_SCORE",cluster.cluster_id);
@@ -1863,6 +1886,79 @@ void ProcessMultiBookCandidates(const MSZZCandidate &candidates[],
 // discipline (D026): detect prior-bar closure -> confirmed exit-management
 // update -> evaluate new signal/opposite exit. See DECISION_LOG.md D028
 // Stage 5.
+// D029 audit remediation, Finding C: frozen before any rerun result was
+// inspected -- 3 retry attempts (in addition to the initial same-bar
+// attempt), then emergency-close the unprotected remainder.
+#define MSZZ_PROTECTION_MAX_RETRIES 3
+
+// D029 audit remediation, Finding C: while a book's remainder is in
+// MSZZ_PARTIAL_EXECUTED_PROTECTION_PENDING, no new exit-management decision
+// is evaluated for it at all (CMSZZBookExitManager::Evaluate() is not
+// called) -- this single retry path is the ONLY thing that runs, which by
+// construction blocks SR4's runner-trail progression (reached only via a
+// normal Evaluate() call) until protection is confirmed, without needing
+// to change BookExitManager.mqh's pure SR4 logic at all. Retries a plain
+// PositionModify() with the same frozen target stop/target every closed
+// bar; after MSZZ_PROTECTION_MAX_RETRIES failures, emergency-closes the
+// remainder; if that ALSO fails, sets g_recovery_required (existing D009
+// mechanism) and blocks new entries. Every attempt is journaled. See
+// DECISION_LOG.md D029 audit remediation.
+void ProcessPendingProtection(CMSZZStrategyBook &book_obj,const MSZZStrategyBookState &book)
+{
+   g_trade.SetExpertMagicNumber(book.magic);
+   g_trade.SetDeviationInPoints(InpDeviationPoints);
+   double new_target=(book.protection_remove_target ? 0.0 : book.target_price);
+   bool ok=g_trade.PositionModify(book.broker_position_ticket,book.protection_target_stop,new_target);
+   int attempt_num=book.protection_retry_count+1;
+   g_portfolio_journals.JournalExitManagement(TimeCurrent(),book.book_id,
+      book.exit_config.trailing_policy_id,"PROTECTION_RETRY",0.0,book.effective_stop,
+      book.protection_target_stop,0.0,ok,
+      StringFormat("protection retry attempt %d of %d",attempt_num,MSZZ_PROTECTION_MAX_RETRIES));
+
+   if(ok)
+   {
+      book_obj.UpdatePartialProtectionState(MSZZ_PARTIAL_PROTECTED,attempt_num,
+         book.protection_target_stop,book.protection_remove_target);
+      book_obj.UpdateExitManagementState(book.max_favorable_r,book.breakeven_activated,
+         book.structure_activated,book.highest_since_activation,book.lowest_since_activation,
+         book.protection_target_stop,book.partial_close_done,book.time_stop_evaluated_done);
+      return;
+   }
+
+   if(attempt_num<MSZZ_PROTECTION_MAX_RETRIES)
+   {
+      book_obj.UpdatePartialProtectionState(MSZZ_PARTIAL_EXECUTED_PROTECTION_PENDING,attempt_num,
+         book.protection_target_stop,book.protection_remove_target);
+      return;
+   }
+
+   // Retries exhausted: emergency-close the unprotected remainder rather
+   // than let it keep running without the intended protection.
+   bool closed=g_trade.PositionClose(book.broker_position_ticket);
+   g_portfolio_journals.JournalExitManagement(TimeCurrent(),book.book_id,
+      book.exit_config.trailing_policy_id,"PROTECTION_EMERGENCY_CLOSE",0.0,
+      book.effective_stop,book.effective_stop,0.0,closed,
+      "protection retries exhausted -- emergency-closing unprotected remainder");
+   if(closed)
+   {
+      double close_price=g_trade.ResultPrice();
+      datetime close_time=TimeCurrent();
+      ExportClosedPortfolioBookFromTrade(book.strategy_id,"PROTECTION_EMERGENCY_CLOSE",
+                                         close_price,close_time);
+      // ExportClosedPortfolioBookFromTrade already marks the book flat,
+      // which resets protection_state to MSZZ_PARTIAL_NOT_STARTED for the
+      // next entry -- nothing further to persist here.
+   }
+   else
+   {
+      g_recovery_required=true;
+      book_obj.UpdatePartialProtectionState(MSZZ_PARTIAL_PROTECTION_FAILED,attempt_num,
+         book.protection_target_stop,book.protection_remove_target);
+      PrintFormat("MSZZ CRITICAL: D029 audit protection emergency close FAILED book=%d ticket=%I64u retcode=%u %s -- recovery required, new entries blocked",
+                  book.book_id,book.broker_position_ticket,g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
+   }
+}
+
 void ProcessOneBookExit(CMSZZStrategyBook &book_obj,const MSZZSpeedSnapshot &fast,
                         const MqlRates &bar)
 {
@@ -1884,6 +1980,18 @@ void ProcessOneBookExit(CMSZZStrategyBook &book_obj,const MSZZSpeedSnapshot &fas
       }
       book=book_obj.State();
       if(book.effective_stop<=0.0) return; // still unknown this bar; try again next bar
+   }
+
+   // D029 audit remediation, Finding C: while protection is unresolved
+   // from a prior bar's partial close, this is the ONLY thing that runs
+   // for this book this bar -- no new CMSZZBookExitManager::Evaluate()
+   // call, which is what blocks SR4's runner-trail progression (and any
+   // other exit-management decision) until protection is confirmed. See
+   // ProcessPendingProtection()'s own header comment.
+   if(book.protection_state==MSZZ_PARTIAL_EXECUTED_PROTECTION_PENDING)
+   {
+      ProcessPendingProtection(book_obj,book);
+      return;
    }
 
    double fav_r=CMSZZBookExitManager::FavorableR(book.direction,book.entry_price,
@@ -1933,19 +2041,27 @@ void ProcessOneBookExit(CMSZZStrategyBook &book_obj,const MSZZSpeedSnapshot &fas
       return;
    }
 
+   int protection_state=book.protection_state;
+   int protection_retry_count=book.protection_retry_count;
+   double protection_target_stop=book.protection_target_stop;
+   bool protection_remove_target=book.protection_remove_target;
+
    if(decision.partial_close)
    {
       double requested_partial_volume=book.logical_volume*decision.partial_fraction;
       double vstep=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
-      double close_volume,remaining_volume;
-      // D029 Phase 3: uses the same tested split helper the EA's entry-time
-      // eligibility gate is built on (CMSZZPositionSizing::ComputePartialSplit),
-      // rather than the ad-hoc NormalizeVolume(volume*fraction) computation
-      // this block used before Phase 3 -- guarantees "no full-close
-      // masquerading as partial" by construction (returns false rather than
-      // a clamped-to-full volume).
+      double vmin=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN);
+      double close_volume,remaining_volume; string split_reject_reason;
+      // D029 Phase 3 / audit Finding D: uses the same tested split helper
+      // the EA's entry-time eligibility gate is built on
+      // (CMSZZPositionSizing::ComputePartialSplit), now checking the
+      // broker's actual minimum volume (not just 2x the step) for both
+      // legs independently -- guarantees "no full-close masquerading as
+      // partial" by construction (returns false rather than a clamped-to-
+      // full volume).
       bool splittable=CMSZZPositionSizing::ComputePartialSplit(book.logical_volume,
-                          decision.partial_fraction,vstep,close_volume,remaining_volume);
+                          decision.partial_fraction,vmin,vstep,close_volume,remaining_volume,
+                          split_reject_reason);
       if(splittable)
       {
          bool ok=g_trade.PositionClosePartial(book.broker_position_ticket,close_volume);
@@ -1960,19 +2076,62 @@ void ProcessOneBookExit(CMSZZStrategyBook &book_obj,const MSZZSpeedSnapshot &fas
             close_volume,(ok ? close_volume : 0.0),
             (ok ? remaining_volume : book.logical_volume),
             partial_deal,partial_price,ok,decision.reason);
-         if(ok) partial_done=true;
+         if(ok)
+         {
+            partial_done=true;
+            // D029 audit remediation, Finding C: the partial succeeding and
+            // its required protection succeeding are two separate broker
+            // calls -- attempt protection immediately (same bar), but never
+            // conflate the two outcomes. Only a CONFIRMED successful modify
+            // reaches MSZZ_PARTIAL_PROTECTED; any failure enters the pending
+            // retry state instead of being silently treated as done.
+            double new_target=(decision.remove_target ? 0.0 : book.target_price);
+            bool protect_ok=g_trade.PositionModify(book.broker_position_ticket,decision.new_stop,new_target);
+            string protect_action=((policy==MSZZ_SWEEP_EXIT_SR2_STRUCTURAL_TRAIL ||
+                                    policy==MSZZ_SWEEP_EXIT_SR4_PARTIAL_RUNNER) ? "STRUCTURAL_TRAIL" : "STOP_MODIFY");
+            g_portfolio_journals.JournalExitManagement(TimeCurrent(),book.book_id,(int)policy,protect_action,
+               max_fav_r,book.stop_price,decision.new_stop,0.0,protect_ok,decision.reason);
+            if(protect_ok)
+            {
+               effective_stop=decision.new_stop;
+               protection_state=MSZZ_PARTIAL_PROTECTED;
+               protection_retry_count=0;
+               protection_target_stop=decision.new_stop;
+               protection_remove_target=decision.remove_target;
+            }
+            else
+            {
+               protection_state=MSZZ_PARTIAL_EXECUTED_PROTECTION_PENDING;
+               protection_retry_count=1;
+               protection_target_stop=decision.new_stop;
+               protection_remove_target=decision.remove_target;
+               PrintFormat("MSZZ WARNING: D029 audit partial protection modify failed book=%d ticket=%I64u retcode=%u %s -- entering retry state",
+                           book.book_id,book.broker_position_ticket,g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
+            }
+         }
          else PrintFormat("MSZZ WARNING: D028 Stage5 partial close failed book=%d ticket=%I64u retcode=%u %s",
                           book.book_id,book.broker_position_ticket,g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
       }
       else
       {
+         // D029 audit remediation, Finding D: journals the actual reason
+         // ComputePartialSplit() rejected the split (e.g. a leg below
+         // volume_min), not a hardcoded generic message -- this branch
+         // should be structurally unreachable now that entry-time
+         // eligibility already checked partial_capable with the same
+         // corrected logic, but is retained as defense-in-depth.
          g_portfolio_journals.JournalExitManagement(TimeCurrent(),book.book_id,(int)policy,
             "PARTIAL_CLOSE_SKIPPED_VOLUME",max_fav_r,book.stop_price,book.stop_price,0.0,false,
-            "requested partial volume clamps to full position -- see DECISION_LOG.md D025 precedent");
+            split_reject_reason);
       }
    }
 
-   if(decision.modify_stop)
+   // D029 audit remediation, Finding C: SR3/SR4's own protection modify is
+   // now handled entirely inline above, atomically sequenced with its
+   // partial close -- this generic block only ever applies to policies
+   // that set modify_stop WITHOUT a partial_close in the same decision
+   // (SR1 breakeven, SR2 structural trail), unchanged from before.
+   if(decision.modify_stop && !decision.partial_close)
    {
       double new_target=(decision.remove_target ? 0.0 : book.target_price);
       bool ok=g_trade.PositionModify(book.broker_position_ticket,decision.new_stop,new_target);
@@ -1986,6 +2145,8 @@ void ProcessOneBookExit(CMSZZStrategyBook &book_obj,const MSZZSpeedSnapshot &fas
                        book.book_id,book.broker_position_ticket,g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
    }
 
+   book_obj.UpdatePartialProtectionState(protection_state,protection_retry_count,
+                                         protection_target_stop,protection_remove_target);
    book_obj.UpdateExitManagementState(max_fav_r,breakeven_activated,structure_activated,
                                       book.highest_since_activation,book.lowest_since_activation,
                                       effective_stop,partial_done,book.time_stop_evaluated_done);
