@@ -101,6 +101,24 @@ public:
       return true;
    }
 
+   // D028 Stage 5: one row per applied (or attempted) exit-management
+   // action -- breakeven/trail/partial/time-stop -- across SR1-SR5. Used
+   // for Stage 5's activation counts and exit-inventory analysis.
+   bool JournalExitManagement(const datetime time,const long book_id,const int policy_id,
+                              const string action,const double fav_r,const double old_stop,
+                              const double new_stop,const double partial_volume,
+                              const bool modify_ok,const string reason)
+   {
+      int h=OpenAppend("MSZZ_SweepExitManagementJournal.csv",
+         "time;book_id;policy_id;action;fav_r;old_stop;new_stop;partial_volume;modify_ok;reason");
+      if(h==INVALID_HANDLE) return !m_enabled;
+      FileWrite(h,TimeToString(time,TIME_DATE|TIME_SECONDS),book_id,policy_id,action,
+                DoubleToString(fav_r,4),DoubleToString(old_stop,8),DoubleToString(new_stop,8),
+                DoubleToString(partial_volume,2),(modify_ok?"true":"false"),reason);
+      FileFlush(h); FileClose(h);
+      return true;
+   }
+
    bool JournalTrade(const MSZZStrategyBookState &book,
                      const datetime exit_time,const double exit_price,
                      const double execution_cost,const double realized_r,

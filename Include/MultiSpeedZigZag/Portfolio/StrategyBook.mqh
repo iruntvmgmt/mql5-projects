@@ -20,6 +20,23 @@ enum ENUM_MSZZ_BOOK_EXIT_POLICY
    MSZZ_BOOK_EXIT_SWEEP_CANONICAL_2R = 2
 };
 
+// D028 Stage 5: SweepReclaim exit-management variants. Selected via
+// MSZZBookExitConfig.trailing_policy_id, orthogonal to policy_id above
+// (policy_id still governs the base fixed-target/opposite-exit shape;
+// trailing_policy_id governs what, if anything, additionally manages the
+// stop/volume before that fixed target or opposite exit fires). SR0 is the
+// default (0) and is an exact no-op versus Stage 4's certified behavior.
+// See DECISION_LOG.md D028 Stage 5 for the frozen definition of each.
+enum ENUM_MSZZ_SWEEP_EXIT_POLICY
+{
+   MSZZ_SWEEP_EXIT_SR0_FIXED2R = 0,
+   MSZZ_SWEEP_EXIT_SR1_BREAKEVEN = 1,
+   MSZZ_SWEEP_EXIT_SR2_STRUCTURAL_TRAIL = 2,
+   MSZZ_SWEEP_EXIT_SR3_PARTIAL_FIXED = 3,
+   MSZZ_SWEEP_EXIT_SR4_PARTIAL_RUNNER = 4,
+   MSZZ_SWEEP_EXIT_SR5_TIME_STOP = 5
+};
+
 struct MSZZBookExitConfig
 {
    int    policy_id;
@@ -60,6 +77,20 @@ struct MSZZStrategyBookState
    datetime                  last_update_time;
    bool                      valid;
    string                    status_reason;
+   // D028 Stage 5: per-book exit-management bookkeeping (SR1-SR5). Reset on
+   // every ResetPositionFields() call, i.e. every new entry, and reseeded
+   // safely on restart (effective_stop always initialized from the current
+   // broker-side stop, never a remembered value -- see BookExitManager.mqh
+   // and DECISION_LOG.md D028 Stage 5 "restart persistence"). Not itself
+   // durably persisted -- an explicit, documented research-scope limitation
+   // matching this project's established precedent (D026 g_trail_states).
+   double                    max_favorable_r;
+   bool                      breakeven_activated;
+   bool                      structure_activated;
+   double                    highest_since_activation;
+   double                    lowest_since_activation;
+   double                    effective_stop;
+   bool                      time_stop_evaluated_done;
 };
 
 class CMSZZStrategyBook
@@ -86,6 +117,13 @@ private:
       m_state.requested_risk_pct=0.0;
       m_state.allocated_risk_pct=0.0;
       m_state.partial_close_done=false;
+      m_state.max_favorable_r=0.0;
+      m_state.breakeven_activated=false;
+      m_state.structure_activated=false;
+      m_state.highest_since_activation=0.0;
+      m_state.lowest_since_activation=0.0;
+      m_state.effective_stop=0.0;
+      m_state.time_stop_evaluated_done=false;
    }
 
 public:
@@ -188,6 +226,52 @@ public:
       m_state.status=MSZZ_BOOK_OPEN;
       m_state.last_update_time=TimeCurrent();
       m_state.status_reason="position open";
+      // D028 Stage 5: effective_stop always starts as the just-opened
+      // position's real stop -- the same value MarkOpen() itself just
+      // validated, so it is never a stale/remembered figure.
+      m_state.effective_stop=stop_price;
+      return true;
+   }
+
+   // D028 Stage 5: applies one exit-management decision computed by
+   // CMSZZBookExitManager. The caller (EA) is responsible for actually
+   // calling PositionModify/PositionClosePartial against the broker first
+   // -- this only updates in-memory bookkeeping once that call is known to
+   // have succeeded, so a failed broker call never desyncs book state from
+   // broker truth.
+   bool UpdateExitManagementState(const double max_favorable_r,
+                                  const bool breakeven_activated,
+                                  const bool structure_activated,
+                                  const double highest_since_activation,
+                                  const double lowest_since_activation,
+                                  const double effective_stop,
+                                  const bool partial_close_done,
+                                  const bool time_stop_evaluated_done)
+   {
+      if(!m_state.valid || m_state.status!=MSZZ_BOOK_OPEN) return false;
+      m_state.max_favorable_r=max_favorable_r;
+      m_state.breakeven_activated=breakeven_activated;
+      m_state.structure_activated=structure_activated;
+      m_state.highest_since_activation=highest_since_activation;
+      m_state.lowest_since_activation=lowest_since_activation;
+      m_state.effective_stop=effective_stop;
+      m_state.partial_close_done=partial_close_done;
+      m_state.time_stop_evaluated_done=time_stop_evaluated_done;
+      m_state.last_update_time=TimeCurrent();
+      return true;
+   }
+
+   // D028 Stage 5 restart-safety: if in-memory bookkeeping was lost (e.g.
+   // EA restart mid-position) but the position is genuinely still open,
+   // reseed effective_stop from the CURRENT broker-side stop -- never a
+   // remembered value -- so ResolveTightening()'s monotonic-only guard can
+   // never regress an already-trailed stop. See DECISION_LOG.md D028
+   // Stage 5, mirrors D026's identical restart-safety design.
+   bool ReseedEffectiveStopIfMissing(const double current_broker_stop)
+   {
+      if(!m_state.valid || m_state.status!=MSZZ_BOOK_OPEN) return false;
+      if(m_state.effective_stop>0.0) return false; // already seeded, nothing to do
+      m_state.effective_stop=current_broker_stop;
       return true;
    }
 

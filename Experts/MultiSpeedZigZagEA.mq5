@@ -33,6 +33,7 @@
 #include <MultiSpeedZigZag/Portfolio/VirtualNettingLedger.mqh>
 #include <MultiSpeedZigZag/Portfolio/PortfolioJournals.mqh>
 #include <MultiSpeedZigZag/Portfolio/PortfolioBookRouting.mqh>
+#include <MultiSpeedZigZag/Portfolio/BookExitManager.mqh>
 
 // D019: hardcoded, not user-suppliable -- see DECISION_LOG.md D019 for why
 // the authorized login is a compile-time constant rather than an input.
@@ -135,6 +136,14 @@ input int    InpPortfolioMaxBooks=2;
 input int    InpPortfolioMaxPhysicalPositions=2;
 input bool   InpPortfolioAllowOpposingBooks=false;
 input bool   InpPortfolioAllowSameDirectionStacking=false;
+
+// D028 Stage 5: bounded SweepReclaim exit-management study. Default 0
+// (SR0) is an exact no-op versus the certified Stage 4 P1-P4 behavior --
+// no breakeven, no trail, no partial close, no time stop. Only the Sweep
+// book's exit policy varies in Stage 5; FastMedConfluence's book is never
+// touched (0/SR0 always). See DECISION_LOG.md D028 Stage 5.
+input group "═══ D028 Stage 5 SweepReclaim Exit Policy ═══"
+input int    InpSweepExitPolicy=0; // 0=SR0 fixed2R,1=SR1 breakeven,2=SR2 structural trail,3=SR3 partial fixed,4=SR4 partial runner,5=SR5 time stop
 
 input group "═══ Account Safeguards ═══"
 input bool   InpKillSwitchEngaged=false;
@@ -353,6 +362,11 @@ bool ConfigurePortfolioArchitecture(string &reason)
    sweep_exit.policy_id=MSZZ_BOOK_EXIT_SWEEP_CANONICAL_2R;
    sweep_exit.target_r=InpSweepBookTargetR;
    sweep_exit.own_family_opposite_exit=true;
+   // D028 Stage 5: only the Sweep book's exit management varies; validated
+   // as one of the six frozen enum values, fail-closed otherwise.
+   if(InpSweepExitPolicy<0 || InpSweepExitPolicy>5)
+   { reason="InpSweepExitPolicy must be 0-5 (SR0-SR5)"; return false; }
+   sweep_exit.trailing_policy_id=InpSweepExitPolicy;
 
    // Stage 3 deliberately reuses the certified run's InpMagic for its one
    // physical book, keeping all legacy ownership/intent/analytics machinery
@@ -1664,6 +1678,129 @@ void ProcessMultiBookCandidates(const MSZZCandidate &candidates[],
                                       candidates,candidate_count);
 }
 
+// D028 Stage 5: applies one book's exit-management decision this closed
+// bar, if its exit_config.trailing_policy_id is non-zero (SR0 is always a
+// no-op, matching Stage 4's certified behavior exactly). Order within
+// ProcessClosedBar() matches this project's established same-bar
+// discipline (D026): detect prior-bar closure -> confirmed exit-management
+// update -> evaluate new signal/opposite exit. See DECISION_LOG.md D028
+// Stage 5.
+void ProcessOneBookExit(CMSZZStrategyBook &book_obj,const MSZZSpeedSnapshot &fast,
+                        const MqlRates &bar)
+{
+   MSZZStrategyBookState book=book_obj.State();
+   if(!book.valid || book.status!=MSZZ_BOOK_OPEN || !book.position_open) return;
+   ENUM_MSZZ_SWEEP_EXIT_POLICY policy=(ENUM_MSZZ_SWEEP_EXIT_POLICY)book.exit_config.trailing_policy_id;
+   if(policy==MSZZ_SWEEP_EXIT_SR0_FIXED2R) return;
+   if(book.initial_risk_price<=0.0) return;
+
+   // Restart-safety: if bookkeeping was lost but the position is genuinely
+   // still open, reseed effective_stop from the current broker-side stop
+   // before evaluating anything -- never from a remembered value.
+   if(book.effective_stop<=0.0)
+   {
+      if(PositionSelectByTicket(book.broker_position_ticket))
+      {
+         double broker_stop=PositionGetDouble(POSITION_SL);
+         if(broker_stop>0.0) book_obj.ReseedEffectiveStopIfMissing(broker_stop);
+      }
+      book=book_obj.State();
+      if(book.effective_stop<=0.0) return; // still unknown this bar; try again next bar
+   }
+
+   double fav_r=CMSZZBookExitManager::FavorableR(book.direction,book.entry_price,
+                                                  book.initial_risk_price,bar.high,bar.low);
+   double max_fav_r=MathMax(book.max_favorable_r,fav_r);
+
+   MqlTick tick;
+   if(!SymbolInfoTick(_Symbol,tick)) return;
+   double market_price=(book.direction==MSZZ_DIR_LONG ? tick.bid : tick.ask);
+   double min_distance=(double)MathMax(SymbolInfoInteger(_Symbol,SYMBOL_TRADE_STOPS_LEVEL),
+                                        SymbolInfoInteger(_Symbol,SYMBOL_TRADE_FREEZE_LEVEL))*_Point;
+   int bars_since_entry=(PeriodSeconds()>0) ? (int)((bar.time-book.entry_time)/PeriodSeconds()) : 0;
+
+   MSZZBookExitDecision decision;
+   bool have_decision=CMSZZBookExitManager::Evaluate(policy,book,bar,fast,market_price,min_distance,
+                                                      bars_since_entry,max_fav_r,decision);
+
+   bool breakeven_activated=book.breakeven_activated || (policy==MSZZ_SWEEP_EXIT_SR1_BREAKEVEN && have_decision);
+   bool structure_activated=book.structure_activated ||
+      ((policy==MSZZ_SWEEP_EXIT_SR2_STRUCTURAL_TRAIL || policy==MSZZ_SWEEP_EXIT_SR4_PARTIAL_RUNNER) &&
+       max_fav_r>=MSZZ_SR_STRUCTURE_ACTIVATION_R);
+   bool partial_done=book.partial_close_done;
+   double effective_stop=book.effective_stop;
+
+   if(!have_decision)
+   {
+      book_obj.UpdateExitManagementState(max_fav_r,breakeven_activated,structure_activated,
+                                         book.highest_since_activation,book.lowest_since_activation,
+                                         effective_stop,partial_done,book.time_stop_evaluated_done);
+      return;
+   }
+
+   g_trade.SetExpertMagicNumber(book.magic);
+   g_trade.SetDeviationInPoints(InpDeviationPoints);
+
+   if(decision.force_close)
+   {
+      bool ok=g_trade.PositionClose(book.broker_position_ticket);
+      g_portfolio_journals.JournalExitManagement(TimeCurrent(),book.book_id,(int)policy,
+         "TIME_STOP",max_fav_r,book.stop_price,book.stop_price,0.0,ok,decision.reason);
+      if(ok)
+      {
+         double close_price=g_trade.ResultPrice();
+         datetime close_time=TimeCurrent();
+         ExportClosedPortfolioBookFromTrade(book.strategy_id,"TIME_STOP",close_price,close_time);
+      }
+      return;
+   }
+
+   if(decision.partial_close)
+   {
+      double close_volume=g_execution_guard.NormalizeVolume(book.logical_volume*decision.partial_fraction);
+      if(close_volume>0.0 && close_volume<book.logical_volume)
+      {
+         bool ok=g_trade.PositionClosePartial(book.broker_position_ticket,close_volume);
+         g_portfolio_journals.JournalExitManagement(TimeCurrent(),book.book_id,(int)policy,
+            "PARTIAL_CLOSE",max_fav_r,book.stop_price,decision.new_stop,close_volume,ok,decision.reason);
+         if(ok) partial_done=true;
+         else PrintFormat("MSZZ WARNING: D028 Stage5 partial close failed book=%d ticket=%I64u retcode=%u %s",
+                          book.book_id,book.broker_position_ticket,g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
+      }
+      else
+      {
+         g_portfolio_journals.JournalExitManagement(TimeCurrent(),book.book_id,(int)policy,
+            "PARTIAL_CLOSE_SKIPPED_VOLUME",max_fav_r,book.stop_price,book.stop_price,close_volume,false,
+            "requested partial volume clamps to full position -- see DECISION_LOG.md D025 precedent");
+      }
+   }
+
+   if(decision.modify_stop)
+   {
+      double new_target=(decision.remove_target ? 0.0 : book.target_price);
+      bool ok=g_trade.PositionModify(book.broker_position_ticket,decision.new_stop,new_target);
+      string action=(policy==MSZZ_SWEEP_EXIT_SR1_BREAKEVEN ? "BREAKEVEN" :
+                     (policy==MSZZ_SWEEP_EXIT_SR2_STRUCTURAL_TRAIL || policy==MSZZ_SWEEP_EXIT_SR4_PARTIAL_RUNNER) ?
+                     "STRUCTURAL_TRAIL" : "STOP_MODIFY");
+      g_portfolio_journals.JournalExitManagement(TimeCurrent(),book.book_id,(int)policy,action,
+         max_fav_r,book.stop_price,decision.new_stop,0.0,ok,decision.reason);
+      if(ok) effective_stop=decision.new_stop;
+      else PrintFormat("MSZZ WARNING: D028 Stage5 stop modification failed book=%d ticket=%I64u retcode=%u %s",
+                       book.book_id,book.broker_position_ticket,g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
+   }
+
+   book_obj.UpdateExitManagementState(max_fav_r,breakeven_activated,structure_activated,
+                                      book.highest_since_activation,book.lowest_since_activation,
+                                      effective_stop,partial_done,book.time_stop_evaluated_done);
+}
+
+void ProcessBookExitManagement(const MSZZSpeedSnapshot &fast,const MqlRates &bar)
+{
+   if(!g_portfolio_multi_book_active) return;
+   ProcessOneBookExit(g_fastmed_book,fast,bar);
+   ProcessOneBookExit(g_sweep_book,fast,bar);
+}
+
 void ProcessClosedBar()
 {
    DetectClosedPositions();
@@ -1693,6 +1830,7 @@ void ProcessClosedBar()
    JournalRegime(g_last_regime);
 
    ProcessResearchTrail(rates,closed_count,fast,med);
+   ProcessBookExitManagement(fast,rates[closed_count-1]);
 
    g_suite.SetRiskReward(InpRiskReward);
    g_suite.SetSignalValidityBars(InpSignalValidityBars);

@@ -488,3 +488,131 @@ production use, select an architecture category, or promote SweepReclaim.
 
 Stage 5 remains the bounded SweepReclaim exit-management study. No Stage 5
 variant was implemented or run in this checkpoint.
+
+## Stage 5A — bounded per-book exit-policy architecture
+
+Continuation picked up via a Codex-to-Claude handoff after Codex's usage
+expired (`D028_Continuation_Handoff_Stages_5_6_Final.md`). Starting SHA
+`346e20a` audited first: branch, local/remote HEAD, and D028 paths all
+matched the handoff exactly; unrelated Quant Beast/platform files were the
+same pre-existing untouched noise present throughout this whole branch.
+Stage 4's P1-P4 numbers were independently cross-checked against
+`Tools/D028/Stage4/portfolio_summary.csv` to full floating-point precision
+(not rounded) before being accepted as a checkpoint.
+
+### Design
+
+`ENUM_MSZZ_SWEEP_EXIT_POLICY` (SR0-SR5) is selected per book via the
+already-existing `MSZZBookExitConfig.trailing_policy_id` field (Stage 4 had
+declared but never populated it) — no new struct field was needed for the
+selector itself. `MSZZStrategyBookState` gained the minimal bookkeeping SR1-
+SR5 actually need (`max_favorable_r`, `breakeven_activated`,
+`structure_activated`, `highest/lowest_since_activation`, `effective_stop`,
+`time_stop_evaluated_done`), reset on every new entry and reseeded from the
+current broker-side stop (never a remembered value) if ever found missing —
+the identical restart-safety pattern D026's trailing-stop research already
+established and this branch has reused ever since.
+
+`Include/MultiSpeedZigZag/Portfolio/BookExitManager.mqh`
+(`CMSZZBookExitManager`) is the pure per-book dispatcher. It deliberately
+reuses `CMSZZResearchTrailPolicy` (D026) directly for favorable-R,
+monotonic-tightening, and confirmed-swing-candidate logic rather than
+duplicating it — the same "no future pivot access, only confirmed pivots,
+monotonic tightening only, broker-distance-valid only" contract already
+proven in D026 and D024's Bug-1 fix applies unchanged here. SR0 is always a
+provable no-op (`Evaluate()` returns `false` immediately). Every threshold
+below is frozen here, before any SR1-SR5 backtest result is inspected, per
+the handoff's own anti-overfitting instruction:
+
+- **SR1 breakeven**: activates once, the first closed bar `fav_r>=1.0R`,
+  moving the stop to **exactly** entry (no cost offset — the handoff's own
+  wording is "move stop to entry," not "entry plus costs," followed
+  literally rather than importing D026's own different convention for its
+  own, textually distinct research variants).
+- **SR2 structural trail**: activates once `fav_r>=1.0R`, then trails behind
+  the latest confirmed Fast-speed swing every bar, monotonic tightening
+  only. The fixed +2R target is never touched.
+- **SR3 partial fixed**: one-shot at `fav_r>=1.0R` — closes exactly 50% of
+  logical volume, moves the remainder's stop to exactly entry, and leaves
+  the +2R target active for the remainder.
+- **SR4 partial + runner**: identical activation/partial to SR3, but removes
+  the fixed target for the remainder and trails it behind confirmed Fast
+  swings (SR2's trail logic, reused) from that point forward — the only
+  uncapped-runner variant authorized, per instruction.
+- **SR5 time stop**: force-closes at exactly 48 closed M5 bars (4 hours)
+  since entry if the position's `max_favorable_r` has never yet reached
+  `+0.5R`. Reasoning for `N=48`: picked from structural session reasoning
+  (half of one 8-hour trading session) before any SR5 result was inspected,
+  per instruction — not tuned. Once `+0.5R` has ever been reached, the time
+  stop never applies again for that position, exactly as specified
+  ("retain canonical 2R management").
+
+Same-bar ordering matches this branch's established discipline (D026):
+`DetectClosedPortfolioBooks()` (prior-bar closure) -> engine rebuild ->
+regime label -> `ProcessBookExitManagement()` (this bar's confirmed
+exit-management update) -> candidate evaluation / opposite-signal exit.
+Failed broker calls (`PositionModify`/`PositionClosePartial`) never desync
+in-memory bookkeeping from broker truth — state is only persisted via
+`CMSZZStrategyBook::UpdateExitManagementState()` after a successful call is
+confirmed, mirroring D025's same discipline for partial closes.
+
+Only the Sweep book's exit policy varies (`InpSweepExitPolicy`, default `0`
+= SR0, validated fail-closed to `0`-`5` in `OnInit()`). FastMedConfluence's
+book is never touched by Stage 5 — its `exit_config.trailing_policy_id`
+stays `0` in every Stage 5 config, per the handoff's "Do not change
+FastMedConfluence A or E."
+
+### Rejected alternatives
+
+- **A single global exit-policy input covering both books**: rejected per
+  the handoff's own explicit instruction ("Do not introduce a global exit
+  input that changes both books").
+- **Adding a cost offset to the breakeven moves** (matching D026's own T1
+  convention): rejected — the D028 handoff's literal wording differs from
+  D026's, and this entry follows the instruction as given rather than
+  silently importing a different research track's convention.
+- **Duplicating D026's trailing-stop math inside a new Stage-5-specific
+  class**: rejected as unnecessary risk — `CMSZZResearchTrailPolicy` is
+  already causal, tested, and proven; Stage 5 reuses it directly.
+
+### Stage 5A checkpoint verification
+
+30 deterministic `Test_MSZZ_*`/`Export_MSZZ_Parity` suites compile and pass
+at 0 failures/0 errors on the new binary (live tree and isolated instance,
+hash-verified identical), including the 16 new `Test_MSZZ_BookExitManager`
+cases (SR0 no-op; SR1 one-shot exact-entry breakeven with no re-fire; SR2
+stale/wrong-side-swing rejection, valid-swing tightening, and never-widen;
+SR3 one-shot partial+breakeven-remainder with no re-fire; SR4 target removal
+on partial and runner-trail-only-after-partial; SR5 no-fire-before-window,
+fire-exactly-at-window, and never-fire-once-threshold-reached; two
+`CMSZZStrategyBook` restart-safety/rejection-when-not-open cases).
+
+Both `shadow_d027_short.ini`/`shadow_d027_long.ini` runs reproduce the exact
+same **113 candidates/46 clusters (short)** and **431 candidates/178
+clusters (long)** with **zero orders/zero deals** as every prior shadow
+baseline on this branch — `InpSweepExitPolicy=0` (SR0, the default) is a
+proven no-op. Standalone full-window reproductions all match the certified
+numbers exactly: **A: 224 trades/+0.1261R/PF 1.2446**; **E: 213
+trades/+0.1467R/PF 1.2532**; **SweepReclaim SR0 (legacy single-strategy
+path, untouched by the new book architecture): 190 trades/+0.1506R/PF
+1.2688/18.2941R max DD**.
+
+One operational bug found and fixed while running this checkpoint, worth
+recording for future batch scripts on this machine (the third time this
+exact class of bug has appeared on this branch — D026 and D027 both hit
+variants of it): MT5's `/config:` argument parser splits on `/`, silently
+truncating a relative path at the first forward slash inside a subdirectory
+component. A batch script step using `${WINROOT}\\D026_Configs/file.ini`
+(backslash before the directory, forward slash before the filename) left
+the isolated terminal idle for 17 minutes with no Tester job ever loaded,
+not a crash or an error — caught by noticing the process had produced no
+new journal activity, not by any test failing. Fixed by using backslashes
+throughout every path segment. No data was lost; the affected step was
+rerun cleanly with the fix.
+
+Tracked evidence: `Include/MultiSpeedZigZag/Portfolio/BookExitManager.mqh`,
+`Tests/MultiSpeedZigZag/Test_MSZZ_BookExitManager.mq5`. Raw reproduction
+reports: `/Users/matt/MT5-MSZZ-TEST/D028_Stage5A_Checkpoint_Results`.
+
+Stage 5A is accepted. Stage 5's actual SR0-SR5 comparison batch follows in
+a separate commit.
