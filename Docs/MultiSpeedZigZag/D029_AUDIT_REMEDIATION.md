@@ -114,14 +114,64 @@ the new emergency-close-failure block would have been silently
 unenforceable for exactly the configs Finding C targets. Fixed by adding
 the identical guard to the top of `ExecutePortfolioBookCandidate()`.
 
-**Still open for Finding C** (not yet done as of this commit): restart
-persistence wiring (`ReconstructProtectionStateOnRestart()` exists on
-`CMSZZStrategyBook` but is not yet called from `OnInit()`), and the 12
-required runtime tests (partial+modify success/failure combinations, retry
-exhaustion, emergency close, SR4 target-removal confirmation, runner
-blocked before protection, restart-after-partial, own-family/broker
-SL-TP races during pending protection, no duplicate partial/journal rows).
-These will land in a follow-up checkpoint before any rerun is executed.
+**Restart persistence — investigated, and a real pre-existing architecture
+gap found**: `ReconstructProtectionStateOnRestart()` is implemented on
+`CMSZZStrategyBook` exactly per the handoff's spec (fails closed to
+`EXECUTED_PROTECTION_PENDING` whenever the recorded protection target is
+unavailable; only resolves to `PROTECTED` when the current broker stop
+matches a *known* recorded target within tolerance). Its own branch logic
+is unit-tested in isolation (7 scenarios, 19 assertions, see
+`Test_MSZZ_StrategyBook.mq5`) and is correct.
+
+However, wiring it into `OnInit()` turned out to be moot: `CMSZZStrategyBook::Configure()`
+unconditionally `ZeroMemory(m_state)`s on every call, and `Configure()` is
+called fresh in `OnInit()` on every EA (re)start. There is **no broker-side
+rehydration of `MSZZStrategyBookState` at all** in the multi-book
+architecture — `position_open`, `status`, `direction`, `entry_price`,
+`logical_volume`, etc. all reset to their zero/FLAT values on restart, and
+nothing reconstructs them from broker positions (`PortfolioMarkOpen()`/
+`PortfolioBookMarkOpenFor()` are only ever called from the entry-execution
+paths, never from `OnInit()`). `ProcessOneBookExit()`'s very first guard
+(`if(!book.valid || book.status!=MSZZ_BOOK_OPEN || !book.position_open)
+return;`) means a book with a genuinely open broker position, after a
+restart, is simply never touched again by any exit-management or
+protection logic — the position runs entirely unmanaged from that point
+until the next restart-free session (or a Tester's end-of-window
+force-close) resolves it.
+
+This is not a defect newly introduced by this patch — `StrategyBook.mqh`'s
+own existing comment (D028 Stage 5) already documents that this whole
+category of exit-management bookkeeping is "not itself persisted... an
+explicit, documented research-scope limitation." What this audit adds is
+the explicit confirmation that the limitation is total (not just
+`effective_stop`, as the comment's phrasing might suggest, but
+`position_open`/`status` themselves), and the observation that it makes
+`ReconstructProtectionStateOnRestart()` currently **unreachable in the
+live EA** — it is correct, tested, ready code with no caller, because the
+broader book-state restart reconstruction it depends on does not exist.
+Building that reconstruction (deriving strategy/family attribution,
+entry price/time, initial stop, and logical volume for an already-open
+position purely from broker + journal data) is a materially larger change
+than "restart persistence for the protection sub-state" — it touches
+entry/portfolio bookkeeping the handoff explicitly said not to redesign.
+It is listed as a required production gap in the final report rather than
+built here.
+
+**Does this affect D029's certification?** No — every D029/D029-audit run
+is a single continuous Strategy Tester session; none involved an EA
+restart mid-position, so this gap has zero effect on any collected
+evidence. It is a live/demo-deployment blocker, not a backtest-evidence
+problem, and is flagged as such.
+
+**Still open for Finding C**: the remaining runtime tests that require a
+live/demo broker connection rather than pure-class unit tests — retry
+exhaustion against a real rejected `PositionModify()`, emergency-close
+success/failure, SR4 target-removal confirmation, own-family/broker SL-TP
+races during pending protection. These will be exercised as part of the
+eventual rerun on the isolated demo account (`MT5-MSZZ-TEST`, Coinexx-Demo
+870012) rather than as standalone synthetic tests, since they require
+genuine broker round-trips this project's established testing pattern
+does not simulate offline.
 
 ## Finding D — generic volume-min vs volume-step eligibility, fixed
 
