@@ -120,6 +120,44 @@ public:
       return true;
    }
 
+   // D029 Phase 3: exact partial-close accounting, one row per executed
+   // (or attempted) SR3-PCT/SR4-PCT partial close. Complements
+   // JournalExitManagement's PARTIAL_CLOSE row (kept unchanged, still
+   // fired) with the fields needed for full parent/child volume and
+   // weighted-R reconciliation: original volume, requested/normalized/
+   // executed partial volume, remaining volume, the actual broker deal
+   // ticket and fill price. Partial and remainder realized-R and weighted
+   // total R are deliberately computed downstream in the Phase 3 analysis
+   // script from this price/volume data plus the already-proven D025
+   // volume-weighted blended close price in MSZZ_TradeAnalytics.csv/
+   // MSZZ_PortfolioTradeAnalytics.csv, rather than duplicating R-calculation
+   // logic in MQL5. See DECISION_LOG.md D029 Phase 3.
+   bool JournalPartialClose(const datetime time,const long book_id,const int policy_id,
+                            const double original_volume,const double partial_fraction,
+                            const double requested_partial_volume,
+                            const double normalized_partial_volume,
+                            const double executed_partial_volume,
+                            const double remaining_volume,
+                            const ulong partial_deal_ticket,const double partial_price,
+                            const bool modify_ok,const string reason)
+   {
+      int h=OpenAppend("MSZZ_PartialCloseJournal.csv",
+         "time;book_id;policy_id;original_volume;partial_fraction;requested_partial_volume;"
+         "normalized_partial_volume;executed_partial_volume;remaining_volume;"
+         "partial_deal_ticket;partial_price;modify_ok;reason");
+      if(h==INVALID_HANDLE) return !m_enabled;
+      FileWrite(h,TimeToString(time,TIME_DATE|TIME_SECONDS),book_id,policy_id,
+                DoubleToString(original_volume,2),DoubleToString(partial_fraction,4),
+                DoubleToString(requested_partial_volume,4),
+                DoubleToString(normalized_partial_volume,2),
+                DoubleToString(executed_partial_volume,2),
+                DoubleToString(remaining_volume,2),
+                partial_deal_ticket,DoubleToString(partial_price,8),
+                (modify_ok?"true":"false"),reason);
+      FileFlush(h); FileClose(h);
+      return true;
+   }
+
    // D029 Phase 1: one row per position-sizing decision (accepted or
    // rejected) when InpSizingMode=MSZZ_SIZE_PERCENT_EQUITY. `run_id` is
    // deliberately omitted -- this project's established convention is that

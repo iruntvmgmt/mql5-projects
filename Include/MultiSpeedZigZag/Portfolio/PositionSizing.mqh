@@ -57,6 +57,34 @@ public:
       return normalized;
    }
 
+   // D029 Phase 3: deterministic 50%-partial volume split, reused by the
+   // EA's SR3-PCT/SR4-PCT partial-close handling so this arithmetic is
+   // defined and tested in exactly one place. partial_out is the original
+   // volume's requested fraction normalized down to the broker step;
+   // remaining_out is whatever is left (original - partial_out), NOT a
+   // separately normalized value -- the remainder is always already a
+   // valid step multiple because original_volume itself is always a valid
+   // step multiple (it came from CMSZZPositionSizing::Calculate() or
+   // InpFixedLots, both already normalized). Returns false (both outputs
+   // zero) if original_volume or volume_step is invalid, or if the
+   // resulting partial leg would be zero or would consume the entire
+   // position (matching the "no full-close masquerading as partial"
+   // requirement).
+   static bool ComputePartialSplit(const double original_volume,const double fraction,
+                                    const double volume_step,
+                                    double &partial_out,double &remaining_out)
+   {
+      partial_out=0.0; remaining_out=0.0;
+      if(original_volume<=0.0 || volume_step<=0.0 || fraction<=0.0 || fraction>=1.0)
+         return false;
+      double partial=NormalizeDown(original_volume*fraction,volume_step,0.0);
+      if(partial<=0.0 || partial>=original_volume-1e-9)
+         return false;
+      partial_out=partial;
+      remaining_out=NormalizeDouble(original_volume-partial,8);
+      return true;
+   }
+
    // Fails closed (returns false, sizing_result=MSZZ_SIZING_REJECTED,
    // reject_reason populated) on: invalid equity/risk percent, invalid
    // tick metadata, invalid volume metadata, zero/negative stop distance,

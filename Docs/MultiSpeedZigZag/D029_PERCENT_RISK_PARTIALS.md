@@ -349,3 +349,111 @@ across all five controls; zero unknown exits; zero cross-run candidate
 divergence for the A/E pair.
 
 Committed as `D029 Phase 2: risk-normalized control equivalence`.
+
+## Phase 3A — executable partial-leg architecture
+
+### Physical implementation decision: broker `PositionClosePartial()`, not child tickets
+
+The handoff asks whether two physical child tickets (a "realization leg" and
+a "remainder/runner leg") would be more reliable than a single ticket with
+a native partial close, framed as an evaluation ("evaluate whether... if
+implemented"), not a requirement. Decision:
+**`BROKER_PARTIAL_CLOSE_RECOMMENDED`** — the existing single-ticket
+`PositionClosePartial()` approach, unchanged from D028 Stage 5A's
+architecture. Reasoning:
+
+- `PositionClosePartial()` is a standard, universally-supported MT5
+  operation on HEDGING accounts — nothing about hedging mode makes it less
+  reliable than on netting accounts; the handoff's own phrasing ("because
+  the account is HEDGING, evaluate...") reads as "this is now *possible*,"
+  not "this is now *necessary*."
+- D028 Stage 5A already built and tested this exact mechanism
+  (`CMSZZBookExitManager`'s SR3/SR4 dispatch, `Test_MSZZ_BookExitManager.mq5`'s
+  16 passing cases including one-shot partial firing, no re-fire, and
+  partial+breakeven-remainder combined decisions) — zero partial-close
+  *reliability* defects were ever found in that testing. The only D028
+  defect was a *volume* problem (0.01 lots can't split), which percent-equity
+  sizing (Phase 1) already solves without touching the close mechanism at
+  all.
+- A child-ticket architecture would duplicate substantial existing
+  infrastructure (per-leg ownership, journaling, reconciliation, portfolio-
+  book-count accounting) to solve a reliability problem that testing shows
+  does not exist, for a "preferred if implemented" option the handoff itself
+  does not mandate. Building it would be new, uncontained risk for no
+  demonstrated benefit.
+
+Consequently, the Phase 3 required test cases specific to a child-ticket
+design (child-ticket mode preserves parent risk; partial children do not
+consume two portfolio books) do not apply and are not written — there are
+no children. Every other Phase 3 required case is covered below or was
+already covered by D028's existing, unmodified `CMSZZBookExitManager` tests.
+
+### What changed
+
+The core partial-close decision logic (`CMSZZBookExitManager::Evaluate()`,
+the SR3/SR4 activation/target/breakeven rules) is **completely unchanged**
+from D028. What Phase 3A adds:
+
+1. **`CMSZZPositionSizing::ComputePartialSplit()`** (new, pure,
+   `PositionSizing.mqh`): the single place the 50%-split arithmetic is
+   defined, reused by both the new pre-entry eligibility check and the
+   EA's existing `ProcessOneBookExit()` partial-close handling (which
+   previously computed the split ad hoc via
+   `NormalizeVolume(volume*fraction)` — now delegates here). Rejects
+   (returns `false`, both outputs zero) rather than clamping whenever the
+   split would produce a zero-size leg or consume the entire position —
+   "no full-close masquerading as partial" is enforced by construction.
+2. **Pre-entry `PARTIAL_VOLUME_INELIGIBLE` rejection** (new,
+   `RequiresPartialEligibility()` + a check at both `ExecuteCluster()` and
+   `ExecutePortfolioBookCandidate()`'s sizing call sites): if
+   SweepReclaim's active exit policy is SR3-PCT or SR4-PCT and the sized
+   entry volume cannot support a valid 50% split
+   (`sizing.partial_capable==false`), the **entry itself is rejected** --
+   `JournalCandidate(...,"REJECT_PARTIAL_VOLUME_INELIGIBLE",...)`, no
+   trade opens at all. This is the literal fix for D028's original defect:
+   instead of silently opening the trade and then discovering the partial
+   can't fire (which is exactly how SR3/SR4 were invalidly tested at fixed
+   0.01 lots), an ineligible signal is now excluded from the sample
+   entirely, honestly, before any position exists. Every other
+   strategy/policy combination is completely unaffected by this check.
+3. **`MSZZ_PartialCloseJournal.csv`** (new, `CMSZZPortfolioJournals::JournalPartialClose()`):
+   one row per executed partial close with original volume, requested
+   fraction, requested/normalized/executed partial volume, remaining
+   volume, the actual broker partial-close deal ticket, and fill price.
+   Partial/remainder realized-R and weighted-total-R are deliberately
+   computed downstream in the Phase 3 analysis script from this
+   price/volume data plus the already-proven D025 volume-weighted blended
+   close price already present in `MSZZ_TradeAnalytics.csv`/
+   `MSZZ_PortfolioTradeAnalytics.csv`, rather than duplicating R-calculation
+   logic inside the EA.
+
+### Tests
+
+`Test_MSZZ_PositionSizing.mq5` extended with 6 new test functions (25 new
+assertions) for `ComputePartialSplit()`: the handoff's own named examples
+(0.02→0.01/0.01, 0.04→0.02/0.02), odd-step determinism (0.03→0.01/0.02,
+0.05→0.02/0.03, repeated-call stability), no-full-close-masquerading (a
+single-step 0.01 volume is rejected, not clamped), invalid-input rejection
+(zero volume/step/fraction, fraction>=1.0), and a large-volume sanity check
+at realistic percent-equity position sizes (15.04 lots, matching Phase 2's
+observed maximum) confirming `partial+remaining` reconciles exactly to the
+original volume. All pass (`failures=0`).
+
+Per-trade partial-execution-once/never-refire, restart-safety, remaining-
+stop-moves-only-after-successful-partial, and cross-family-zero guarantees
+are D028 Stage 5A properties this pass does not touch, already proven by
+`Test_MSZZ_BookExitManager.mq5`'s existing 16 cases (unchanged).
+
+### Backward-compatibility verification
+
+All 31 pre-existing deterministic suites recompiled and rerun: **0
+failures across every suite**, including the freshly extended
+`Test_MSZZ_PositionSizing.mq5` (41 Phase 1 assertions + 25 new Phase 3
+assertions, all pass). Shadow-short reproduced exactly (113/46/0). D29-SR0
+(percent-equity, Phase 2's own control) reproduced fresh on the new binary:
+**190 trades, +0.1506R, PF 1.2688, 18.2941R max DD** — exact match, proving
+Phase 3A's changes (which only activate for SweepReclaim under an SR3-PCT/
+SR4-PCT policy) have zero effect on SR0 or any other previously certified
+path.
+
+Committed as `D029 Phase 3A: executable partial-leg architecture`.

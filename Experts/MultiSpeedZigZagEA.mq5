@@ -629,19 +629,21 @@ bool PrepareMarketCandidate(const MSZZCandidate &source,MSZZCandidate &prepared,
 bool ComputeSizedVolume(const MSZZCandidate &prepared,const long book_id,
                         const ENUM_MSZZ_STRATEGY_ID strategy_id,const long magic,
                         const string logical_position_id,
-                        double &volume,double &risk_pct_for_book,string &reject_reason)
+                        double &volume,double &risk_pct_for_book,
+                        bool &partial_capable,string &reject_reason)
 {
    reject_reason="";
+   double vstep=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
    if(InpSizingMode==MSZZ_SIZE_FIXED_LOT)
    {
       volume=g_execution_guard.NormalizeVolume(InpFixedLots);
       risk_pct_for_book=InpPortfolioRiskPerBookPct;
+      partial_capable=(vstep>0.0 && volume>=2.0*vstep-1e-9);
       if(volume<=0.0){ reject_reason="volume normalization failed"; return false; }
       return true;
    }
 
    double vmin=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN);
-   double vstep=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
    double vmax=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MAX);
    double tsize=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
    double tvalue=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
@@ -654,6 +656,7 @@ bool ComputeSizedVolume(const MSZZCandidate &prepared,const long book_id,
    if(InpWriteCSV)
       g_portfolio_journals.JournalSizing(TimeCurrent(),logical_position_id,strategy_id,
                                          book_id,magic,sizing,0.0,0.0,0.0);
+   partial_capable=sizing.partial_capable;
    if(!ok)
    {
       volume=0.0; risk_pct_for_book=0.0;
@@ -663,6 +666,22 @@ bool ComputeSizedVolume(const MSZZCandidate &prepared,const long book_id,
    volume=sizing.normalized_volume;
    risk_pct_for_book=sizing.actual_risk_pct;
    return true;
+}
+
+// D029 Phase 3: SweepReclaim's exit policy is only meaningfully SR3-PCT/
+// SR4-PCT if the entry itself can support a genuine 50% partial close.
+// Rather than silently letting the trade open and then skipping the
+// partial later (D028 Stage 5A's behavior, which is exactly how SR3/SR4
+// were found to be invalidly tested at 0.01 fixed lots), this rejects the
+// ENTRY itself up front -- "Do not silently... fall back to canonical
+// fixed exit." Only applies to SweepReclaim under an active partial
+// policy; every other strategy/policy combination is unaffected. See
+// DECISION_LOG.md D029 Phase 3 / Docs/MultiSpeedZigZag/D029_PERCENT_RISK_PARTIALS.md.
+bool RequiresPartialEligibility(const ENUM_MSZZ_STRATEGY_ID strategy_id)
+{
+   return (strategy_id==MSZZ_STRAT_SWEEP_RECLAIM &&
+          (InpSweepExitPolicy==(int)MSZZ_SWEEP_EXIT_SR3_PARTIAL_FIXED ||
+           InpSweepExitPolicy==(int)MSZZ_SWEEP_EXIT_SR4_PARTIAL_RUNNER));
 }
 
 bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &owner)
@@ -742,14 +761,22 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
    }
    MSZZStrategyBookState sizing_book_ctx=ActivePortfolioBookState();
    double volume,portfolio_requested_risk_computed;
+   bool sizing_partial_capable;
    string sizing_reject;
    if(!ComputeSizedVolume(prepared,sizing_book_ctx.book_id,prepared.strategy_id,
                           (sizing_book_ctx.magic!=0 ? sizing_book_ctx.magic : InpMagic),
-                          cluster.cluster_id,volume,portfolio_requested_risk_computed,sizing_reject))
+                          cluster.cluster_id,volume,portfolio_requested_risk_computed,
+                          sizing_partial_capable,sizing_reject))
    {
       prepared.reason=sizing_reject;
       JournalCandidate(prepared,(InpSizingMode==MSZZ_SIZE_PERCENT_EQUITY ? "REJECT_SIZING" : "REJECT_VOLUME"),
                        cluster.cluster_id);
+      return false;
+   }
+   if(RequiresPartialEligibility(prepared.strategy_id) && !sizing_partial_capable)
+   {
+      prepared.reason="partial-policy volume ineligible for a valid 50% split -- opening volume below 2x broker step";
+      JournalCandidate(prepared,"REJECT_PARTIAL_VOLUME_INELIGIBLE",cluster.cluster_id);
       return false;
    }
 
@@ -1654,13 +1681,21 @@ bool ExecutePortfolioBookCandidate(const MSZZOpportunityCluster &cluster,
       return false;
    }
    double volume,book_requested_risk;
+   bool sizing_partial_capable;
    string sizing_reject;
    if(!ComputeSizedVolume(prepared,book.book_id,strategy_id,book.magic,
-                          cluster.cluster_id,volume,book_requested_risk,sizing_reject))
+                          cluster.cluster_id,volume,book_requested_risk,
+                          sizing_partial_capable,sizing_reject))
    {
       prepared.reason=sizing_reject;
       JournalCandidate(prepared,(InpSizingMode==MSZZ_SIZE_PERCENT_EQUITY ? "REJECT_SIZING" : "REJECT_VOLUME"),
                        cluster.cluster_id);
+      return false;
+   }
+   if(RequiresPartialEligibility(strategy_id) && !sizing_partial_capable)
+   {
+      prepared.reason="partial-policy volume ineligible for a valid 50% split -- opening volume below 2x broker step";
+      JournalCandidate(prepared,"REJECT_PARTIAL_VOLUME_INELIGIBLE",cluster.cluster_id);
       return false;
    }
 
@@ -1900,12 +1935,31 @@ void ProcessOneBookExit(CMSZZStrategyBook &book_obj,const MSZZSpeedSnapshot &fas
 
    if(decision.partial_close)
    {
-      double close_volume=g_execution_guard.NormalizeVolume(book.logical_volume*decision.partial_fraction);
-      if(close_volume>0.0 && close_volume<book.logical_volume)
+      double requested_partial_volume=book.logical_volume*decision.partial_fraction;
+      double vstep=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
+      double close_volume,remaining_volume;
+      // D029 Phase 3: uses the same tested split helper the EA's entry-time
+      // eligibility gate is built on (CMSZZPositionSizing::ComputePartialSplit),
+      // rather than the ad-hoc NormalizeVolume(volume*fraction) computation
+      // this block used before Phase 3 -- guarantees "no full-close
+      // masquerading as partial" by construction (returns false rather than
+      // a clamped-to-full volume).
+      bool splittable=CMSZZPositionSizing::ComputePartialSplit(book.logical_volume,
+                          decision.partial_fraction,vstep,close_volume,remaining_volume);
+      if(splittable)
       {
          bool ok=g_trade.PositionClosePartial(book.broker_position_ticket,close_volume);
+         double partial_price=(ok ? g_trade.ResultPrice() : 0.0);
+         ulong partial_deal=(ok ? g_trade.ResultDeal() : 0);
          g_portfolio_journals.JournalExitManagement(TimeCurrent(),book.book_id,(int)policy,
             "PARTIAL_CLOSE",max_fav_r,book.stop_price,decision.new_stop,close_volume,ok,decision.reason);
+         // D029 Phase 3: full parent/child accounting for exact
+         // reconciliation -- see JournalPartialClose()'s own header comment.
+         g_portfolio_journals.JournalPartialClose(TimeCurrent(),book.book_id,(int)policy,
+            book.logical_volume,decision.partial_fraction,requested_partial_volume,
+            close_volume,(ok ? close_volume : 0.0),
+            (ok ? remaining_volume : book.logical_volume),
+            partial_deal,partial_price,ok,decision.reason);
          if(ok) partial_done=true;
          else PrintFormat("MSZZ WARNING: D028 Stage5 partial close failed book=%d ticket=%I64u retcode=%u %s",
                           book.book_id,book.broker_position_ticket,g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
@@ -1913,7 +1967,7 @@ void ProcessOneBookExit(CMSZZStrategyBook &book_obj,const MSZZSpeedSnapshot &fas
       else
       {
          g_portfolio_journals.JournalExitManagement(TimeCurrent(),book.book_id,(int)policy,
-            "PARTIAL_CLOSE_SKIPPED_VOLUME",max_fav_r,book.stop_price,book.stop_price,close_volume,false,
+            "PARTIAL_CLOSE_SKIPPED_VOLUME",max_fav_r,book.stop_price,book.stop_price,0.0,false,
             "requested partial volume clamps to full position -- see DECISION_LOG.md D025 precedent");
       }
    }

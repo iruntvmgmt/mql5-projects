@@ -341,6 +341,87 @@ void TestSameStrategySecondBookRejected()
    AssertTrue(!approved,"a second book for the SAME strategy is rejected (max_books_per_strategy=1): "+reason);
 }
 
+//--- D029 Phase 3: partial-close volume split (CMSZZPositionSizing::ComputePartialSplit) ---
+
+void TestPartialSplit_002_SplitsEvenly()
+{
+   double partial,remaining;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.02,0.5,VOL_STEP,partial,remaining);
+   AssertTrue(ok,"0.02 volume at 50% is splittable");
+   AssertNear(partial,0.01,1e-9,"0.02 splits into partial=0.01");
+   AssertNear(remaining,0.01,1e-9,"0.02 splits into remaining=0.01");
+}
+
+void TestPartialSplit_004_SplitsEvenly()
+{
+   double partial,remaining;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.04,0.5,VOL_STEP,partial,remaining);
+   AssertTrue(ok,"0.04 volume at 50% is splittable");
+   AssertNear(partial,0.02,1e-9,"0.04 splits into partial=0.02");
+   AssertNear(remaining,0.02,1e-9,"0.04 splits into remaining=0.02");
+}
+
+void TestPartialSplit_OddStep_Deterministic()
+{
+   double partial,remaining;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.03,0.5,VOL_STEP,partial,remaining);
+   AssertTrue(ok,"0.03 (odd number of steps) volume at 50% is splittable");
+   AssertNear(partial,0.01,1e-9,"0.03*0.5=0.015 normalizes DOWN to partial=0.01, not up to 0.02");
+   AssertNear(remaining,0.02,1e-9,"0.03 remainder after a 0.01 partial is 0.02 (not re-normalized, just subtracted)");
+
+   double partial2,remaining2;
+   bool ok2=CMSZZPositionSizing::ComputePartialSplit(0.05,0.5,VOL_STEP,partial2,remaining2);
+   AssertTrue(ok2,"0.05 (odd number of steps) volume at 50% is splittable");
+   AssertNear(partial2,0.02,1e-9,"0.05*0.5=0.025 normalizes DOWN to partial=0.02");
+   AssertNear(remaining2,0.03,1e-9,"0.05 remainder after a 0.02 partial is 0.03");
+
+   // Determinism: repeated calls with identical inputs produce identical outputs.
+   double partial3,remaining3;
+   CMSZZPositionSizing::ComputePartialSplit(0.03,0.5,VOL_STEP,partial3,remaining3);
+   AssertNear(partial,partial3,1e-9,"0.03 split is deterministic across repeated calls (partial)");
+   AssertNear(remaining,remaining3,1e-9,"0.03 split is deterministic across repeated calls (remaining)");
+}
+
+void TestPartialSplit_NoFullCloseMasqueradingAsPartial()
+{
+   double partial,remaining;
+   // A single-step volume (0.01) can never produce a nonzero partial leg
+   // that leaves a nonzero remainder -- must reject, not clamp to a
+   // full close labeled as "partial."
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(0.01,0.5,VOL_STEP,partial,remaining);
+   AssertTrue(!ok,"a single-step (0.01) volume cannot be validly split -- rejected, not silently full-closed");
+   AssertNear(partial,0.0,1e-9,"rejected split reports partial=0.0");
+   AssertNear(remaining,0.0,1e-9,"rejected split reports remaining=0.0");
+}
+
+void TestPartialSplit_InvalidInputsRejected()
+{
+   double partial,remaining;
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.0,0.5,VOL_STEP,partial,remaining),
+              "zero original volume is rejected");
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,0.5,0.0,partial,remaining),
+              "zero volume_step is rejected");
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,0.0,VOL_STEP,partial,remaining),
+              "zero fraction is rejected");
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,1.0,VOL_STEP,partial,remaining),
+              "fraction=1.0 (would consume the entire position) is rejected");
+   AssertTrue(!CMSZZPositionSizing::ComputePartialSplit(0.10,1.5,VOL_STEP,partial,remaining),
+              "fraction>1.0 is rejected");
+}
+
+void TestPartialSplit_LargeVolumeStillDeterministic()
+{
+   // Sanity check against the actual large volumes Phase 2 observed
+   // (up to ~15 lots) to confirm the split logic behaves the same way at
+   // realistic percent-equity position sizes, not just small examples.
+   double partial,remaining;
+   bool ok=CMSZZPositionSizing::ComputePartialSplit(15.04,0.5,VOL_STEP,partial,remaining);
+   AssertTrue(ok,"a large (15.04 lot) volume at 50% is splittable");
+   AssertNear(partial,7.52,1e-9,"15.04 splits evenly into partial=7.52");
+   AssertNear(remaining,7.52,1e-9,"15.04 splits evenly into remaining=7.52");
+   AssertNear(partial+remaining,15.04,1e-9,"partial+remaining reconciles exactly to the original volume");
+}
+
 void OnStart()
 {
    TestLongShortSymmetry();
@@ -365,6 +446,13 @@ void OnStart()
    TestClosedBookReleasesRisk();
    TestOpposingBooksAllowed();
    TestSameStrategySecondBookRejected();
+
+   TestPartialSplit_002_SplitsEvenly();
+   TestPartialSplit_004_SplitsEvenly();
+   TestPartialSplit_OddStep_Deterministic();
+   TestPartialSplit_NoFullCloseMasqueradingAsPartial();
+   TestPartialSplit_InvalidInputsRejected();
+   TestPartialSplit_LargeVolumeStillDeterministic();
 
    PrintFormat("Test_MSZZ_PositionSizing: failures=%d",g_failures);
 }
