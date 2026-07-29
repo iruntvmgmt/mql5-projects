@@ -846,3 +846,80 @@ was actually exercised by this account's position sizing, and re-running
 either without first fixing the partial-close volume floor (e.g. a larger
 base lot size, or broker/account support for finer lot steps) would not
 produce genuine evidence either way.
+
+## Stage 6 — independent-book portfolio comparison
+
+Only SR5 qualified as PORTFOLIO_TEST_ELIGIBLE from Stage 5, so Stage 6's
+scope is two actual EA portfolio runs — **C-A-SR5** (FastMedConfluence A 2R +
+SweepReclaim SR5, opposing enabled) and **C-E-SR5** (FastMedConfluence E 3R +
+SweepReclaim SR5, opposing enabled) — built from the certified `Tools/D028/Stage4`
+P3/P4 configs with only `InpSweepExitPolicy=5` added and a new magic/report
+name (`Tools/D028/Stage6/d028_stage6_C_A_SR5.ini`,
+`d028_stage6_C_E_SR5.ini`). Every other required control (C0=A alone, C1=E
+alone, C2=SweepReclaim SR0 alone, C3=P3, C4=P4) is already certified —
+respectively D026's baseline A/E, this document's own Stage 5 SR0 run, and
+D028 Stage 4's P3/P4 — and is reused rather than rerun, per "do not rerun
+certified work unnecessarily." No combined result below is constructed by
+arithmetic addition; both C-A-SR5 and C-E-SR5 are actual executed EA runs.
+
+| | C0 (A alone) | C3 (P3, ctrl) | **C-A-SR5** | C1 (E alone) | C4 (P4, ctrl) | **C-E-SR5** |
+|---|---|---|---|---|---|---|
+| trades | 224 | 343 | **344** | 213 | 331 | **332** |
+| cum R | +28.2447 | +39.9275 | **+39.8369** | +31.2465 | +45.9294 | **+42.8388** |
+| expectancy | 0.1261 | 0.1164 | **0.1158** | 0.1467 | 0.1388 | **0.1290** |
+| PF | 1.2446 | 1.2132 | **1.2126** | 1.2532 | 1.2389 | **1.2216** |
+| max DD | ~15.158 | 23.5883 | **23.5883** | ~16.920 | 24.2455 | **24.2455** |
+| FastMedConfluence contribution | — | 209/+23.4386 | **210/+25.4386** | — | 199/+27.4405 | **200/+26.4405** |
+| SweepReclaim contribution | — | 134/+16.4889 | **134/+14.3983** | — | 132/+18.4889 | **132/+16.3983** |
+| Dev cum R | — | +20.5393 | **+20.4486** | — | +17.1392 | **+15.0485** |
+| Val cum R | — | +5.8524 | **+6.8524** | — | +12.8524 | **+12.8524** |
+| Holdout cum R | — | +13.5358 | **+12.5358** | — | +15.9378 | **+14.9378** |
+| simultaneous-book episodes / hours | — | 69 / 57.30 | **70 / 57.71** | — | 74 / 60.79 | **75 / 61.21** |
+
+(C2, SweepReclaim SR0 alone: 190 trades/+28.6117R/PF 1.2688/18.2941R DD — not
+directly comparable to a matched-core row above since it has no
+FastMedConfluence leg; included for completeness as the mandatory control.)
+
+**The central finding: SR5's standalone drawdown improvement does not carry
+through to the executed portfolio.** In both matched comparisons, max DD in
+the actual portfolio run is **exactly identical, to four decimal places**,
+to the P3/P4 control (23.5883R and 24.2455R respectively) — not merely
+similar, identical — while cumulative R is **lower** than the control in
+both cases (-0.0906R for C-A-SR5, a materially larger **-3.0906R** for
+C-E-SR5). SweepReclaim's own contribution is lower in both portfolios
+despite an equal or matching trade count (134/+14.3983R vs P3's
+134/+16.4889R; 132/+16.3983R vs P4's 132/+18.4889R) — consistent with SR5's
+standalone finding that it trades roughly -1.5R of edge for a DD
+improvement, except here the DD improvement never materializes at the
+portfolio level, so the trade only shows its cost. FastMedConfluence's own
+contribution also shifts (+1 trade, +2.0000R in C-A-SR5; +1 trade, -1.0000R
+in C-E-SR5) purely from occupancy path-dependence — SweepReclaim's book
+closing at a different time than it would under SR0 changes which signals
+are available when a portfolio slot frees up, even though FastMedConfluence's
+own exit policy never changed. This is exactly the kind of interaction
+effect the handoff's "do not construct combined results by arithmetic
+addition" requirement exists to catch: a policy can look strictly better in
+isolation and still fail to help, or even mildly hurt, once it is actually
+executed inside the real two-book system.
+
+**Integrity audit:** zero duplicate `logical_position_id`s in either run's
+`MSZZ_PortfolioTradeAnalytics.csv`; max recorded portfolio open risk
+`0.5%` in both runs, never exceeding the `InpPortfolioMaxTotalRiskPct=0.50`
+cap; every `MSZZ_PortfolioRiskJournal.csv` action is `OPEN` (108/114
+correctly rejected in C-A-SR5/C-E-SR5 respectively, all against the
+one-book-per-strategy/two-book-max/risk-cap rules, none against a
+cross-family rule since none applies here); `MSZZ_SweepExitManagementJournal.csv`
+shows exactly **one** `TIME_STOP` firing in each portfolio run (vs. two in
+SR5's standalone run) — a legitimate, honestly-reported occupancy
+difference: the second standalone time-stop candidate's signal did not
+result in the same trade inside the portfolio's shared-risk/occupancy
+dynamics, not a bug. Account mode remains `HEDGING` throughout (unchanged
+from Stage 4).
+
+**Stage 6 classification: C-A-SR5 and C-E-SR5 are both REJECTED** against
+the Stage 6 success criteria — the first and most basic requirement,
+"exceeds matched core on cumulative R," fails for both, and the DD
+improvement that motivated advancing SR5 out of Stage 5 does not appear in
+either actual portfolio. Neither is being recommended for further use.
+**P3 and P4 (SR0-based, unmodified SweepReclaim exit management) remain the
+best independently-executed portfolios found in D028.**
