@@ -58,6 +58,23 @@ These are research decisions, not implementation-state or production labels:
 No D027 family is a `PORTFOLIO_VALIDATION_CANDIDATE`. Full rationales and
 regime-feature categories are machine-readable under `Tools/D027/Final/`.
 
+## D028 addendum — SweepReclaim upgraded to portfolio-validated
+
+D027 left SweepReclaim at `RESEARCH_ONLY` (row above, unchanged as a
+historical record of what D027 concluded at the time). D028 subsequently
+found SweepReclaim performs strongly as an **independent HEDGING-mode book**
+running alongside FastMedConfluence with opposing entries enabled (Stage 4,
+certified; see `D028_MULTIBOOK_ARCHITECTURE.md`) — contributing +16.49R to
+P3 and +18.49R to P4 as an actually executed portfolio leg, not an arithmetic
+addition. D028 Stage 5 additionally screened six exit-management variants
+for SweepReclaim and found none that improve on its original fixed-2R exit
+(see `D028_FINAL_REPORT.md`). SweepReclaim's D028 status:
+**`PORTFOLIO_VALIDATION_CANDIDATE`** (independent-book context, fixed-2R
+exit only, opposing entries enabled) — still not a standalone production
+recommendation on its own, and still bound by every anti-overfitting caveat
+already disclosed in D027 and D028 (within-sample chronological split only,
+no genuine independent OOS data, no cost-stress testing performed).
+
 ## Required metrics
 
 Each strategy must retain its own count, expectancy, win rate, average adverse excursion, average favorable excursion, holding time, regime, symbol, timeframe, spread, and execution mode. Combined-suite results may never substitute for per-strategy evidence.

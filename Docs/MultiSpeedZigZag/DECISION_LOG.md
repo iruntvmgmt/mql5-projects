@@ -2274,3 +2274,26 @@ auditable architecture and one interesting standalone research signal
 (SweepReclaim 2R), but no production promotion. A/E remain unchanged, all new
 families remain default-off, no merge to `main` occurred, and no live or
 production deployment occurred.
+
+## D028 — multi-book portfolio architecture and exit-policy study
+
+Full record kept in `Docs/MultiSpeedZigZag/D028_MULTIBOOK_ARCHITECTURE.md`
+(stage-by-stage detail, exact numbers, both bugs found and fixed, every
+frozen threshold) and `Docs/MultiSpeedZigZag/D028_FINAL_REPORT.md` (top-level
+summary), per this branch's established convention of keeping large
+multi-stage studies in their own dedicated document rather than inline here.
+
+Summary: independent HEDGING-mode books (separate physical tickets, magics,
+risk allocation per strategy) materially outperform the legacy shared-
+ownership architecture that made SweepReclaim and FastMedConfluence compete
+for one position slot. Best portfolio found: **P4** (FastMedConfluence E 3R +
+SweepReclaim 2R, independent books, opposing entries enabled) — 331 trades,
++45.9294R, PF 1.2389, 24.2455R DD. A bounded study of six SweepReclaim exit-
+management policies (SR0-SR5) found none that improves on SweepReclaim's
+existing fixed-2R exit: two were rejected outright, two could not be validly
+tested at all due to the account's minimum lot size blocking every partial
+close, and the one that passed standalone screening (a 4-hour time stop)
+lost its apparent benefit once tested in the actual executed portfolio.
+**Final architecture decision: `INDEPENDENT_HEDGING_BOOKS_RECOMMENDED`.** No
+exit-policy change to SweepReclaim is recommended. No merge to `main`, no
+live deployment, no entry optimization of A/E/SweepReclaim at any point.
