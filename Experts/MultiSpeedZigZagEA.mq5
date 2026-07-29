@@ -1156,6 +1156,17 @@ void DetectClosedPositions()
          if((ulong)HistoryDealGetInteger(ticket,DEAL_POSITION_ID)!=intent.position_ticket) continue;
 
          long entry_type=HistoryDealGetInteger(ticket,DEAL_ENTRY);
+         // D029 audit remediation, Finding B: journal every deal for this
+         // intent's position while it is already being read for fill_time/
+         // exit_price/closing_time below -- read-only, no new broker query.
+         if(InpWriteCSV)
+            g_portfolio_journals.JournalDeal(
+               (datetime)HistoryDealGetInteger(ticket,DEAL_TIME),0,(ENUM_MSZZ_STRATEGY_ID)intent.strategy_id,
+               intent.position_ticket,ticket,
+               (entry_type==DEAL_ENTRY_IN ? "IN" : (entry_type==DEAL_ENTRY_OUT ? "OUT" : "OUT_BY")),
+               HistoryDealGetDouble(ticket,DEAL_VOLUME),HistoryDealGetDouble(ticket,DEAL_PRICE),
+               HistoryDealGetDouble(ticket,DEAL_COMMISSION),HistoryDealGetDouble(ticket,DEAL_SWAP),
+               HistoryDealGetDouble(ticket,DEAL_PROFIT));
          if(entry_type==DEAL_ENTRY_IN)
          {
             fill_time=(datetime)HistoryDealGetInteger(ticket,DEAL_TIME);
@@ -1612,6 +1623,18 @@ bool ExportAndFlattenPortfolioBook(const ENUM_MSZZ_STRATEGY_ID strategy_id,
          (ulong)HistoryDealGetInteger(deal,DEAL_POSITION_ID)!=book.broker_position_ticket)
          continue;
       long entry_type=HistoryDealGetInteger(deal,DEAL_ENTRY);
+      // D029 audit remediation, Finding B: journal every deal for this
+      // position (entry and every exit) while it is already being read for
+      // the exit_price/realized_r computation below -- read-only, no new
+      // broker query, no change to the computation itself.
+      if(InpWriteCSV)
+         g_portfolio_journals.JournalDeal(
+            (datetime)HistoryDealGetInteger(deal,DEAL_TIME),book.book_id,strategy_id,
+            book.broker_position_ticket,deal,
+            (entry_type==DEAL_ENTRY_IN ? "IN" : (entry_type==DEAL_ENTRY_OUT ? "OUT" : "OUT_BY")),
+            HistoryDealGetDouble(deal,DEAL_VOLUME),HistoryDealGetDouble(deal,DEAL_PRICE),
+            HistoryDealGetDouble(deal,DEAL_COMMISSION),HistoryDealGetDouble(deal,DEAL_SWAP),
+            HistoryDealGetDouble(deal,DEAL_PROFIT));
       if(entry_type!=DEAL_ENTRY_OUT && entry_type!=DEAL_ENTRY_OUT_BY) continue;
       double volume=HistoryDealGetDouble(deal,DEAL_VOLUME);
       exit_volume+=volume;
@@ -1654,6 +1677,31 @@ bool ExportClosedPortfolioBookFromTrade(const ENUM_MSZZ_STRATEGY_ID strategy_id,
    double realized_r=(book.direction==MSZZ_DIR_LONG ?
                       exit_price-book.entry_price :
                       book.entry_price-exit_price)/book.initial_risk_price;
+   // D029 audit remediation, Finding B: journal every deal for this
+   // position (own-book opposite close / protection emergency close /
+   // time-stop paths all funnel through here with a single already-known
+   // exit_price/exit_time) -- a read-only history scan performed strictly
+   // for reconciliation, after the close this function was already called
+   // to record; it does not affect exit_price/realized_r, which remain
+   // exactly the caller-supplied values used above.
+   if(InpWriteCSV && HistorySelect(book.entry_time-3600,TimeCurrent()))
+   {
+      int deal_total=HistoryDealsTotal();
+      for(int i=0;i<deal_total;i++)
+      {
+         ulong deal=HistoryDealGetTicket(i);
+         if(deal==0 || (ulong)HistoryDealGetInteger(deal,DEAL_POSITION_ID)!=book.broker_position_ticket)
+            continue;
+         long entry_type=HistoryDealGetInteger(deal,DEAL_ENTRY);
+         g_portfolio_journals.JournalDeal(
+            (datetime)HistoryDealGetInteger(deal,DEAL_TIME),book.book_id,strategy_id,
+            book.broker_position_ticket,deal,
+            (entry_type==DEAL_ENTRY_IN ? "IN" : (entry_type==DEAL_ENTRY_OUT ? "OUT" : "OUT_BY")),
+            HistoryDealGetDouble(deal,DEAL_VOLUME),HistoryDealGetDouble(deal,DEAL_PRICE),
+            HistoryDealGetDouble(deal,DEAL_COMMISSION),HistoryDealGetDouble(deal,DEAL_SWAP),
+            HistoryDealGetDouble(deal,DEAL_PROFIT));
+      }
+   }
    if(InpWriteCSV)
       g_portfolio_journals.JournalTrade(book,exit_time,exit_price,0.0,
                                         realized_r,exit_reason,g_last_regime_id);

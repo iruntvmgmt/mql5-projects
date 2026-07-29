@@ -366,7 +366,42 @@ umbrella script tying together A/C/G/H's individual outputs into one
 pass/fail summary) and `reconcile_deals_and_r.py` (Finding B) are still
 open; see "Next" below.
 
-## Next: Finding B instrumentation, rerun execution, final certification
+## Finding B instrumentation — deal-level journal (minimum needed for independent reconciliation)
+
+Added `CMSZZPortfolioJournals::JournalDeal()` (`MSZZ_DealJournal.csv`:
+`time;book_id;strategy_id;position_ticket;deal_ticket;entry_type;volume;
+price;commission;swap;profit`) and wired it into the three places a
+position's closing deals are already read from broker history:
+`ExportAndFlattenPortfolioBook()` (the common broker-SL/TP/test-end path),
+`DetectClosedPositions()` (the single-book intent path), and
+`ExportClosedPortfolioBookFromTrade()` (own-book-opposite/protection-
+emergency-close/time-stop paths, which added their own `HistorySelect()`
+deal scan for this purpose since they previously received only a
+pre-computed exit price).
+
+**This is a read-only, post-hoc journal — it changes no execution
+timing or decision logic.** Every call site already performs a
+`HistoryDealsTotal()`/`HistoryDealGetTicket()` scan to compute
+`exit_price`/`realized_r` from broker history; `JournalDeal()` is called
+once per deal already being read in that same scan, strictly after the
+position has closed. `exit_price` and `realized_r` are computed exactly
+as before, from the same values — the new journal calls do not
+participate in that computation at all, only observe and record it.
+Compiled clean (0 errors/0 warnings); full 29-suite regression re-run and
+confirmed `failures=0` across every suite (no test file exercises these
+functions or `PortfolioJournals.mqh` directly, so this was expected, but
+verified rather than assumed).
+
+This is the minimum instrumentation needed for `reconcile_deals_and_r.py`
+to independently verify sum(exit volumes)==opening filled volume, the
+volume-weighted exit price, and price-based R — the original Phase 3/4
+runs never captured per-deal detail, so this could not be checked
+independently until now. It only takes effect on **new** runs; the
+original (pre-rerun) evidence has no `MSZZ_DealJournal.csv` and cannot be
+retroactively reconciled at the deal level — another reason, alongside
+Finding C's confirmed defect, that a full rerun is required.
+
+## Next: rerun execution, independent reconciliation, final certification
 
 See later sections of this document (added incrementally as each finding
 is remediated) and `D029_AUDIT_FINAL_REPORT.md` for the full certification.

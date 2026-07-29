@@ -227,6 +227,34 @@ public:
       FileFlush(h); FileClose(h);
       return true;
    }
+
+   // D029 audit remediation, Finding B: one row per broker deal (entry or
+   // exit) for a position, so an offline script can independently
+   // reconstruct sum(exit volumes)==opening filled volume, the
+   // volume-weighted exit price, and price-based R -- without trusting the
+   // EA's own in-line computation of the same numbers. Written from
+   // exactly the same HistoryDealsTotal()/HistoryDealGetTicket() scan the
+   // caller already performs to compute exit_price/realized_r for
+   // JournalTrade() above -- this adds a journal row per deal already
+   // being read, it does not add a new broker query or change what any
+   // function decides to do. See DECISION_LOG.md D029 audit remediation.
+   bool JournalDeal(const datetime time,const long book_id,
+                    const ENUM_MSZZ_STRATEGY_ID strategy_id,
+                    const ulong position_ticket,const ulong deal_ticket,
+                    const string entry_type,const double volume,
+                    const double price,const double commission,
+                    const double swap,const double profit)
+   {
+      int h=OpenAppend("MSZZ_DealJournal.csv",
+         "time;book_id;strategy_id;position_ticket;deal_ticket;entry_type;"
+         "volume;price;commission;swap;profit");
+      if(h==INVALID_HANDLE) return !m_enabled;
+      FileWrite(h,TimeToString(time,TIME_DATE|TIME_SECONDS),book_id,(int)strategy_id,
+                position_ticket,deal_ticket,entry_type,volume,price,
+                commission,swap,profit);
+      FileFlush(h); FileClose(h);
+      return true;
+   }
 };
 
 #endif
