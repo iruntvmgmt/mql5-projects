@@ -26,6 +26,12 @@
 #include <MultiSpeedZigZag/Research/ResearchTrailPolicy.mqh>
 #include <MultiSpeedZigZag/Research/RegimeClassifier.mqh>
 #include <MultiSpeedZigZag/Research/RegimeEligibilityPolicy.mqh>
+#include <MultiSpeedZigZag/Portfolio/CrossFamilyPolicy.mqh>
+#include <MultiSpeedZigZag/Portfolio/StrategyBook.mqh>
+#include <MultiSpeedZigZag/Portfolio/PortfolioRiskManager.mqh>
+#include <MultiSpeedZigZag/Portfolio/ExecutionCoordinator.mqh>
+#include <MultiSpeedZigZag/Portfolio/VirtualNettingLedger.mqh>
+#include <MultiSpeedZigZag/Portfolio/PortfolioJournals.mqh>
 
 // D019: hardcoded, not user-suppliable -- see DECISION_LOG.md D019 for why
 // the authorized login is a compile-time constant rather than an input.
@@ -112,6 +118,23 @@ input double InpTrailChandelierATRMult=3.0;
 input group "═══ D027 Regime Architecture ═══"
 input int    InpRegimeEligibilityMode=0; // 0=LABEL_ONLY, 1=RESEARCH_FILTER
 
+// D028 Stage 1: architecture-only scaffold. Default false is an exact legacy
+// no-op. Activation deliberately fails closed until Stage 2 deterministic
+// integration tests and Stage 3 single-book equivalence authorize dispatch.
+input group "═══ D028 Multi-Book Portfolio (Architecture Only) ═══"
+input bool   InpEnableMultiBookPortfolio=false;
+input int    InpCrossFamilyPolicy=0; // 0=legacy control; 4=independent books
+input long   InpPortfolioBaseMagic=26074000;
+input double InpFastMedBookTargetR=2.0;
+input double InpSweepBookTargetR=2.0;
+input double InpPortfolioRiskPerBookPct=0.25;
+input double InpPortfolioMaxTotalRiskPct=0.50;
+input double InpPortfolioMaxFamilyRiskPct=0.50;
+input int    InpPortfolioMaxBooks=2;
+input int    InpPortfolioMaxPhysicalPositions=2;
+input bool   InpPortfolioAllowOpposingBooks=false;
+input bool   InpPortfolioAllowSameDirectionStacking=false;
+
 input group "═══ Account Safeguards ═══"
 input bool   InpKillSwitchEngaged=false;
 input int    InpMaxTradesPerDay=20;
@@ -164,10 +187,89 @@ MSZZTrailConfig                g_trail_config;
 // every journal row. See DECISION_LOG.md D027.
 MSZZRegimeState                g_last_regime;
 string                         g_last_regime_id="";
+// D028 Stage 1 architecture objects. No ProcessClosedBar()/ExecuteCluster()
+// caller reaches these while InpEnableMultiBookPortfolio is false.
+CMSZZStrategyBook              g_fastmed_book;
+CMSZZStrategyBook              g_sweep_book;
+CMSZZPortfolioRiskManager      g_portfolio_risk;
+CMSZZExecutionCoordinator      g_execution_coordinator;
+CMSZZVirtualNettingLedger      g_virtual_ledger;
+CMSZZPortfolioJournals         g_portfolio_journals;
 
 bool LiveExecutionAuthorized(){ return (!InpShadowOnly && InpAllowLiveExecution && InpAcknowledgeRisk); }
 bool EventConsumed(const string id){ return g_event_store.Contains(id); }
 bool ConsumeEvent(const string id){ return g_event_store.Add(id); }
+
+bool ConfigurePortfolioArchitecture(string &reason)
+{
+   reason="";
+   ENUM_MSZZ_CROSS_FAMILY_POLICY policy=
+      (ENUM_MSZZ_CROSS_FAMILY_POLICY)InpCrossFamilyPolicy;
+   if(!CMSZZCrossFamilyPolicy::IsKnown(policy))
+   {
+      reason="unknown D028 cross-family policy";
+      return false;
+   }
+   if(!g_execution_coordinator.Configure(_Symbol,InpPortfolioBaseMagic,policy,reason))
+      return false;
+
+   MSZZBookExitConfig fastmed_exit; ZeroMemory(fastmed_exit);
+   fastmed_exit.policy_id=MSZZ_BOOK_EXIT_FIXED_R;
+   fastmed_exit.target_r=InpFastMedBookTargetR;
+   fastmed_exit.own_family_opposite_exit=true;
+   MSZZBookExitConfig sweep_exit; ZeroMemory(sweep_exit);
+   sweep_exit.policy_id=MSZZ_BOOK_EXIT_SWEEP_CANONICAL_2R;
+   sweep_exit.target_r=InpSweepBookTargetR;
+   sweep_exit.own_family_opposite_exit=true;
+
+   long fastmed_magic=g_execution_coordinator.BookMagic(
+      MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,1);
+   long sweep_magic=g_execution_coordinator.BookMagic(MSZZ_STRAT_SWEEP_RECLAIM,2);
+   if(fastmed_magic<=0 || sweep_magic<=0 || fastmed_magic==sweep_magic)
+   {
+      reason="D028 book magic derivation failed uniqueness";
+      return false;
+   }
+   if(!g_fastmed_book.Configure(1,MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,
+                                MSZZ_FAMILY_BREAKOUT,fastmed_magic,true,
+                                fastmed_exit,reason))
+      return false;
+   if(!g_sweep_book.Configure(2,MSZZ_STRAT_SWEEP_RECLAIM,
+                              MSZZ_FAMILY_REVERSAL,sweep_magic,true,
+                              sweep_exit,reason))
+      return false;
+
+   MSZZPortfolioRiskConfig risk; ZeroMemory(risk);
+   risk.max_total_initial_risk_pct=InpPortfolioMaxTotalRiskPct;
+   risk.max_risk_per_book_pct=InpPortfolioRiskPerBookPct;
+   risk.max_risk_per_family_pct=InpPortfolioMaxFamilyRiskPct;
+   risk.max_same_direction_risk_pct=InpPortfolioMaxTotalRiskPct;
+   risk.max_opposing_direction_risk_pct=InpPortfolioMaxTotalRiskPct;
+   risk.max_logical_books=InpPortfolioMaxBooks;
+   risk.max_books_per_strategy=1;
+   risk.max_physical_positions=InpPortfolioMaxPhysicalPositions;
+   risk.daily_loss_cap_pct=0.0;
+   risk.drawdown_cap_pct=0.0;
+   risk.symbol_exposure_cap_lots=InpFixedLots*InpPortfolioMaxBooks;
+   risk.allow_opposing_books=InpPortfolioAllowOpposingBooks;
+   risk.allow_same_direction_stacking=InpPortfolioAllowSameDirectionStacking;
+   if(!g_portfolio_risk.Configure(risk,reason)) return false;
+
+   string ledger_file=StringFormat("MSZZ_D028_VirtualLedger_%s_%d_%I64d.csv",
+                                   _Symbol,(int)_Period,InpPortfolioBaseMagic);
+   if(!g_virtual_ledger.Configure(_Symbol,ledger_file))
+   {
+      reason=g_virtual_ledger.LastError();
+      return false;
+   }
+   g_portfolio_journals.Configure(InpWriteCSV);
+   if(!g_portfolio_journals.EnsureTradeAnalyticsHeader())
+   {
+      reason="D028 portfolio journal initialization failed";
+      return false;
+   }
+   return true;
+}
 
 // D027: one row per closed bar, every bar -- independent of whether any
 // candidate fired that bar. Required for Stage 2's regime-distribution and
@@ -1068,6 +1170,26 @@ int OnInit()
    if(InpMagic<=0 || InpFastATRLen<1 || InpMedATRLen<1 || InpSlowATRLen<1 || InpFastATRMult<=0.0 ||
       InpMedATRMult<=0.0 || InpSlowATRMult<=0.0 || InpRiskReward<=0.0 || InpHistoryBars<300)
       return INIT_PARAMETERS_INCORRECT;
+
+   if(InpEnableMultiBookPortfolio)
+   {
+      string portfolio_reason;
+      if(!ConfigurePortfolioArchitecture(portfolio_reason))
+      {
+         Print("MSZZ D028 PORTFOLIO CONFIG REJECTED: ",portfolio_reason);
+         return INIT_FAILED;
+      }
+      PrintFormat("MSZZ D028 PORTFOLIO ARCHITECTURE READY mode=%s policy=%s "
+                  "physical_ticket_isolation=%s virtual_ledger_required=%s",
+                  CMSZZPositionOwnership::AccountModeText(g_execution_coordinator.AccountMode()),
+                  CMSZZCrossFamilyPolicy::Text(
+                     (ENUM_MSZZ_CROSS_FAMILY_POLICY)InpCrossFamilyPolicy),
+                  (g_execution_coordinator.PhysicalTicketIsolationSupported()?"true":"false"),
+                  (g_execution_coordinator.VirtualLedgerRequired()?"true":"false"));
+      Print("MSZZ D028 PORTFOLIO ACTIVATION BLOCKED: Stage 1 is architecture-only; "
+            "Stage 2 tests and Stage 3 single-book equivalence are required.");
+      return INIT_FAILED;
+   }
 
    // D019: fail-closed research-eligibility authorization. All-or-nothing --
    // if InpResearchMinScoreOverride>0.0 is set but any required condition

@@ -2,18 +2,18 @@
 
 ## Decision status
 
-**Stage 0 blocked on 2026-07-28. No architecture implementation has started.**
+**Stage 0B complete; Stage 1 architecture implemented default-off on
+2026-07-28.**
 
 D028 begins at `dc14d99f9cc97404b93ec17aa9dc6b589e41b9b4` on
 `feature/d028-multibook-portfolio`. The isolated tester is a **HEDGING**
 account, so it can represent separate physical strategy positions. A virtual
 netting ledger remains a required architectural component for portability.
 
-The standalone controls reproduced exactly, but the required legacy combined
-control did not. Investigation found a pre-existing candidate-array indexing
-defect in the D027 combined-strategy integration. The old combined result is
-therefore not a deterministic baseline and D028's explicit Stage 0 stop gate
-applies.
+The standalone controls reproduced exactly. Stage 0B repaired the pre-existing
+candidate-array indexing defect and established the corrected 372-trade legacy
+combined control. Historical D027 combined evidence remains preserved but
+invalidated for combined-baseline comparison.
 
 ## Non-negotiable design
 
@@ -138,6 +138,45 @@ proceed when baseline parity fails.
    logical trade analytics.
 
 No D028 strategy or exit result is claimed by this checkpoint.
+
+## Stage 1 architecture checkpoint — 2026-07-28
+
+Stage 1 adds the portfolio abstractions without routing any live or historical
+trade through them:
+
+- `StrategyBook.mqh` defines independently owned book identity, tickets,
+  logical position identity, risk, and per-book exit configuration.
+- `PortfolioRiskManager.mqh` fail-closes on total, book, family, directional,
+  physical-position, logical-book, daily-loss, drawdown, and symbol limits.
+- `CrossFamilyPolicy.mqh` makes legacy reverse, ignore, flatten-only,
+  regime-exclusive, and independent-book behavior explicit.
+- `ExecutionCoordinator.mqh` detects the account margin mode. It plans
+  ticket-isolated physical actions for hedging and net-difference actions with
+  synthetic protection for netting/exchange accounts.
+- `VirtualNettingLedger.mqh` maintains attributable logical allocations and
+  broker net-difference calculations. Persistence/restart reconciliation and
+  synthetic-stop processing remain Stage 2 test-gated work.
+- `PortfolioJournals.mqh` defines the four required book, risk, allocation, and
+  logical-trade journals.
+
+The EA inputs default to `InpEnableMultiBookPortfolio=false`. When explicitly
+enabled at this checkpoint, initialization deliberately fails closed after
+validating the architecture and reporting the detected account mode. Broker
+transmission is intentionally not wired until Stage 2 deterministic tests and
+Stage 3 single-book equivalence are complete. This prevents a partially
+implemented research mode from silently falling back to legacy shared
+ownership.
+
+The isolated account remains `HEDGING`, so the first portfolio experiment can
+use real ticket/magic isolation. The virtual netting abstraction is retained
+for portability but is not being presented as production-ready; netting
+synthetic stops require an uninterrupted EA and do not provide broker-hosted
+protection.
+
+Stage 1 changes no signal, score, cluster priority, entry, stop, exit, cost,
+window, canonical A/E definition, or SweepReclaim trigger. Legacy shared
+ownership remains the default comparison control. Stage 2 must provide the
+full deterministic unit/integration suite before any architecture activation.
 
 ## Stage 0B integrity addendum — 2026-07-28
 

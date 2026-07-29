@@ -1,0 +1,8 @@
+component,path,stage1_status,default_behavior,deferred_gate
+cross_family_policy,Include/MultiSpeedZigZag/Portfolio/CrossFamilyPolicy.mqh,implemented,legacy_shared_reverse,Stage2 policy tests
+strategy_book,Include/MultiSpeedZigZag/Portfolio/StrategyBook.mqh,implemented,inactive,Stage2 ownership and persistence tests
+portfolio_risk,Include/MultiSpeedZigZag/Portfolio/PortfolioRiskManager.mqh,implemented,inactive,Stage2 limit tests
+execution_coordinator,Include/MultiSpeedZigZag/Portfolio/ExecutionCoordinator.mqh,plan_only,inactive,Stage2 integration tests and Stage3 equivalence
+virtual_netting_ledger,Include/MultiSpeedZigZag/Portfolio/VirtualNettingLedger.mqh,in_memory_plan_only,inactive,Stage2 persistence allocation and synthetic-stop tests
+portfolio_journals,Include/MultiSpeedZigZag/Portfolio/PortfolioJournals.mqh,schema_and_writers,inactive,Stage2 attribution reconciliation
+ea_wiring,Experts/MultiSpeedZigZagEA.mq5,validation_only,disabled_and_legacy,Stage2 tests then Stage3 execution wiring
