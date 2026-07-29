@@ -2401,3 +2401,45 @@ a new durable per-deal export journal), the remaining Finding C runtime
 tests requiring live broker round-trips, Finding H's broader certification
 scripts, executing the required rerun, and the final certification report.
 No merge to `main`, no live deployment at any point in this pass.
+
+## D029 audit remediation — final certification (closing entry)
+
+All items above were closed out. Summary (full detail in
+`D029_AUDIT_REMEDIATION.md` and `D029_AUDIT_FINAL_REPORT.md`):
+
+- **Finding B** was built: a new `MSZZ_DealJournal.csv` (read-only,
+  additive to existing deal-scan loops, no new decision branch, no
+  execution-timing change) plus `reconcile_deals_and_r.py`, which
+  independently reconstructs every trade from raw broker deals and
+  compares against the EA's own reported exit price/R. **This caught a
+  second real, previously-undetected defect**, unrelated to Finding C:
+  `ExportClosedPortfolioBookFromTrade()` (used for own-family-opposite
+  closes, protection emergency-closes, and time-stop force-closes)
+  computed `realized_r` from a single caller-supplied exit price, silently
+  ignoring any earlier partial-close deal. This had been present in
+  D029's original, certified `P3_SR3`/`P4_SR3` evidence the entire time.
+  Fixed by making that function do the same volume-weighted computation
+  `ExportAndFlattenPortfolioBook()` already did correctly.
+- **All 7 configs were rerun twice** — once after the Finding C/D/E
+  architecture patch, again after the Finding B fix — with no selective
+  reruns of favorable variants, into `D029_Audit_Results/` (original
+  `D029_Phase{2,3,4}_Results/` evidence never touched).
+- **Final independent reconciliation: 0 mismatches across all 7
+  variants.** Controls (`D29_SR0`/`SR3_PCT`/`SR4_PCT`) are byte-identical
+  to the original evidence; `D29_P3`/`D29_P4` differ only by
+  immaterial (~1e-13) floating-point noise on `OWN_FAMILY_OPPOSITE`
+  exits; `P3_SR3`/`P4_SR3` each have exactly the one genuine Finding B
+  correction (~-0.19R per portfolio) plus the same float-noise pattern
+  on their other `OWN_FAMILY_OPPOSITE` exits.
+- **D029's original strategy/portfolio conclusions are reconfirmed on
+  the patched, reconciled evidence** — not preserved by assumption. The
+  Finding B correction makes `P3-SR3`/`P4-SR3`'s already-`REJECTED`
+  standing (see `STRATEGY_CATALOG.md`) slightly worse, not better; it
+  does not change any variant's qualitative conclusion.
+- **Restart persistence remains explicitly unresolved** — disclosed, not
+  claimed solved.
+- **Final certification**: `CERTIFIED_WITH_ARCHITECTURAL_PATCH` /
+  `BROKER_PARTIAL_CLOSE_RECOMMENDED_WITH_STATE_PATCH` /
+  `RESEARCH_RESULT_CERTIFIED` / `RESTART_RECOVERY_REMAINS_UNRESOLVED` /
+  `NO PRODUCTION DEPLOYMENT`. No merge to `main`, no live deployment at
+  any point in this audit.

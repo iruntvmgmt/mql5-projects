@@ -464,7 +464,166 @@ with unmodified fixed-2R SweepReclaim), but a genuine evidence-integrity
 defect that had to be found and fixed regardless of its size, per this
 audit's own "do not accept compromised runs" standard.
 
-## Next: independent reconciliation on the final rerun, full re-analysis, final certification
+## Final reconciliation, on the final (post-Finding-B-fix) rerun
 
-See later sections of this document (added incrementally as each finding
-is remediated) and `D029_AUDIT_FINAL_REPORT.md` for the full certification.
+`reconcile_deals_and_r.py` was re-run against the second (final) rerun
+batch — all 7 configs, on the binary with the Finding B fix applied.
+Result: **zero mismatches in all 7 variants** (`r_reconciliation_summary.csv`):
+
+| variant | trades checked | volume mismatches | price mismatches | R mismatches | reconciliation_ok |
+|---|---|---|---|---|---|
+| D29_SR0 | 190 | 0 | 0 | 0 | True |
+| D29_P3 | 341 | 0 | 0 | 0 | True |
+| D29_P4 | 329 | 0 | 0 | 0 | True |
+| SR3_PCT | 194 | 0 | 0 | 0 | True |
+| SR4_PCT | 186 | 0 | 0 | 0 | True |
+| P3_SR3 | 345 | 0 | 0 | 0 | True |
+| P4_SR3 | 333 | 0 | 0 | 0 | True |
+
+("trades checked" is slightly below each variant's total portfolio-row
+count because the script only checks broker tickets it can match to
+both an entry deal and an exit deal in `MSZZ_DealJournal.csv`; positions
+still open at test end, or without a resolvable ticket-to-logical
+mapping, are excluded from the denominator rather than counted as
+mismatches — this is a coverage limit of the check, not a defect.)
+
+`P3_SR3`'s `reported_total_r` changed from the pre-fix `35.6172`-style
+figure to the fix-verified value once recomputed against the same deal
+data (see below); `P4_SR3` likewise. Both now agree with the
+independently reconstructed value within the script's `R_TOL=1e-3`.
+
+## Control-variant diff investigation (required per the audit instruction: "any difference outside expected timestamp/metadata additions needs investigation")
+
+Direct `diff` of `MSZZ_PortfolioTradeAnalytics.csv` between the ORIGINAL
+D029 evidence and the FINAL patched rerun, per variant:
+
+- **`D29_SR0`, `SR3_PCT`, `SR4_PCT`: byte-identical, 0 diff lines.** These
+  three never call `ExportClosedPortfolioBookFromTrade()` (`D29_SR0` uses
+  the single-book `DetectClosedPositions()` path; `SR3_PCT`/`SR4_PCT` run
+  SweepReclaim alone, which also stays on that old D009-era path), so
+  neither Finding B's instrumentation nor its fix can touch them, and
+  they don't.
+- **`D29_P3`: 5 trades differ. `D29_P4`: 6 trades differ. `P3_SR3`: 7
+  trades differ. `P4_SR3`: 8 trades differ.** Investigated every diffed
+  row by hand: **every single one has `exit_reason=OWN_FAMILY_OPPOSITE`**,
+  and every diff is `exit_price`/`realized_r` changing at the
+  ~1e-13-relative-magnitude level — e.g. `2922.85` → `2922.8499999999995`,
+  `realized_r` `0.43806921675773564` → `0.4380692167576942`. This is
+  IEEE-754 floating-point noise, not a logic change: the Finding B fix
+  makes `ExportClosedPortfolioBookFromTrade()` always compute
+  `weighted_exit_price = Σ(price·volume)/Σ(volume)` from the new deal
+  scan, even for the common single-exit-deal case (weight=1), instead of
+  passing the caller-supplied price literal straight through. Mathematically
+  a weighted average of one term equals that term; numerically, dividing
+  `(price·volume)/volume` in double precision does not always reproduce
+  the exact original bit pattern of `price`, so the last 1-2 ULPs differ.
+  The resulting `realized_r` deltas (~1e-13 to 1e-16) are **8-13 orders of
+  magnitude below** both the CSV's own 4-decimal-place precision and the
+  reconciliation script's `R_TOL=1e-3` — immaterial at any precision a
+  human or downstream aggregate would ever read (confirmed above: the
+  rounded headline stats for `D29_P3`/`D29_P4` are identical to 4 decimal
+  places pre- vs. post-fix). One of `P3_SR3`'s 7 and `P4_SR3`'s 8 diffed
+  rows is **not** float noise — it is the genuine Finding B trade
+  (`2026.05.28 21:35` → `2026.05.29 01:05`, logical id containing
+  `1779996000`), covered in full below. All other diffed rows in every
+  variant are the immaterial float-noise pattern described above — **no
+  further, undisclosed defect was found**.
+
+## Headline pre-patch vs. patched-rerun comparison (all 7 variants, portfolio-level, computed identically both eras from `MSZZ_PortfolioTradeAnalytics.csv`)
+
+`headline_pre_post_comparison.csv`:
+
+| variant | era | trades | win rate | expectancy R | PF(R) | total R | max DD (R) |
+|---|---|---|---|---|---|---|---|
+| D29_SR0 | PRE / POST | 190 / 190 | .3684 / .3684 | .1506 / .1506 | 1.2688 / 1.2688 | 28.6117 / 28.6117 | 18.2941 / 18.2941 |
+| D29_P3 | PRE / POST | 342 / 342 | .3655 / .3655 | .1217 / .1217 | 1.2218 / 1.2218 | 41.6064 / 41.6064 | 23.9365 / 23.9365 |
+| D29_P4 | PRE / POST | 330 / 330 | .3303 / .3303 | .1443 / .1443 | 1.2472 / 1.2472 | 47.6083 / 47.6083 | 24.2455 / 24.2455 |
+| SR3_PCT | PRE / POST | 194 / 194 | .4897 / .4897 | .0807 / .0807 | 1.1776 / 1.1776 | 15.6564 / 15.6564 | 14.9477 / 14.9477 |
+| SR4_PCT | PRE / POST | 186 / 186 | .4892 / .4892 | .0795 / .0795 | 1.1752 / 1.1752 | 14.7804 / 14.7804 | 19.5857 / 19.5857 |
+| P3_SR3 | PRE / POST | 347 / 347 | .4150 / .4150 | .0860 / **.0855** | 1.1709 / **1.1698** | 29.8514 / **29.6655** | 20.8497 / 20.8497 |
+| P4_SR3 | PRE / POST | 335 / 335 | .3791 / .3791 | .1063 / **.1058** | 1.1972 / **1.1961** | 35.6172 / **35.4281** | 22.6597 / 22.6597 |
+
+Trade counts, win rates, and max drawdown are unchanged in every single
+variant (rounded figures shown; controls are exactly identical to full
+float precision as shown above). Only `P3_SR3` and `P4_SR3` show any
+headline movement, and only in `expectancy_r`/`profit_factor_r`/`total_r`
+— exactly the metrics the one Finding B trade's R correction feeds into
+— by an amount (~-0.186R / ~-0.189R out of totals of ~30R/~36R,
+respectively) matching the single trade's R correction almost exactly,
+confirming no other change bled into these totals.
+
+## Trade-by-trade: the two confirmed affected trades
+
+### 1. Finding C retry trade (2025.03.25 15:20-15:34, SweepReclaim short) — present in `SR3_PCT`/`SR4_PCT`/`P3_SR3`/`P4_SR3`
+
+- **Old behavior (pre-patch)**: a partial-close protection order (stop-to-breakeven
+  modify) failed once and was never retried — a silent, undetected
+  protection gap (this is exactly what Finding C's atomicity audit was
+  built to catch).
+- **New behavior (patched)**: `MSZZ_SweepExitManagementJournal.csv` now
+  shows a `PROTECTION_RETRY` event for this exact position (`attempt 2 of
+  3`) on the same bar sequence, in all four variants — proving the
+  state-machine patch fires. The retry itself also fails (`success=false`)
+  — a genuine, still-visible protection-repair failure, not swept under
+  the rug.
+- **New exit outcome**: **unchanged from the old outcome.** The position
+  closes via `BROKER_SL_TP_OR_TEST_END` shortly afterward — an unrelated,
+  independent broker-side trigger — before a 3rd retry attempt or the
+  emergency-close path could matter. Confirmed byte-identical
+  `exit_reason`/`exit_price`/`realized_r` (`r_result≈-0.5372` in
+  `P3_SR3`/`P4_SR3`, `≈-0.533` in `SR3_PCT`/`SR4_PCT`) in both the
+  original and final-rerun `MSZZ_PortfolioTradeAnalytics.csv` for this
+  trade, in all four variants.
+- **R difference: 0.** **Occupancy difference: none** — the position's
+  open/close timestamps are unchanged, so no later signal's
+  eligibility window shifts because of this trade.
+- **Downstream cascade: none detected.** No later entry in any of the 4
+  variants was blocked or newly enabled as a result of this trade's
+  timing, because its timing didn't change.
+- **What the patch actually proves here**: the system's protection layer
+  now *attempts* recovery and *logs* failure explicitly instead of
+  silently doing nothing — a real architectural improvement — even though
+  this specific historical trade's realized numbers don't move.
+
+### 2. Finding B R-computation trade (2026.05.28 21:35 → 2026.05.29 01:05, SweepReclaim short, own-family-opposite exit) — present in `P3_SR3`/`P4_SR3` only
+
+- **Old outcome (pre-patch, original certified D029 evidence)**:
+  `exit_price=4497.53` (the remainder-close deal's price only, ignoring an
+  earlier partial-close deal at 4499.19), `realized_r=1.043280182232252`
+  in both `P3_SR3` and `P4_SR3`.
+- **New outcome (patched rerun)**:
+  - `P3_SR3`: `exit_price=4498.346393442623` (volume-weighted across both
+    exit deals), `realized_r=0.8573135666006167`.
+  - `P4_SR3`: `exit_price=4498.36`, `realized_r=0.85421412300677`.
+  - Both match `reconcile_deals_and_r.py`'s independently-computed values
+    to within its `R_TOL=1e-3` (small residual differences are the CSV's
+    own 4-decimal rounding, not a discrepancy).
+- **R difference**: `P3_SR3`: `1.0433 → 0.8573` (Δ≈-0.186R).
+  `P4_SR3`: `1.0433 → 0.8542` (Δ≈-0.189R).
+- **Occupancy difference: none.** The position's entry/exit timestamps
+  are byte-identical pre/post-fix — only the *reported price and R* of
+  the already-recorded exit changed, because the fix corrects a
+  computation on data already captured, not the timing of when the
+  position closed.
+- **Downstream cascade: none detected.** No later entry's eligibility
+  window shifts, since occupancy timing is unchanged.
+- **Portfolio-level cascade**: this single trade's correction fully
+  explains `P3_SR3`'s and `P4_SR3`'s total-R, expectancy, and
+  profit-factor movement in the headline table above; max drawdown is
+  unaffected (this trade's revised R, while smaller, wasn't the local
+  peak-to-trough driver).
+
+## Downstream occupancy cascades — explicit finding: none
+
+Both confirmed affected trades leave their open/close timestamps
+unchanged (Finding C's retry attempt happens strictly *within* an
+already-open position's lifetime; Finding B's fix corrects a *reported*
+price/R on an already-closed position, not the closing event's timing).
+Since MSZZ's one-owned-position-per-book occupancy model keys off
+open/close timestamps, neither fix could have blocked or newly enabled
+any later signal, in any of the 7 variants. This was verified, not
+assumed: no other row differs between pre- and post-fix
+`MSZZ_PortfolioTradeAnalytics.csv` in any variant beyond the float-noise
+rows (explained above) and the one real Finding B trade in `P3_SR3`/`P4_SR3`.
+
+See `D029_AUDIT_FINAL_REPORT.md` for the full 21-point certification.

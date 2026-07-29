@@ -1,0 +1,9 @@
+check,result
+fields_compared,time|strategy_id|setup|direction|score|entry|stop|target|origin_id|event_id|strategy_family
+price_tolerance,1e-08
+score_tolerance,1e-10
+all_pairwise_streams_identical,True
+all_canonical_hashes_equal,True
+D29_SR0_sha256,9f880ec104c2c30253db9e7a40559c8878d605ab5cd062f2748304d7bb25a065
+SR3_PCT_sha256,9f880ec104c2c30253db9e7a40559c8878d605ab5cd062f2748304d7bb25a065
+SR4_PCT_sha256,9f880ec104c2c30253db9e7a40559c8878d605ab5cd062f2748304d7bb25a065

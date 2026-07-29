@@ -110,6 +110,17 @@ reconfirmed. Percent-equity sizing itself is validated, reusable
 infrastructure (`DUAL_MODE_RECOMMENDED`) independent of this negative
 exit-management result.
 
+**Audit reconfirmation (D029 audit remediation, see `DECISION_LOG.md`'s
+closing entry and `D029_AUDIT_FINAL_REPORT.md`)**: all of the above was
+re-verified against a twice-patched, independently-reconciled rerun
+(partial-close/protection atomicity fix, plus a second real R-computation
+defect found and fixed via new deal-level reconciliation). `D29-P3`/
+`D29-P4` are byte-identical or immaterially so (~1e-13 float noise) to
+the original evidence. `P3-SR3`/`P4-SR3`'s total portfolio R each moved
+by approximately -0.19R (a genuine, now-fixed R-computation correction
+affecting one trade in each) — this makes their already-`REJECTED`
+standing marginally worse, not better, and changes no conclusion above.
+
 ## Required metrics
 
 Each strategy must retain its own count, expectancy, win rate, average adverse excursion, average favorable excursion, holding time, regime, symbol, timeframe, spread, and execution mode. Combined-suite results may never substitute for per-strategy evidence.
