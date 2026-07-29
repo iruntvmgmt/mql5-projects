@@ -1,0 +1,4 @@
+variant,top3_removed_cum_r,top3_removed_exp,top5_removed_cum_r,top5_removed_exp,best_quarter,best_quarter_removed_cum_r,best_quarter_removed_exp,extreme_runner_dependence
+SR0,22.6117,0.1209,18.6117,0.1006,2025Q2,13.3449,0.0845,no
+SR3_PCT,9.6561,0.0506,5.6561,0.0299,2025Q2,4.2023,0.0263,no
+SR4_PCT,-13.1993,-0.0721,-20.8973,-0.1155,2025Q2,-5.2291,-0.0333,YES -- top-3/top-5/best-quarter removal all flip result negative

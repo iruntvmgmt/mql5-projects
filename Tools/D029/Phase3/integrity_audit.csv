@@ -1,0 +1,4 @@
+variant,unknown_exits,reject_partial_volume_ineligible,actual_risk_exceeds_requested,future_leakage_detected
+SR0,0,0,0,no
+SR3_PCT,0,0,0,no
+SR4_PCT,0,0,0,no

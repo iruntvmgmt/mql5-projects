@@ -1,0 +1,4 @@
+variant,dev_trades,dev_cum_r,dev_exp,val_trades,val_cum_r,val_exp,holdout_trades,holdout_cum_r,holdout_exp
+SR0,123,17.583,0.143,29,4.4695,0.1541,38,6.5592,0.1726
+SR3_PCT,126,11.4533,0.0909,30,0.6198,0.0207,38,3.583,0.0943
+SR4_PCT,120,5.2988,0.0442,29,3.5033,0.1208,37,5.9779,0.1616

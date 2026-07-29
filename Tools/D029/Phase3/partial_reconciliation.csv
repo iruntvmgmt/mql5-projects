@@ -1,0 +1,3 @@
+variant,partial_events,exact_volume_reconciliation,mean_executed_fraction,min_executed_fraction,max_executed_fraction,within_2pct_of_50pct
+SR3_PCT,86,86/86,0.4932,0.4444,0.5,77/86
+SR4_PCT,82,82/82,0.4918,0.4444,0.5,70/82

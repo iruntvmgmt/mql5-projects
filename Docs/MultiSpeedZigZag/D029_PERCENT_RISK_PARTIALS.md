@@ -457,3 +457,84 @@ SR4-PCT policy) have zero effect on SR0 or any other previously certified
 path.
 
 Committed as `D029 Phase 3A: executable partial-leg architecture`.
+
+## Phase 3 — executable partial and runner study
+
+SR0, SR3-PCT, SR4-PCT each run exactly once at the frozen $100,000
+balance, SweepReclaim only, canonical entries/stop unchanged. Full detail:
+`Tools/D029/Phase3/README.md`, results CSVs in the same directory, raw
+evidence in `/Users/matt/MT5-MSZZ-TEST/D029_Phase3_Results/`.
+
+### Volume resolution and same-signal proof
+
+Zero `REJECT_PARTIAL_VOLUME_INELIGIBLE` events across 203 (SR3-PCT) and 207
+(SR4-PCT) sizing decisions — SweepReclaim's volume resolution at $100,000
+remains perfect, exactly matching Phase 0's projection and Phase 2's
+empirical confirmation. `RAW_CANDIDATE` count is **identical (376)** across
+all three variants — proof, not assumption, that neither partial policy
+alters signal generation in any way.
+
+### Partial accounting
+
+Both variants produced genuine, mechanically real partial closes this
+time: **86 for SR3-PCT, 82 for SR4-PCT**, with **100% exact volume
+reconciliation** (`executed_partial_volume + remaining_volume ==
+original_volume` in every single case, verified via the new
+`MSZZ_PartialCloseJournal.csv`). Executed partial fraction averages
+49.3%/49.2% (range 44.4%-50.0%) — never exactly 50.0% in every case because
+of volume-step rounding on odd-step original volumes, exactly the
+"non-exact split" behavior Phase 0 disclosed in advance; every such case is
+captured in the journal's `executed_partial_volume` field, not silently
+assumed to be a clean half.
+
+### Results
+
+| | SR0 (ctrl) | SR3-PCT | SR4-PCT |
+|---|---|---|---|
+| trades | 190 | 194 | 186 |
+| cum R | +28.6117 | +15.6561 | +14.7800 |
+| expectancy | 0.1506 | 0.0807 | 0.0795 |
+| PF | 1.2688 | 1.1776 | 1.1752 |
+| max DD | 18.2941 | **14.9477** | 19.5860 |
+| win rate | 0.3684 | 0.4897 | 0.4892 |
+| mean hold (bars) | 23.65 | 20.58 | **131.38** |
+| Val expectancy | 0.1541 | 0.0207 | 0.1208 |
+| Holdout expectancy | 0.1726 | 0.0943 | 0.1616 |
+| top-3-removed exp | 0.1209 | 0.0506 | **-0.0721** |
+| top-5-removed exp | 0.1006 | 0.0299 | **-0.1155** |
+| best-quarter-removed exp | 0.0845 | 0.0263 | **-0.0333** |
+| long / short expectancy | 0.0808 / 0.2219 | -0.0035 / 0.1684 | 0.0704 / 0.0883 |
+
+**SR3-PCT — `PORTFOLIO_TEST_ELIGIBLE`.** Every explicit decision-rule gate
+passes: positive full-window, validation, and holdout expectancy; remains
+positive excluding the top 3 trades (0.0506) and excluding the best
+quarter (0.0263); no extreme runner dependence (top-5-removed still
+positive at 0.0299); zero unknown exits; exact accounting; zero signal
+mismatch. Max drawdown improves a genuine **18.3%** versus SR0 (14.95R vs
+18.29R) — this is not an artifact of a handful of trades, since the result
+survives top-3/top-5/best-quarter exclusion throughout. The honest
+tradeoff: cumulative R, expectancy, and PF are all lower than SR0, and
+long-direction expectancy turns slightly negative (-0.0035, essentially
+breakeven). This is a real DD-for-edge tradeoff, not a free improvement —
+reported as such, not oversold.
+
+**SR4-PCT — `REJECTED`.** Fails three explicit gates simultaneously:
+removing the top 3 trades flips the entire result from **+14.78R to
+-13.20R**; removing the top 5 goes further to -20.90R; removing the best
+quarter also goes negative (-5.23R). `avg_mfe_r` (1.9826) and mean holding
+time (131.38 bars, 5.7x SR0's) both point to the same cause — a small
+number of very large structural-trail runners are propping up an otherwise
+losing result. This is precisely the "extreme runner subgroup dependence"
+pattern the decision rules are designed to catch, and unlike D028's SR4
+(where the mechanism never genuinely fired), this is a real finding about
+a genuinely-executing runner design: on SweepReclaim's entries, letting the
+remainder ride behind confirmed structural pivots with no fixed target
+does not produce a robust edge. Also notable: max DD does not even improve
+over SR0 here (19.586R vs 18.294R, slightly worse) — SR4-PCT offers neither
+the return of SR0 nor the drawdown benefit of SR3-PCT.
+
+Both `MSZZ_TradeAnalytics.csv` outputs are hashed (`output_hashes.csv`) for
+deterministic reproducibility.
+
+**Only SR3-PCT advances to Phase 4**, alongside SR0 as the mandatory
+control. Committed as `D029 Phase 3: executable partial and runner study`.

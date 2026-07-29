@@ -1,0 +1,4 @@
+variant,pct_mfe_ge_0_5r,pct_mfe_ge_1_0r,pct_mfe_ge_2_0r,avg_mfe_r,avg_giveback_r
+SR0,0.6474,0.5053,0.3684,1.3003,1.1497
+SR3_PCT,0.6392,0.5,0.2784,1.1772,1.0965
+SR4_PCT,0.6344,0.5,0.2742,1.9826,1.9031

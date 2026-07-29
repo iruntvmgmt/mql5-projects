@@ -1,0 +1,4 @@
+variant,raw_candidate_count,matches_sr0_control
+SR0,376,yes (control)
+SR3_PCT,376,"yes -- exact match, zero signal-stream divergence"
+SR4_PCT,376,"yes -- exact match, zero signal-stream divergence"

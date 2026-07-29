@@ -1,0 +1,4 @@
+variant,long_trades,long_expectancy,short_trades,short_expectancy
+SR0,96,0.0808,94,0.2219
+SR3_PCT,99,-0.0035,95,0.1684
+SR4_PCT,92,0.0704,94,0.0883
