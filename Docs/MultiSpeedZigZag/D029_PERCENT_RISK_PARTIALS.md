@@ -538,3 +538,80 @@ deterministic reproducibility.
 
 **Only SR3-PCT advances to Phase 4**, alongside SR0 as the mandatory
 control. Committed as `D029 Phase 3: executable partial and runner study`.
+
+## Phase 4 — percentage-sized portfolio comparison
+
+Only SR3-PCT qualified from Phase 3, so Phase 4 required exactly two new
+actual EA portfolio runs: `P3-SR3` (A 2R + SweepReclaim SR3-PCT) and
+`P4-SR3` (E 3R + SweepReclaim SR3-PCT), both at $100,000. The controls
+(`D29-P3`, `D29-P4`, both SweepReclaim SR0) were already certified in
+Phase 2 and reused, not rerun — consistent with "do not rerun certified
+work unnecessarily." Full detail: `Tools/D029/Phase4/README.md`, results
+CSVs in the same directory, raw evidence in
+`/Users/matt/MT5-MSZZ-TEST/D029_Phase4_Results/`.
+
+### Results
+
+| | D29-P3 (ctrl) | P3-SR3 | D29-P4 (ctrl) | P4-SR3 |
+|---|---|---|---|---|
+| trades | 342 | 347 | 330 | 335 |
+| cum R | +41.6064 | +29.8514 | +47.6083 | +35.6172 |
+| expectancy | 0.1217 | 0.0860 | 0.1443 | 0.1063 |
+| PF | 1.2218 | 1.1709 | 1.2472 | 1.1972 |
+| max DD | 23.9365 | **20.8497** | 24.2455 | **22.6597** |
+| Sweep trades / cum R | 136 / +17.4889 | 139 / **+4.7340** | 134 / +19.4889 | 137 / **+5.4978** |
+| simultaneous episodes / hours | 69 / 57.05 | 67 / 49.63 | 74 / 60.54 | 72 / 53.04 |
+
+### The central finding: SR3-PCT's drawdown improvement partially survives the portfolio, but SweepReclaim's own edge collapses far more than the standalone test predicts
+
+This is a materially different result than D028's SR5, where the
+standalone DD improvement was exactly canceled at the portfolio level (max
+DD came out byte-identical to control). Here, DD genuinely improves in
+both portfolios — **-12.9% for P3** (23.94R -> 20.85R) and **-6.5% for
+P4** (24.25R -> 22.66R), a real, non-trivial reduction, not an artifact.
+But the cost is much larger than Phase 3's standalone SR3-PCT result would
+suggest: SweepReclaim's own portfolio contribution collapses from
+**+17.49R to +4.73R** in P3 (almost the same trade count, 136 vs 139 —
+this is not fewer trades, it's the *same trades resolving far worse*), and
+from **+19.49R to +5.50R** in P4. This is a genuine, portfolio-specific
+interaction effect that only appears once a real opposing FastMedConfluence
+book is competing for the same account's risk budget and occupancy — it is
+invisible from Phase 3's standalone-only test, and is exactly the class of
+effect the handoff's "do not construct combined results by arithmetic
+addition" requirement exists to catch. (Investigating the precise
+mechanism — e.g., whether breakeven-stopped remainder legs are more
+frequently caught by cross-book risk-cap timing than fixed-2R positions —
+is a natural follow-on question but is out of scope for this bounded
+study; the finding itself, that the interaction exists and is large, is
+what matters for the decision below.)
+
+### Weak-core-month behavior
+
+Of FastMedConfluence A's 5 negative-expectancy months, P3-SR3 improves 3
+(2025-05, 2025-11, 2026-03) and worsens 2 (2025-07, 2026-06) relative to
+the P3 control — a mixed, not clearly favorable, pattern. Full table:
+`weak_core_months.csv`.
+
+### Integrity
+
+Zero duplicate logical IDs, zero cross-family actions, maximum observed
+portfolio risk 0.4997% (P3-SR3) / 0.4997% (P4-SR3), both safely under the
+0.50% cap; account mode HEDGING throughout; 64 and 63 partial-close events
+respectively, matching the per-book exit-management journals exactly.
+
+### Classification
+
+**P3-SR3: REJECTED. P4-SR3: REJECTED.** The primary Phase 4 gate —
+"exceeds matched core on cumulative R" — fails decisively for both (-28%
+and -25% respectively). The genuine drawdown improvement is real but far
+too small to offset the much larger loss of SweepReclaim's own
+portfolio-level edge. Combined with D028's SR5 finding (a different
+failure mode — zero DD effect rather than a large R cost — but the same
+ultimate verdict), this is now the **second independent exit-management
+study, under two different sizing regimes, to find that no tested
+SweepReclaim exit-management variant improves the actual executed
+independent-book portfolio.** D29-P3 and D29-P4 (both SweepReclaim SR0,
+original unmodified exit management) remain the best percentage-sized
+portfolios found anywhere in D029.
+
+Committed as `D029 Phase 4: percentage-sized portfolio comparison`.
