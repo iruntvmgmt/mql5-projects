@@ -195,10 +195,95 @@ CMSZZPortfolioRiskManager      g_portfolio_risk;
 CMSZZExecutionCoordinator      g_execution_coordinator;
 CMSZZVirtualNettingLedger      g_virtual_ledger;
 CMSZZPortfolioJournals         g_portfolio_journals;
+bool                           g_portfolio_single_book_active=false;
+ENUM_MSZZ_STRATEGY_ID          g_portfolio_strategy_id=MSZZ_STRAT_NONE;
 
 bool LiveExecutionAuthorized(){ return (!InpShadowOnly && InpAllowLiveExecution && InpAcknowledgeRisk); }
 bool EventConsumed(const string id){ return g_event_store.Contains(id); }
 bool ConsumeEvent(const string id){ return g_event_store.Add(id); }
+
+int EnabledStrategyCount()
+{
+   int count=0;
+   if(InpEnableFastBreakout) count++;
+   if(InpEnableMediumBreakout) count++;
+   if(InpEnableSlowBreakout) count++;
+   if(InpEnableFastMedConfluence) count++;
+   if(InpEnableFastMedContext) count++;
+   if(InpEnableMedSlowContext) count++;
+   if(InpEnableNestedPullback) count++;
+   if(InpEnableWeightedEnsemble) count++;
+   if(InpEnableAlignedFastPullback) count++;
+   if(InpEnableBreakoutRetest) count++;
+   if(InpEnableSweepReclaim) count++;
+   if(InpEnableCompressionBreakout) count++;
+   if(InpEnableStructureTransition) count++;
+   return count;
+}
+
+MSZZStrategyBookState ActivePortfolioBookState()
+{
+   if(g_portfolio_strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
+      return g_fastmed_book.State();
+   return g_sweep_book.State();
+}
+
+bool PortfolioMarkFlat(const string reason)
+{
+   if(!g_portfolio_single_book_active) return true;
+   if(g_portfolio_strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
+      return g_fastmed_book.MarkFlat(reason);
+   if(g_portfolio_strategy_id==MSZZ_STRAT_SWEEP_RECLAIM)
+      return g_sweep_book.MarkFlat(reason);
+   return false;
+}
+
+bool PortfolioMarkEntryPending(const MSZZCandidate &candidate,const double volume,
+                               const double requested_risk_pct,string &reason)
+{
+   if(!g_portfolio_single_book_active) return true;
+   if(candidate.strategy_id!=g_portfolio_strategy_id)
+   {
+      reason="candidate does not belong to active single book";
+      return false;
+   }
+   if(g_portfolio_strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
+      return g_fastmed_book.MarkEntryPending(candidate,volume,requested_risk_pct,reason);
+   return g_sweep_book.MarkEntryPending(candidate,volume,requested_risk_pct,reason);
+}
+
+bool PortfolioMarkOpen(const string logical_position_id,const ulong position_ticket,
+                       const ulong order_ticket,const datetime entry_time,
+                       const double entry_price,const double stop_price,
+                       const double target_price,const double allocated_risk_pct,
+                       string &reason)
+{
+   if(!g_portfolio_single_book_active) return true;
+   if(g_portfolio_strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
+      return g_fastmed_book.MarkOpen(logical_position_id,position_ticket,order_ticket,
+                                     entry_time,entry_price,stop_price,target_price,
+                                     allocated_risk_pct,reason);
+   return g_sweep_book.MarkOpen(logical_position_id,position_ticket,order_ticket,
+                                entry_time,entry_price,stop_price,target_price,
+                                allocated_risk_pct,reason);
+}
+
+bool PortfolioAssignPendingLogicalPositionId(const string logical_position_id,
+                                             string &reason)
+{
+   if(!g_portfolio_single_book_active) return true;
+   if(g_portfolio_strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
+      return g_fastmed_book.AssignPendingLogicalPositionId(logical_position_id,reason);
+   return g_sweep_book.AssignPendingLogicalPositionId(logical_position_id,reason);
+}
+
+double PortfolioTargetR(const ENUM_MSZZ_STRATEGY_ID strategy_id)
+{
+   if(!g_portfolio_single_book_active) return InpRiskReward;
+   if(strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE) return InpFastMedBookTargetR;
+   if(strategy_id==MSZZ_STRAT_SWEEP_RECLAIM) return InpSweepBookTargetR;
+   return 0.0;
+}
 
 bool ConfigurePortfolioArchitecture(string &reason)
 {
@@ -208,6 +293,25 @@ bool ConfigurePortfolioArchitecture(string &reason)
    if(!CMSZZCrossFamilyPolicy::IsKnown(policy))
    {
       reason="unknown D028 cross-family policy";
+      return false;
+   }
+   if(policy!=MSZZ_CROSS_FAMILY_INDEPENDENT_BOOKS)
+   {
+      reason="Stage 3 single-book mode requires INDEPENDENT_BOOKS policy";
+      return false;
+   }
+   if(EnabledStrategyCount()!=1)
+   {
+      reason="Stage 3 requires exactly one enabled strategy";
+      return false;
+   }
+   if(InpEnableFastMedConfluence)
+      g_portfolio_strategy_id=MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE;
+   else if(InpEnableSweepReclaim)
+      g_portfolio_strategy_id=MSZZ_STRAT_SWEEP_RECLAIM;
+   else
+   {
+      reason="Stage 3 supports only FastMedConfluence or SweepReclaim";
       return false;
    }
    if(!g_execution_coordinator.Configure(_Symbol,InpPortfolioBaseMagic,policy,reason))
@@ -222,22 +326,21 @@ bool ConfigurePortfolioArchitecture(string &reason)
    sweep_exit.target_r=InpSweepBookTargetR;
    sweep_exit.own_family_opposite_exit=true;
 
-   long fastmed_magic=g_execution_coordinator.BookMagic(
-      MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,1);
-   long sweep_magic=g_execution_coordinator.BookMagic(MSZZ_STRAT_SWEEP_RECLAIM,2);
-   if(fastmed_magic<=0 || sweep_magic<=0 || fastmed_magic==sweep_magic)
+   // Stage 3 deliberately reuses the certified run's InpMagic for its one
+   // physical book, keeping all legacy ownership/intent/analytics machinery
+   // identical. Stage 4 will assign distinct per-book magics.
+   if(g_portfolio_strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
    {
-      reason="D028 book magic derivation failed uniqueness";
-      return false;
+      if(!g_fastmed_book.Configure(1,MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,
+                                   MSZZ_FAMILY_BREAKOUT,InpMagic,true,
+                                   fastmed_exit,reason)) return false;
    }
-   if(!g_fastmed_book.Configure(1,MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,
-                                MSZZ_FAMILY_BREAKOUT,fastmed_magic,true,
-                                fastmed_exit,reason))
-      return false;
-   if(!g_sweep_book.Configure(2,MSZZ_STRAT_SWEEP_RECLAIM,
-                              MSZZ_FAMILY_REVERSAL,sweep_magic,true,
-                              sweep_exit,reason))
-      return false;
+   else
+   {
+      if(!g_sweep_book.Configure(2,MSZZ_STRAT_SWEEP_RECLAIM,
+                                 MSZZ_FAMILY_REVERSAL,InpMagic,true,
+                                 sweep_exit,reason)) return false;
+   }
 
    MSZZPortfolioRiskConfig risk; ZeroMemory(risk);
    risk.max_total_initial_risk_pct=InpPortfolioMaxTotalRiskPct;
@@ -268,6 +371,7 @@ bool ConfigurePortfolioArchitecture(string &reason)
       reason="D028 portfolio journal initialization failed";
       return false;
    }
+   g_portfolio_single_book_active=true;
    return true;
 }
 
@@ -408,10 +512,12 @@ bool PrepareMarketCandidate(const MSZZCandidate &source,MSZZCandidate &prepared,
    prepared.entry=(source.direction==MSZZ_DIR_LONG ? tick.ask : tick.bid);
    double risk=MathAbs(prepared.entry-source.stop);
    if(risk<=0.0){ reason="market entry equals structural stop"; return false; }
+   double target_r=PortfolioTargetR(source.strategy_id);
+   if(target_r<=0.0){ reason="book target R is invalid"; return false; }
    // D025 variant F: no fixed take-profit at all -- exits via SL or
    // opposite-signal reversal only. See DECISION_LOG.md D025.
    prepared.target=InpDisableFixedTarget ? 0.0 :
-      (source.direction==MSZZ_DIR_LONG ? prepared.entry+risk*InpRiskReward : prepared.entry-risk*InpRiskReward);
+      (source.direction==MSZZ_DIR_LONG ? prepared.entry+risk*target_r : prepared.entry-risk*target_r);
    return g_execution_guard.ValidateStops(prepared,prepared.stop,prepared.target,reason,InpDisableFixedTarget);
 }
 
@@ -534,6 +640,68 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
       return true;
    }
 
+   bool portfolio_pending=false;
+   double portfolio_requested_risk=InpPortfolioRiskPerBookPct;
+   if(g_portfolio_single_book_active)
+   {
+      if(closed_opposite && !PortfolioMarkFlat("own-book opposite close"))
+      {
+         prepared.reason="active book could not reconcile opposite close";
+         JournalCandidate(prepared,"REJECT_PORTFOLIO_BOOK",cluster.cluster_id);
+         return false;
+      }
+
+      MSZZStrategyBookState books[];
+      ArrayResize(books,1);
+      books[0]=ActivePortfolioBookState();
+      MSZZPortfolioRiskSnapshot risk_snapshot;
+      MSZZOwnershipSnapshot ownership_snapshot=g_ownership.Snapshot();
+      if(!g_portfolio_risk.BuildSnapshot(books,1,ownership_snapshot.owned_positions,
+                                         0.0,0.0,risk_snapshot))
+      {
+         prepared.reason="portfolio risk snapshot failed: "+risk_snapshot.reason;
+         JournalCandidate(prepared,"REJECT_PORTFOLIO_RISK",cluster.cluster_id);
+         return false;
+      }
+      if(!g_portfolio_risk.ApproveOpen(risk_snapshot,books,1,prepared.strategy_id,
+                                       prepared.family_id,prepared.direction,
+                                       portfolio_requested_risk,volume,reason))
+      {
+         prepared.reason=reason;
+         JournalCandidate(prepared,"REJECT_PORTFOLIO_RISK",cluster.cluster_id);
+         return false;
+      }
+      if(!PortfolioMarkEntryPending(owner,volume,portfolio_requested_risk,reason))
+      {
+         prepared.reason=reason;
+         JournalCandidate(prepared,"REJECT_PORTFOLIO_BOOK",cluster.cluster_id);
+         return false;
+      }
+      if(!PortfolioAssignPendingLogicalPositionId(persistence_id,reason))
+      {
+         PortfolioMarkFlat("logical position identity rejected");
+         prepared.reason=reason;
+         JournalCandidate(prepared,"REJECT_PORTFOLIO_BOOK",cluster.cluster_id);
+         return false;
+      }
+      MSZZExecutionPlan plan;
+      if(!g_execution_coordinator.BuildOpenPlan(ActivePortfolioBookState(),0.0,plan,reason) ||
+         plan.action!=MSZZ_COORDINATOR_OPEN_PHYSICAL)
+      {
+         PortfolioMarkFlat("execution plan rejected");
+         prepared.reason=(reason!="" ? reason : "single-book hedging plan not physical");
+         JournalCandidate(prepared,"REJECT_PORTFOLIO_EXECUTION",cluster.cluster_id);
+         return false;
+      }
+      g_portfolio_journals.JournalRisk(TimeCurrent(),plan.book_id,"OPEN",true,
+                                       "approved",risk_snapshot,portfolio_requested_risk);
+      g_portfolio_journals.JournalBook(TimeCurrent(),ActivePortfolioBookState(),
+                                      "ENTRY_PENDING","",
+                                      g_execution_coordinator.AccountMode(),
+                                      g_last_regime_id);
+      portfolio_pending=true;
+   }
+
    // D006 idempotent execution-intent persistence: durably mark this cluster
    // consumed BEFORE attempting to submit the order, and fail closed if that
    // write does not succeed. This makes execution idempotent with respect to
@@ -544,6 +712,7 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
    // broker, this cluster will not be retried even though no position opened.
    if(!ConsumeEvent(persistence_id))
    {
+      if(portfolio_pending) PortfolioMarkFlat("event persistence failed");
       prepared.reason="execution intent persistence failed, order not attempted";
       JournalCandidate(prepared,"REJECT_INTENT_PERSISTENCE",cluster.cluster_id);
       return false;
@@ -582,6 +751,7 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
 
    if(!g_intent_store.CreateIntent(intent))
    {
+      if(portfolio_pending) PortfolioMarkFlat("intent persistence failed");
       prepared.reason="execution intent store persistence failed: "+g_intent_store.LastError();
       JournalCandidate(prepared,"REJECT_INTENT_STORE",cluster.cluster_id);
       return false;
@@ -656,6 +826,30 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
          // that never actually resolved.
          intent.position_ticket=0;
       }
+
+      if(portfolio_pending)
+      {
+         MSZZStrategyBookState pending_book=ActivePortfolioBookState();
+         string book_reason;
+         datetime book_entry_time=TimeCurrent();
+         double book_entry_price=(intent.average_fill_price>0.0 ?
+                                  intent.average_fill_price : prepared.entry);
+         if(!PortfolioMarkOpen(pending_book.logical_position_id,intent.position_ticket,
+                               intent.order_ticket,book_entry_time,book_entry_price,
+                               prepared.stop,prepared.target,portfolio_requested_risk,
+                               book_reason))
+         {
+            Print("MSZZ D028 BOOK OPEN RECONCILIATION FAILED: ",book_reason);
+            g_recovery_required=true;
+         }
+         else
+         {
+            g_portfolio_journals.JournalBook(TimeCurrent(),ActivePortfolioBookState(),
+                                            "OPEN","",
+                                            g_execution_coordinator.AccountMode(),
+                                            g_last_regime_id);
+         }
+      }
    }
    else
    {
@@ -679,6 +873,7 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
       prepared.reason=StringFormat("retcode=%u %s (cluster already marked consumed; not retried)",
                                    g_trade.ResultRetcode(),g_trade.ResultRetcodeDescription());
       JournalCandidate(prepared,"ORDER_FAILED",cluster.cluster_id);
+      if(portfolio_pending) PortfolioMarkFlat("broker order failed");
    }
    return ok;
 }
@@ -760,6 +955,46 @@ void DetectClosedPositions()
       else if(InpWriteCSV)
       {
          g_trade_analytics.ExportClosedTrade(intent,fill_time,closing_price,closing_time);
+      }
+
+      if(g_portfolio_single_book_active &&
+         intent.strategy_id==(int)g_portfolio_strategy_id)
+      {
+         MSZZStrategyBookState active_book=ActivePortfolioBookState();
+         MSZZStrategyBookState journal_book; ZeroMemory(journal_book);
+         journal_book.valid=true;
+         journal_book.enabled=true;
+         journal_book.book_id=active_book.book_id;
+         journal_book.strategy_id=(ENUM_MSZZ_STRATEGY_ID)intent.strategy_id;
+         journal_book.family_id=active_book.family_id;
+         journal_book.magic=intent.magic;
+         journal_book.direction=(ENUM_MSZZ_DIRECTION)intent.direction;
+         journal_book.logical_position_id=intent.intent_id;
+         journal_book.broker_position_ticket=intent.position_ticket;
+         journal_book.entry_time=fill_time;
+         journal_book.entry_price=intent.average_fill_price;
+         journal_book.stop_price=intent.requested_stop;
+         journal_book.target_price=intent.requested_target;
+         journal_book.initial_risk_price=MathAbs(intent.average_fill_price-
+                                                intent.requested_stop);
+         journal_book.logical_volume=intent.filled_volume;
+         journal_book.exit_config=active_book.exit_config;
+         double realized_r=0.0;
+         if(journal_book.initial_risk_price>0.0)
+            realized_r=(intent.direction==(int)MSZZ_DIR_LONG ?
+                        closing_price-intent.average_fill_price :
+                        intent.average_fill_price-closing_price)/
+                       journal_book.initial_risk_price;
+         if(InpWriteCSV)
+            g_portfolio_journals.JournalTrade(journal_book,closing_time,
+                                              closing_price,0.0,realized_r,
+                                              "broker position closed",
+                                              g_last_regime_id);
+         if(active_book.position_open &&
+            active_book.broker_position_ticket==intent.position_ticket)
+         {
+            PortfolioMarkFlat("broker position closed");
+         }
       }
 
       if(!g_intent_store.UpdateIntent(intent))
@@ -1186,9 +1421,15 @@ int OnInit()
                      (ENUM_MSZZ_CROSS_FAMILY_POLICY)InpCrossFamilyPolicy),
                   (g_execution_coordinator.PhysicalTicketIsolationSupported()?"true":"false"),
                   (g_execution_coordinator.VirtualLedgerRequired()?"true":"false"));
-      Print("MSZZ D028 PORTFOLIO ACTIVATION BLOCKED: Stage 1 is architecture-only; "
-            "Stage 2 tests and Stage 3 single-book equivalence are required.");
-      return INIT_FAILED;
+      if(!g_execution_coordinator.PhysicalTicketIsolationSupported())
+      {
+         Print("MSZZ D028 STAGE 3 REJECTED: single-book equivalence is restricted "
+               "to the isolated HEDGING account.");
+         return INIT_FAILED;
+      }
+      PrintFormat("MSZZ D028 STAGE 3 SINGLE BOOK ACTIVE strategy_id=%d magic=%I64d target_r=%.2f",
+                  (int)g_portfolio_strategy_id,InpMagic,
+                  PortfolioTargetR(g_portfolio_strategy_id));
    }
 
    // D019: fail-closed research-eligibility authorization. All-or-nothing --

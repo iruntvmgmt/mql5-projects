@@ -65,9 +65,12 @@ void OnStart()
          pending.origin_id=="ORIGIN|A-EVENT-1" &&
          pending.logical_position_id=="MSZZB1|1|A-EVENT-1",
          "signal origin and logical identity survive handoff",failures);
+   Check(a.AssignPendingLogicalPositionId("CLUSTER-1",reason) &&
+         a.State().logical_position_id=="CLUSTER-1",
+         "pending logical ID binds to durable cluster identity",failures);
    Check(!sweep.MarkEntryPending(ac,0.01,0.25,reason) && reason!="",
          "book rejects another strategy candidate",failures);
-   Check(a.MarkOpen(pending.logical_position_id,1001,2001,D'2026.07.01 10:01',
+   Check(a.MarkOpen(a.State().logical_position_id,1001,2001,D'2026.07.01 10:01',
                     3300.0,3290.0,3320.0,0.25,reason),
          "pending entry becomes open",failures);
    Check(a.OwnsTicket(1001) && a.OwnsTicket(2001) && !a.OwnsTicket(9999),
@@ -82,5 +85,5 @@ void OnStart()
    Check(!a.State().position_open && a.State().broker_position_ticket==0,
          "flat transition clears position ownership",failures);
 
-   PrintFormat("TEST_SUMMARY tests=15 failures=%d",failures);
+   PrintFormat("TEST_SUMMARY tests=16 failures=%d",failures);
 }

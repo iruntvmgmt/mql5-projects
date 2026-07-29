@@ -1,0 +1,4 @@
+run,trade_rows,portfolio_trade_rows,unique_trade_ids,unique_portfolio_ids,missing_portfolio_ids,unexpected_portfolio_ids,duplicate_trade_ids,duplicate_portfolio_ids,direction_mismatches,entry_time_mismatches,exit_time_mismatches,max_abs_r_difference,status
+A_2R,224,224,224,224,0,0,0,0,0,0,0,4.783342712375016e-05,PASS
+E_3R,213,213,213,213,0,0,0,0,0,0,0,4.80322906628583e-05,PASS
+SweepReclaim_2R,190,190,190,190,0,0,0,0,0,0,0,4.960422168132084e-05,PASS

@@ -222,6 +222,52 @@ Stage 2 does not claim single-book portfolio equivalence, a combined portfolio
 result, a SweepReclaim management result, production readiness, or approval to
 remove the activation block.
 
+## Stage 3 single-book equivalence — 2026-07-28
+
+Stage 3 activates exactly one logical book on the isolated HEDGING tester.
+Activation requires:
+
+- `InpEnableMultiBookPortfolio=true`;
+- `INDEPENDENT_BOOKS`;
+- exactly one enabled strategy;
+- FastMedConfluence or SweepReclaim;
+- detected physical ticket isolation.
+
+Every other Stage 3 combination fails initialization. The active book reuses
+the run's certified `InpMagic` so ownership, intent persistence, protection,
+deal reconciliation, and established analytics remain directly comparable.
+Distinct simultaneous book magics remain Stage 4 work.
+
+The book now approves each entry through the portfolio risk manager, binds its
+logical position ID to the durable cluster ID, validates a hedging physical
+execution plan, owns the returned order/position ticket, supplies its own
+target R, and returns flat only when its own ticket closes. All logical trades,
+including opposite-signal closures, reconcile into
+`MSZZ_PortfolioTradeAnalytics.csv`.
+
+Exact full-history results:
+
+| Book | Target | Trades | Cumulative R | Expectancy R | PF | Max DD R | Long | Short |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| FastMedConfluence A | 2R | 224 | 28.2447 | 0.1261 | 1.2446 | 15.1581 | 107 | 117 |
+| FastMedConfluence E | 3R | 213 | 31.2465 | 0.1467 | 1.2532 | 16.9204 | 101 | 112 |
+| SweepReclaim | 2R | 190 | 28.6117 | 0.1506 | 1.2688 | 18.2941 | 96 | 94 |
+
+Each new `MSZZ_TradeAnalytics.csv` is byte-identical to its certified control.
+The 627 portfolio logical-trade rows have zero missing, unexpected, or
+duplicate IDs; direction, entry time, and exit time have zero mismatches.
+Computed R differs from the certified four-decimal field by less than 0.00005R,
+which is solely the certified CSV's display rounding.
+
+All 27 scripts compiled with zero errors/warnings and all 27 runtime suites
+passed. Default-off shadows remain 113/46 and 431/178 candidates/clusters,
+zero malformed candidates, and zero trades.
+
+No combined configuration was run. This proves single-book equivalence and
+per-book target selection in isolation; it does not yet prove simultaneous
+FastMed 3R plus SweepReclaim 2R execution. Stage 4 remains the first combined
+portfolio test.
+
 ## Stage 0B integrity addendum — 2026-07-28
 
 The owner authorized a bounded repair of the candidate-index defect. Historical

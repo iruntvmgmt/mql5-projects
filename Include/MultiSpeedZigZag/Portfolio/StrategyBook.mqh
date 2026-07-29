@@ -191,6 +191,17 @@ public:
       return true;
    }
 
+   bool AssignPendingLogicalPositionId(const string logical_position_id,
+                                       string &reason)
+   {
+      reason="";
+      if(m_state.status!=MSZZ_BOOK_ENTRY_PENDING || logical_position_id=="")
+      { reason="logical ID assignment requires pending book and nonempty ID"; return false; }
+      m_state.logical_position_id=logical_position_id;
+      m_state.last_update_time=TimeCurrent();
+      return true;
+   }
+
    bool MarkFlat(const string reason)
    {
       if(!m_state.valid) return false;
