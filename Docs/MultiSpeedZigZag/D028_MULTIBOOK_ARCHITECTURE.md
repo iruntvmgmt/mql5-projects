@@ -616,3 +616,233 @@ reports: `/Users/matt/MT5-MSZZ-TEST/D028_Stage5A_Checkpoint_Results`.
 
 Stage 5A is accepted. Stage 5's actual SR0-SR5 comparison batch follows in
 a separate commit.
+
+### Stage 5 wiring bug found and fixed before any result was accepted
+
+The first full SR0-SR5 batch (all six configs) produced `MSZZ_RunSummary.csv`
+rows that were byte-identical across every variant — same 190 trades, same
+`+0.1506R` expectancy, same `PF 1.2688`, same `18.2941R` max DD for SR1
+through SR5 as for SR0 — and `MSZZ_SweepExitManagementJournal.csv` was never
+created by any of the six runs (confirmed genuinely absent, not merely
+uncollected, by checking all three Tester agents' `MQL5/Files/` directly).
+Cross-checking `MSZZ_TradeAnalytics.csv` ruled out the innocent explanation
+(SweepReclaim trades rarely reaching `+1.0R`) — 96 of 190 trades (50%) reach
+`mfe_r>=1.0R`, more than enough for SR1/SR2/SR3/SR5 to have fired repeatedly
+if the code path were actually running.
+
+Root cause: `ProcessBookExitManagement()` gated only on
+`g_portfolio_multi_book_active`. Every Stage 5 config enables SweepReclaim
+alone (`ConfigurePortfolioArchitecture()`'s single-supported-strategy path),
+which sets `g_portfolio_single_book_active=true` and
+`g_portfolio_multi_book_active=false` — the exact opposite flag. The whole
+exit-management call was therefore skipped every bar for all six runs,
+regardless of `InpSweepExitPolicy`. SR0's numbers came out correct anyway
+only because SR0's own dispatcher branch (`policy==SR0_FIXED2R`) is a
+no-op by design, and because position-closure detection for single-book mode
+runs through the pre-existing, separate `DetectClosedPositions()`/intent-store
+path (D008/D009), not through the multi-book-only `DetectClosedPortfolioBooks()`
+that `ProcessBookExitManagement()` sits next to — so SR0's fixed-2R baseline
+looked identical to the certified numbers by coincidence of two independent
+paths, not because exit management ran and did nothing.
+
+Fix: widened the gate to `if(!g_portfolio_multi_book_active &&
+!g_portfolio_single_book_active) return;`, matching the existing
+`!single && !multi` convention already used by `PortfolioTargetR()`
+elsewhere in the same file. `ProcessOneBookExit()`'s own per-book guards
+(`book.valid`, `status==MSZZ_BOOK_OPEN`, `position_open`) make calling it for
+an unconfigured book (e.g. `g_fastmed_book` in a SweepReclaim-only run) a
+safe no-op, so no further branching was needed. The fix is provably a no-op
+for every previously certified path in this branch: the FastMedConfluence
+book's `trailing_policy_id` is never set to anything but `0` by any config
+family (A/E/P1-P4), and every existing SweepReclaim config other than Stage
+5's SR1-SR5 also defaults `InpSweepExitPolicy=0`, which short-circuits
+`CMSZZBookExitManager::Evaluate()` before any of this matters. Only the six
+Stage 5 SR1-SR5 configs are affected.
+
+Verification after the fix: recompiled (`0 errors, 0 warnings`), hash-synced
+to the isolated instance, and reran the full SR0-SR5 batch. See below for the
+corrected results.
+
+### Second bug found during the same verification pass: duplicate portfolio-journal rows
+
+The corrected batch's `MSZZ_TradeAnalytics.csv` (190/194/195/194/182/190 rows
+across SR0-SR5, matching each `MSZZ_RunSummary.csv` trade count exactly) was
+clean, but `MSZZ_PortfolioTradeAnalytics.csv` was not: SR5 had 192 rows for
+190 trades, with the two duplicated `logical_position_id`s matching its two
+`TIME_STOP` force-closes exactly. Cause: `ProcessOneBookExit()`'s SR5
+force-close branch calls `ExportClosedPortfolioBookFromTrade()`, which
+journals and flattens the book immediately; `DetectClosedPositions()` then
+independently re-detects the same now-closed ticket on a later bar and wrote
+a second, unconditional row.
+
+A first fix attempt gated the `DetectClosedPositions()` write on
+`ActivePortfolioBookState()` still matching the closed ticket. This was
+wrong and was caught before being accepted: it reduced every variant's
+`MSZZ_PortfolioTradeAnalytics.csv` row count well below its trade count
+(e.g. SR0 190->166, a 24-row deficit matching its 24 `OTHER`-exit-reason
+trades exactly) — because the far more common own-family-opposite-close
+path (`ApplyOwnershipPreflight` -> `PortfolioMarkFlat("own-book opposite
+close")`) reassigns the book to a new position mid-bar, before
+`DetectClosedPositions()` ever revisits the old intent, so the active-book
+identity is *expected* to have moved on by then. Gating on it produced
+silent data loss for the common case while fixing only the rare one.
+
+Correct fix: an explicit `g_portfolio_journaled_tickets[]` set (mirroring
+the existing `g_partial_closed_tickets[]` pattern already used for D025's
+partial-close tracking). Both write sites — `ExportClosedPortfolioBookFromTrade()`
+(SR5's immediate force-close journal) and `DetectClosedPositions()`'s
+single-book block — mark/check the ticket instead of any book-state
+snapshot. Reran the full SR0-SR5 batch a third time; `MSZZ_TradeAnalytics.csv`
+and `MSZZ_PortfolioTradeAnalytics.csv` row counts now match exactly for
+every variant (190/190, 194/194, 195/195, 194/194, 182/182, 190/190), zero
+duplicate `logical_position_id`s anywhere, and every `MSZZ_RunSummary.csv`
+number is byte-identical to the pre-this-fix batch (expected: this fix only
+changes a secondary journal's write conditions, never a trading decision).
+
+### Stage 5 results — SR0-SR5
+
+SR0 reproduces the certified SweepReclaim-in-independent-book-path baseline
+exactly: **190 trades, +28.6117R, expectancy +0.1506R, PF 1.2688, max DD
+18.2941R** — matches the D028 handoff's ground truth and the Stage 5A
+checkpoint's own reproduction to the fourth decimal. All analysis below is
+computed from each variant's `MSZZ_TradeAnalytics.csv` via
+`d028_stage5_analysis.py` (development `2025.03.01`-`2025.12.31`, validation
+`2026.01.01`-`2026.04.30`, holdout `2026.05.01`-`2026.07.24`, per D027's
+frozen window declaration). Full per-quarter tables and raw output are
+preserved in `/Users/matt/MT5-MSZZ-TEST/D028_Stage5_Results/`.
+
+| | SR0 (ctrl) | SR1 BE | SR2 trail | SR3 partial | SR4 runner | SR5 time-stop |
+|---|---|---|---|---|---|---|
+| trades | 190 | 194 | 195 | 194 | 182 | 190 |
+| cum R | +28.6117 | +16.4340 | +18.4149 | +16.4340 | +3.4882 | +27.1420 |
+| expectancy | 0.1506 | 0.0847 | 0.0944 | 0.0847 | 0.0192 | 0.1429 |
+| PF | 1.2688 | 1.1854 | 1.1804 | 1.1854 | 1.0421 | 1.2562 |
+| max DD | 18.2941 | 19.7531 | 22.9263 | 19.7531 | 40.8095 | 17.6732 |
+| win rate | 0.3684 | 0.2835 | 0.3282 | 0.2835 | 0.1319 | 0.3632 |
+| mean/median/p90 hold (bars) | 23.65/5/40 | 20.58/4/36 | 22.01/4/38 | 20.58/4/36 | 141.90/5/82 | 20.18/5/40 |
+| Dev exp (n) | 0.1430 (123) | 0.1113 (126) | 0.1233 (127) | 0.1113 (126) | -0.0604 (116) | 0.1310 (123) |
+| Val exp (n) | **0.1541** (29) | **-0.0384** (30) | **-0.0860** (30) | **-0.0384** (30) | 0.0973 (29) | **0.1541** (29) |
+| Holdout exp (n) | 0.1726 (38) | 0.0937 (38) | 0.1404 (38) | 0.0937 (38) | 0.2075 (37) | 0.1726 (38) |
+| top-3-removed exp | 0.1209 | 0.0546 | 0.0647 | 0.0546 | **-0.2651** | 0.1131 |
+| best-quarter-removed exp | 0.0845 | 0.0073 | 0.0061 | 0.0073 | **-0.1612** | 0.0752 |
+| avg MFE / avg giveback | 1.3003/1.1497 | 1.1772/1.0925 | 1.2339/1.1394 | 1.1772/1.0925 | 2.0176/1.9984 | 1.2909/1.1481 |
+| exit SL/TP/OTHER | 100/66/24 | 83/51/60 | 87/58/50 | 83/51/60 | 78/8/96 | 99/65/26 |
+| `MSZZ_TradeAnalytics.csv` SHA-256 | `2e57ec92...` | `48844336...` | `37b85f2c...` | `48844336...` | `ba0491a1...` | `df014636...` |
+
+(Long/short and full quarterly breakdowns are in the raw analysis output,
+not reproduced here; SR0's own pre-existing long/short asymmetry — long exp
+0.0808 vs short exp 0.2219 — is a characteristic of the frozen SweepReclaim
+entry logic itself, not something any SRx exit policy introduces or fixes,
+and every SRx preserves the same direction of asymmetry.)
+
+Exit reasons are the coarse `SL`/`TP`/`OTHER` buckets `MSZZ_TradeAnalytics.csv`
+already records (`OTHER` covers own-family-opposite exits and, for SR5,
+forced `TIME_STOP` closes — cross-checked exactly: SR5's `OTHER` count is
+SR0's 24 plus its own 2 `TIME_STOP` journal entries). Reproducing the
+handoff's full 11-category exit inventory (`BREAKEVEN_STOP`,
+`STRUCTURAL_TRAIL`, `PARTIAL_AT_1R`, `RUNNER_TRAIL`, etc. as distinct from a
+plain `SL`) is not possible from this field alone — the fine cause of an
+`SL`-exit (original stop vs. a modified/trailed one) is only recoverable by
+cross-referencing `MSZZ_SweepExitManagementJournal.csv`, which was done for
+integrity checking below but not folded into a trade-by-trade reconciled
+export. Recorded here as an honest limitation of the current instrumentation
+rather than a fabricated fine-grained breakdown.
+
+**Integrity audit** (all six variants): zero duplicate `logical_position_id`s
+in `MSZZ_TradeAnalytics.csv` or `MSZZ_PortfolioTradeAnalytics.csv`;
+`MSZZ_TradeAnalytics.csv` row count exactly equals each variant's
+`MSZZ_RunSummary.csv` trade count; `MSZZ_PortfolioTradeAnalytics.csv` row
+count now exactly matches `MSZZ_TradeAnalytics.csv` for every variant
+(post the fix above); no `UNKNOWN` exit reason ever appears; no cross-family
+exits are possible in this single-strategy configuration; SR0's numbers are
+byte-identical to the certified baseline; deterministic output hashes
+recorded above.
+
+**SR1 (breakeven) — REJECTED.** Cumulative R, expectancy, and PF all worse
+than SR0 on the identical entry stream, max DD worse (19.75R vs 18.29R), and
+validation-window expectancy is **negative** (-0.0384R), which alone
+disqualifies it under the Stage 5 decision rules ("positive validation and
+holdout" is required). Moving the stop to breakeven at +1R converts a
+meaningful fraction of trades that would have reached the fixed +2R target
+into scratch trades once price pulls back through entry before continuing —
+visible directly in the exit mix (`OTHER` count jumps from 24 to 60, `TP`
+count drops from 66 to 51) and in the mean holding time actually
+*shortening* (23.65 -> 20.58 bars) despite giving trades more room to
+survive a pullback.
+
+**SR2 (structural trail) — REJECTED.** Same failure mode as SR1 and for the
+same underlying reason (this frozen SweepReclaim entry's edge depends more
+on reaching its full +2R target than on protecting partial gains early):
+worse cumulative R, worse expectancy, **worse max DD than the control**
+(22.93R vs 18.29R — trailing behind confirmed swings gave back more room
+than the fixed stop it replaced on this entry style), and negative
+validation-window expectancy (-0.0860R).
+
+**SR3 (partial 50% + breakeven remainder) — REDESIGN_REQUIRED, not a valid
+test of the SR3 mechanism.** `MSZZ_SweepExitManagementJournal.csv` shows
+every single partial-close attempt (194/194) logged
+`PARTIAL_CLOSE_SKIPPED_VOLUME`, `modify_ok=false`, "requested partial volume
+clamps to full position" — because every position here trades at
+`InpFixedLots=0.01`, the account/symbol's minimum tradable size, and 50% of
+the minimum lot cannot be represented at the broker's lot step. Every SR3
+decision therefore degenerates to exactly its breakeven-modify half with no
+volume ever actually banked — and SR3's results are not merely similar to
+SR1's, they are **byte-identical**: same 194 trades, same every statistic to
+four decimals, and an identical `MSZZ_TradeAnalytics.csv` SHA-256 hash
+(`48844336...`) to SR1. SR3 as designed (a genuine partial-close-then-manage-
+the-remainder policy) was never actually exercised by this backtest and
+cannot be, until either the base position size is increased or the broker
+supports finer-grained partial closes. Its numbers must not be read as "SR3
+performs like SR1" in any causal sense — they are the same trades because
+the mechanism collapsed to the same trades.
+
+**SR4 (partial 50% + structural runner) — REDESIGN_REQUIRED, and actively
+harmful under the current lot-size constraint; do not deploy or extend
+without fixing the underlying issue first.** The same lot-size floor blocks
+every partial close here too (15974/15974 `PARTIAL_CLOSE_SKIPPED_VOLUME`
+entries), but SR4's dispatcher gates its structural-trail phase on
+`partial_close_done`, which — because the partial can never actually
+succeed — never becomes true. The position instead re-enters the "attempt
+partial, move stop to breakeven, remove the fixed target" branch on every
+single bar it remains favorable, forever: the target is discarded (`remove_
+target=true` fires unconditionally) but no real trailing protection ever
+engages, since the code never reaches the trail branch. The result is a
+target-less position sitting behind a static breakeven stop with no active
+management at all — visible directly in the numbers: mean holding time
+balloons to **141.90 bars** (vs. 23.65 for the control), max DD nearly
+triples to **40.81R**, and full-window results are dominated by a handful of
+outliers to the point that **removing just the top 3 trades flips the whole
+result from +3.49R to -47.45R** (expectancy -0.2651R) and removing the best
+quarter flips it to -25.15R — the exact "dependence on a tiny runner
+subgroup" pattern the Stage 5 decision rules explicitly disqualify, on top
+of the mechanism never having been genuinely tested. The development window
+alone is net negative (-7.01R). This is the clearest finding of the whole
+study: SR4 as currently wired should not be considered even directionally
+informative about a real partial+runner policy, and should not be rerun
+until the partial-close volume floor is fixed at the architecture level.
+
+**SR5 (time stop, N=48 bars / 4h, threshold +0.5R) — PORTFOLIO_TEST_ELIGIBLE.**
+Only 2 of 190 trades were ever force-closed (`MSZZ_SweepExitManagementJournal.csv`:
+exactly 2 `TIME_STOP` rows, both `modify_ok=true`), so SR5 is essentially SR0
+with a narrow, low-frequency safety rule layered on top — every required
+criterion is met: full-window expectancy positive (+0.1429R), validation
+expectancy positive and **identical to the control** (+0.1541R, meaning
+neither of the 2 affected trades falls in the validation window), holdout
+expectancy positive and identical to the control (+0.1726R), remains
+positive excluding the top 3 trades (+0.1131R) and excluding the best
+quarter (+0.0752R), no unknown exits, exact accounting, max DD **improves**
+on the control (17.6732R vs 18.2941R). The tradeoff is genuinely marginal
+rather than a clear win — cumulative R is very slightly lower than SR0
+(+27.14R vs +28.61R, a ~1.47R cost concentrated in exactly 2 trades that
+would otherwise have run to a worse outcome) — so this should be reported to
+Stage 6 as a modest, low-risk drawdown-shaving tweak, not as a materially
+better SweepReclaim, and Stage 6 should judge it on whether that small DD
+improvement matters at the portfolio level once combined with FastMedConfluence.
+
+**Stage 5 summary decision:** only **SR5** advances to Stage 6, alongside
+SR0 as the mandatory control. SR1 and SR2 are REJECTED on their own
+evidence. SR3 and SR4 are REDESIGN_REQUIRED — neither's underlying mechanism
+was actually exercised by this account's position sizing, and re-running
+either without first fixing the partial-close volume floor (e.g. a larger
+base lot size, or broker/account support for finer lot steps) would not
+produce genuine evidence either way.

@@ -183,6 +183,21 @@ bool                           g_research_mode_active=false;
 // explicitly out of scope for a bounded mechanism-decomposition study.
 // See DECISION_LOG.md D025.
 ulong                          g_partial_closed_tickets[];
+// D028 Stage 5 bug fix: tracks which broker position tickets have already
+// received a MSZZ_PortfolioTradeAnalytics.csv row, so a position closed via
+// ProcessOneBookExit's SR5 force-close path (which journals immediately,
+// see ExportClosedPortfolioBookFromTrade) is never journaled a second time
+// when DetectClosedPositions() later notices the same ticket is gone. An
+// earlier attempt gated the DetectClosedPositions() write on
+// ActivePortfolioBookState() still matching the closed ticket instead --
+// wrong, because the far more common own-family-opposite-close path
+// (ApplyOwnershipPreflight -> PortfolioMarkFlat("own-book opposite close"))
+// flattens/reassigns the book to a new position mid-bar, before
+// DetectClosedPositions() ever runs for the old intent, so that guard
+// silently dropped every opposite-close trade's portfolio journal row
+// instead of just the intended SR5 duplicate. See DECISION_LOG.md D028
+// Stage 5.
+ulong                          g_portfolio_journaled_tickets[];
 // D026: research-only, in-memory (non-persistent across restarts, see
 // DECISION_LOG.md D026 "restart persistence") per-ticket trailing-stop
 // state. g_trail_config is built once in OnInit() from the Inp* rung/
@@ -1014,8 +1029,21 @@ void DetectClosedPositions()
          g_trade_analytics.ExportClosedTrade(intent,fill_time,closing_price,closing_time);
       }
 
+      // D028 Stage 5 bug fix: guard on a ticket-already-journaled set, not
+      // on whether ActivePortfolioBookState() still matches this ticket.
+      // The book is legitimately reassigned to a NEW position mid-bar by
+      // the own-family-opposite-close path (ApplyOwnershipPreflight ->
+      // PortfolioMarkFlat("own-book opposite close"), well before
+      // DetectClosedPositions() ever sees the old intent) -- an earlier
+      // attempt at this fix gated on active-book-matches-ticket and, as a
+      // result, silently dropped the portfolio journal row for every
+      // opposite-close trade (the common case), not just the intended
+      // target (SR5's force-close path, which journals immediately via
+      // ExportClosedPortfolioBookFromTrade and must not be double-journaled
+      // here). See DECISION_LOG.md D028 Stage 5.
       if(g_portfolio_single_book_active &&
-         intent.strategy_id==(int)g_portfolio_strategy_id)
+         intent.strategy_id==(int)g_portfolio_strategy_id &&
+         !TicketAlreadyPortfolioJournaled(intent.position_ticket))
       {
          MSZZStrategyBookState active_book=ActivePortfolioBookState();
          MSZZStrategyBookState journal_book; ZeroMemory(journal_book);
@@ -1047,6 +1075,7 @@ void DetectClosedPositions()
                                               closing_price,0.0,realized_r,
                                               "broker position closed",
                                               g_last_regime_id);
+         MarkTicketPortfolioJournaled(intent.position_ticket);
          if(active_book.position_open &&
             active_book.broker_position_ticket==intent.position_ticket)
          {
@@ -1065,6 +1094,20 @@ bool TicketAlreadyPartialClosed(const ulong ticket)
    for(int i=0;i<ArraySize(g_partial_closed_tickets);i++)
       if(g_partial_closed_tickets[i]==ticket) return true;
    return false;
+}
+
+bool TicketAlreadyPortfolioJournaled(const ulong ticket)
+{
+   for(int i=0;i<ArraySize(g_portfolio_journaled_tickets);i++)
+      if(g_portfolio_journaled_tickets[i]==ticket) return true;
+   return false;
+}
+
+void MarkTicketPortfolioJournaled(const ulong ticket)
+{
+   int n=ArraySize(g_portfolio_journaled_tickets);
+   ArrayResize(g_portfolio_journaled_tickets,n+1);
+   g_portfolio_journaled_tickets[n]=ticket;
 }
 
 void MarkTicketPartialClosed(const ulong ticket)
@@ -1429,6 +1472,15 @@ bool ExportAndFlattenPortfolioBook(const ENUM_MSZZ_STRATEGY_ID strategy_id,
    return PortfolioBookMarkFlatFor(strategy_id,exit_reason);
 }
 
+// D028 Stage 5: called directly by ProcessOneBookExit()'s SR5 force-close
+// branch, immediately after PositionClose() succeeds -- unlike the two
+// broker-detection paths above (DetectClosedPositions() for single-book,
+// DetectClosedPortfolioBooks()/ExportAndFlattenPortfolioBook() for multi-
+// book), which only discover a closure on a LATER bar once the ticket is
+// already gone. Marks the ticket journaled so DetectClosedPositions()'s
+// own later detection of this same now-closed ticket does not write a
+// second MSZZ_PortfolioTradeAnalytics.csv row for it. See
+// DECISION_LOG.md D028 Stage 5.
 bool ExportClosedPortfolioBookFromTrade(const ENUM_MSZZ_STRATEGY_ID strategy_id,
                                         const string exit_reason,
                                         const double exit_price,
@@ -1444,6 +1496,7 @@ bool ExportClosedPortfolioBookFromTrade(const ENUM_MSZZ_STRATEGY_ID strategy_id,
    if(InpWriteCSV)
       g_portfolio_journals.JournalTrade(book,exit_time,exit_price,0.0,
                                         realized_r,exit_reason,g_last_regime_id);
+   MarkTicketPortfolioJournaled(book.broker_position_ticket);
    g_portfolio_journals.JournalBook(exit_time,book,"CLOSED",exit_reason,
                                    g_execution_coordinator.AccountMode(),
                                    g_last_regime_id);
@@ -1796,7 +1849,13 @@ void ProcessOneBookExit(CMSZZStrategyBook &book_obj,const MSZZSpeedSnapshot &fas
 
 void ProcessBookExitManagement(const MSZZSpeedSnapshot &fast,const MqlRates &bar)
 {
-   if(!g_portfolio_multi_book_active) return;
+   // D028 Stage 5 bug fix: the original gate only checked
+   // g_portfolio_multi_book_active, so single-strategy runs (e.g. Stage 5's
+   // SweepReclaim-only configs, which set g_portfolio_single_book_active
+   // instead -- see ConfigurePortfolioArchitecture()) never reached
+   // ProcessOneBookExit() at all, regardless of InpSweepExitPolicy. Matches
+   // the existing !single && !multi convention used at PortfolioTargetR().
+   if(!g_portfolio_multi_book_active && !g_portfolio_single_book_active) return;
    ProcessOneBookExit(g_fastmed_book,fast,bar);
    ProcessOneBookExit(g_sweep_book,fast,bar);
 }
