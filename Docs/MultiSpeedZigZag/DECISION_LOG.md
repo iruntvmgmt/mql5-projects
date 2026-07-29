@@ -2443,3 +2443,63 @@ All items above were closed out. Summary (full detail in
   `RESEARCH_RESULT_CERTIFIED` / `RESTART_RECOVERY_REMAINS_UNRESOLVED` /
   `NO PRODUCTION DEPLOYMENT`. No merge to `main`, no live deployment at
   any point in this audit.
+
+## D030 — P4 loss-cluster and uncovered-regime map
+
+First phase of the D030–D035 six-family shadow research program (see
+`D030_D035_Six_Family_Claude_Handoff.md`), branched from
+`feature/d029-audit-remediation` @ `6e55ff34...` into
+`feature/d030-six-family-shadow-research`. Read-only analysis of the
+certified `D029_Audit_Results/D29_P4` evidence (330 trades, independently
+recomputed to the same +47.6083R / PF 1.2472 already in
+`D029_AUDIT_FINAL_REPORT.md`) plus the D028 Stage4 `P4` run's bar-level
+`MSZZ_RegimeJournal.csv` (the only full bar census on disk over the same
+window — safe to reuse since the Layer 1 regime classifier is unchanged
+and price-structure-only between D028 and D029). No strategy logic, no
+new backtest. Full findings: `D030_P4_LOSS_MAP.md`; scripts/CSVs:
+`Tools/D030/`.
+
+Headline findings:
+
+- P4's largest, most stable loss cluster is `market_phase =
+  TREND_CONTINUATION` (45% of all census bars, -10.48R, negative in dev,
+  validation, AND holdout) together with the same underlying fact seen
+  from the alignment axis: `FULLY_ALIGNED` is the most common alignment
+  state (60% of bars) yet the worst-performing one, while `OPPOSED`
+  alignment (fast/slow structure disagreeing) produces +50.33R — more
+  than the portfolio's entire net total. Consistent with FastMedConfluence
+  and SweepReclaim both being reversal/confluence systems, not
+  trend-following ones.
+- `exit_reason = OWN_FAMILY_OPPOSITE` (a trade force-closed by the
+  opposing book's signal, not its own stop/target) is negative in all
+  three splits, -13.39R total. Flagged as a candidate for a future,
+  separate causal-filter study on the existing books — explicitly not
+  acted on here, since this program prohibits modifying FastMedConfluence
+  or SweepReclaim entries.
+- `MSZZ_PHASE_RANGE` never fired once across 98,943 census bars (~16
+  months of XAUUSD M5). Not disqualifying for Family 6 (Range Rotation
+  already specifies it must build its own range definition rather than
+  reuse the phase classifier), but reinforces that this is a hard
+  requirement, not a formality.
+- Recommended D031 priority: Momentum Continuation and Trend Pullback
+  first (both target the TREND_CONTINUATION/FULLY_ALIGNED gap directly),
+  Session Sweep Reversal third (Asian session persistently flat vs a
+  strong New York), Break-Retest Continuation/Compression Breakout
+  secondary (thin-but-real BREAKOUT-phase signal), Range Rotation lowest
+  priority pending its own range-detection design.
+- **ID and name collision found, not fixed**: the handoff's suggested
+  `1060` (Session Sweep Reversal) collides with the existing `1060 =
+  Compression Breakout (D027 S4)` in `STRATEGY_CATALOG.md`. More
+  significantly, the handoff's own Family 4 is *also* named "Compression
+  Breakout" (suggested ID `1090`) — an implemented D027 S4
+  `CompressionBreakout` already exists at `1060`, so this is not a fresh
+  hypothesis; D031 must decide whether Family 4 supersedes, reuses, or is
+  deliberately distinct from it, and assign non-colliding IDs throughout.
+- Data limitations disclosed in full in `D030_P4_LOSS_MAP.md`: MFE/MAE
+  bucket unavailable at the portfolio-trade level (not exported for any
+  `D029_Audit_Results` portfolio config); spread/risk decile substituted
+  with a commission+swap cost-to-risk proxy (`execution_cost` is
+  uniformly 0.0 in this evidence) that correlates with holding time
+  rather than measuring spread independently.
+
+D031 (six-family shadow candidate architecture) has not started.

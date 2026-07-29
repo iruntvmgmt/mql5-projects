@@ -1,0 +1,7 @@
+cut,trades_removed,remaining_total_r,remaining_pf,still_positive
+baseline_all_trades,0,47.6083,1.2472,True
+top-1_exclusion,1,44.6083,1.2316,True
+top-3_exclusion,3,38.6083,1.2005,True
+top-5_exclusion,5,32.6083,1.1693,True
+best_month_exclusion(2025-03),26,34.6803,1.1926,True
+best_quarter_exclusion(2025-Q3),59,33.6885,1.2134,True

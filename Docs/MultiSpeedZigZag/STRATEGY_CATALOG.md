@@ -124,3 +124,19 @@ standing marginally worse, not better, and changes no conclusion above.
 ## Required metrics
 
 Each strategy must retain its own count, expectancy, win rate, average adverse excursion, average favorable excursion, holding time, regime, symbol, timeframe, spread, and execution mode. Combined-suite results may never substitute for per-strategy evidence.
+
+## D030 addendum — six-family research program, ID collision note
+
+D030 (`D030_P4_LOSS_MAP.md`) is the first phase of a bounded six-family
+shadow research program (`D030_D035_Six_Family_Claude_Handoff.md`)
+evaluating six new candidate strategy families against the certified P4
+portfolio above. No entries in this catalog were changed by D030.
+
+Flagged for D031: the handoff's suggested ID `1060` (new Family "Session
+Sweep Reversal") collides with the already-assigned `1060 = Compression
+Breakout (D027 S4)` row above. The handoff's own new Family 4 is also
+named "Compression Breakout" (suggested ID `1090`) — since `1060` is an
+existing implemented (default-disabled) strategy of that same name, D031
+must explicitly decide whether the new Family 4 supersedes, reuses, or is
+deliberately distinct from `1060`, and must assign non-colliding IDs for
+all six new families before any are implemented.
