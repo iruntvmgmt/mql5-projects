@@ -72,6 +72,30 @@ public:
       return true;
    }
 
+   // Deterministic account-abstraction seam. Production callers use
+   // Configure(), which always reads ACCOUNT_MARGIN_MODE from the terminal.
+   bool ConfigureForMode(const string symbol,const long base_magic,
+                         const ENUM_MSZZ_CROSS_FAMILY_POLICY policy,
+                         const ENUM_MSZZ_ACCOUNT_MODE account_mode,
+                         string &reason)
+   {
+      reason="";
+      if(symbol=="" || base_magic<=0)
+      { reason="execution coordinator symbol/base magic invalid"; return false; }
+      if(!CMSZZCrossFamilyPolicy::IsKnown(policy))
+      { reason="unknown cross-family policy"; return false; }
+      if(account_mode!=MSZZ_ACCOUNT_HEDGING &&
+         account_mode!=MSZZ_ACCOUNT_NETTING &&
+         account_mode!=MSZZ_ACCOUNT_EXCHANGE)
+      { reason="unsupported deterministic account mode"; return false; }
+      m_symbol=symbol;
+      m_base_magic=base_magic;
+      m_policy=policy;
+      m_account_mode=account_mode;
+      m_configured=true;
+      return true;
+   }
+
    ENUM_MSZZ_ACCOUNT_MODE AccountMode() const { return m_account_mode; }
    bool PhysicalTicketIsolationSupported() const { return m_account_mode==MSZZ_ACCOUNT_HEDGING; }
    bool VirtualLedgerRequired() const

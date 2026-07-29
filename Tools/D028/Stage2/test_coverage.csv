@@ -1,0 +1,25 @@
+requirement,suite,status,evidence
+book_id_and_magic_uniqueness,Test_MSZZ_StrategyBook,PASS,distinct IDs and magics
+book_trade_ownership,Test_MSZZ_StrategyBook,PASS,owned position/order tickets only
+family_exit_isolation,Test_MSZZ_CrossFamilyPolicy,PASS,independent cross-family action IGNORE
+cross_family_ignore,Test_MSZZ_CrossFamilyPolicy,PASS,IGNORE action
+cross_family_flatten_only,Test_MSZZ_CrossFamilyPolicy,PASS,explicit invalidation required
+independent_books,Test_MSZZ_CrossFamilyPolicy,PASS,cross-family mutation prohibited
+same_direction_books,Test_MSZZ_PortfolioRisk,PASS,disabled reject and enabled approve
+opposing_direction_books,Test_MSZZ_PortfolioRisk,PASS,disabled reject and enabled approve
+total_and_per_book_risk,Test_MSZZ_PortfolioRisk,PASS,limits fail closed
+per_family_risk,Test_MSZZ_PortfolioRisk,PASS,family cap diagnostic
+maximum_books_and_positions,Test_MSZZ_PortfolioRisk,PASS,logical and physical caps
+hedging_ticket_isolation,Test_MSZZ_ExecutionCoordinator,PASS,physical open plan
+netting_increase_reduce_flat_reverse,Test_MSZZ_ExecutionCoordinator,PASS,net deltas including through zero
+proportional_cost_allocation,Test_MSZZ_VirtualNettingLedger,PASS,volume pro rata
+partial_close_attribution,Test_MSZZ_VirtualNettingLedger,PASS,volume R and cost reconcile
+synthetic_stops_and_targets,Test_MSZZ_VirtualNettingLedger,PASS,long short and simultaneous observations
+restart_persistence,Test_MSZZ_VirtualNettingLedger,PASS,save load exact allocations
+malformed_state_fail_closed,Test_MSZZ_VirtualNettingLedger,PASS,invalid allocation and corrupt header
+duplicate_event_suppression,Test_MSZZ_IntentStore,PASS,existing deterministic store coverage
+test_end_reconciliation,Test_MSZZ_TradeAnalytics,PASS,existing deterministic analytics coverage
+candidate_integrity,Test_MSZZ_CandidateHandoff,PASS,no malformed candidate reaches clustering
+legacy_default_parity,short_and_long_shadows,PASS,113/46 and 431/178 zero orders
+standalone_A_control,Stage0B_reuse,PASS,224 trades and 28.2447R unchanged
+standalone_Sweep_control,Stage0B_reuse,PASS,190 trades and 28.6117R unchanged

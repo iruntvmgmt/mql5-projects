@@ -178,6 +178,50 @@ window, canonical A/E definition, or SweepReclaim trigger. Legacy shared
 ownership remains the default comparison control. Stage 2 must provide the
 full deterministic unit/integration suite before any architecture activation.
 
+## Stage 2 deterministic portfolio tests — 2026-07-28
+
+Stage 2 hardened and tested the architecture without activating portfolio
+execution. Five required suites add 68 deterministic assertions:
+
+- strategy-book identity, ownership, transition, and non-mutation checks;
+- portfolio book/strategy/family/direction/physical/risk limit checks;
+- deterministic hedging, netting, and exchange execution plans;
+- cross-family legacy, ignore, flatten-only, regime-exclusive, and independent
+  policy decisions;
+- virtual netting increases, reductions, offset-to-flat, reversal-through
+  zero, partial-close attribution, proportional costs, simultaneous synthetic
+  stop/target observations, persistence, restart reconciliation, and malformed
+  state rejection.
+
+`ExecutionCoordinator::ConfigureForMode()` is a deterministic abstraction seam
+only. Production configuration continues to read `ACCOUNT_MARGIN_MODE` from
+the terminal. It does not allow the EA input surface to spoof account mode.
+
+The virtual ledger now persists exact logical allocations and rejects unknown,
+truncated, wrong-symbol, wrong-schema, and malformed records before replacing
+in-memory state. Synthetic stop and target methods only identify causal
+triggers; broker submission and simultaneous-event ordering remain execution
+work for Stage 3 integration and equivalence.
+
+The EA and all 27 `Test_MSZZ_*` scripts compiled with zero errors and zero
+warnings in `/Users/matt/MT5-MSZZ-TEST`. All 27 runtime suites passed with zero
+failures. Final default-off shadows remained exact:
+
+| Window | Raw candidates | Clusters | Malformed | Trades |
+|---|---:|---:|---:|---:|
+| short | 113 | 46 | 0 | 0 |
+| long | 431 | 178 | 0 | 0 |
+
+Stage 0B's certified A and SweepReclaim standalone controls were reused rather
+than regenerated: no signal/execution path is reachable while the new mode is
+disabled, and exact shadow parity proves the legacy default remains unchanged.
+Stage 3 must now reproduce A, E, and SweepReclaim through the new single-book
+path before any combined portfolio test.
+
+Stage 2 does not claim single-book portfolio equivalence, a combined portfolio
+result, a SweepReclaim management result, production readiness, or approval to
+remove the activation block.
+
 ## Stage 0B integrity addendum — 2026-07-28
 
 The owner authorized a bounded repair of the candidate-index defect. Historical
