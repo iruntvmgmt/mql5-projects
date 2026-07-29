@@ -2297,3 +2297,47 @@ lost its apparent benefit once tested in the actual executed portfolio.
 **Final architecture decision: `INDEPENDENT_HEDGING_BOOKS_RECOMMENDED`.** No
 exit-policy change to SweepReclaim is recommended. No merge to `main`, no
 live deployment, no entry optimization of A/E/SweepReclaim at any point.
+
+## D029 — percentage-risk sizing, executable partial-leg validation, and portfolio reconciliation
+
+Full record in `Docs/MultiSpeedZigZag/D029_PERCENT_RISK_PARTIALS.md`
+(stage-by-stage detail) and `D029_FINAL_REPORT.md` (45-point summary), on
+`feature/d029-percent-risk-partials`, forked from D028's final SHA.
+
+D028's SR3/SR4 (SweepReclaim partial-close variants) were never validly
+tested — the account's 0.01-lot minimum size made every 50% partial close
+mathematically impossible. D029 built and validated a percentage-of-equity
+sizing engine (`CMSZZPositionSizing`) specifically to resolve this, then
+re-ran the partial-close study with genuinely executable partials.
+
+Summary: percent-equity sizing works — when volume resolution is
+sufficient (SweepReclaim's always was at the frozen $100,000 balance),
+results reconcile exactly to the certified fixed-lot baseline. Two real
+implementation bugs were found only once the engine was exercised against
+real backtests (a leftover fixed-lot exposure cap; a flawed
+journal-deduplication fix caught before acceptance) — both fixed and
+reverified. With sizing no longer the blocker, SR3-PCT (partial +
+breakeven) and SR4-PCT (partial + uncapped runner) both executed genuine
+partial closes (168 total, 100% exact reconciliation) for the first time.
+SR4-PCT failed outright on its own standalone evidence — extreme
+dependence on a handful of outsized trades (removing the top 3 flips the
+whole result negative). SR3-PCT passed every standalone gate with a real,
+distributed 18% drawdown improvement, but failed the actual portfolio test:
+SweepReclaim's own edge collapses in the real P3/P4 context far more than
+the standalone result predicted (+17.49R -> +4.73R in P3, on nearly
+identical trade count), so neither P3-SR3 nor P4-SR3 exceeds its matched
+core.
+
+**D029 is now the second independent study — under two different sizing
+regimes, this time with a genuinely working partial-close mechanism — to
+conclude that no tested SweepReclaim exit-management variant improves the
+actual executed independent-book portfolio.** P3 and P4 with SweepReclaim's
+original, unmodified fixed-2R exit remain the best portfolios found across
+D028 and D029 combined. **Final decisions**: sizing architecture
+`DUAL_MODE_RECOMMENDED` (fixed-lot stays default; percent-equity is now
+validated, reusable infrastructure); partial architecture
+`BROKER_PARTIAL_CLOSE_RECOMMENDED` (single-ticket `PositionClosePartial()`,
+a child-ticket design was evaluated and rejected as unnecessary). No
+exit-management change to SweepReclaim is recommended. No merge to `main`,
+no live deployment, no entry optimization of A/E/SweepReclaim at any point
+in D029.

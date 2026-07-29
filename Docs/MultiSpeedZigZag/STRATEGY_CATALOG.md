@@ -75,6 +75,41 @@ recommendation on its own, and still bound by every anti-overfitting caveat
 already disclosed in D027 and D028 (within-sample chronological split only,
 no genuine independent OOS data, no cost-stress testing performed).
 
+## D029 addendum — percent-equity sizing and partial-close exit study
+
+D029 built a percentage-of-equity sizing engine specifically to give
+SweepReclaim's SR3/SR4 partial-close exit variants (left `REDESIGN_REQUIRED`
+by D028 — never validly tested at the account's 0.01-lot minimum size) a
+genuine test. With sizing no longer the blocker, both variants executed
+real partial closes for the first time (see `D029_FINAL_REPORT.md` for
+full detail):
+
+- **SR3-PCT** (50% partial at +1R, breakeven remainder): `RESEARCH_ONLY`.
+  Passes every standalone anti-overfitting gate with a real, distributed
+  18% drawdown reduction — but fails the actual portfolio test (P3-SR3/
+  P4-SR3 below), so it is not a portfolio recommendation despite being a
+  legitimate standalone finding.
+- **SR4-PCT** (50% partial at +1R, uncapped structural-pivot runner):
+  `REJECTED`. Extreme dependence on a handful of outsized trades — removing
+  the top 3 trades flips the entire standalone result negative.
+- **D29-P3 / D29-P4** (SweepReclaim SR0, unmodified, percent-equity sized):
+  `PORTFOLIO_VALIDATION_CANDIDATE`, carrying forward D028's P3/P4 status
+  unchanged under the new sizing regime — still the best portfolios found
+  across both D028 and D029.
+- **P3-SR3 / P4-SR3** (SweepReclaim SR3-PCT in the actual portfolio):
+  `REJECTED`. Neither exceeds its matched core on cumulative R —
+  SweepReclaim's own portfolio contribution collapses far more than the
+  standalone SR3-PCT result predicts once a real opposing FastMedConfluence
+  book is competing for the same risk budget.
+
+D029 is the second independent study (after D028's SR0-SR5) to find that no
+tested SweepReclaim exit-management variant improves the actual executed
+independent-book portfolio. SweepReclaim's D028 status
+(`PORTFOLIO_VALIDATION_CANDIDATE`, fixed-2R exit only) is unchanged and
+reconfirmed. Percent-equity sizing itself is validated, reusable
+infrastructure (`DUAL_MODE_RECOMMENDED`) independent of this negative
+exit-management result.
+
 ## Required metrics
 
 Each strategy must retain its own count, expectancy, win rate, average adverse excursion, average favorable excursion, holding time, regime, symbol, timeframe, spread, and execution mode. Combined-suite results may never substitute for per-strategy evidence.

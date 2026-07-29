@@ -1,0 +1,9 @@
+check,result
+number_of_exit_policies_tested,"2 (SR3-PCT, SR4-PCT) against 1 control (SR0-PCT) -- disclosed, not hidden"
+thresholds_frozen_before_results,"yes -- Phase 0 froze the tester balance, partial fraction (50%), activation trigger (+1R), and every SR3/SR4 rule before any Phase 1-4 backtest ran"
+robustness_checks_applied_uniformly,"yes -- top-3/top-5/best-quarter exclusion computed identically for SR0/SR3-PCT/SR4-PCT, not only for the eventual candidate"
+extreme_concentration_found_and_disqualified,"yes -- SR4-PCT's outlier dependence was found and used to REJECT it, not explained away"
+portfolio_confirmation_required_before_acceptance,yes -- SR3-PCT passed standalone screening but was still rejected once the actual Phase 4 portfolio result contradicted it
+fixed_cost_stress_scenarios_applied,NO -- same disclosed gap as D028: increased spread / adverse slippage / missed fill / delayed stop modification were not tested in this pass
+genuine_independent_out_of_sample_data,"NO -- this account's usable M5 history begins only three days before the existing research window; every D029 development/validation/holdout split is a within-sample chronological split, not genuine OOS, per D027's original disclosure carried forward unchanged"
+large_nominal_lot_sizes_disclosed,"yes -- percent-equity sizing produces up to 15+ lot positions on tight-stop FastMedConfluence trades; canonical costs/execution are held constant regardless of size, a real-world liquidity consideration this backtest does not model"

@@ -1,0 +1,5 @@
+portfolio,category,rationale
+"D29-P3 (A 2R + SweepReclaim SR0, percent-equity)",PORTFOLIO_VALIDATION_CANDIDATE,Best percent-equity portfolio found; carries forward D028 P3's validated status under the new sizing regime.
+"D29-P4 (E 3R + SweepReclaim SR0, percent-equity)",PORTFOLIO_VALIDATION_CANDIDATE,Best percent-equity portfolio found overall in D029; carries forward D028 P4's validated status under the new sizing regime.
+P3-SR3 (A 2R + SweepReclaim SR3-PCT),REJECTED,"Does not exceed matched core (D29-P3) on cumulative R (-28%); SweepReclaim's own portfolio contribution collapses from +17.49R to +4.73R despite a near-identical trade count -- a genuine portfolio-specific interaction, not visible standalone."
+P4-SR3 (E 3R + SweepReclaim SR3-PCT),REJECTED,Does not exceed matched core (D29-P4) on cumulative R (-25%); same collapse pattern as P3-SR3 (+19.49R -> +5.50R).

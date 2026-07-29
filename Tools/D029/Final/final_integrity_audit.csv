@@ -1,0 +1,14 @@
+phase,check,result
+Phase1,backward-compat: 31 suites + shadow + SR0 fixed-lot reproduction,"all exact, 0 failures"
+Phase2,actual risk never exceeds requested cap,"confirmed across 2,802 sizing decisions"
+Phase2,symbol_exposure_cap_lots bug found and fixed before accepting results,"fixed, reverified"
+Phase3,raw candidate stream identical across SR0/SR3-PCT/SR4-PCT,"376/376/376, exact"
+Phase3,partial volume reconciliation,"100% exact (86/86, 82/82)"
+Phase3,unknown exits,zero across all variants
+Phase4,duplicate logical IDs,zero
+Phase4,cross-family actions,zero
+Phase4,max observed portfolio risk,"0.4997% / 0.4997%, both under the 0.50% cap"
+Phase4,account mode,HEDGING throughout
+AllPhases,no merge to main,confirmed
+AllPhases,no live deployment,confirmed
+AllPhases,D027/D028 evidence unaltered,confirmed -- only new D029-prefixed files and additive EA/Include changes
