@@ -32,6 +32,7 @@
 #include <MultiSpeedZigZag/Portfolio/ExecutionCoordinator.mqh>
 #include <MultiSpeedZigZag/Portfolio/VirtualNettingLedger.mqh>
 #include <MultiSpeedZigZag/Portfolio/PortfolioJournals.mqh>
+#include <MultiSpeedZigZag/Portfolio/PositionSizing.mqh>
 #include <MultiSpeedZigZag/Portfolio/PortfolioBookRouting.mqh>
 #include <MultiSpeedZigZag/Portfolio/BookExitManager.mqh>
 
@@ -84,6 +85,13 @@ input int    InpSignalValidityBars=3;
 
 input group "═══ Standalone Execution ═══"
 input double InpFixedLots=0.01;
+// D029: MSZZ_SIZE_FIXED_LOT (default) uses InpFixedLots exactly as before,
+// byte-identical to every certified pre-D029 run. MSZZ_SIZE_PERCENT_EQUITY
+// sizes from InpPortfolioRiskPerBookPct/ACCOUNT_EQUITY instead -- those two
+// existing inputs are reused rather than duplicated with new ones, since
+// they already mean exactly "requested per-book risk percent" and "max
+// total portfolio risk percent." See DECISION_LOG.md D029 Phase 1.
+input ENUM_MSZZ_POSITION_SIZING_MODE InpSizingMode=MSZZ_SIZE_FIXED_LOT;
 input double InpMaxSpreadPoints=80.0;
 input int    InpDeviationPoints=30;
 input bool   InpExitOwnedOpposite=true;
@@ -593,6 +601,57 @@ bool PrepareMarketCandidate(const MSZZCandidate &source,MSZZCandidate &prepared,
    return g_execution_guard.ValidateStops(prepared,prepared.stop,prepared.target,reason,InpDisableFixedTarget);
 }
 
+// D029 Phase 1: single sizing entry point shared by both the single-book
+// (ExecuteCluster) and multi-book (ExecutePortfolioBookCandidate) execution
+// paths. In MSZZ_SIZE_FIXED_LOT (default) mode this is exactly the
+// pre-D029 InpFixedLots/NormalizeVolume() call, byte-identical output --
+// risk_pct_for_book returns InpPortfolioRiskPerBookPct unchanged, matching
+// every certified run's existing (assumed, not computed) bookkeeping value.
+// In MSZZ_SIZE_PERCENT_EQUITY mode, computes and journals the full sizing
+// decision (accepted or rejected) via CMSZZPositionSizing::Calculate(), and
+// returns the ACTUAL normalized risk percent for risk-cap approval and book
+// bookkeeping -- never the flat requested percent -- per the D029 handoff's
+// explicit "portfolio approval must use actual normalized initial risk"
+// requirement. See DECISION_LOG.md D029 Phase 1.
+bool ComputeSizedVolume(const MSZZCandidate &prepared,const long book_id,
+                        const ENUM_MSZZ_STRATEGY_ID strategy_id,const long magic,
+                        const string logical_position_id,
+                        double &volume,double &risk_pct_for_book,string &reject_reason)
+{
+   reject_reason="";
+   if(InpSizingMode==MSZZ_SIZE_FIXED_LOT)
+   {
+      volume=g_execution_guard.NormalizeVolume(InpFixedLots);
+      risk_pct_for_book=InpPortfolioRiskPerBookPct;
+      if(volume<=0.0){ reject_reason="volume normalization failed"; return false; }
+      return true;
+   }
+
+   double vmin=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN);
+   double vstep=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
+   double vmax=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MAX);
+   double tsize=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
+   double tvalue=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
+   double equity=AccountInfoDouble(ACCOUNT_EQUITY);
+
+   MSZZSizingResult sizing;
+   bool ok=CMSZZPositionSizing::Calculate(equity,InpPortfolioRiskPerBookPct,
+                                          prepared.entry,prepared.stop,tsize,tvalue,
+                                          vmin,vstep,vmax,sizing);
+   if(InpWriteCSV)
+      g_portfolio_journals.JournalSizing(TimeCurrent(),logical_position_id,strategy_id,
+                                         book_id,magic,sizing,0.0,0.0,0.0);
+   if(!ok)
+   {
+      volume=0.0; risk_pct_for_book=0.0;
+      reject_reason=sizing.reject_reason;
+      return false;
+   }
+   volume=sizing.normalized_volume;
+   risk_pct_for_book=sizing.actual_risk_pct;
+   return true;
+}
+
 bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &owner)
 {
    string persistence_id=cluster.cluster_id;
@@ -668,8 +727,18 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
       MSZZCandidate rejected=owner; rejected.reason=reason;
       JournalCandidate(rejected,"REJECT_STOPS",cluster.cluster_id); return false;
    }
-   double volume=g_execution_guard.NormalizeVolume(InpFixedLots);
-   if(volume<=0.0){ prepared.reason="volume normalization failed"; JournalCandidate(prepared,"REJECT_VOLUME",cluster.cluster_id); return false; }
+   MSZZStrategyBookState sizing_book_ctx=ActivePortfolioBookState();
+   double volume,portfolio_requested_risk_computed;
+   string sizing_reject;
+   if(!ComputeSizedVolume(prepared,sizing_book_ctx.book_id,prepared.strategy_id,
+                          (sizing_book_ctx.magic!=0 ? sizing_book_ctx.magic : InpMagic),
+                          cluster.cluster_id,volume,portfolio_requested_risk_computed,sizing_reject))
+   {
+      prepared.reason=sizing_reject;
+      JournalCandidate(prepared,(InpSizingMode==MSZZ_SIZE_PERCENT_EQUITY ? "REJECT_SIZING" : "REJECT_VOLUME"),
+                       cluster.cluster_id);
+      return false;
+   }
 
    // D012: fail closed before any state-mutating call if the account cannot
    // comfortably afford this order. See DECISION_LOG.md D012 for why
@@ -713,7 +782,7 @@ bool ExecuteCluster(const MSZZOpportunityCluster &cluster,const MSZZCandidate &o
    }
 
    bool portfolio_pending=false;
-   double portfolio_requested_risk=InpPortfolioRiskPerBookPct;
+   double portfolio_requested_risk=portfolio_requested_risk_computed;
    if(g_portfolio_single_book_active)
    {
       if(closed_opposite && !PortfolioMarkFlat("own-book opposite close"))
@@ -1571,8 +1640,16 @@ bool ExecutePortfolioBookCandidate(const MSZZOpportunityCluster &cluster,
       JournalCandidate(prepared,"REJECT_STOPS",cluster.cluster_id);
       return false;
    }
-   double volume=g_execution_guard.NormalizeVolume(InpFixedLots);
-   if(volume<=0.0) return false;
+   double volume,book_requested_risk;
+   string sizing_reject;
+   if(!ComputeSizedVolume(prepared,book.book_id,strategy_id,book.magic,
+                          cluster.cluster_id,volume,book_requested_risk,sizing_reject))
+   {
+      prepared.reason=sizing_reject;
+      JournalCandidate(prepared,(InpSizingMode==MSZZ_SIZE_PERCENT_EQUITY ? "REJECT_SIZING" : "REJECT_VOLUME"),
+                       cluster.cluster_id);
+      return false;
+   }
 
    book=PortfolioBookStateFor(strategy_id);
    if(book.position_open)
@@ -1611,19 +1688,19 @@ bool ExecutePortfolioBookCandidate(const MSZZOpportunityCluster &cluster,
    int physical_positions=(books[0].position_open?1:0)+(books[1].position_open?1:0);
    if(!g_portfolio_risk.BuildSnapshot(books,2,physical_positions,0.0,0.0,snapshot) ||
       !g_portfolio_risk.ApproveOpen(snapshot,books,2,strategy_id,owner.family_id,
-                                    prepared.direction,InpPortfolioRiskPerBookPct,
+                                    prepared.direction,book_requested_risk,
                                     volume,reason))
    {
       prepared.reason=(reason!="" ? reason : snapshot.reason);
       JournalCandidate(prepared,"REJECT_PORTFOLIO_RISK",cluster.cluster_id);
       g_portfolio_journals.JournalRisk(TimeCurrent(),book.book_id,"OPEN",false,
                                        prepared.reason,snapshot,
-                                       InpPortfolioRiskPerBookPct);
+                                       book_requested_risk);
       return false;
    }
 
    if(!PortfolioBookMarkPendingFor(strategy_id,owner,volume,
-                                   InpPortfolioRiskPerBookPct,
+                                   book_requested_risk,
                                    cluster.cluster_id,reason))
    {
       prepared.reason=reason;
@@ -1676,14 +1753,14 @@ bool ExecutePortfolioBookCandidate(const MSZZOpportunityCluster &cluster,
    if(!PortfolioBookMarkOpenFor(strategy_id,cluster.cluster_id,position_ticket,
                                 order_ticket,TimeCurrent(),entry_price,
                                 prepared.stop,prepared.target,
-                                InpPortfolioRiskPerBookPct,reason))
+                                book_requested_risk,reason))
    {
       Print("MSZZ D028 MULTI BOOK OPEN RECONCILIATION FAILED: ",reason);
       return false;
    }
    book=PortfolioBookStateFor(strategy_id);
    g_portfolio_journals.JournalRisk(TimeCurrent(),book.book_id,"OPEN",true,
-                                    "approved",snapshot,InpPortfolioRiskPerBookPct);
+                                    "approved",snapshot,book_requested_risk);
    g_portfolio_journals.JournalBook(TimeCurrent(),book,"OPEN","",
                                     g_execution_coordinator.AccountMode(),
                                     g_last_regime_id);

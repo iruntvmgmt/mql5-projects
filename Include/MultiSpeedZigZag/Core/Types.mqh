@@ -105,6 +105,16 @@ enum ENUM_MSZZ_CLUSTER_STATE
    MSZZ_CLUSTER_CANCELLED_CONFLICT
 };
 
+// D029: position-sizing mode. Default MSZZ_SIZE_FIXED_LOT keeps every
+// existing certified run's behavior byte-identical -- percentage-equity
+// sizing only activates when a config explicitly sets InpSizingMode=1.
+// See DECISION_LOG.md D029 Phase 1.
+enum ENUM_MSZZ_POSITION_SIZING_MODE
+{
+   MSZZ_SIZE_FIXED_LOT      = 0,
+   MSZZ_SIZE_PERCENT_EQUITY = 1
+};
+
 enum ENUM_MSZZ_EVIDENCE_MASK
 {
    MSZZ_EVIDENCE_NONE       = 0,

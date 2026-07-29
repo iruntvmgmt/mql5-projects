@@ -151,3 +151,98 @@ This document, `Tools/D029/Phase0/README.md`, `frozen_design.md`, and
 `volume_resolution_summary.csv` are committed as `D029 Phase 0: freeze
 percentage-risk and partial-leg study` before any Phase 1 implementation
 begins.
+
+## Phase 1 — percentage-equity sizing engine
+
+### Design
+
+New pure module `Include/MultiSpeedZigZag/Portfolio/PositionSizing.mqh`
+(`CMSZZPositionSizing::Calculate()`), no MT5 API calls, following the same
+discipline as every other pure-calculation module in this project (e.g.
+D026's `CMSZZResearchTrailPolicy`). Computes and returns the full
+`MSZZSizingResult` struct (equity snapshot, requested/actual risk money and
+percent, stop distance, loss per lot, raw and normalized volume,
+normalization error, minimum-volume and partial-capable flags, sizing
+result, reject reason) exactly per the frozen Phase 0 formula: `raw_volume =
+(equity * risk_pct/100) / ((stop_distance/tick_size)*tick_value)`, normalized
+DOWN only to the nearest broker volume step, never up, never silently
+substituting the minimum lot if that would exceed requested risk. Fails
+closed on: invalid equity/risk percent, invalid tick or volume metadata,
+zero/negative stop distance, nonpositive loss-per-lot, normalized volume
+below the broker minimum, and (defense-in-depth, unreachable by
+construction given the normalize-down rule) normalized risk exceeding
+requested risk.
+
+New EA input `InpSizingMode` (`ENUM_MSZZ_POSITION_SIZING_MODE`, default
+`MSZZ_SIZE_FIXED_LOT=0`). **Design decision, disclosed rather than silently
+deviating from the handoff's suggested input list**: the handoff suggested
+two additional new inputs, `InpRiskPercentPerBook` and
+`InpMaxPortfolioRiskPercent`. These were not added — D028 already has
+`InpPortfolioRiskPerBookPct` (0.25%, already frozen in Phase 0) and
+`InpPortfolioMaxTotalRiskPct` (0.50%, already frozen in Phase 0) serving
+exactly these roles (the "requested per-book risk percent" used for
+risk-cap bookkeeping, and the portfolio-wide cap), already wired into
+`CMSZZPortfolioRiskManager`'s config. Adding parallel inputs with the same
+meaning would create two knobs that must always agree rather than one
+source of truth. `InpSizingMode` is the only new input.
+
+A single shared helper, `ComputeSizedVolume()` in the EA, is called from
+both execution paths (`ExecuteCluster()` for single-book mode,
+`ExecutePortfolioBookCandidate()` for multi-book mode) — the two call sites
+that previously each called `g_execution_guard.NormalizeVolume(InpFixedLots)`
+directly. In `MSZZ_SIZE_FIXED_LOT` mode this is exactly that same call,
+byte-identical; `risk_pct_for_book` returns `InpPortfolioRiskPerBookPct`
+unchanged, matching every certified run's existing (assumed, not computed)
+bookkeeping value. In `MSZZ_SIZE_PERCENT_EQUITY` mode, it calls
+`CMSZZPositionSizing::Calculate()` with live `SymbolInfoDouble`/
+`AccountInfoDouble` metadata, journals the decision (accepted or rejected)
+via a new `MSZZ_SizingJournal.csv` (`CMSZZPortfolioJournals::JournalSizing()`),
+and returns the **actual** normalized risk percent — never the flat
+requested percent — for downstream risk-cap approval
+(`CMSZZPortfolioRiskManager::ApproveOpen()`, unmodified) and book
+bookkeeping (`allocated_risk_pct`), per the handoff's explicit "portfolio
+approval must use actual normalized initial risk" requirement. Rejected
+sizing decisions surface as `JournalCandidate(...,"REJECT_SIZING",...)`,
+parallel to the existing `REJECT_VOLUME` used in fixed-lot mode.
+
+`CMSZZPortfolioRiskManager` itself is unmodified — it was already
+generic (accepts any `risk_pct` number, has no fixed-lot-specific
+assumption), so no changes were needed there; only the caller-supplied
+value changes between sizing modes.
+
+### Tests
+
+`Tests/MultiSpeedZigZag/Test_MSZZ_PositionSizing.mq5`, 41 assertions:
+long/short symmetry, exact stop-distance calculation, correct tick-value
+use, correct percent-to-money conversion, normalize-down (never up),
+minimum-volume rejection (never silently forced up), invalid
+tick/volume/equity/risk-percent metadata rejection, zero-stop-distance
+rejection, actual risk never exceeds requested across 6 stop-distance
+cases, volume_max clamping, the partial-capable flag boundary at 0.02 lots
+— plus 7 integration cases proving the sizing engine's output composes
+correctly with the existing, unmodified `CMSZZPortfolioRiskManager`: one
+book at actual risk approved, a second 0.25% book approved up to the exact
+0.50% cap, anything above the cap rejected, actual (under-allocated, not
+flat-requested) risk is what gets summed into the portfolio snapshot, a
+closed book contributes zero risk, opposing-direction books allowed,
+same-strategy second book rejected. All 41 pass (`failures=0`).
+
+### Backward-compatibility verification
+
+Per the handoff's explicit gate ("stop if any fixed-lot certified result
+changes"):
+- All 31 pre-existing deterministic `Test_MSZZ_*`/`Export_MSZZ_Parity`
+  suites recompiled and rerun on the new binary: **0 failures across every
+  suite**.
+- Shadow regression, both windows, reproduced exactly: short **113
+  candidates / 46 clusters / 0 executed**; long **431 candidates / 178
+  clusters / 0 executed** — `InpSizingMode` defaulting to `MSZZ_SIZE_FIXED_LOT`
+  is confirmed a true no-op for candidate generation and clustering.
+- SweepReclaim SR0 (D028's certified fixed-lot standalone baseline)
+  reproduced fresh on the new binary, config unchanged, `InpSizingMode` not
+  set (defaults to fixed-lot): **190 trades, +0.1506R expectancy, PF
+  1.2688, 18.2941R max DD** — exact match to the certified number to every
+  decimal place.
+
+No certified pre-D029 result changed. Committed as `D029 Phase 1:
+percentage-equity sizing engine`.

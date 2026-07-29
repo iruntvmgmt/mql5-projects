@@ -3,6 +3,7 @@
 
 #include <MultiSpeedZigZag/Portfolio/ExecutionCoordinator.mqh>
 #include <MultiSpeedZigZag/Portfolio/PortfolioRiskManager.mqh>
+#include <MultiSpeedZigZag/Portfolio/PositionSizing.mqh>
 
 class CMSZZPortfolioJournals
 {
@@ -115,6 +116,54 @@ public:
       FileWrite(h,TimeToString(time,TIME_DATE|TIME_SECONDS),book_id,policy_id,action,
                 DoubleToString(fav_r,4),DoubleToString(old_stop,8),DoubleToString(new_stop,8),
                 DoubleToString(partial_volume,2),(modify_ok?"true":"false"),reason);
+      FileFlush(h); FileClose(h);
+      return true;
+   }
+
+   // D029 Phase 1: one row per position-sizing decision (accepted or
+   // rejected) when InpSizingMode=MSZZ_SIZE_PERCENT_EQUITY. `run_id` is
+   // deliberately omitted -- this project's established convention is that
+   // the output CSV/Report filename itself is the run identifier (see every
+   // other journal above), so a redundant per-row run_id column would carry
+   // no information not already in the file path. `partial_requested_volume`
+   // / `partial_normalized_volume` / `remaining_volume` are always 0.0 here
+   // in Phase 1/2 (no partial mechanism exists yet); Phase 3 populates them
+   // without needing a schema change. See DECISION_LOG.md D029 Phase 1.
+   bool JournalSizing(const datetime time,const string logical_position_id,
+                      const ENUM_MSZZ_STRATEGY_ID strategy_id,const long book_id,
+                      const long magic,const MSZZSizingResult &sizing,
+                      const double partial_requested_volume,
+                      const double partial_normalized_volume,
+                      const double remaining_volume)
+   {
+      int h=OpenAppend("MSZZ_SizingJournal.csv",
+         "time;logical_position_id;strategy_id;book_id;magic;equity_snapshot;"
+         "requested_risk_pct;requested_risk_money;entry_price;stop_price;"
+         "stop_distance_points;tick_size;tick_value;raw_volume;normalized_volume;"
+         "actual_risk_money;actual_risk_pct;risk_underallocation_pct;partial_capable;"
+         "partial_requested_volume;partial_normalized_volume;remaining_volume;"
+         "sizing_result;reject_reason");
+      if(h==INVALID_HANDLE) return !m_enabled;
+      double underallocation_pct=(sizing.requested_risk_pct>0.0) ?
+         (sizing.normalization_error/sizing.equity_snapshot*100.0) : 0.0;
+      FileWrite(h,TimeToString(time,TIME_DATE|TIME_SECONDS),logical_position_id,
+                (int)strategy_id,book_id,magic,
+                DoubleToString(sizing.equity_snapshot,2),
+                DoubleToString(sizing.requested_risk_pct,4),
+                DoubleToString(sizing.requested_risk_money,2),
+                DoubleToString(sizing.entry_price,8),DoubleToString(sizing.stop_price,8),
+                DoubleToString(sizing.stop_distance_points,8),
+                DoubleToString(sizing.tick_size,8),DoubleToString(sizing.tick_value,8),
+                DoubleToString(sizing.raw_volume,6),DoubleToString(sizing.normalized_volume,2),
+                DoubleToString(sizing.actual_risk_money,2),
+                DoubleToString(sizing.actual_risk_pct,4),
+                DoubleToString(underallocation_pct,4),
+                (sizing.partial_capable?"true":"false"),
+                DoubleToString(partial_requested_volume,2),
+                DoubleToString(partial_normalized_volume,2),
+                DoubleToString(remaining_volume,2),
+                (sizing.sizing_result==MSZZ_SIZING_OK?"OK":"REJECTED"),
+                sizing.reject_reason);
       FileFlush(h); FileClose(h);
       return true;
    }
