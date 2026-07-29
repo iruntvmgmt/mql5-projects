@@ -246,3 +246,106 @@ changes"):
 
 No certified pre-D029 result changed. Committed as `D029 Phase 1:
 percentage-equity sizing engine`.
+
+## Phase 2 — percentage-sized controls
+
+Five new apples-to-apples controls at the frozen $100,000 balance, all
+entries/stops/costs/architecture unchanged from D028: `D29-A` (A alone,
+fixed 2R), `D29-E` (E alone, fixed 3R), `D29-SR0` (SweepReclaim alone,
+fixed 2R), `D29-P3` (A 2R + SweepReclaim 2R, independent books), `D29-P4`
+(E 3R + SweepReclaim 2R, independent books). Configs derived from D028's
+own certified Stage 3/Stage 4 single-book and multi-book templates with
+only `Deposit=100000` and `InpSizingMode=1` changed. Full detail:
+`Tools/D029/Phase2/README.md`, results CSVs in the same directory, raw
+evidence in `/Users/matt/MT5-MSZZ-TEST/D029_Phase2_Results/`.
+
+### Bug found and fixed before accepting any Phase 2 result
+
+The first Phase 2 batch produced only 15 trades for D29-A (vs. D028's
+certified 224) and 1 trade for D29-SR0 (vs. 190) — most sizing decisions
+were themselves correct (524/531 `OK` for D29-A), but 432 of 717 raw
+candidates were rejected downstream with `"symbol exposure cap exceeded"`.
+Root cause: `ConfigurePortfolioArchitecture()` set
+`risk.symbol_exposure_cap_lots=InpFixedLots*InpPortfolioMaxBooks`
+unconditionally — a leftover fixed-lot-mode assumption (0.01 lots x 2
+books = 0.02 lots max exposure) that was never updated for percent-equity
+mode, where normalized volumes routinely reach 0.1-15+ lots. This gap
+existed through all of Phase 1's backward-compatibility testing because
+that testing exercised only fixed-lot mode (by design, to prove the
+default path was unchanged) — exactly why Phase 2's real backtests exist:
+to exercise percent-equity mode against real data for the first time.
+
+Fix: `risk.symbol_exposure_cap_lots` is now `0.0` (disabled) when
+`InpSizingMode==MSZZ_SIZE_PERCENT_EQUITY`, `InpFixedLots*InpPortfolioMaxBooks`
+unchanged otherwise. This is not a safety regression — portfolio risk is
+already fully bounded by the mode-aware `max_total_initial_risk_pct`
+(0.50%) and `max_risk_per_book_pct` (0.25%) checks in the same function,
+which use ACTUAL computed risk regardless of position size; the lot-count
+cap was redundant with (and, in percent-equity mode, far stricter than
+intended by) those percent-based caps. Recompiled (`0 errors, 0 warnings`),
+reconfirmed shadow-short still reproduces exactly (113/46/0), then reran
+the full Phase 2 batch.
+
+### Results
+
+| control | trades | cum R | expectancy | PF | max DD | Dev cum R | Val cum R | Holdout cum R |
+|---|---|---|---|---|---|---|---|---|
+| D29-A | 221 | +28.9237 | 0.1309 | 1.2520 | 14.9204 | +14.5886 | +7.9115 | +6.4236 |
+| D29-E | 210 | +31.9255 | 0.1520 | 1.2601 | 16.9204 | +9.1884 | +14.9115 | +7.8256 |
+| D29-SR0 | 190 | +28.6117 | 0.1506 | 1.2688 | 18.2941 | +17.5830 | +4.4695 | +6.5592 |
+| D29-P3 | 342 | +41.6064 | 0.1217 | 1.2218 | 23.9365 | +22.1910 | +6.8796 | +12.5358 |
+| D29-P4 | 330 | +47.6083 | 0.1443 | 1.2472 | 24.2455 | +19.7909 | +12.8796 | +14.9378 |
+
+**D29-SR0 reconciles exactly** to D028's certified fixed-lot SweepReclaim
+baseline: 190/190 trades, identical R statistics to four decimal places.
+`MSZZ_SizingJournal.csv` shows zero `MIN_VOLUME_REJECT` events and 100% of
+positions partial-capable (>=0.02 lots) — exactly matching Phase 0's
+pre-result projection that $100,000 clears SweepReclaim's stop-distance
+distribution with full margin. Because R-multiples are computed from
+entry/stop/exit prices only, never from position size, this is expected
+once volume resolution is sufficient — not a coincidence, a structural
+proof that percent-equity sizing is R-neutral when it works.
+
+D29-A, D29-E, D29-P3, and D29-P4 each show a small trade-count deficit
+versus their D028 fixed-lot counterparts (-3, -3, -1, -1 respectively — a
+maximum 1.4% delta). Every difference reconciles to the handoff's own
+allowed categories: **7 genuine `MIN_VOLUME_REJECT` events** in every A/E-
+touching run (`MSZZ_SizingJournal.csv`: `"normalized volume below broker
+minimum -- not silently forced up"` — a handful of FastMedConfluence
+signals have stop distances tight enough that even $100,000 at 0.25% risk
+floors to below 0.01 lots) plus **`BOOK_ALREADY_OPEN` cascading occupancy
+shifts** (a few percent-equity trades close at slightly different times
+than their fixed-lot counterparts purely from the different R-realized
+path of trades that were sized differently, which shifts which signal
+"wins" a later occupancy race — the same class of effect D028 Stage 6
+already documented for exit-policy changes). One `ORDER_FAILED`
+(`retcode=10016 invalid stops`) appears in both A and E, matching the
+exact benign category D028's own Stage 4 checkpoint already documented.
+A's and E's `RAW_CANDIDATE`/`REJECT_STOPS` counts are identical between
+the two runs (717/180 each) — since A and E share identical entries and
+differ only in target R, this is a strong internal proof that sizing mode
+has zero effect on upstream candidate generation, consistent with the
+shadow-regression proof from Phase 1.
+
+**Volume distribution** (`volume_distribution.csv`): median position size
+ranges 0.10-0.49 lots depending on the strategy's typical stop width;
+maximum observed volume reaches **15.04-15.56 lots** for A/E/P3/P4 (their
+tightest-stop trades) and 4.90 lots for SR0. This is mathematically correct
+given the frozen 0.25%-risk/$100,000-balance formula, but is disclosed
+honestly as a real-world consideration this backtest does not model:
+canonical costs/execution are held constant regardless of position size,
+while a genuine 15-lot XAUUSD order would carry materially different
+slippage and liquidity characteristics than a 0.01-lot order. This does
+not invalidate the R-multiple comparisons (which are the basis for every
+D029 decision), but it means the *absolute* dollar/percentage figures in
+this report should not be read as a literal live-execution forecast at
+this exact balance without further liquidity-stress analysis — a gap
+explicitly out of scope for this bounded study, consistent with D029's own
+anti-overfitting disclosure requirements.
+
+**Integrity audit** (`integrity_audit.csv`): actual risk percent never
+exceeded the 0.25% requested cap in any of the 2,802 sizing decisions
+across all five controls; zero unknown exits; zero cross-run candidate
+divergence for the A/E pair.
+
+Committed as `D029 Phase 2: risk-normalized control equivalence`.

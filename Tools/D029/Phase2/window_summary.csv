@@ -1,0 +1,4 @@
+control,dev_trades,dev_cum_r,val_trades,val_cum_r,holdout_trades,holdout_cum_r
+D29_A,132,14.5886,49,7.9115,40,6.4236
+D29_E,125,9.1884,47,14.9115,38,7.8256
+D29_SR0,123,17.583,29,4.4695,38,6.5592

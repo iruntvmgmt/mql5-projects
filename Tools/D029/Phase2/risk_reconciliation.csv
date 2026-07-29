@@ -1,0 +1,6 @@
+control,fixed_lot_certified_trades,percent_equity_trades,delta,min_volume_reject_count,order_failed_count,attribution
+D29_A,224,221,-3,7,1,MIN_VOLUME_REJECT (7 events) + BOOK_ALREADY_OPEN cascading occupancy shift
+D29_E,213,210,-3,7,1,MIN_VOLUME_REJECT (7 events) + BOOK_ALREADY_OPEN cascading occupancy shift
+D29_SR0,190,190,0,0,0,"exact reconciliation -- SweepReclaim stops always wide enough at $100,000 for zero MIN_VOLUME_REJECT"
+D29_P3,343,342,-1,7,,MIN_VOLUME_REJECT (shared with D29_A path) + BOOK_ALREADY_OPEN cascading occupancy shift
+D29_P4,331,330,-1,7,,MIN_VOLUME_REJECT (shared with D29_E path) + BOOK_ALREADY_OPEN cascading occupancy shift

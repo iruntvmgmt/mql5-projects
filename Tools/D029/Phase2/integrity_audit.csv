@@ -1,0 +1,6 @@
+control,actual_risk_pct_mean,actual_risk_pct_max,exceeds_requested_risk_count,unknown_exit_count,raw_candidate_count_matches_sibling_run
+D29_A,0.2339,0.25,0,0,"yes (717, identical to D29_E -- proves sizing has zero effect on candidate generation)"
+D29_E,0.234,0.25,0,0,"yes (717, identical to D29_A -- proves sizing has zero effect on candidate generation)"
+D29_SR0,0.2461,0.25,0,0,n/a (independent entry stream)
+D29_P3,0.2383,0.25,0,0,n/a (portfolio run)
+D29_P4,0.2383,0.25,0,0,n/a (portfolio run)

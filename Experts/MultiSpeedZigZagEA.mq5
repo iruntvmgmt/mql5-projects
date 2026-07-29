@@ -432,7 +432,20 @@ bool ConfigurePortfolioArchitecture(string &reason)
    risk.max_physical_positions=InpPortfolioMaxPhysicalPositions;
    risk.daily_loss_cap_pct=0.0;
    risk.drawdown_cap_pct=0.0;
-   risk.symbol_exposure_cap_lots=InpFixedLots*InpPortfolioMaxBooks;
+   // D029 Phase 2 bug fix: this cap was always derived from InpFixedLots,
+   // an assumption that only holds in MSZZ_SIZE_FIXED_LOT mode. In
+   // MSZZ_SIZE_PERCENT_EQUITY mode, normalized volume is computed from risk
+   // percent and varies per trade (often far above InpFixedLots*2) -- found
+   // empirically when Phase 2's first real D29-A run rejected 432/717
+   // candidates with "symbol exposure cap exceeded" despite every sizing
+   // decision itself being correct and within the 0.25%/0.50% risk caps.
+   // Disabling this lot-count cap in percent-equity mode is correct, not a
+   // safety regression: portfolio risk is already bounded by the
+   // mode-aware max_total_initial_risk_pct/max_risk_per_book_pct checks
+   // above, which use ACTUAL computed risk regardless of lot size. See
+   // DECISION_LOG.md D029 Phase 2.
+   risk.symbol_exposure_cap_lots=(InpSizingMode==MSZZ_SIZE_PERCENT_EQUITY) ?
+      0.0 : InpFixedLots*InpPortfolioMaxBooks;
    risk.allow_opposing_books=InpPortfolioAllowOpposingBooks;
    risk.allow_same_direction_stacking=InpPortfolioAllowSameDirectionStacking;
    if(!g_portfolio_risk.Configure(risk,reason)) return false;
