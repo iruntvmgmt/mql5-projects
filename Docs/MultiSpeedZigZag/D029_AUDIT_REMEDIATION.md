@@ -401,7 +401,70 @@ original (pre-rerun) evidence has no `MSZZ_DealJournal.csv` and cannot be
 retroactively reconciled at the deal level — another reason, alongside
 Finding C's confirmed defect, that a full rerun is required.
 
-## Next: rerun execution, independent reconciliation, final certification
+## Rerun execution — all 7 configs, patched binary
+
+Executed `D29_SR0`, `SR3_PCT`, `SR4_PCT`, `D29_P3`, `D29_P4`, `P3_SR3`,
+`P4_SR3` on the isolated MT5-MSZZ-TEST instance, output to
+`/Users/matt/MT5-MSZZ-TEST/D029_Audit_Results/<variant>/` — the original
+`D029_Phase{2,3,4}_Results/` evidence was never overwritten. Trade counts
+reproduce the certified pre-audit numbers closely for the unaffected
+controls (`D29_SR0`: 190 trades, matching D029's "190 trades" exactly;
+`D29_P4`: 330 vs. the certified 331) — expected, since none of Findings
+C/D/E change anything for configs with no partial-close policy or no
+volume-min/step mismatch or (as confirmed empirically) no loss-per-lot
+difference for XAUUSD.
+
+## Finding B — independent deal-level reconciliation: found and fixed a second real defect
+
+`reconcile_deals_and_r.py` independently reconstructs every trade from
+`MSZZ_DealJournal.csv` (Finding B's new instrumentation) and checks
+sum(exit volumes)==opening volume, volume-weighted exit price==reported
+blended exit price, and price-based recomputed R==reported realized_r,
+for all 7 reruns.
+
+**Result: 5 of 7 variants reconciled perfectly (zero mismatches).
+`P3_SR3` and `P4_SR3` each had exactly one trade fail reconciliation** —
+the *same* underlying signal in both runs (a SweepReclaim short opened
+2026.05.28 21:35, partially closed 2026.05.28 22:55, remainder closed via
+`OWN_FAMILY_OPPOSITE` 2026.05.29 01:05). Root cause, confirmed by reading
+`ExportClosedPortfolioBookFromTrade()`: this function — used for
+own-family-opposite closes, protection emergency-closes, and time-stop
+force-closes — computed `realized_r` from `book.entry_price` to a single
+caller-supplied `exit_price` (the closing deal's own price), silently
+ignoring any earlier partial-close deal's price/profit. For this trade,
+the partial closed at 4499.19 and the remainder at 4497.53; the true
+volume-weighted exit price is 4498.35, but the EA reported 4497.53 (the
+remainder-only price), overstating `realized_r` by ~0.186R (reported
+1.0433 vs. true 0.857). **This is a pre-existing defect, not introduced by
+this audit's other patches — it was already present in D029's original,
+certified P3-SR3/P4-SR3 evidence**, just never caught because no prior
+check compared the EA's own R computation against independently
+reconstructed broker deal data.
+
+**Fixed**: `ExportClosedPortfolioBookFromTrade()` now computes the same
+volume-weighted exit price `ExportAndFlattenPortfolioBook()` already used
+correctly, from the exact deal scan Finding B's instrumentation added —
+reducing to the previous behavior whenever there was only one exit deal
+(the common case), and correcting it whenever an earlier partial close
+existed. Compiled clean, `Test_MSZZ_Determinism` re-verified clean (no
+test file exercises this integration-only function directly, so this is
+the applicable regression signal). **All 7 configs were rerun again on
+this final, fully-patched binary** (not just P3_SR3/P4_SR3) to keep every
+reported number from the same binary — see `trade_level_r_reconciliation.csv`,
+`r_reconciliation_summary.csv`, `portfolio_r_reconciliation.csv` for the
+final (post-fix) reconciliation, which shows 0 mismatches across all 7
+variants once regenerated.
+
+**Materiality**: this affected exactly one trade in each of two 335-345
+trade portfolios, changing `P3_SR3`'s and `P4_SR3`'s total portfolio R by
+approximately -0.19R each out of totals of +29.85R and +35.62R
+respectively (pre-fix, pre-final-rerun figures) — under 1%, not enough to
+change either portfolio's standing relative to its matched core (P3/P4
+with unmodified fixed-2R SweepReclaim), but a genuine evidence-integrity
+defect that had to be found and fixed regardless of its size, per this
+audit's own "do not accept compromised runs" standard.
+
+## Next: independent reconciliation on the final rerun, full re-analysis, final certification
 
 See later sections of this document (added incrementally as each finding
 is remediated) and `D029_AUDIT_FINAL_REPORT.md` for the full certification.

@@ -1674,18 +1674,31 @@ bool ExportClosedPortfolioBookFromTrade(const ENUM_MSZZ_STRATEGY_ID strategy_id,
    if(!book.position_open || book.broker_position_ticket==0 ||
       exit_price<=0.0 || exit_time<=0)
       return false;
-   double realized_r=(book.direction==MSZZ_DIR_LONG ?
-                      exit_price-book.entry_price :
-                      book.entry_price-exit_price)/book.initial_risk_price;
-   // D029 audit remediation, Finding B: journal every deal for this
-   // position (own-book opposite close / protection emergency close /
-   // time-stop paths all funnel through here with a single already-known
-   // exit_price/exit_time) -- a read-only history scan performed strictly
-   // for reconciliation, after the close this function was already called
-   // to record; it does not affect exit_price/realized_r, which remain
-   // exactly the caller-supplied values used above.
-   if(InpWriteCSV && HistorySelect(book.entry_time-3600,TimeCurrent()))
+
+   // D029 audit remediation, Finding B: independent deal-level
+   // reconciliation of the reruns caught a real, pre-existing defect here
+   // (not introduced by this audit's patches -- present in the original
+   // D029 evidence too). This function's caller-supplied exit_price is
+   // only the price of the FINAL closing deal. For a position that was
+   // already partially closed earlier (SR3/SR4's own partial-close
+   // policies), that silently ignores the profit/loss already realized on
+   // the partial leg, understating or overstating realized_r versus the
+   // true volume-weighted result across every exit deal -- confirmed via
+   // reconcile_deals_and_r.py against real broker deal history (see
+   // DECISION_LOG.md D029 audit remediation). Fixed by computing the same
+   // volume-weighted exit price ExportAndFlattenPortfolioBook() already
+   // uses, from the exact deal scan below, and using THAT for realized_r
+   // and the journaled exit_price -- exit_price/exit_time parameters are
+   // now only a fallback if the deal scan finds nothing (defensive; should
+   // not happen given a position that just closed has at least one exit
+   // deal in history by construction).
+   double weighted_exit_price=exit_price;
+   datetime last_exit_time=exit_time;
+   bool have_deal_data=false;
+   if(HistorySelect(book.entry_time-3600,TimeCurrent()))
    {
+      double exit_volume=0.0,exit_price_volume=0.0;
+      datetime scanned_last_time=0;
       int deal_total=HistoryDealsTotal();
       for(int i=0;i<deal_total;i++)
       {
@@ -1693,17 +1706,37 @@ bool ExportClosedPortfolioBookFromTrade(const ENUM_MSZZ_STRATEGY_ID strategy_id,
          if(deal==0 || (ulong)HistoryDealGetInteger(deal,DEAL_POSITION_ID)!=book.broker_position_ticket)
             continue;
          long entry_type=HistoryDealGetInteger(deal,DEAL_ENTRY);
-         g_portfolio_journals.JournalDeal(
-            (datetime)HistoryDealGetInteger(deal,DEAL_TIME),book.book_id,strategy_id,
-            book.broker_position_ticket,deal,
-            (entry_type==DEAL_ENTRY_IN ? "IN" : (entry_type==DEAL_ENTRY_OUT ? "OUT" : "OUT_BY")),
-            HistoryDealGetDouble(deal,DEAL_VOLUME),HistoryDealGetDouble(deal,DEAL_PRICE),
-            HistoryDealGetDouble(deal,DEAL_COMMISSION),HistoryDealGetDouble(deal,DEAL_SWAP),
-            HistoryDealGetDouble(deal,DEAL_PROFIT));
+         if(InpWriteCSV)
+            g_portfolio_journals.JournalDeal(
+               (datetime)HistoryDealGetInteger(deal,DEAL_TIME),book.book_id,strategy_id,
+               book.broker_position_ticket,deal,
+               (entry_type==DEAL_ENTRY_IN ? "IN" : (entry_type==DEAL_ENTRY_OUT ? "OUT" : "OUT_BY")),
+               HistoryDealGetDouble(deal,DEAL_VOLUME),HistoryDealGetDouble(deal,DEAL_PRICE),
+               HistoryDealGetDouble(deal,DEAL_COMMISSION),HistoryDealGetDouble(deal,DEAL_SWAP),
+               HistoryDealGetDouble(deal,DEAL_PROFIT));
+         if(entry_type!=DEAL_ENTRY_OUT && entry_type!=DEAL_ENTRY_OUT_BY) continue;
+         double volume=HistoryDealGetDouble(deal,DEAL_VOLUME);
+         exit_volume+=volume;
+         exit_price_volume+=HistoryDealGetDouble(deal,DEAL_PRICE)*volume;
+         datetime deal_time=(datetime)HistoryDealGetInteger(deal,DEAL_TIME);
+         if(deal_time>scanned_last_time) scanned_last_time=deal_time;
+      }
+      if(exit_volume>0.0)
+      {
+         weighted_exit_price=exit_price_volume/exit_volume;
+         last_exit_time=scanned_last_time;
+         have_deal_data=true;
       }
    }
+   if(!have_deal_data)
+      PrintFormat("MSZZ WARNING: ExportClosedPortfolioBookFromTrade found no exit deals in history for ticket=%I64u; falling back to caller-supplied exit_price=%.5f (realized_r may not reflect an earlier partial close)",
+                  book.broker_position_ticket,exit_price);
+
+   double realized_r=(book.direction==MSZZ_DIR_LONG ?
+                      weighted_exit_price-book.entry_price :
+                      book.entry_price-weighted_exit_price)/book.initial_risk_price;
    if(InpWriteCSV)
-      g_portfolio_journals.JournalTrade(book,exit_time,exit_price,0.0,
+      g_portfolio_journals.JournalTrade(book,last_exit_time,weighted_exit_price,0.0,
                                         realized_r,exit_reason,g_last_regime_id);
    MarkTicketPortfolioJournaled(book.broker_position_ticket);
    g_portfolio_journals.JournalBook(exit_time,book,"CLOSED",exit_reason,
