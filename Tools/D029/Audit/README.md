@@ -34,18 +34,26 @@ condition, and write deterministic CSV output.
   original Phase 3 analyzer's mislabeled `abs(f-0.5)<0.02` "exact_50".
   Produces `corrected_partial_fraction_summary.csv`.
 
+- **`audit_portfolios.py`** (Finding H) — native/logical trade count
+  consistency, duplicate logical IDs, strategy/family attribution,
+  partial counts, risk-cap sequence integrity, exit-management action
+  inventory (whitelist grounded in the EA's real action labels, not
+  guessed), top-1/3/5 and best-quarter exclusion, dev/val/holdout split,
+  long/short split, output hashes. Produces `portfolio_integrity_audit.csv`,
+  `output_hashes.csv`. **Result on current (pre-rerun) evidence:
+  `overall_integrity_ok = True`** for all four variants — this is a
+  pre-rerun baseline and must be re-run against fresh rerun output.
+
 ## Still to be written (see D029_AUDIT_REMEDIATION.md "Next" sections)
 
 - `reconcile_deals_and_r.py` (Finding B) — independent deal-level
   weighted-R reconciliation. Blocked on adding a durable per-deal export
   journal to the EA (the original Phase 3/4 runs never captured this).
-- `analyze_d029_audit.py` / `audit_portfolios.py` (Finding H) — the
-  broader certification-check battery (native/logical trade counts,
-  duplicate logical IDs, strategy attribution, risk-cap sequencing,
-  cross-family actions, exit inventory, dev/val/holdout, output hashes).
-- `sizing_reconciliation.csv`, `portfolio_integrity_audit.csv`,
-  `output_hashes.csv`, `final_audit_decision.csv` — final-certification
-  deliverables, written once the rerun decision is executed.
+- `analyze_d029_audit.py` (Finding H) — umbrella script tying A/C/G/H's
+  individual outputs into one pass/fail summary.
+- `sizing_reconciliation.csv`, `final_audit_decision.csv` —
+  final-certification deliverables, written once the rerun decision is
+  executed.
 
 ## Running
 

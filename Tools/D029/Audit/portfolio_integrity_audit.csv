@@ -1,0 +1,5 @@
+variant,native_trades,portfolio_trades,duplicate_logical_ids,attribution_mismatches,partial_events,max_simultaneous_risk_pct,risk_cap_violations,unknown_exit_management_actions,integrity_ok
+SR3_PCT,194,194,0,0,86,0.25,0,0,True
+SR4_PCT,186,186,0,0,82,0.25,0,0,True
+P3_SR3,0,347,0,0,64,0.4997,0,0,True
+P4_SR3,0,335,0,0,63,0.4997,0,0,True

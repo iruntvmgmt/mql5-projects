@@ -332,7 +332,41 @@ percentage sizing was always scoped as research-only
 final certification's "remaining production gaps" section has a concrete,
 itemized list rather than a vague caveat.
 
-## Next: rerun decision, final certification
+## Finding H — portfolio-integrity check battery (pre-rerun baseline)
+
+`Tools/D029/Audit/audit_portfolios.py` checks, for each of SR3_PCT,
+SR4_PCT, P3_SR3, P4_SR3: native-vs-logical trade count consistency,
+duplicate `logical_position_id` values, strategy/family attribution
+consistency, partial-close counts, risk-cap sequence integrity (every
+approved action's resulting portfolio risk checked against the frozen
+0.50% cap), an exit-management action inventory checked against a
+whitelist grounded in the EA's actual `JournalExitManagement()` action
+labels (not guessed — verified against real observed values first;
+`MSZZ_TradeAnalytics.csv`'s own `exit_reason` field turned out to be a
+generic MT5-level string for the single-book runs, not a per-policy
+classification, so the real check uses
+`MSZZ_SweepExitManagementJournal.csv`'s `action` field instead), top-1/3/5
+exclusion, best-quarter exclusion, dev/val/holdout split, long/short
+split, and a SHA-256 hash of every input file read. Produces
+`portfolio_integrity_audit.csv` and `output_hashes.csv`.
+
+**Result on the current (pre-rerun) evidence: `overall_integrity_ok =
+True`** — no duplicate IDs, no attribution mismatches, no risk-cap
+violations, no unknown exit-management actions, native/logical counts
+consistent, across all four variants. This confirms Finding C's defect
+(one unprotected partial per run) is an isolated execution-safety gap, not
+a symptom of broader portfolio-bookkeeping corruption — but per the rerun
+decision below, **this is a pre-rerun baseline, not certification
+evidence**, and must be re-run against the rerun's fresh output once that
+lands (`ROOTS` in the script point at the original Phase 3/4 directories
+and will need updating).
+
+`analyze_d029_audit.py` (the remaining Finding H script — a single
+umbrella script tying together A/C/G/H's individual outputs into one
+pass/fail summary) and `reconcile_deals_and_r.py` (Finding B) are still
+open; see "Next" below.
+
+## Next: Finding B instrumentation, rerun execution, final certification
 
 See later sections of this document (added incrementally as each finding
 is remediated) and `D029_AUDIT_FINAL_REPORT.md` for the full certification.
