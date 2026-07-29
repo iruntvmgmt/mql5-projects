@@ -1,0 +1,10 @@
+check,result
+fields_compared,time|strategy_id|setup|direction|score|entry|stop|target|origin_id|event_id|strategy_family
+fields_not_available_in_journal_schema,evaluation_time|expiry_time (disclosed gap; not exported by MSZZ_SignalJournal.csv at RAW_CANDIDATE stage)
+price_tolerance,1e-08
+score_tolerance,1e-10
+all_pairwise_streams_identical,True
+all_canonical_hashes_equal,True
+SR0_sha256,9f880ec104c2c30253db9e7a40559c8878d605ab5cd062f2748304d7bb25a065
+SR3_PCT_sha256,9f880ec104c2c30253db9e7a40559c8878d605ab5cd062f2748304d7bb25a065
+SR4_PCT_sha256,9f880ec104c2c30253db9e7a40559c8878d605ab5cd062f2748304d7bb25a065

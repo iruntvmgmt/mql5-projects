@@ -1,0 +1,4 @@
+base,other,base_count,other_count,count_mismatch,identical,first_diff_index,first_diff_field,first_diff_base_value,first_diff_other_value,first_diff_base_time,first_diff_other_time
+SR0,SR3_PCT,376,376,False,True,,,,,,
+SR0,SR4_PCT,376,376,False,True,,,,,,
+SR3_PCT,SR4_PCT,376,376,False,True,,,,,,

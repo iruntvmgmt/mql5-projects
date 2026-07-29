@@ -1,0 +1,5 @@
+variant,total_partials,matched_protection,missing_or_failed_protection,duplicate_partial_same_bar
+SR3_PCT,86,85,1,0
+SR4_PCT,82,81,1,0
+P3_SR3,64,63,1,0
+P4_SR3,63,62,1,0
