@@ -2716,3 +2716,24 @@ Accounting and ownership reconciliation passed with zero mismatches,
 the full regression passed 32/32, and P4 remained byte-identical.
 Decision: **`REJECTED`; D034 is not authorized.** Full detail:
 `D033_INTEGRATION_DEFECT_REMEDIATION.md`.
+
+### D033 post-remediation methodology audit
+
+The `467155e` result remains valid evidence for production's current
+opposite-close-and-reverse policy, but source inspection proves D032 used
+stop/target-only exits and rejected every signal while its family trade
+was open. A controlled stop/target-only broker run produced exactly 822
+trades but PF 1.0276, +0.01825R expectancy, and +14.9991R; PF, holdout,
+and best-quarter-exclusion gates failed.
+
+Replay classified all 2,650 emitted sequences: 1,825 (68.9%) were armed
+on the same bar that the preceding setup terminated, 449 followed a
+neutral reset, and only 376 were fresh crosses from inside. This is a
+material event-semantics defect; no state-machine change was made.
+
+Canonical SSR validity (3 bars) and target (2R) now fail closed when SSR
+is enabled. Regression remains 32/32 and P4 remains byte-identical.
+Classifications: **`SSR_VALID_REJECTION`**,
+**`D032_D033_METHODOLOGY_MISMATCH`**, and
+**`D031_D032_EVENT_SEMANTICS_DEFECT`**. D034 remains blocked. See
+`D033_POST_REMEDIATION_METHODOLOGY_AUDIT.md`.

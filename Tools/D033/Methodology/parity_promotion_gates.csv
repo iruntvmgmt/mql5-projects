@@ -1,0 +1,8 @@
+gate,result
+PF > 1.05,FAIL
+expectancy > 0,PASS
+development > 0,PASS
+validation > 0,PASS
+holdout > 0,FAIL
+top-three exclusion > 0,PASS
+best-quarter exclusion > 0,FAIL

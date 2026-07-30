@@ -193,3 +193,14 @@ development, holdout, top-three, and best-quarter-exclusion gates
 negative. Full regression passed 32/32, P4 parity remained exact, and
 accounting/ownership remained clean. Final status: **`REJECTED`; not
 eligible for D034.**
+
+Post-remediation methodology qualification: D032 used stop/target-only
+exits, while the 906-trade production run closed and reversed on 30
+opposite signals. A controlled policy-parity run produced 822 trades,
+PF 1.0276, and +0.01825R expectancy but failed PF, holdout, and
+best-quarter-exclusion gates. In addition, 1,825 of 2,650 emitted
+candidates were same-trigger-bar re-arms rather than proven fresh market
+excursions. Canonical 3-bar validity and 2R target now fail closed.
+Status remains **`REJECTED`**, additionally classified
+`D032_D033_METHODOLOGY_MISMATCH` and
+`D031_D032_EVENT_SEMANTICS_DEFECT`; D034 remains blocked.

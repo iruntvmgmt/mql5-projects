@@ -1,0 +1,4 @@
+classification,applies,reason
+SSR_VALID_REJECTION,true,"controlled stop/target-only broker run fails PF, holdout, and best-quarter-exclusion promotion gates"
+D032_D033_METHODOLOGY_MISMATCH,true,D032 rejects opposite signals while open; old and 467155e D033 close and immediately reverse
+D031_D032_EVENT_SEMANTICS_DEFECT,true,1825 of 2650 emitted candidates are same-trigger-bar re-arms

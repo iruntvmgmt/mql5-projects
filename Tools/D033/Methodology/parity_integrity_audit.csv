@@ -1,0 +1,14 @@
+check,count,pass
+candidate_geometry_mismatches,0,true
+unresolved_logical_positions,0,true
+duplicate_origin_ids,0,true
+duplicate_event_ids,0,true
+duplicate_execution_intents,0,true
+unknown_exits,0,true
+opposite_signal_exits,0,true
+immediate_reversals,0,true
+volume_mismatches,0,true
+weighted_exit_price_mismatches,0,true
+reported_r_mismatches,0,true
+actual_risk_over_requested,0,true
+portfolio_risk_over_cap,0,true

@@ -1,0 +1,5 @@
+run,execution_policy,candidates,trades,pf,expectancy_r,total_r,opposite_exits
+D032 synthetic,stop_target_only,2650,822,1.079,0.051,,0
+old D033,opposite_close_and_reverse,2650,389,1.0532615810624784,0.034513367609254504,13.425700000000003,8
+corrected D033 467155e,opposite_close_and_reverse,2650,906,0.996093777083684,-0.002549558498896246,-2.309899999999999,30
+controlled methodology parity,stop_target_only,2650,822,1.0276226519337017,0.018247080291970804,14.999100000000002,0

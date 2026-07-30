@@ -1,0 +1,8 @@
+behavior,d032_simulator,old_d033,corrected_d033_467155e
+same-direction candidate while open,REJECT,REJECT_OWNERSHIP,REJECT_OWNERSHIP
+opposite-direction candidate while open,REJECT,CLOSE_AND_REVERSE,CLOSE_AND_REVERSE
+stop exit,YES,YES,YES
+target exit,YES,YES,YES
+opposite-signal exit,NO,YES,YES
+immediate reversal,NO,YES,YES
+test-end exit,EXCLUDED_FROM_RESULTS,BROKER_TEST_END_CLOSE,BROKER_TEST_END_CLOSE

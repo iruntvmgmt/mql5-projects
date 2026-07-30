@@ -1,0 +1,8 @@
+metric,value
+all_state_machine_arms,32586
+emitted_candidates_classified,2650
+unmatched_emitted_candidates,0
+same_bar_rearms,1825
+still_outside_expiry_rearms,0
+still_outside_invalidation_rearms,0
+opposite_signal_closes,30

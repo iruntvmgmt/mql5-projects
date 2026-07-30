@@ -1,0 +1,6 @@
+test,trades,total_r,expectancy_r,positive
+development,519,2.9948999999999995,0.005770520231213872,true
+validation,151,16.9943,0.11254503311258278,true
+holdout,152,-4.990099999999998,-0.03282960526315788,false
+top_3_exclusion,819,8.9806,,true
+best_quarter_exclusion,722,-13.998099999999997,,false

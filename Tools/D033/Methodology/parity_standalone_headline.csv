@@ -1,0 +1,2 @@
+production_candidates,broker_trades,ownership_rejections,duplicate_rejections,spread_rejections,expiry_rejections,stop_exits,target_exits,opposite_signal_exits,immediate_reversals,profit_factor_r,expectancy_r,total_r,max_drawdown_r,win_rate
+2650,822,1814,0,7,7,543,279,0,0,1.0276226519337017,0.018247080291970804,14.999100000000002,35.0125,0.33941605839416056
