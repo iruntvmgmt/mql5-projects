@@ -1,0 +1,11 @@
+scope,event_count,unique_count,duplicates,result
+all_historical_events,217,217,0,PASS
+fast_long,8,8,0,PASS
+fast_short,14,14,0,PASS
+medium_long,50,50,0,PASS
+medium_short,55,55,0,PASS
+slow_long,39,39,0,PASS
+slow_short,51,51,0,PASS
+synthetic_speed_separation,3,3,0,PASS
+synthetic_direction_separation,2,2,0,PASS
+synthetic_projection_basis_separation,2,2,0,PASS

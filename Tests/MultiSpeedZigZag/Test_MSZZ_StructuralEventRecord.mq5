@@ -62,6 +62,31 @@ bool SameRecord(const MSZZStructuralEventRecord &a,
       a.atr_at_event==b.atr_at_event;
 }
 
+void WriteParityRow(const int handle,const datetime bar_time,
+                    const MSZZStructuralEventRecord &engine_record,
+                    const MSZZStructuralEventRecord &replay_record)
+{
+   FileWrite(handle,TimeToString(bar_time,TIME_DATE|TIME_SECONDS),
+      (int)engine_record.speed,MSZZDirectionText(engine_record.direction),
+      engine_record.event_id,replay_record.event_id,
+      engine_record.projection_anchor_1_id,
+      engine_record.projection_anchor_2_id,
+      DoubleToString(engine_record.projected_level_previous_bar,10),
+      DoubleToString(replay_record.projected_level_previous_bar,10),
+      DoubleToString(engine_record.projected_level_event_bar,10),
+      DoubleToString(replay_record.projected_level_event_bar,10),
+      engine_record.source_origin_pivot_id,
+      replay_record.source_origin_pivot_id,
+      engine_record.broken_pivot_id,replay_record.broken_pivot_id,
+      DoubleToString(engine_record.atr_at_event,10),
+      DoubleToString(replay_record.atr_at_event,10),
+      DoubleToString(engine_record.break_distance,10),
+      DoubleToString(replay_record.break_distance,10),
+      DoubleToString(engine_record.impulse_distance,10),
+      DoubleToString(replay_record.impulse_distance,10),
+      (SameRecord(engine_record,replay_record) ? "PASS" : "FAIL"));
+}
+
 bool BuildBullish(const ENUM_MSZZ_SPEED speed,
                   MSZZStructuralEventRecord &record,
                   const string anchor_2_id="BH2")
@@ -194,6 +219,18 @@ void TestEngineReplayRealHistory()
 
    int certified_events=0,mismatches=0,same_rebuild_mutations=0;
    string ids[];
+   int parity_handle=FileOpen("MSZZ_StructuralEventParity.csv",
+      FILE_WRITE|FILE_CSV|FILE_ANSI,';');
+   if(parity_handle!=INVALID_HANDLE)
+      FileWrite(parity_handle,"bar_time","speed","direction",
+         "engine_event_id","replay_event_id","projection_anchor_1_id",
+         "projection_anchor_2_id","engine_projected_previous",
+         "replay_projected_previous","engine_projected_event",
+         "replay_projected_event","engine_origin_pivot",
+         "replay_origin_pivot","engine_broken_pivot","replay_broken_pivot",
+         "engine_atr","replay_atr","engine_break_distance",
+         "replay_break_distance","engine_impulse_distance",
+         "replay_impulse_distance","field_parity");
    for(int si=0;si<3;si++)
    {
       ENUM_MSZZ_SPEED speed=(ENUM_MSZZ_SPEED)si;
@@ -219,6 +256,10 @@ void TestEngineReplayRealHistory()
          if(have_bull)
          {
             certified_events++;
+            if(parity_handle!=INVALID_HANDLE)
+               WriteParityRow(parity_handle,rates[i].time,
+                  snap.bullish_structural_event,
+                  history[i].bullish_structural_event);
             if(!SameRecord(history[i].bullish_structural_event,
                            snap.bullish_structural_event))
                mismatches++;
@@ -228,6 +269,10 @@ void TestEngineReplayRealHistory()
          if(have_bear)
          {
             certified_events++;
+            if(parity_handle!=INVALID_HANDLE)
+               WriteParityRow(parity_handle,rates[i].time,
+                  snap.bearish_structural_event,
+                  history[i].bearish_structural_event);
             if(!SameRecord(history[i].bearish_structural_event,
                            snap.bearish_structural_event))
                mismatches++;
@@ -238,6 +283,11 @@ void TestEngineReplayRealHistory()
             (have_bull || have_bear))
             same_rebuild_mutations++;
       }
+   }
+   if(parity_handle!=INVALID_HANDLE)
+   {
+      FileFlush(parity_handle);
+      FileClose(parity_handle);
    }
 
    int duplicates=0;

@@ -1,0 +1,15 @@
+test_case,expected,actual,result
+valid_bullish,valid,valid,PASS
+valid_bearish,valid,valid,PASS
+fast_medium_slow,separate IDs,separate IDs,PASS
+projection_recomputation,exact,exact,PASS
+break_impulse_recomputation,exact,exact,PASS
+missing_origin_adjacency,invalid MISSING_ORIGIN_ADJACENCY,invalid MISSING_ORIGIN_ADJACENCY,PASS
+invalid_origin_chronology,invalid INVALID_PIVOT_CHRONOLOGY,invalid INVALID_PIVOT_CHRONOLOGY,PASS
+zero_atr,invalid INVALID_NUMERIC,invalid INVALID_NUMERIC,PASS
+directionally_invalid_close,invalid INVALID_BULLISH_GEOMETRY,invalid INVALID_BULLISH_GEOMETRY,PASS
+projection_mismatch,invalid PROJECTION_MISMATCH,invalid PROJECTION_MISMATCH,PASS
+deterministic_repeat,byte-equivalent,byte-equivalent,PASS
+copy_lifetime,prior copy unchanged,prior copy unchanged,PASS
+same_rebuild_pivot_mutation,at least one,15,PASS
+engine_replay,zero mismatches,0 of 217,PASS
