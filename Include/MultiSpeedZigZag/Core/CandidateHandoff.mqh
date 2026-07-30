@@ -27,6 +27,7 @@ private:
          case MSZZ_STRAT_COMPRESSION_BREAKOUT:
          case MSZZ_STRAT_STRUCTURE_TRANSITION:
          case MSZZ_STRAT_WEIGHTED_ENSEMBLE:
+         case MSZZ_STRAT_SESSION_SWEEP_REVERSAL:
             return true;
          default:
             return false;

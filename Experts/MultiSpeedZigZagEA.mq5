@@ -10,6 +10,7 @@
 #include <MultiSpeedZigZag/Strategies/StrategySuite.mqh>
 #include <MultiSpeedZigZag/Core/CandidateHandoff.mqh>
 #include <MultiSpeedZigZag/Strategies/D027StrategyFamilies.mqh>
+#include <MultiSpeedZigZag/Strategies/SessionSweepReversalStrategy.mqh>
 #include <MultiSpeedZigZag/Arbitration/OpportunityClusterEngine.mqh>
 #include <MultiSpeedZigZag/Execution/EventStore.mqh>
 #include <MultiSpeedZigZag/Execution/ExecutionGuard.mqh>
@@ -152,6 +153,20 @@ input int    InpPortfolioMaxPhysicalPositions=2;
 input bool   InpPortfolioAllowOpposingBooks=false;
 input bool   InpPortfolioAllowSameDirectionStacking=false;
 
+// D033: Session Sweep Reversal, promoted from D031/D032 shadow research
+// (the only one of six families to pass every D032 mandatory gate --
+// see Docs/MultiSpeedZigZag/D032_SIX_FAMILY_SCREENING.md). Default
+// disabled, standalone-only for D033 (not yet combinable with FastMed/
+// Sweep in the same run -- see PortfolioBookRouting.mqh). Target R is
+// frozen at the D031/D032 canonical value (2.0) by
+// SessionSweepReversalStrategy.mqh's own MSZZ_SSR_PROD_TARGET_R
+// constant, not by this input -- InpSSRBookTargetR exists only for
+// architectural symmetry with the other book-target inputs and must not
+// be changed from 2.0 without a new frozen study.
+input group "═══ D033 Session Sweep Reversal ═══"
+input bool   InpEnableSessionSweepReversal=false;
+input double InpSSRBookTargetR=2.0;
+
 // D028 Stage 5: bounded SweepReclaim exit-management study. Default 0
 // (SR0) is an exact no-op versus the certified Stage 4 P1-P4 behavior --
 // no breakeven, no trail, no partial close, no time stop. Only the Sweep
@@ -178,6 +193,11 @@ CMSZZD027StrategyFamilies     g_d027_suite;
 // candidates are never appended to the candidates[]/d027_candidates[]
 // arrays g_suite/g_d027_suite feed into ExecuteCluster().
 CMSZZSixFamilyResearchSuite   g_six_family_suite;
+// D033: production Session Sweep Reversal, distinct from g_six_family_suite
+// above -- this emits the production MSZZCandidate type and, when enabled,
+// DOES flow through CandidateHandoff/StrategyBook/execution, unlike the
+// disjoint shadow-research suite.
+CMSZZSessionSweepReversalStrategy g_ssr_strategy;
 CMSZZOpportunityClusterEngine g_cluster_engine;
 CMSZZEventStore                g_event_store;
 CMSZZExecutionGuard            g_execution_guard;
@@ -237,6 +257,7 @@ string                         g_last_regime_id="";
 // caller reaches these while InpEnableMultiBookPortfolio is false.
 CMSZZStrategyBook              g_fastmed_book;
 CMSZZStrategyBook              g_sweep_book;
+CMSZZStrategyBook              g_ssr_book;   // D033, single-book standalone only -- see ConfigurePortfolioArchitecture()
 CMSZZPortfolioRiskManager      g_portfolio_risk;
 CMSZZExecutionCoordinator      g_execution_coordinator;
 CMSZZVirtualNettingLedger      g_virtual_ledger;
@@ -284,6 +305,7 @@ int EnabledStrategyCount()
    if(InpEnableSweepReclaim) count++;
    if(InpEnableCompressionBreakout) count++;
    if(InpEnableStructureTransition) count++;
+   if(InpEnableSessionSweepReversal) count++;
    return count;
 }
 
@@ -291,6 +313,8 @@ MSZZStrategyBookState ActivePortfolioBookState()
 {
    if(g_portfolio_strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
       return g_fastmed_book.State();
+   if(g_portfolio_strategy_id==MSZZ_STRAT_SESSION_SWEEP_REVERSAL)
+      return g_ssr_book.State();
    return g_sweep_book.State();
 }
 
@@ -301,6 +325,8 @@ bool PortfolioMarkFlat(const string reason)
       return g_fastmed_book.MarkFlat(reason);
    if(g_portfolio_strategy_id==MSZZ_STRAT_SWEEP_RECLAIM)
       return g_sweep_book.MarkFlat(reason);
+   if(g_portfolio_strategy_id==MSZZ_STRAT_SESSION_SWEEP_REVERSAL)
+      return g_ssr_book.MarkFlat(reason);
    return false;
 }
 
@@ -315,6 +341,8 @@ bool PortfolioMarkEntryPending(const MSZZCandidate &candidate,const double volum
    }
    if(g_portfolio_strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
       return g_fastmed_book.MarkEntryPending(candidate,volume,requested_risk_pct,reason);
+   if(g_portfolio_strategy_id==MSZZ_STRAT_SESSION_SWEEP_REVERSAL)
+      return g_ssr_book.MarkEntryPending(candidate,volume,requested_risk_pct,reason);
    return g_sweep_book.MarkEntryPending(candidate,volume,requested_risk_pct,reason);
 }
 
@@ -329,6 +357,10 @@ bool PortfolioMarkOpen(const string logical_position_id,const ulong position_tic
       return g_fastmed_book.MarkOpen(logical_position_id,position_ticket,order_ticket,
                                      entry_time,entry_price,stop_price,target_price,
                                      allocated_risk_pct,reason);
+   if(g_portfolio_strategy_id==MSZZ_STRAT_SESSION_SWEEP_REVERSAL)
+      return g_ssr_book.MarkOpen(logical_position_id,position_ticket,order_ticket,
+                                 entry_time,entry_price,stop_price,target_price,
+                                 allocated_risk_pct,reason);
    return g_sweep_book.MarkOpen(logical_position_id,position_ticket,order_ticket,
                                 entry_time,entry_price,stop_price,target_price,
                                 allocated_risk_pct,reason);
@@ -340,6 +372,8 @@ bool PortfolioAssignPendingLogicalPositionId(const string logical_position_id,
    if(!g_portfolio_single_book_active) return true;
    if(g_portfolio_strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE)
       return g_fastmed_book.AssignPendingLogicalPositionId(logical_position_id,reason);
+   if(g_portfolio_strategy_id==MSZZ_STRAT_SESSION_SWEEP_REVERSAL)
+      return g_ssr_book.AssignPendingLogicalPositionId(logical_position_id,reason);
    return g_sweep_book.AssignPendingLogicalPositionId(logical_position_id,reason);
 }
 
@@ -349,6 +383,7 @@ double PortfolioTargetR(const ENUM_MSZZ_STRATEGY_ID strategy_id)
       return InpRiskReward;
    if(strategy_id==MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE) return InpFastMedBookTargetR;
    if(strategy_id==MSZZ_STRAT_SWEEP_RECLAIM) return InpSweepBookTargetR;
+   if(strategy_id==MSZZ_STRAT_SESSION_SWEEP_REVERSAL) return InpSSRBookTargetR;
    return 0.0;
 }
 
@@ -371,7 +406,8 @@ bool ConfigurePortfolioArchitecture(string &reason)
    bool supported_pair=(enabled_count==2 && InpEnableFastMedConfluence &&
                         InpEnableSweepReclaim);
    if(!CMSZZPortfolioBookRouting::IsSupportedSelection(
-         enabled_count,InpEnableFastMedConfluence,InpEnableSweepReclaim))
+         enabled_count,InpEnableFastMedConfluence,InpEnableSweepReclaim,
+         InpEnableSessionSweepReversal))
    {
       reason="portfolio strategy selection is unsupported";
       return false;
@@ -380,6 +416,8 @@ bool ConfigurePortfolioArchitecture(string &reason)
       g_portfolio_strategy_id=MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE;
    else if(enabled_count==1 && InpEnableSweepReclaim)
       g_portfolio_strategy_id=MSZZ_STRAT_SWEEP_RECLAIM;
+   else if(enabled_count==1 && InpEnableSessionSweepReversal)
+      g_portfolio_strategy_id=MSZZ_STRAT_SESSION_SWEEP_REVERSAL;
    else if(supported_pair)
       g_portfolio_strategy_id=MSZZ_STRAT_NONE;
    else
@@ -403,6 +441,15 @@ bool ConfigurePortfolioArchitecture(string &reason)
    if(InpSweepExitPolicy<0 || InpSweepExitPolicy>5)
    { reason="InpSweepExitPolicy must be 0-5 (SR0-SR5)"; return false; }
    sweep_exit.trailing_policy_id=InpSweepExitPolicy;
+   // D033: SSR's canonical exit is a plain fixed-2R (no trailing/breakeven/
+   // partial management, matching fastmed's own exit shape, not sweep's
+   // more elaborate canonical-2R-with-trailing-policy one) -- exactly the
+   // frozen D031/D032 definition (target baked into the candidate at
+   // emission, closes via broker-native SL/TP or own-family-opposite).
+   MSZZBookExitConfig ssr_exit; ZeroMemory(ssr_exit);
+   ssr_exit.policy_id=MSZZ_BOOK_EXIT_FIXED_R;
+   ssr_exit.target_r=InpSSRBookTargetR;
+   ssr_exit.own_family_opposite_exit=true;
 
    // Stage 3 deliberately reuses the certified run's InpMagic for its one
    // physical book, keeping all legacy ownership/intent/analytics machinery
@@ -427,11 +474,22 @@ bool ConfigurePortfolioArchitecture(string &reason)
                                    MSZZ_FAMILY_BREAKOUT,InpMagic,true,
                                    fastmed_exit,reason)) return false;
    }
-   else
+   else if(g_portfolio_strategy_id==MSZZ_STRAT_SWEEP_RECLAIM)
    {
       if(!g_sweep_book.Configure(2,MSZZ_STRAT_SWEEP_RECLAIM,
                                  MSZZ_FAMILY_REVERSAL,InpMagic,true,
                                  sweep_exit,reason)) return false;
+   }
+   else if(g_portfolio_strategy_id==MSZZ_STRAT_SESSION_SWEEP_REVERSAL)
+   {
+      if(!g_ssr_book.Configure(3,MSZZ_STRAT_SESSION_SWEEP_REVERSAL,
+                               MSZZ_FAMILY_REVERSAL,InpMagic,true,
+                               ssr_exit,reason)) return false;
+   }
+   else
+   {
+      reason="portfolio single-book selection resolved to no known strategy";
+      return false;
    }
 
    MSZZPortfolioRiskConfig risk; ZeroMemory(risk);
@@ -2300,6 +2358,7 @@ void ProcessBookExitManagement(const MSZZSpeedSnapshot &fast,const MqlRates &bar
    if(!g_portfolio_multi_book_active && !g_portfolio_single_book_active) return;
    ProcessOneBookExit(g_fastmed_book,fast,bar);
    ProcessOneBookExit(g_sweep_book,fast,bar);
+   ProcessOneBookExit(g_ssr_book,fast,bar); // D033 -- no-op unless g_ssr_book was Configure()d this run
 }
 
 void ProcessClosedBar()
@@ -2354,6 +2413,13 @@ void ProcessClosedBar()
    int candidate_count=g_suite.Evaluate(fast,med,slow,rates[closed_count-1].time,rates[closed_count-1].close,candidates);
    MSZZCandidate d027_candidates[];
    int d027_count=g_d027_suite.Evaluate(fast,med,slow,g_last_regime,rates[closed_count-1],d027_candidates);
+   // D033: production Session Sweep Reversal, same merge shape as
+   // g_d027_suite above, gated by its own enable flag (unlike g_d027_suite's
+   // five sub-strategies, which are gated inside Configure()).
+   MSZZCandidate ssr_candidates[];
+   int ssr_count=0;
+   if(InpEnableSessionSweepReversal)
+      ssr_count=g_ssr_strategy.Evaluate(fast,rates[closed_count-1],ssr_candidates);
    string handoff_diagnostic;
    if(!CMSZZCandidateHandoff::ValidateCollection(candidates,candidate_count,handoff_diagnostic))
    {
@@ -2363,6 +2429,11 @@ void ProcessClosedBar()
    if(!CMSZZCandidateHandoff::ValidateCollection(d027_candidates,d027_count,handoff_diagnostic))
    {
       Print("MSZZ CANDIDATE HANDOFF REJECTED stage=d027 reason=",handoff_diagnostic);
+      return;
+   }
+   if(!CMSZZCandidateHandoff::ValidateCollection(ssr_candidates,ssr_count,handoff_diagnostic))
+   {
+      Print("MSZZ CANDIDATE HANDOFF REJECTED stage=ssr reason=",handoff_diagnostic);
       return;
    }
    for(int i=0;i<d027_count;i++)
@@ -2378,6 +2449,23 @@ void ProcessClosedBar()
       if(appended_index<0 || appended_index>=candidate_count)
       {
          PrintFormat("MSZZ CANDIDATE HANDOFF REJECTED stage=append_index index=%d count=%d",
+                     appended_index,candidate_count);
+         return;
+      }
+   }
+   for(int i=0;i<ssr_count;i++)
+   {
+      int appended_index=-1;
+      if(!CMSZZCandidateHandoff::Append(candidates,candidate_count,ssr_candidates[i],
+                                       appended_index,handoff_diagnostic))
+      {
+         PrintFormat("MSZZ CANDIDATE HANDOFF REJECTED stage=append_ssr source_index=%d reason=%s",
+                     i,handoff_diagnostic);
+         return;
+      }
+      if(appended_index<0 || appended_index>=candidate_count)
+      {
+         PrintFormat("MSZZ CANDIDATE HANDOFF REJECTED stage=append_ssr_index index=%d count=%d",
                      appended_index,candidate_count);
          return;
       }
@@ -2544,6 +2632,7 @@ int OnInit()
    }
 
    g_six_family_suite.Configure(PeriodSeconds(),InpWriteCSV);
+   g_ssr_strategy.Configure(PeriodSeconds(),InpSignalValidityBars);
 
    g_instance_id=StringFormat("%d-%d-%d",(int)AccountInfoInteger(ACCOUNT_LOGIN),(int)TimeLocal(),MathRand());
    if(!g_intent_store.Configure(_Symbol,_Period,InpMagic,g_instance_id))
@@ -2675,6 +2764,7 @@ string EnabledStrategiesSummary()
    if(InpEnableSweepReclaim)        out+=(out=="" ? "" : ",")+"SweepReclaim";
    if(InpEnableCompressionBreakout) out+=(out=="" ? "" : ",")+"CompressionBreakout";
    if(InpEnableStructureTransition) out+=(out=="" ? "" : ",")+"StructureTransition";
+   if(InpEnableSessionSweepReversal) out+=(out=="" ? "" : ",")+"SessionSweepReversal";
    return (out=="" ? "NONE" : out);
 }
 

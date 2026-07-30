@@ -47,7 +47,19 @@ enum ENUM_MSZZ_STRATEGY_ID
    MSZZ_STRAT_SWEEP_RECLAIM = 1050,         // D027 S3
    MSZZ_STRAT_COMPRESSION_BREAKOUT = 1060,  // D027 S4
    MSZZ_STRAT_STRUCTURE_TRANSITION = 1070,  // D027 S5
-   MSZZ_STRAT_WEIGHTED_ENSEMBLE = 1080
+   MSZZ_STRAT_WEIGHTED_ENSEMBLE = 1080,
+   // D033: production execution port of the D031/D032 Session Sweep
+   // Reversal shadow family -- the only one of six to pass every D032
+   // mandatory gate. 1090 was the D030 handoff's original *suggested* ID
+   // for a different, never-implemented hypothesis ("Compression
+   // Breakout" Family 4); D031 explicitly declined it for that purpose
+   // (see STRATEGY_CATALOG.md's D031 addendum) and it remains otherwise
+   // unassigned, so it is reused here for SSR instead -- see
+   // Tools/D033/id_allocation.csv. Deliberately NOT 1200: that ID belongs
+   // to the disjoint, non-executing research namespace
+   // (Research/Families/ResearchCandidateTypes.mqh) and must never be
+   // confused with this production strategy.
+   MSZZ_STRAT_SESSION_SWEEP_REVERSAL = 1090
 };
 
 // D027 Layer 2: explicit strategy-family identity, separate from

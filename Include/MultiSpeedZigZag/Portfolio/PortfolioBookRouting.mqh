@@ -6,12 +6,22 @@
 class CMSZZPortfolioBookRouting
 {
 public:
+   // D033: added a third single-book option (Session Sweep Reversal)
+   // WITHOUT touching the existing two-strategy pair case at all --
+   // enabled_count==2 still requires exactly {fastmed, sweep}, unchanged.
+   // SSR is standalone-only in D033 (no SSR+fastmed or SSR+sweep pair is
+   // supported yet); combining it with P4 is D034's job, not this one.
    static bool IsSupportedSelection(const int enabled_count,
                                     const bool fastmed_enabled,
-                                    const bool sweep_enabled)
+                                    const bool sweep_enabled,
+                                    const bool ssr_enabled=false)
    {
-      if(enabled_count==1) return fastmed_enabled!=sweep_enabled;
-      return enabled_count==2 && fastmed_enabled && sweep_enabled;
+      if(enabled_count==1)
+      {
+         int on=(fastmed_enabled?1:0)+(sweep_enabled?1:0)+(ssr_enabled?1:0);
+         return on==1;
+      }
+      return enabled_count==2 && fastmed_enabled && sweep_enabled && !ssr_enabled;
    }
 
    static string ConsumedKey(const ENUM_MSZZ_STRATEGY_ID strategy_id,
