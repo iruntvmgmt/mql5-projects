@@ -1,0 +1,35 @@
+field,type,required,meaning
+valid,bool,true,ownership certification result
+validation_reason,string,true,OK or fail-closed reason
+event_id,string,true,MSZZSE1 length-prefixed identity
+speed,ENUM_MSZZ_SPEED,true,fast medium slow
+direction,ENUM_MSZZ_DIRECTION,true,long or short
+event_time,datetime,true,break confirmation bar
+source_origin_pivot_id,string,true,chronologically adjacent opposite pivot
+source_origin_price,double,true,origin pivot price
+source_origin_pivot_time,datetime,true,origin pivot time
+source_origin_confirmation_time,datetime,true,origin confirmation
+broken_pivot_id,string,true,projection anchor 2
+broken_pivot_price,double,true,anchor 2 price
+broken_pivot_time,datetime,true,anchor 2 pivot time
+broken_pivot_confirmation_time,datetime,true,anchor 2 confirmation
+projection_anchor_1_id,string,true,projection anchor 1
+projection_anchor_1_price,double,true,anchor 1 price
+projection_anchor_1_time,datetime,true,anchor 1 pivot time
+projection_anchor_1_confirmation_time,datetime,true,anchor 1 confirmation
+projection_anchor_2_id,string,true,projection anchor 2
+projection_anchor_2_price,double,true,anchor 2 price
+projection_anchor_2_time,datetime,true,anchor 2 pivot time
+projection_anchor_2_confirmation_time,datetime,true,anchor 2 confirmation
+previous_bar_time,datetime,true,previous comparison bar
+projected_level_previous_bar,double,true,exact previous projection
+projected_level_event_bar,double,true,exact event projection
+break_close_previous_bar,double,true,previous close
+break_close_price,double,true,event close
+break_distance,double,true,absolute event close-level distance
+break_distance_atr,double,true,break distance over event ATR
+impulse_origin_price,double,true,origin pivot price
+impulse_extreme_price,double,true,direction-owned event extreme
+impulse_distance,double,true,absolute impulse distance
+impulse_distance_atr,double,true,impulse distance over event ATR
+atr_at_event,double,true,event-bar ATR

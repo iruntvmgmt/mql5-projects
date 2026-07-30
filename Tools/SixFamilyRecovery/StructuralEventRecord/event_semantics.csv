@@ -1,0 +1,3 @@
+direction,projection_anchor_1,projection_anchor_2,broken_pivot,origin_rule,cross_rule,impulse_extreme
+LONG,prior_high,last_high,last_high,latest low captured when last_high confirmed with pivot and confirmation chronology preceding it,previous_close<=previous_projection and event_close>event_projection,max(event_high broken_high)
+SHORT,prior_low,last_low,last_low,latest high captured when last_low confirmed with pivot and confirmation chronology preceding it,previous_close>=previous_projection and event_close<event_projection,min(event_low broken_low)
