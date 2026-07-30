@@ -1,3 +1,3 @@
 direction,origin_rule,projection_anchor_1,projection_anchor_2,broken_pivot,creation_point,reconstruction_used,result
-LONG,latest low retained when anchor2 high confirmed with strict pivot and confirmation chronology,prior_high,last_high,last_high,BuildSpeed break branch,false,PASS
-SHORT,latest high retained when anchor2 low confirmed with strict pivot and confirmation chronology,prior_low,last_low,last_low,BuildSpeed break branch,false,PASS
+LONG,latest low retained when anchor2 high confirmed with strict pivot and confirmation chronology,prior_high,last_high,last_high,immediately after final-bar break comparison from retained inputs,false,PASS
+SHORT,latest high retained when anchor2 low confirmed with strict pivot and confirmation chronology,prior_low,last_low,last_low,immediately after final-bar break comparison from retained inputs,false,PASS

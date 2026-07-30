@@ -150,7 +150,7 @@ struct MSZZPivot
    string                    id;
 };
 
-// MSZZSE1: immutable ownership-certified structural break evidence.
+// MSZZSE2: immutable ownership-certified structural break evidence.
 // Additive to the legacy break flags/IDs; no existing strategy consumes it.
 struct MSZZStructuralEventRecord
 {
@@ -161,18 +161,26 @@ struct MSZZStructuralEventRecord
    ENUM_MSZZ_DIRECTION     direction;
    datetime                event_time;
    string                  source_origin_pivot_id;
+   ENUM_MSZZ_SPEED         source_origin_pivot_speed;
+   ENUM_MSZZ_PIVOT_KIND    source_origin_pivot_kind;
    double                  source_origin_price;
    datetime                source_origin_pivot_time;
    datetime                source_origin_confirmation_time;
    string                  broken_pivot_id;
+   ENUM_MSZZ_SPEED         broken_pivot_speed;
+   ENUM_MSZZ_PIVOT_KIND    broken_pivot_kind;
    double                  broken_pivot_price;
    datetime                broken_pivot_time;
    datetime                broken_pivot_confirmation_time;
    string                  projection_anchor_1_id;
+   ENUM_MSZZ_SPEED         projection_anchor_1_speed;
+   ENUM_MSZZ_PIVOT_KIND    projection_anchor_1_kind;
    double                  projection_anchor_1_price;
    datetime                projection_anchor_1_time;
    datetime                projection_anchor_1_confirmation_time;
    string                  projection_anchor_2_id;
+   ENUM_MSZZ_SPEED         projection_anchor_2_speed;
+   ENUM_MSZZ_PIVOT_KIND    projection_anchor_2_kind;
    double                  projection_anchor_2_price;
    datetime                projection_anchor_2_time;
    datetime                projection_anchor_2_confirmation_time;

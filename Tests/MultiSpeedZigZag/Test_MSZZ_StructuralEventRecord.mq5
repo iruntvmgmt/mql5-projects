@@ -31,19 +31,27 @@ bool SameRecord(const MSZZStructuralEventRecord &a,
       a.event_id==b.event_id && a.speed==b.speed &&
       a.direction==b.direction && a.event_time==b.event_time &&
       a.source_origin_pivot_id==b.source_origin_pivot_id &&
+      a.source_origin_pivot_speed==b.source_origin_pivot_speed &&
+      a.source_origin_pivot_kind==b.source_origin_pivot_kind &&
       a.source_origin_price==b.source_origin_price &&
       a.source_origin_pivot_time==b.source_origin_pivot_time &&
       a.source_origin_confirmation_time==b.source_origin_confirmation_time &&
       a.broken_pivot_id==b.broken_pivot_id &&
+      a.broken_pivot_speed==b.broken_pivot_speed &&
+      a.broken_pivot_kind==b.broken_pivot_kind &&
       a.broken_pivot_price==b.broken_pivot_price &&
       a.broken_pivot_time==b.broken_pivot_time &&
       a.broken_pivot_confirmation_time==b.broken_pivot_confirmation_time &&
       a.projection_anchor_1_id==b.projection_anchor_1_id &&
+      a.projection_anchor_1_speed==b.projection_anchor_1_speed &&
+      a.projection_anchor_1_kind==b.projection_anchor_1_kind &&
       a.projection_anchor_1_price==b.projection_anchor_1_price &&
       a.projection_anchor_1_time==b.projection_anchor_1_time &&
       a.projection_anchor_1_confirmation_time==
          b.projection_anchor_1_confirmation_time &&
       a.projection_anchor_2_id==b.projection_anchor_2_id &&
+      a.projection_anchor_2_speed==b.projection_anchor_2_speed &&
+      a.projection_anchor_2_kind==b.projection_anchor_2_kind &&
       a.projection_anchor_2_price==b.projection_anchor_2_price &&
       a.projection_anchor_2_time==b.projection_anchor_2_time &&
       a.projection_anchor_2_confirmation_time==
@@ -89,15 +97,34 @@ void WriteParityRow(const int handle,const datetime bar_time,
 
 bool BuildBullish(const ENUM_MSZZ_SPEED speed,
                   MSZZStructuralEventRecord &record,
-                  const string anchor_2_id="BH2")
+                  const string anchor_2_id="BH2",
+                  const string origin_id="BL1")
 {
    datetime t=D'2026.01.05 10:00:00';
    MSZZPivot a1=Pivot(speed,MSZZ_PIVOT_HIGH,"BH1",t,t+60,100.0);
-   MSZZPivot origin=Pivot(speed,MSZZ_PIVOT_LOW,"BL1",t+300,t+360,95.0);
+   MSZZPivot origin=Pivot(speed,MSZZ_PIVOT_LOW,origin_id,t+300,t+360,95.0);
    MSZZPivot a2=Pivot(speed,MSZZ_PIVOT_HIGH,anchor_2_id,t+600,t+660,101.0);
    return CMSZZStructuralEventPolicy::Build(
       "XAUUSD",PERIOD_M5,speed,MSZZ_DIR_LONG,t+900,t+1200,
       101.5,102.5,103.0,101.8,1.0,a1,a2,origin,0.01,record);
+}
+
+bool ConsumableFieldsBlank(const MSZZStructuralEventRecord &record)
+{
+   return !record.valid && record.event_id=="" &&
+      record.source_origin_pivot_id=="" &&
+      record.source_origin_price==0.0 &&
+      record.broken_pivot_id=="" && record.broken_pivot_price==0.0 &&
+      record.projection_anchor_1_id=="" &&
+      record.projection_anchor_1_price==0.0 &&
+      record.projection_anchor_2_id=="" &&
+      record.projection_anchor_2_price==0.0 &&
+      record.projected_level_previous_bar==0.0 &&
+      record.projected_level_event_bar==0.0 &&
+      record.break_close_previous_bar==0.0 &&
+      record.break_close_price==0.0 &&
+      record.break_distance==0.0 && record.impulse_distance==0.0 &&
+      record.atr_at_event==0.0;
 }
 
 bool BuildBearish(const ENUM_MSZZ_SPEED speed,
@@ -135,18 +162,22 @@ void TestValidConstruction()
 
 void TestDeterminismAndSeparation()
 {
-   MSZZStructuralEventRecord a,b,medium,slow,different_basis,bear;
+   MSZZStructuralEventRecord a,b,medium,slow,different_basis,
+                             different_origin,bear;
    BuildBullish(MSZZ_SPEED_FAST,a);
    BuildBullish(MSZZ_SPEED_FAST,b);
    BuildBullish(MSZZ_SPEED_MEDIUM,medium);
    BuildBullish(MSZZ_SPEED_SLOW,slow);
    BuildBullish(MSZZ_SPEED_FAST,different_basis,"BH-DIFFERENT");
+   BuildBullish(MSZZ_SPEED_FAST,different_origin,"BH2","BL-DIFFERENT");
    BuildBearish(MSZZ_SPEED_FAST,bear);
    AssertTrue(SameRecord(a,b),"same input byte-equivalent record");
    AssertTrue(a.event_id!=medium.event_id && medium.event_id!=slow.event_id,
               "fast medium slow IDs separated");
    AssertTrue(a.event_id!=different_basis.event_id,
               "projection basis changes event ID");
+   AssertTrue(a.event_id!=different_origin.event_id,
+              "source origin changes MSZZSE2 event ID");
    AssertTrue(a.event_id!=bear.event_id,
               "bullish bearish IDs separated");
 }
@@ -163,6 +194,8 @@ void TestFailClosed()
       101.5,102.5,103,102,1,a1,a2,blank,0.01,r) &&
       r.validation_reason=="MISSING_ORIGIN_ADJACENCY",
       "missing adjacency fails closed");
+   AssertTrue(ConsumableFieldsBlank(r),
+              "early construction failure exposes no consumable fields");
 
    MSZZPivot late_origin=Pivot(MSZZ_SPEED_FAST,MSZZ_PIVOT_LOW,"LATE",
       t+700,t+720,95);
@@ -171,6 +204,8 @@ void TestFailClosed()
       101.5,102.5,103,102,1,a1,a2,late_origin,0.01,r) &&
       r.validation_reason=="INVALID_PIVOT_CHRONOLOGY",
       "invalid origin chronology fails closed");
+   AssertTrue(ConsumableFieldsBlank(r),
+              "late validation failure exposes no consumable fields");
 
    MSZZPivot origin=Pivot(MSZZ_SPEED_FAST,MSZZ_PIVOT_LOW,"ORIGIN",
       t+300,t+360,95);
@@ -191,6 +226,63 @@ void TestFailClosed()
    AssertTrue(!CMSZZStructuralEventPolicy::Validate(r,0.01,reason) &&
               reason=="PROJECTION_MISMATCH",
               "projection mismatch fails validation");
+   AssertTrue(ConsumableFieldsBlank(r) &&
+              r.validation_reason=="PROJECTION_MISMATCH",
+              "public validation blanks failed attempted record");
+}
+
+void TestPivotOwnershipFailClosed()
+{
+   datetime t=D'2026.01.05 13:00:00';
+   MSZZPivot high1=Pivot(MSZZ_SPEED_FAST,MSZZ_PIVOT_HIGH,
+      "HIGH1",t,t+60,100);
+   MSZZPivot high2=Pivot(MSZZ_SPEED_FAST,MSZZ_PIVOT_HIGH,
+      "HIGH2",t+600,t+660,101);
+   MSZZPivot low1=Pivot(MSZZ_SPEED_FAST,MSZZ_PIVOT_LOW,
+      "LOW1",t,t+60,100);
+   MSZZPivot low2=Pivot(MSZZ_SPEED_FAST,MSZZ_PIVOT_LOW,
+      "LOW2",t+600,t+660,99);
+   MSZZPivot bull_origin=Pivot(MSZZ_SPEED_FAST,MSZZ_PIVOT_LOW,
+      "BULL_ORIGIN",t+300,t+360,95);
+   MSZZPivot bear_origin=Pivot(MSZZ_SPEED_FAST,MSZZ_PIVOT_HIGH,
+      "BEAR_ORIGIN",t+300,t+360,105);
+   MSZZStructuralEventRecord r;
+
+   AssertTrue(!CMSZZStructuralEventPolicy::Build(
+      "XAUUSD",PERIOD_M5,MSZZ_SPEED_FAST,MSZZ_DIR_LONG,t+900,t+1200,
+      98.5,102.5,103,98,1,low1,low2,bull_origin,0.01,r) &&
+      r.validation_reason=="INVALID_PIVOT_KIND" &&
+      ConsumableFieldsBlank(r),"bullish low anchors fail closed");
+   AssertTrue(!CMSZZStructuralEventPolicy::Build(
+      "XAUUSD",PERIOD_M5,MSZZ_SPEED_FAST,MSZZ_DIR_LONG,t+900,t+1200,
+      101.5,102.5,103,102,1,high1,high2,bear_origin,0.01,r) &&
+      r.validation_reason=="INVALID_PIVOT_KIND" &&
+      ConsumableFieldsBlank(r),"bullish high origin fails closed");
+   AssertTrue(!CMSZZStructuralEventPolicy::Build(
+      "XAUUSD",PERIOD_M5,MSZZ_SPEED_FAST,MSZZ_DIR_SHORT,t+900,t+1200,
+      101.5,97.5,102,97,1,high1,high2,bear_origin,0.01,r) &&
+      r.validation_reason=="INVALID_PIVOT_KIND" &&
+      ConsumableFieldsBlank(r),"bearish high anchors fail closed");
+   AssertTrue(!CMSZZStructuralEventPolicy::Build(
+      "XAUUSD",PERIOD_M5,MSZZ_SPEED_FAST,MSZZ_DIR_SHORT,t+900,t+1200,
+      98.5,97.5,98,97,1,low1,low2,bull_origin,0.01,r) &&
+      r.validation_reason=="INVALID_PIVOT_KIND" &&
+      ConsumableFieldsBlank(r),"bearish low origin fails closed");
+
+   MSZZPivot cross_origin=Pivot(MSZZ_SPEED_MEDIUM,MSZZ_PIVOT_LOW,
+      "CROSS_ORIGIN",t+300,t+360,95);
+   AssertTrue(!CMSZZStructuralEventPolicy::Build(
+      "XAUUSD",PERIOD_M5,MSZZ_SPEED_FAST,MSZZ_DIR_LONG,t+900,t+1200,
+      101.5,102.5,103,102,1,high1,high2,cross_origin,0.01,r) &&
+      r.validation_reason=="PIVOT_SPEED_MISMATCH" &&
+      ConsumableFieldsBlank(r),"cross-speed origin fails closed");
+   MSZZPivot cross_anchor=Pivot(MSZZ_SPEED_MEDIUM,MSZZ_PIVOT_HIGH,
+      "CROSS_ANCHOR",t,t+60,100);
+   AssertTrue(!CMSZZStructuralEventPolicy::Build(
+      "XAUUSD",PERIOD_M5,MSZZ_SPEED_FAST,MSZZ_DIR_LONG,t+900,t+1200,
+      101.5,102.5,103,102,1,cross_anchor,high2,bull_origin,0.01,r) &&
+      r.validation_reason=="PIVOT_SPEED_MISMATCH" &&
+      ConsumableFieldsBlank(r),"cross-speed projection anchor fails closed");
 }
 
 void TestLifetimeCopy()
@@ -312,8 +404,18 @@ void OnStart()
    TestValidConstruction();
    TestDeterminismAndSeparation();
    TestFailClosed();
+   TestPivotOwnershipFailClosed();
    TestLifetimeCopy();
    TestEngineReplayRealHistory();
+   int summary_handle=FileOpen("MSZZ_StructuralEventTestSummary.csv",
+      FILE_WRITE|FILE_CSV|FILE_ANSI,',');
+   if(summary_handle!=INVALID_HANDLE)
+   {
+      FileWrite(summary_handle,"failures","result");
+      FileWrite(summary_handle,g_failures,(g_failures==0 ? "PASS" : "FAIL"));
+      FileFlush(summary_handle);
+      FileClose(summary_handle);
+   }
    PrintFormat("MSZZ structural event record test complete failures=%d",
                g_failures);
 }

@@ -9,3 +9,4 @@ slow_short,51,51,0,PASS
 synthetic_speed_separation,3,3,0,PASS
 synthetic_direction_separation,2,2,0,PASS
 synthetic_projection_basis_separation,2,2,0,PASS
+synthetic_source_origin_separation,2,2,0,PASS

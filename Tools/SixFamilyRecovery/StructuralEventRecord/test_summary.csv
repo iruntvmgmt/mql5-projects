@@ -1,3 +1,3 @@
 suite,suite_count,failures,fresh_raw_log,tooling_no_ops,shutdown_timeouts,result,evidence
-Test_MSZZ_StructuralEventRecord,1,0,true,0,0,PASS,217 events 0 replay mismatches 0 duplicate IDs 15 same-rebuild mutation events
-complete_existing_regression,32,0,true,0,0,PASS,/private/tmp/d033_methodology_regression.tsv
+Test_MSZZ_StructuralEventRecord,1,0,true,0,0,PASS,MSZZ_StructuralEventTestSummary.csv; 217 MSZZSE2 events 0 replay mismatches 0 duplicate IDs 15 same-rebuild mutation events
+complete_existing_regression,32,0,true,0,0,PASS,/private/tmp/mszz_se2_regression_final.tsv

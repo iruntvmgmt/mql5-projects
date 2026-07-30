@@ -10,7 +10,7 @@
 - `Core/StructuralEventRecord.mqh` is the single projection, identity, builder and validator policy.
 - `TripleZigZagEngine::BuildSpeed()` retains the direction-adjacent origin at the moment each second projection anchor is confirmed. On a legacy break it passes exact local bars, ATR, anchors and retained origin to the shared builder.
 - `Research/StructuralReplay.mqh` uses the same pivot-ID, projection and builder policy and exposes per-bar records.
-- Legacy `BO|...` IDs remain compatibility fields. Certified identities use `MSZZSE1`.
+- Legacy `BO|...` IDs remain compatibility fields. Certified identities use `MSZZSE2`, including the source-origin pivot. `MSZZSE1` is historical evidence only.
 
 No record is reconstructed from the final snapshot. A missing/invalid origin or projection makes only the new record invalid; legacy behavior continues identically.
 
@@ -24,7 +24,9 @@ The certified June 2025 XAUUSD M5 replay contained 217 valid events:
 | Medium | 50 | 55 |
 | Slow | 39 | 51 |
 
-All 217 matched engine versus replay field-for-field and all 217 IDs were unique. Fifteen occurred on bars where a pivot was confirmed during the same rebuild, proving that the retained scan-time origin/projection basis—not reconstructed final state—was captured.
+All 217 matched engine versus replay field-for-field and all 217 MSZZSE2 IDs were unique. Fifteen occurred on bars where a pivot was confirmed during the same rebuild, proving that the retained scan-time origin/projection basis—not reconstructed final state—was captured. This parity establishes consistency between two callers of the shared policy; it is not an independent ownership algorithm.
+
+Origin adjacency is captured during the scan. Construction occurs immediately after the final-bar break comparison from retained exact comparison inputs.
 
 ## Validation and tests
 

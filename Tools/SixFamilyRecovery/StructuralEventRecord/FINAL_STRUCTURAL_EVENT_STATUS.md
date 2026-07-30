@@ -4,14 +4,16 @@
 
 `STRUCTURAL_EVENT_RECORD_CERTIFIED`
 
-The engine now exposes an additive, immutable `MSZZStructuralEventRecord` built from the exact local projection, pivot, close and ATR inputs used when a break is detected. Structural replay uses the same deterministic policy. No six-family generator or production execution behavior changed.
+The engine now exposes an additive, immutable `MSZZStructuralEventRecord` built from the exact local projection, pivot, close and ATR inputs used when a break is detected. Certified identity is `MSZZSE2` and includes the source-origin pivot. Structural replay uses the same deterministic policy. No six-family generator or production execution behavior changed.
 
 ## Certification
 
 - EA and all affected tests compile with 0 errors and 0 warnings in fresh UTF-16 MetaEditor logs.
 - Focused structural-event tests pass with 0 failures.
 - Engine and replay match field-for-field for all 217 certified events.
-- All 217 certified event IDs are unique.
+- All 217 certified MSZZSE2 event IDs are unique.
+- Pivot kind and speed ownership are validated and fail closed.
+- Every failed construction or validation blanks all consumable fields while retaining only its diagnostic reason.
 - Fifteen same-rebuild pivot-mutation events retain the exact comparison-time ownership basis.
 - Existing regression: 32/32 PASS; 0 tooling no-ops.
 - P4: 330 trades, +47.60833364128713R, PF 1.247223461881301.
@@ -23,6 +25,6 @@ No family is authorized for implementation. Structural input ownership is now pr
 
 D034 and D035 remain blocked.
 
-## Next authorized code change
+## Gate status
 
-Implement the shared versioned research-candidate v2 type, strict validation, delimiter-safe journal serialization/parser, and cross-language schema fixtures. Do not modify a family generator until that shared schema is certified.
+The structural-event prerequisite for ResearchCandidateSchemaV2 is satisfied. That schema remains a separate, not-yet-started phase. No family generator is authorized.

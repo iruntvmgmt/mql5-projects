@@ -1,10 +1,10 @@
 # Structural Event Record Specification
 
-Version: `MSZZSE1`. Scope: additive core/replay evidence only.
+Version: `MSZZSE2`. Scope: additive core/replay evidence only.
 
 ## Event ownership
 
-A certified event is created only inside the bar scan at the instant a close-cross break is confirmed. It owns immutable copies of the exact previous/event projections, their two same-kind pivot anchors, the direction-specific origin associated with the second projection anchor, event closes, ATR and derived geometry.
+Origin adjacency is captured during the bar scan when the second projection anchor is confirmed. The certified record is constructed immediately after the final-bar break comparison from retained exact comparison inputs. It owns immutable copies of the exact previous/event projections, their two same-kind and same-speed pivot anchors, the direction-specific origin associated with the second projection anchor, event closes, ATR and derived geometry.
 
 Bullish:
 
@@ -32,12 +32,12 @@ Both anchor times must be strictly ordered. The record validator recomputes both
 ## Identity
 
 ```text
-MSZZSE1|
+MSZZSE2|
 LP(symbol)|LP(timeframe)|LP(speed)|LP(direction)|LP(event_time)|
-LP(broken_pivot_id)|LP(anchor1_id)|LP(anchor2_id)
+LP(broken_pivot_id)|LP(anchor1_id)|LP(anchor2_id)|LP(source_origin_pivot_id)
 ```
 
-`LP(x)` is decimal byte/character length, colon, then value. IDs change with speed, direction, event time, broken pivot or projection basis. Legacy `BO|...` IDs remain untouched compatibility fields and are not ownership-certified identities.
+`LP(x)` is decimal byte/character length, colon, then value. IDs change with speed, direction, event time, broken pivot, projection basis, or source origin. `MSZZSE1` is retained only in historical infrastructure evidence and must not be consumed by new code. Legacy `BO|...` IDs remain untouched compatibility fields and are not ownership-certified identities.
 
 ## Geometry
 
@@ -55,10 +55,10 @@ Event high/low is passed explicitly to the shared builder; it is not reconstruct
 
 ## Validation
 
-Required: finite positive prices/ATR; known speed and long/short direction; nonempty distinct projection IDs; strictly ordered anchor pivot times; origin pivot and confirmation chronology preceding the broken pivot; broken pivot equals anchor 2; event time not before broken confirmation; exact projection, break-distance and normalized-distance recomputation within `max(point_size*0.1,1e-10)`; and directionally valid cross/impulse.
+Required: finite positive prices/ATR; known speed and long/short direction; nonempty distinct projection IDs; every copied pivot has `record.speed`; bullish anchors/broken pivot are HIGH and origin is LOW; bearish anchors/broken pivot are LOW and origin is HIGH; strictly ordered anchor pivot times; origin pivot and confirmation chronology preceding the broken pivot; broken pivot equals anchor 2; event time not before broken confirmation; exact projection, break-distance and normalized-distance recomputation within `max(point_size*0.1,1e-10)`; and directionally valid cross/impulse.
 
-Invalid records remain fully blank except `validation_reason`; `valid=false`. Validation never changes legacy flags.
+Any construction or public validation failure blanks every consumable identity, ownership, price, time, and geometry field. Only `validation_reason` remains and `valid=false`. Attempted values are not exposed through the certified record. Validation never changes legacy flags.
 
 ## Lifetime and parity
 
-Each `MSZZSpeedSnapshot` has additive bullish and bearish records representing only the final bar of that rebuild. Reset clears them. Copying a snapshot/record produces an immutable value. `StructuralReplay` exposes equivalent per-bar records and calls the same builder and validator. Engine/replay formula duplication is prohibited.
+Each `MSZZSpeedSnapshot` has additive bullish and bearish records representing only the final bar of that rebuild. Reset clears them. Copying a snapshot/record produces an immutable value. `StructuralReplay` exposes equivalent per-bar records and calls the same builder and validator. Engine/replay parity proves implementation consistency through that shared policy; it is not an independent ownership algorithm. Formula duplication is prohibited.

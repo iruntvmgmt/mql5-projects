@@ -4,11 +4,21 @@ valid_bearish,valid,valid,PASS
 fast_medium_slow,separate IDs,separate IDs,PASS
 projection_recomputation,exact,exact,PASS
 break_impulse_recomputation,exact,exact,PASS
+source_origin_identity,different origin produces different MSZZSE2 ID,different ID,PASS
+valid_bullish_pivot_ownership,HIGH anchors and broken LOW origin,matched,PASS
+valid_bearish_pivot_ownership,LOW anchors and broken HIGH origin,matched,PASS
+invalid_bullish_low_anchors,invalid INVALID_PIVOT_KIND and blank,invalid INVALID_PIVOT_KIND and blank,PASS
+invalid_bullish_high_origin,invalid INVALID_PIVOT_KIND and blank,invalid INVALID_PIVOT_KIND and blank,PASS
+invalid_bearish_high_anchors,invalid INVALID_PIVOT_KIND and blank,invalid INVALID_PIVOT_KIND and blank,PASS
+invalid_bearish_low_origin,invalid INVALID_PIVOT_KIND and blank,invalid INVALID_PIVOT_KIND and blank,PASS
+cross_speed_origin,invalid PIVOT_SPEED_MISMATCH and blank,invalid PIVOT_SPEED_MISMATCH and blank,PASS
+cross_speed_projection_anchor,invalid PIVOT_SPEED_MISMATCH and blank,invalid PIVOT_SPEED_MISMATCH and blank,PASS
 missing_origin_adjacency,invalid MISSING_ORIGIN_ADJACENCY,invalid MISSING_ORIGIN_ADJACENCY,PASS
-invalid_origin_chronology,invalid INVALID_PIVOT_CHRONOLOGY,invalid INVALID_PIVOT_CHRONOLOGY,PASS
+invalid_origin_chronology,invalid INVALID_PIVOT_CHRONOLOGY and blank,invalid INVALID_PIVOT_CHRONOLOGY and blank,PASS
 zero_atr,invalid INVALID_NUMERIC,invalid INVALID_NUMERIC,PASS
 directionally_invalid_close,invalid INVALID_BULLISH_GEOMETRY,invalid INVALID_BULLISH_GEOMETRY,PASS
 projection_mismatch,invalid PROJECTION_MISMATCH,invalid PROJECTION_MISMATCH,PASS
+late_validation_blank_policy,all consumable fields blank with reason retained,all blank reason retained,PASS
 deterministic_repeat,byte-equivalent,byte-equivalent,PASS
 copy_lifetime,prior copy unchanged,prior copy unchanged,PASS
 same_rebuild_pivot_mutation,at least one,15,PASS

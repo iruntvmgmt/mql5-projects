@@ -22,61 +22,8 @@ private:
       return MathAbs(a-b)<=tolerance;
    }
 
-public:
-   static string PivotId(const string symbol,const ENUM_TIMEFRAMES timeframe,
-                         const ENUM_MSZZ_SPEED speed,
-                         const ENUM_MSZZ_PIVOT_KIND kind,
-                         const datetime pivot_time,
-                         const datetime confirmed_time)
-   {
-      return StringFormat("MSZZ|%s|%d|%d|%d|%I64d|%I64d",
-                          symbol,(int)timeframe,(int)speed,(int)kind,
-                          (long)pivot_time,(long)confirmed_time);
-   }
-
-   static void Blank(MSZZStructuralEventRecord &record,const string reason="")
-   {
-      ZeroMemory(record);
-      record.valid=false;
-      record.speed=MSZZ_SPEED_FAST;
-      record.direction=MSZZ_DIR_NONE;
-      record.event_id="";
-      record.source_origin_pivot_id="";
-      record.broken_pivot_id="";
-      record.projection_anchor_1_id="";
-      record.projection_anchor_2_id="";
-      record.validation_reason=reason;
-   }
-
-   static double ProjectLevel(const MSZZPivot &anchor_1,
-                              const MSZZPivot &anchor_2,
-                              const datetime at_time)
-   {
-      if(!anchor_1.valid || !anchor_2.valid ||
-         anchor_2.pivot_time<=anchor_1.pivot_time)
-         return 0.0;
-      double seconds=(double)(anchor_2.pivot_time-anchor_1.pivot_time);
-      double slope=(anchor_2.price-anchor_1.price)/seconds;
-      return anchor_2.price+slope*(double)(at_time-anchor_2.pivot_time);
-   }
-
-   static string EventId(const string symbol,const ENUM_TIMEFRAMES timeframe,
-                         const ENUM_MSZZ_SPEED speed,
-                         const ENUM_MSZZ_DIRECTION direction,
-                         const datetime event_time,
-                         const string broken_pivot_id,
-                         const string anchor_1_id,
-                         const string anchor_2_id)
-   {
-      return "MSZZSE1|"+LP(symbol)+"|"+LP(IntegerToString((int)timeframe))+
-             "|"+LP(IntegerToString((int)speed))+
-             "|"+LP(IntegerToString((int)direction))+
-             "|"+LP(I64((long)event_time))+
-             "|"+LP(broken_pivot_id)+"|"+LP(anchor_1_id)+"|"+LP(anchor_2_id);
-   }
-
-   static bool Validate(const MSZZStructuralEventRecord &record,
-                        const double point_size,string &reason)
+   static bool ValidateAttempt(const MSZZStructuralEventRecord &record,
+                               const double point_size,string &reason)
    {
       reason="";
       double tolerance=MathMax(point_size*0.1,1.0e-10);
@@ -88,6 +35,20 @@ public:
       { reason="INVALID_DIRECTION"; return false; }
       if(record.speed<MSZZ_SPEED_FAST || record.speed>MSZZ_SPEED_SLOW)
       { reason="INVALID_SPEED"; return false; }
+      ENUM_MSZZ_PIVOT_KIND structural_kind=
+         (record.direction==MSZZ_DIR_LONG ? MSZZ_PIVOT_HIGH : MSZZ_PIVOT_LOW);
+      ENUM_MSZZ_PIVOT_KIND origin_kind=
+         (record.direction==MSZZ_DIR_LONG ? MSZZ_PIVOT_LOW : MSZZ_PIVOT_HIGH);
+      if(record.projection_anchor_1_kind!=structural_kind ||
+         record.projection_anchor_2_kind!=structural_kind ||
+         record.broken_pivot_kind!=structural_kind ||
+         record.source_origin_pivot_kind!=origin_kind)
+      { reason="INVALID_PIVOT_KIND"; return false; }
+      if(record.projection_anchor_1_speed!=record.speed ||
+         record.projection_anchor_2_speed!=record.speed ||
+         record.broken_pivot_speed!=record.speed ||
+         record.source_origin_pivot_speed!=record.speed)
+      { reason="PIVOT_SPEED_MISMATCH"; return false; }
       if(record.event_time<=0 || record.previous_bar_time<=0 ||
          record.previous_bar_time>=record.event_time)
       { reason="INVALID_EVENT_TIME"; return false; }
@@ -166,6 +127,75 @@ public:
       return true;
    }
 
+public:
+   static string PivotId(const string symbol,const ENUM_TIMEFRAMES timeframe,
+                         const ENUM_MSZZ_SPEED speed,
+                         const ENUM_MSZZ_PIVOT_KIND kind,
+                         const datetime pivot_time,
+                         const datetime confirmed_time)
+   {
+      return StringFormat("MSZZ|%s|%d|%d|%d|%I64d|%I64d",
+                          symbol,(int)timeframe,(int)speed,(int)kind,
+                          (long)pivot_time,(long)confirmed_time);
+   }
+
+   static void Blank(MSZZStructuralEventRecord &record,const string reason="")
+   {
+      ZeroMemory(record);
+      record.valid=false;
+      record.speed=MSZZ_SPEED_FAST;
+      record.direction=MSZZ_DIR_NONE;
+      record.event_id="";
+      record.source_origin_pivot_id="";
+      record.broken_pivot_id="";
+      record.projection_anchor_1_id="";
+      record.projection_anchor_2_id="";
+      record.validation_reason=reason;
+   }
+
+   static double ProjectLevel(const MSZZPivot &anchor_1,
+                              const MSZZPivot &anchor_2,
+                              const datetime at_time)
+   {
+      if(!anchor_1.valid || !anchor_2.valid ||
+         anchor_2.pivot_time<=anchor_1.pivot_time)
+         return 0.0;
+      double seconds=(double)(anchor_2.pivot_time-anchor_1.pivot_time);
+      double slope=(anchor_2.price-anchor_1.price)/seconds;
+      return anchor_2.price+slope*(double)(at_time-anchor_2.pivot_time);
+   }
+
+   static string EventId(const string symbol,const ENUM_TIMEFRAMES timeframe,
+                         const ENUM_MSZZ_SPEED speed,
+                         const ENUM_MSZZ_DIRECTION direction,
+                         const datetime event_time,
+                         const string broken_pivot_id,
+                         const string anchor_1_id,
+                         const string anchor_2_id,
+                         const string source_origin_pivot_id)
+   {
+      return "MSZZSE2|"+LP(symbol)+"|"+LP(IntegerToString((int)timeframe))+
+             "|"+LP(IntegerToString((int)speed))+
+             "|"+LP(IntegerToString((int)direction))+
+             "|"+LP(I64((long)event_time))+
+             "|"+LP(broken_pivot_id)+"|"+LP(anchor_1_id)+"|"+LP(anchor_2_id)+
+             "|"+LP(source_origin_pivot_id);
+   }
+
+   static bool Validate(MSZZStructuralEventRecord &record,
+                        const double point_size,string &reason)
+   {
+      if(ValidateAttempt(record,point_size,reason))
+      {
+         record.valid=true;
+         record.validation_reason="OK";
+         return true;
+      }
+      string retained_reason=reason;
+      Blank(record,retained_reason);
+      return false;
+   }
+
    static bool Build(const string symbol,const ENUM_TIMEFRAMES timeframe,
                      const ENUM_MSZZ_SPEED speed,
                      const ENUM_MSZZ_DIRECTION direction,
@@ -191,19 +221,27 @@ public:
       record.speed=speed; record.direction=direction;
       record.event_time=event_time; record.previous_bar_time=previous_bar_time;
       record.source_origin_pivot_id=source_origin.id;
+      record.source_origin_pivot_speed=source_origin.speed;
+      record.source_origin_pivot_kind=source_origin.kind;
       record.source_origin_price=source_origin.price;
       record.source_origin_pivot_time=source_origin.pivot_time;
       record.source_origin_confirmation_time=source_origin.confirmed_time;
       record.broken_pivot_id=projection_anchor_2.id;
+      record.broken_pivot_speed=projection_anchor_2.speed;
+      record.broken_pivot_kind=projection_anchor_2.kind;
       record.broken_pivot_price=projection_anchor_2.price;
       record.broken_pivot_time=projection_anchor_2.pivot_time;
       record.broken_pivot_confirmation_time=projection_anchor_2.confirmed_time;
       record.projection_anchor_1_id=projection_anchor_1.id;
+      record.projection_anchor_1_speed=projection_anchor_1.speed;
+      record.projection_anchor_1_kind=projection_anchor_1.kind;
       record.projection_anchor_1_price=projection_anchor_1.price;
       record.projection_anchor_1_time=projection_anchor_1.pivot_time;
       record.projection_anchor_1_confirmation_time=
          projection_anchor_1.confirmed_time;
       record.projection_anchor_2_id=projection_anchor_2.id;
+      record.projection_anchor_2_speed=projection_anchor_2.speed;
+      record.projection_anchor_2_kind=projection_anchor_2.kind;
       record.projection_anchor_2_price=projection_anchor_2.price;
       record.projection_anchor_2_time=projection_anchor_2.pivot_time;
       record.projection_anchor_2_confirmation_time=
@@ -230,11 +268,10 @@ public:
       record.event_id=EventId(symbol,timeframe,speed,direction,event_time,
                               record.broken_pivot_id,
                               record.projection_anchor_1_id,
-                              record.projection_anchor_2_id);
+                              record.projection_anchor_2_id,
+                              record.source_origin_pivot_id);
       string reason;
-      record.valid=Validate(record,point_size,reason);
-      record.validation_reason=reason;
-      return record.valid;
+      return Validate(record,point_size,reason);
    }
 };
 

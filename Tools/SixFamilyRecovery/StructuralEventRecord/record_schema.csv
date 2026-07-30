@@ -1,23 +1,31 @@
 field,type,required,meaning
 valid,bool,true,ownership certification result
 validation_reason,string,true,OK or fail-closed reason
-event_id,string,true,MSZZSE1 length-prefixed identity
+event_id,string,true,MSZZSE2 length-prefixed full ownership identity
 speed,ENUM_MSZZ_SPEED,true,fast medium slow
 direction,ENUM_MSZZ_DIRECTION,true,long or short
 event_time,datetime,true,break confirmation bar
 source_origin_pivot_id,string,true,chronologically adjacent opposite pivot
+source_origin_pivot_speed,ENUM_MSZZ_SPEED,true,must equal record speed
+source_origin_pivot_kind,ENUM_MSZZ_PIVOT_KIND,true,opposite of structural pivot kind
 source_origin_price,double,true,origin pivot price
 source_origin_pivot_time,datetime,true,origin pivot time
 source_origin_confirmation_time,datetime,true,origin confirmation
 broken_pivot_id,string,true,projection anchor 2
+broken_pivot_speed,ENUM_MSZZ_SPEED,true,must equal record speed
+broken_pivot_kind,ENUM_MSZZ_PIVOT_KIND,true,HIGH bullish LOW bearish
 broken_pivot_price,double,true,anchor 2 price
 broken_pivot_time,datetime,true,anchor 2 pivot time
 broken_pivot_confirmation_time,datetime,true,anchor 2 confirmation
 projection_anchor_1_id,string,true,projection anchor 1
+projection_anchor_1_speed,ENUM_MSZZ_SPEED,true,must equal record speed
+projection_anchor_1_kind,ENUM_MSZZ_PIVOT_KIND,true,HIGH bullish LOW bearish
 projection_anchor_1_price,double,true,anchor 1 price
 projection_anchor_1_time,datetime,true,anchor 1 pivot time
 projection_anchor_1_confirmation_time,datetime,true,anchor 1 confirmation
 projection_anchor_2_id,string,true,projection anchor 2
+projection_anchor_2_speed,ENUM_MSZZ_SPEED,true,must equal record speed
+projection_anchor_2_kind,ENUM_MSZZ_PIVOT_KIND,true,HIGH bullish LOW bearish
 projection_anchor_2_price,double,true,anchor 2 price
 projection_anchor_2_time,datetime,true,anchor 2 pivot time
 projection_anchor_2_confirmation_time,datetime,true,anchor 2 confirmation
