@@ -1,0 +1,20 @@
+field,type,required,producer,validation,lifetime
+valid,bool,true,BuildSpeed,true only after all invariants,represented bar
+event_id,string,true,BuildSpeed,nonempty unique deterministic,immutable copy
+speed,ENUM_MSZZ_SPEED,true,BuildSpeed,fast/medium/slow,immutable copy
+direction,ENUM_MSZZ_DIRECTION,true,BuildSpeed,long/short,immutable copy
+event_time,datetime,true,BuildSpeed,represented closed bar,immutable copy
+source_origin_pivot_id,string,true,BuildSpeed,valid direction-adjacent pivot,immutable copy
+source_origin_price,double,true,BuildSpeed,positive finite and pivot-equal,immutable copy
+source_origin_confirmation_time,datetime,true,BuildSpeed,matches source pivot,immutable copy
+broken_pivot_id,string,true,BuildSpeed,matches projection endpoint pivot,immutable copy
+broken_level_price,double,true,BuildSpeed,exact projection used at event,immutable copy
+broken_pivot_confirmation_time,datetime,true,BuildSpeed,matches broken pivot,immutable copy
+break_close_price,double,true,BuildSpeed,bar close and directionally beyond level,immutable copy
+break_distance,double,true,BuildSpeed,absolute close-level,immutable copy
+break_distance_atr,double,true,BuildSpeed,break_distance/atr_at_event,immutable copy
+impulse_origin_price,double,true,BuildSpeed,source origin price,immutable copy
+impulse_extreme_price,double,true,BuildSpeed,direction-owned event extreme,immutable copy
+impulse_distance,double,true,BuildSpeed,absolute extreme-origin,immutable copy
+impulse_distance_atr,double,true,BuildSpeed,impulse_distance/atr_at_event,immutable copy
+atr_at_event,double,true,BuildSpeed,positive final-bar ATR,immutable copy

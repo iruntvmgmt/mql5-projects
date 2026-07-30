@@ -1,0 +1,10 @@
+field,producer,bar_represented,update_order,event_owned,immutable,safe_to_copy,conclusion
+bullish_break,TripleZigZagEngine::BuildSpeed,final closed bar,after pivots and projections,true,false,true,flag only
+bearish_break,TripleZigZagEngine::BuildSpeed,final closed bar,after pivots and projections,true,false,true,flag only
+bullish_event_id,TripleZigZagEngine::BuildSpeed,final closed bar,after bullish flag,partial,true,true,does not own projected price or impulse
+bearish_event_id,TripleZigZagEngine::BuildSpeed,final closed bar,after bearish flag,partial,true,true,does not own projected price or impulse
+resistance_now,TripleZigZagEngine::ProjectLine,final closed bar,after full pivot scan,false,false,true,current projection only
+support_now,TripleZigZagEngine::ProjectLine,final closed bar,after full pivot scan,false,false,true,current projection only
+last_high,TripleZigZagEngine::ConfirmHigh,latest confirmed high,while scanning prefix,true,true,true,pivot event only
+last_low,TripleZigZagEngine::ConfirmLow,latest confirmed low,while scanning prefix,true,true,true,pivot event only
+fast_swing_amplitude_r,RegimeClassifier::SwingAmplitudeR,current snapshot,after engine rebuild,false,false,true,not break-owned
