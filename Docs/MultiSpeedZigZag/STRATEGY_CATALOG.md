@@ -140,3 +140,26 @@ existing implemented (default-disabled) strategy of that same name, D031
 must explicitly decide whether the new Family 4 supersedes, reuses, or is
 deliberately distinct from `1060`, and must assign non-colliding IDs for
 all six new families before any are implemented.
+
+## D031 addendum — six shadow-research candidate IDs allocated
+
+D031 (`D031_SIX_FAMILY_ARCHITECTURE.md`) implemented all six families as
+shadow candidate generators (`Include/MultiSpeedZigZag/Research/Families/*.mqh`).
+**None of these are production strategies and none of the rows in the
+table above were changed.** They use a deliberately separate ID
+namespace (plain `int` constants, not `ENUM_MSZZ_STRATEGY_ID`/
+`ENUM_MSZZ_STRATEGY_FAMILY`) precisely so they can never be confused with
+or collide with the table above:
+
+| Research strategy ID | Name | Research family ID | Status |
+|---:|---|---:|---|
+| 1200 | Session Sweep Reversal | 8 | SHADOW_RESEARCH, no execution path, default disabled |
+| 1201 | Momentum Continuation | 9 | SHADOW_RESEARCH, no execution path, default disabled |
+| 1202 | Break-Retest Continuation | 10 | SHADOW_RESEARCH, no execution path, default disabled |
+| 1203 | Compression Breakout (Research) | 11 | SHADOW_RESEARCH, no execution path, default disabled — distinct implementation from row `1060` above, see D031 doc's "Audit of existing strategy 1060" |
+| 1204 | Trend Pullback | 12 | SHADOW_RESEARCH, no execution path, default disabled |
+| 1205 | Range Rotation | 13 | SHADOW_RESEARCH, no execution path, default disabled — does not use `MSZZ_PHASE_RANGE` (confirmed never firing in D030), builds its own range detector |
+
+Full ID inspection: `Tools/D031/id_allocation.csv`. None of these six have
+been standalone-screened (D032) or promoted; this table entry exists only
+so a future ID allocation never collides with 1200-1205/8-13 by accident.

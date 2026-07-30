@@ -26,6 +26,7 @@
 #include <MultiSpeedZigZag/Research/ResearchTrailPolicy.mqh>
 #include <MultiSpeedZigZag/Research/RegimeClassifier.mqh>
 #include <MultiSpeedZigZag/Research/RegimeEligibilityPolicy.mqh>
+#include <MultiSpeedZigZag/Research/SixFamilyResearchSuite.mqh>
 #include <MultiSpeedZigZag/Portfolio/CrossFamilyPolicy.mqh>
 #include <MultiSpeedZigZag/Portfolio/StrategyBook.mqh>
 #include <MultiSpeedZigZag/Portfolio/PortfolioRiskManager.mqh>
@@ -73,6 +74,12 @@ input bool InpEnableBreakoutRetest=false;
 input bool InpEnableSweepReclaim=false;
 input bool InpEnableCompressionBreakout=false;
 input bool InpEnableStructureTransition=false;
+// D031 six-family shadow research (see Research/SixFamilyResearchSuite.mqh).
+// Default disabled, same convention as the D027 research families above:
+// every existing configuration's candidate stream and behavior remain
+// unchanged unless this is explicitly turned on. Even when enabled, this
+// suite can never reach execution -- it only ever writes its own journal.
+input bool InpEnableSixFamilyResearch=false;
 
 input group "═══ Structure & Signal ═══"
 input int    InpMinBarsBetween=3;
@@ -165,6 +172,12 @@ input bool InpVerboseLog=true;
 CMSZZTripleZigZagEngine       g_engine;
 CMSZZStrategySuite            g_suite;
 CMSZZD027StrategyFamilies     g_d027_suite;
+// D031: six-family shadow research suite (pure observer -- see
+// Research/SixFamilyResearchSuite.mqh's safety contract). Evaluated
+// alongside CMSZZRegimeClassifier in ProcessClosedBar(), its own
+// candidates are never appended to the candidates[]/d027_candidates[]
+// arrays g_suite/g_d027_suite feed into ExecuteCluster().
+CMSZZSixFamilyResearchSuite   g_six_family_suite;
 CMSZZOpportunityClusterEngine g_cluster_engine;
 CMSZZEventStore                g_event_store;
 CMSZZExecutionGuard            g_execution_guard;
@@ -2317,6 +2330,18 @@ void ProcessClosedBar()
    g_last_regime_id=TimeToString(g_last_regime.evaluation_time,TIME_DATE|TIME_SECONDS);
    JournalRegime(g_last_regime);
 
+   // D031: six-family shadow research, evaluated immediately after regime
+   // classification (same dependency as every strategy below) but BEFORE
+   // g_suite/g_d027_suite -- and its output is a disjoint MSZZResearchCandidate
+   // array that is never passed to CMSZZCandidateHandoff, g_cluster_engine,
+   // or ExecuteCluster. Pure observer, same shape as JournalRegime() above:
+   // reads this bar's fast/med/slow/regime, writes only its own journal.
+   if(InpEnableSixFamilyResearch)
+   {
+      MSZZResearchCandidate six_family_candidates[];
+      g_six_family_suite.Evaluate(fast,med,slow,g_last_regime,rates[closed_count-1],six_family_candidates);
+   }
+
    ProcessResearchTrail(rates,closed_count,fast,med);
    ProcessBookExitManagement(fast,rates[closed_count-1]);
 
@@ -2517,6 +2542,8 @@ int OnInit()
       Print("MSZZ D027 sequence-state load failed; refusing to start enabled multi-step research.");
       return INIT_FAILED;
    }
+
+   g_six_family_suite.Configure(PeriodSeconds(),InpWriteCSV);
 
    g_instance_id=StringFormat("%d-%d-%d",(int)AccountInfoInteger(ACCOUNT_LOGIN),(int)TimeLocal(),MathRand());
    if(!g_intent_store.Configure(_Symbol,_Period,InpMagic,g_instance_id))

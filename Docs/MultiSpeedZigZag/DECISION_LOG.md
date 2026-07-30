@@ -2503,3 +2503,70 @@ Headline findings:
   rather than measuring spread independently.
 
 D031 (six-family shadow candidate architecture) has not started.
+
+## D031 — six-family shadow-candidate architecture
+
+Second phase of the D030–D035 program, same branch. Implemented all six
+families as deterministic, non-executing candidate generators. Full
+detail: `D031_SIX_FAMILY_ARCHITECTURE.md`; code:
+`Include/MultiSpeedZigZag/Research/Families/*.mqh` +
+`Research/SixFamilyResearchSuite.mqh`; tests:
+`Tests/MultiSpeedZigZag/Test_MSZZ_D031_SixFamilies.mq5`.
+
+- **ID allocation**: inspected `Core/Types.mqh` before allocating anything
+  (`Tools/D031/id_allocation.csv`). Found the handoff's own suggested IDs
+  collide on three of six: `1060`/`1070`/`1080` are already
+  `Compression Breakout (D027 S4)`/`Structure Transition`/`Weighted
+  Ensemble`. Allocated a fresh, unambiguous block instead — strategy IDs
+  1200-1205, family IDs 8-13 — as `#define` constants in a new,
+  deliberately disjoint `MSZZResearchCandidate` struct/namespace
+  (`Research/Families/ResearchCandidateTypes.mqh`), not new values added
+  to the production `ENUM_MSZZ_STRATEGY_ID`/`ENUM_MSZZ_STRATEGY_FAMILY`
+  enums. Existing strategy `1060` was not renamed, reused, or modified.
+- **Isolation**: every family and the aggregator route through one shared
+  factory (`CMSZZResearchCandidateFactory`) that only ever produces
+  `MSZZResearchCandidate`, never `MSZZCandidate` — passing a research
+  candidate into `CandidateHandoff`/`ClusterEngine`/`ExecuteCluster` would
+  not compile. Static grep audit (`Tools/D031/shadow_safety_audit.md`)
+  confirms zero trade-function calls and zero `Execution/`/`Portfolio/`
+  includes anywhere in the new files. EA wiring
+  (`Experts/MultiSpeedZigZagEA.mq5`) is one `if(InpEnableSixFamilyResearch)`
+  block (default `false`) right after regime classification, same "pure
+  observer" shape as `JournalRegime()`; its output array is never appended
+  to the production `candidates[]`.
+- **Existing-1060 audit** (handoff's own Family 4 requirement): read
+  D027 S4 in full. It is implemented, correct for its own frozen
+  definition (discrete `market_phase==MSZZ_PHASE_COMPRESSION` label +
+  3-bar arm + 6-bar wait), default-disabled -- no defect found. The new
+  Family 4 research strategy deliberately uses a different, raw-feature
+  approach (`regime.normalized_atr` + a self-tracked rolling window,
+  never reading `market_phase` at all) rather than reusing or wrapping it.
+  Whether the two should ultimately coexist or one supersede the other is
+  deferred to D032's overlap analysis.
+- **Range Rotation** built its own self-contained range detector (rolling
+  48-bar window: width stability, age, touch counts, reused
+  `regime.directional_efficiency`) since `MSZZ_PHASE_RANGE` never fired in
+  D030's 98,943-bar census. Building the test fixtures for this family by
+  hand caught a real ordering bug: `Evaluate()` computed the current bar's
+  range boundaries *including* that same bar, making the breakout-arm
+  check unsatisfiable by construction (a new high always ties, never
+  exceeds, a range high computed including itself). Fixed by moving the
+  window update to the end of `Evaluate()`.
+- **Compile/test status**: `mcp__mt5-bridge__compile_mql5` did not produce
+  a compiler-log update across four attempts in this session -- including
+  against a previously-known-good file
+  (`Test_MSZZ_CandidateHandoff.mq5`, log-confirmed compiling cleanly
+  earlier the same day) -- and `mt5_status` shows no MT5/MetaEditor
+  process running, consistent with an environment issue rather than a
+  code defect. Mitigated by manual signature cross-checks against every
+  actual `Evaluate()`/`Emit()` call site, brace/paren balancing, an
+  independent (non-MQL5) ID-collision check, and hand-tracing every test
+  fixture's arithmetic (which is how the Range Rotation bug above was
+  found). `Test_MSZZ_D031_SixFamilies.mq5` and the existing test suite
+  must still be compiled and run before D032 begins -- full disclosure in
+  `Tools/D031/known_limitations.md`.
+- No FastMedConfluence, SweepReclaim, P4 exit logic, or
+  `OWN_FAMILY_OPPOSITE` behavior was touched. No standalone performance
+  screening (D032) was run.
+
+D032 (standalone synthetic screening) has not started.

@@ -1,0 +1,41 @@
+id_type,id,name,source,status
+strategy_id,1001,Fast Breakout,Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1002,Medium Breakout,Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1003,Slow Breakout,Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1010,Fast + Medium Confluence,Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1011,Fast with Medium Context,Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1012,Medium with Slow Context,Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1020,Sequential Confirmation,Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing_reserved
+strategy_id,1030,Nested Pullback,Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1031,Aligned Fast Pullback Continuation (D027 S1),Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1040,Breakout Retest (D027 S2),Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1050,Sweep and Reclaim (D027 S3),Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1060,Compression Breakout (D027 S4),Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1070,Structure Transition (D027 S5),Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1080,Weighted Ensemble,Core/Types.mqh ENUM_MSZZ_STRATEGY_ID,existing
+strategy_id,1060,Session Sweep Reversal,handoff-suggested,COLLISION_with_existing_1060_not_used
+strategy_id,1070,Momentum Continuation,handoff-suggested,COLLISION_with_existing_1070_not_used
+strategy_id,1080,Break-Retest Continuation,handoff-suggested,COLLISION_with_existing_1080_not_used
+strategy_id,1090,Compression Breakout,handoff-suggested,free_but_not_used_see_note
+strategy_id,1100,Trend Pullback,handoff-suggested,free_but_not_used_see_note
+strategy_id,1110,Range Rotation,handoff-suggested,free_but_not_used_see_note
+strategy_id,1200,Session Sweep Reversal,D031 allocation (MSZZ_RSRCH_STRAT_SESSION_SWEEP_REVERSAL),ALLOCATED
+strategy_id,1201,Momentum Continuation,D031 allocation (MSZZ_RSRCH_STRAT_MOMENTUM_CONTINUATION),ALLOCATED
+strategy_id,1202,Break-Retest Continuation,D031 allocation (MSZZ_RSRCH_STRAT_BREAK_RETEST_CONTINUATION),ALLOCATED
+strategy_id,1203,Compression Breakout (Research),D031 allocation (MSZZ_RSRCH_STRAT_COMPRESSION_BREAKOUT),ALLOCATED
+strategy_id,1204,Trend Pullback,D031 allocation (MSZZ_RSRCH_STRAT_TREND_PULLBACK),ALLOCATED
+strategy_id,1205,Range Rotation,D031 allocation (MSZZ_RSRCH_STRAT_RANGE_ROTATION),ALLOCATED
+family_id,0,NONE,Core/Types.mqh ENUM_MSZZ_STRATEGY_FAMILY,existing
+family_id,1,BREAKOUT,Core/Types.mqh ENUM_MSZZ_STRATEGY_FAMILY,existing
+family_id,2,PULLBACK,Core/Types.mqh ENUM_MSZZ_STRATEGY_FAMILY,existing
+family_id,3,RETEST,Core/Types.mqh ENUM_MSZZ_STRATEGY_FAMILY,existing
+family_id,4,REVERSAL,Core/Types.mqh ENUM_MSZZ_STRATEGY_FAMILY,existing
+family_id,5,COMPRESSION,Core/Types.mqh ENUM_MSZZ_STRATEGY_FAMILY,existing
+family_id,6,RANGE,Core/Types.mqh ENUM_MSZZ_STRATEGY_FAMILY,existing_unused_by_any_strategy
+family_id,7,ENSEMBLE,Core/Types.mqh ENUM_MSZZ_STRATEGY_FAMILY,existing
+family_id,8,SESSION_SWEEP_REVERSAL,D031 allocation (MSZZ_RSRCH_FAMILY_SESSION_SWEEP_REVERSAL),ALLOCATED
+family_id,9,MOMENTUM_CONTINUATION,D031 allocation (MSZZ_RSRCH_FAMILY_MOMENTUM_CONTINUATION),ALLOCATED
+family_id,10,BREAK_RETEST_CONTINUATION,D031 allocation (MSZZ_RSRCH_FAMILY_BREAK_RETEST_CONTINUATION),ALLOCATED
+family_id,11,COMPRESSION_BREAKOUT,D031 allocation (MSZZ_RSRCH_FAMILY_COMPRESSION_BREAKOUT),ALLOCATED
+family_id,12,TREND_PULLBACK,D031 allocation (MSZZ_RSRCH_FAMILY_TREND_PULLBACK),ALLOCATED
+family_id,13,RANGE_ROTATION,D031 allocation (MSZZ_RSRCH_FAMILY_RANGE_ROTATION),ALLOCATED
