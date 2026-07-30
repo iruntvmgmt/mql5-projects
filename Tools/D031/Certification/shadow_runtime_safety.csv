@@ -1,0 +1,8 @@
+metric,value,evidence_source
+research_candidates_generated,3234,D031_Cert_B_Results/MSZZ_SixFamilyResearchJournal.csv row count
+research_orders,0,D031_Cert_B_Results/MSZZ_DealJournal.csv -- 0 of 659 deals attributed to strategy_id 1200-1205
+research_execution_intents,0,structurally impossible -- MSZZResearchCandidate is a disjoint type from MSZZCandidate; ExecutionIntentStore only ever receives MSZZCandidate-derived intents from CandidateHandoff/ClusterEngine, which the shadow suite's output never reaches (see Tools/D031/shadow_safety_audit.md static grep audit)
+research_cluster_handoffs,0,same as above -- CMSZZCandidateHandoff::Append only accepts MSZZCandidate; confirmed empirically via 0 shadow strategy_ids in StrategyBookJournal (downstream of cluster execution)
+research_book_allocations,0,D031_Cert_B_Results/MSZZ_StrategyBookJournal.csv -- 0 of 660 rows reference strategy_id 1200-1205 or family_id 8-13; only 1010 and 1050 present
+research_risk_requests,0,D031_Cert_B_Results/MSZZ_PortfolioRiskJournal.csv -- only book_id 1 and 2 (the two production books) present across all 444 rows
+production_candidate_stream_identity,CONFIRMED IDENTICAL,sha256 of MSZZ_PortfolioTradeAnalytics.csv identical across certified D029 reference, config A (shadow disabled), and config B (shadow enabled): 9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f

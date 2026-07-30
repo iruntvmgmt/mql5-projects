@@ -1,0 +1,33 @@
+suite,last_result_line,timestamp,failures
+Export_MSZZ_Parity,MSZZ parity export complete run_id=manual_XAUUSD_5_1785387300 closed_bars=999,22:00:42.300,unknown
+Test_MSZZ_BookExitManager,MSZZ BookExitManager test complete failures=0,22:01:11.027,0
+Test_MSZZ_CandidateHandoff,TEST_SUMMARY tests=36 failures=0,22:02:08.236,0
+Test_MSZZ_Clusters,MSZZ cluster test complete failures=0,22:02:54.768,0
+Test_MSZZ_CrossFamilyPolicy,TEST_SUMMARY tests=9 failures=0,22:03:25.220,0
+Test_MSZZ_D027Strategies,TEST_SUMMARY tests=20 failures=0,22:03:58.591,0
+Test_MSZZ_D031_SixFamilies,TEST_SUMMARY tests=39 failures=0,22:04:22.985,0
+Test_MSZZ_Determinism,TEST PASS: deterministic rebuild,22:04:48.123,0
+Test_MSZZ_ExecutionCoordinator,TEST_SUMMARY tests=11 failures=0,22:05:05.663,0
+Test_MSZZ_ExecutionGuard,MSZZ ExecutionGuard test complete failures=0,22:05:35.883,0
+Test_MSZZ_ExitModelsPhase2,MSZZ Phase2 exit models test complete failures=0,22:06:03.618,0
+Test_MSZZ_ExitSimulator,MSZZ exit simulator test complete failures=0,22:06:30.481,0
+Test_MSZZ_Expiry,MSZZ expiry test complete failures=0,22:06:56.139,0
+Test_MSZZ_IntentStore,MSZZ intent store test complete failures=0,22:07:17.526,0
+Test_MSZZ_Margin,MSZZ margin test complete failures=0,22:07:43.322,0
+Test_MSZZ_Ownership,MSZZ ownership test complete failures=0,22:08:10.080,0
+Test_MSZZ_PortfolioRisk,TEST_SUMMARY tests=15 failures=0,22:08:38.393,0
+Test_MSZZ_PortfolioRouting,TEST_SUMMARY tests=11 failures=0,22:08:59.019,0
+Test_MSZZ_PositionSizing,Test_MSZZ_PositionSizing: failures=0,22:09:21.001,0
+Test_MSZZ_Protection,MSZZ protection test complete failures=0,22:09:46.596,0
+Test_MSZZ_Reconciler,MSZZ reconciler test complete failures=0,22:10:14.323,0
+Test_MSZZ_RegimeClassifier,MSZZ RegimeClassifier test complete failures=0,22:10:40.525,0
+Test_MSZZ_RegimeEligibility,MSZZ RegimeEligibility test complete failures=0,22:11:06.710,0
+Test_MSZZ_ResearchEligibility,MSZZ research eligibility test complete failures=0,22:11:34.560,0
+Test_MSZZ_ResearchTrail,MSZZ ResearchTrail policy test complete failures=0,22:12:01.324,0
+Test_MSZZ_RunSummary,MSZZ run summary test complete failures=0,22:12:31.885,0
+Test_MSZZ_Safeguard,MSZZ safeguard test complete failures=0,22:13:20.643,0
+Test_MSZZ_StateMachine,MSZZ state machine test complete failures=0,22:13:55.896,0
+Test_MSZZ_StrategyBook,TEST_SUMMARY tests=35 failures=0,22:14:17.771,0
+Test_MSZZ_StructuralReplay,MSZZ structural replay equivalence test complete failures=0,22:14:39.406,0
+Test_MSZZ_TradeAnalytics,MSZZ trade analytics test complete failures=0,22:15:00.819,0
+Test_MSZZ_VirtualNettingLedger,TEST_SUMMARY tests=18 failures=0,22:15:26.672,0

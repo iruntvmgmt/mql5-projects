@@ -1,0 +1,7 @@
+comparison,file,rows_compared,field_diffs,sha256_match,verdict
+A_vs_certified_D029_reference,MSZZ_PortfolioTradeAnalytics.csv,330 vs 330,0,true,IDENTICAL -- shadow-disabled config reproduces the certified P4 candidate stream exactly
+A_vs_B,MSZZ_PortfolioTradeAnalytics.csv,330 vs 330,0,true,IDENTICAL -- enabling six-family research does not alter the production candidate/trade stream
+B_DealJournal_shadow_attribution,MSZZ_DealJournal.csv,659 deals,0,n/a,0 of 659 deals reference strategy_id 1200-1205
+B_StrategyBookJournal_shadow_attribution,MSZZ_StrategyBookJournal.csv,660 rows,0,n/a,0 of 660 rows reference strategy_id 1200-1205 or family_id 8-13; only 1010 (392 rows) and 1050 (268 rows) present
+B_PortfolioRiskJournal_book_ids,MSZZ_PortfolioRiskJournal.csv,444 rows,0,n/a,only book_id 1 (217 rows) and book_id 2 (227 rows) present -- the two production books, no shadow book
+B_SixFamilyResearchJournal_population,MSZZ_SixFamilyResearchJournal.csv,3234 candidates,n/a,n/a,non-empty as expected; strategy_id distribution 1200=2650 1203=281 1205=149 1202=142 1204=12 1201=0 (Momentum Continuation emitted no candidates over this specific 17-month XAUUSD M5 window -- see D031_CERTIFICATION.md note)

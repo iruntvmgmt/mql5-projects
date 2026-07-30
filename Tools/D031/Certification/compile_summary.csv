@@ -1,0 +1,6 @@
+file,method,timestamp,errors,warnings,elapsed_ms,ex5_sha256
+MQL5\Experts\MultiSpeedZigZagEA.mq5,wine start /Unix metaeditor64.exe /compile (live install tree),2026.07.29 21:46:23.199,0,0,8110,not_recorded_live_tree
+MQL5\Experts\MultiSpeedZigZagEA.mq5,wine start /Unix metaeditor64.exe /portable /compile (isolated MT5-MSZZ-TEST tree),2026.07.29 22:16:41.488,0,0,6186,not_recorded_isolated_tree
+MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_D031_SixFamilies.mq5,wine start /Unix metaeditor64.exe /compile (live install tree; first pass, test-fixture bug present),2026.07.29 21:45:18.036,0,0,871,not_recorded
+MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_D031_SixFamilies.mq5,wine start /Unix metaeditor64.exe /compile (live install tree; after test-fixture fix),2026.07.29 21:53:17.462,0,0,4416,not_recorded
+MQL5\Scripts\MultiSpeedZigZagTests\Test_MSZZ_D031_SixFamilies.mq5,wine start /Unix metaeditor64.exe /portable /compile (isolated tree; after fix),2026.07.29 21:57:13.563,0,0,1643,not_recorded

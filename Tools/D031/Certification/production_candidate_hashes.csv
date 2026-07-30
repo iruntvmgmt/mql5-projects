@@ -1,0 +1,4 @@
+source,description,trades,total_r,pf,last_entry_time,sha256_MSZZ_PortfolioTradeAnalytics
+D029_Audit_Results/D29_P4,certified D029 audit-final-rerun reference (pre-D031),330,47.6083,1.2472,2026.07.21 04:10:00,9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f
+D031_Cert_A_Results,config A: same P4 config, D031 code compiled in, InpEnableSixFamilyResearch=false,330,47.6083,1.2472,2026.07.21 04:10:00,9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f
+D031_Cert_B_Results,config B: same P4 config, D031 code compiled in, InpEnableSixFamilyResearch=true,330,47.6083,1.2472,2026.07.21 04:10:00,9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f

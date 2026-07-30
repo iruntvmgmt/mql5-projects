@@ -2570,3 +2570,55 @@ detail: `D031_SIX_FAMILY_ARCHITECTURE.md`; code:
   screening (D032) was run.
 
 D032 (standalone synthetic screening) has not started.
+
+## D031 certification checkpoint — all gates passed
+
+Full detail: `Tools/D031/Certification/D031_CERTIFICATION.md`. Root cause
+of the earlier BLOCKED status: `mcp__mt5-bridge__compile_mql5` uses
+exactly the direct-invocation pattern `AGENTS.md`'s "Known MetaEditor
+compilation issue (2026-07-16)" already documents as broken (silent
+no-op, exit code 0, no log/`.ex5` update). The documented
+`wine start /Unix metaeditor64.exe /compile:... /log` fallback worked
+immediately. A second gotcha specific to Tester runs: `terminal64.exe`
+exits right after dispatching a backtest job; the real computation
+continues in a separate `metatester64.exe` process that must be waited on
+by PID directly, not inferred from the GUI process — two premature reads
+(31 and 151 trades instead of 330) happened before this was diagnosed.
+
+- **Compile**: `MultiSpeedZigZagEA.mq5` and `Test_MSZZ_D031_SixFamilies.mq5`
+  both 0 errors/0 warnings, in both the live and isolated (`MT5-MSZZ-TEST`)
+  trees.
+- **D031 test suite**: first run was 39 tests/1 failure — a real bug in
+  the TEST FIXTURE (not production code): `TestSessionSweepReversal`'s
+  expiry-loop bars kept satisfying the sweep re-arm threshold, so the
+  original setup's expiry immediately re-armed a new one, and the
+  "decisive post-expiry" bar triggered that new setup instead of proving
+  true expiry. Fixed the fixture; reran: 39/39, 0 failures. Caught only
+  because the suite was actually executed, not just reviewed.
+- **Existing regression suite**: all 32 `regress_*.ini` suites (31
+  pre-existing + the new D031 one) run against the isolated instance, 0
+  failures across all of them, verified by reading the raw terminal log
+  directly rather than trusting a first-pass automation script whose
+  inline result capture turned out to have its own bug (silently
+  inherited the previous suite's result for any suite using an older
+  summary-line format).
+- **P4 parity (the empirical standard this checks against, matching
+  D029's own bar)**: three configs compared --
+  certified `D029_Audit_Results/D29_P4`, Config A (shadow research
+  disabled), Config B (enabled). All three produced **byte-for-byte
+  identical** `MSZZ_PortfolioTradeAnalytics.csv`
+  (sha256 `9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f`,
+  330 trades, +47.6083R, PF 1.2472). Config B additionally produced 3,234
+  real shadow research candidates with zero trace in any execution-facing
+  journal (deals, strategy books, portfolio risk) -- confirmed empirically,
+  not only by the type-system isolation argument from D031's original
+  static audit.
+- **Honest observation, not a failure**: of the six families, Momentum
+  Continuation (1201) emitted zero candidates over this real 17-month
+  window, despite Gate 3 proving its logic fires under synthetic
+  conditions -- its frozen arm thresholds may be stricter than this
+  instrument/timeframe's regime distribution supports. Not changed here
+  (would be exactly the "tune after seeing results" the handoff
+  prohibits); flagged for attention during D032.
+
+**D031 is certified. D032 (standalone synthetic screening) may begin.**

@@ -292,11 +292,20 @@ void TestSessionSweepReversal()
    ssr_exp.Evaluate(f3,Bar(asian,100,105,102),"R0","Asian",0.01,out);
    ssr_exp.Evaluate(f3,Bar(freeze,101,103,102),"R1","London",0.01,out);
    ssr_exp.Evaluate(f3,Bar(sweep_bar,95,101,99),"R2","London",0.01,out);
-   for(int i=1;i<=7;i++) // 7 bars > MSZZ_SSR_RECLAIM_WINDOW_BARS(6), never reclaims, still armed the whole time
-      ssr_exp.Evaluate(f3,Bar(sweep_bar+300*i,96,99,98),"R"+IntegerToString(i),"London",0.01,out);
+   // 7 bars > MSZZ_SSR_RECLAIM_WINDOW_BARS(6), never reclaims. low=99 is
+   // deliberately kept ABOVE the re-arm threshold (asian_low(100) -
+   // min_excursion(1.5) = 98.5) -- using a low that still qualified as a
+   // fresh sweep here would re-arm a brand-new setup the instant the
+   // original one expired, and the decisive bar below would then
+   // legitimately trigger THAT new setup, proving nothing about real
+   // expiry. (This is exactly what the first version of this test did
+   // wrong -- caught by actually running it.)
+   for(int i=1;i<=7;i++)
+      ssr_exp.Evaluate(f3,Bar(sweep_bar+300*i,99,100,98),"R"+IntegerToString(i),"London",0.01,out);
    // decisive bar: a close well above the session level (100) WOULD reclaim
-   // if the setup were still armed. Silence here proves real expiry.
-   int n_after_expiry=ssr_exp.Evaluate(f3,Bar(sweep_bar+300*8,96,103,102),"R8","London",0.01,out);
+   // if the setup were still armed. Silence here proves real expiry. low=99
+   // again stays above the re-arm threshold.
+   int n_after_expiry=ssr_exp.Evaluate(f3,Bar(sweep_bar+300*8,99,103,102),"R8","London",0.01,out);
    AssertTrue(n_after_expiry==0,"session sweep reversal: stale setup expires after the frozen reclaim window (decisive post-expiry bar stays silent)");
 }
 
