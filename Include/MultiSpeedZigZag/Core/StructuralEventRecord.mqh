@@ -23,6 +23,17 @@ private:
    }
 
 public:
+   static string PivotId(const string symbol,const ENUM_TIMEFRAMES timeframe,
+                         const ENUM_MSZZ_SPEED speed,
+                         const ENUM_MSZZ_PIVOT_KIND kind,
+                         const datetime pivot_time,
+                         const datetime confirmed_time)
+   {
+      return StringFormat("MSZZ|%s|%d|%d|%d|%I64d|%I64d",
+                          symbol,(int)timeframe,(int)speed,(int)kind,
+                          (long)pivot_time,(long)confirmed_time);
+   }
+
    static void Blank(MSZZStructuralEventRecord &record,const string reason="")
    {
       ZeroMemory(record);
@@ -92,7 +103,7 @@ public:
       { reason="INVALID_PROJECTION_IDENTITY"; return false; }
       if(record.projection_anchor_1_time>=record.projection_anchor_2_time ||
          record.source_origin_pivot_time>=record.broken_pivot_time ||
-         record.source_origin_confirmation_time>
+         record.source_origin_confirmation_time>=
             record.broken_pivot_confirmation_time ||
          record.broken_pivot_confirmation_time>record.event_time)
       { reason="INVALID_PIVOT_CHRONOLOGY"; return false; }

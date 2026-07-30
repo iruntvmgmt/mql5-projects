@@ -2,6 +2,7 @@
 #define __MSZZ_TRIPLE_ZIGZAG_ENGINE_MQH__
 
 #include <MultiSpeedZigZag/Core/Types.mqh>
+#include <MultiSpeedZigZag/Core/StructuralEventRecord.mqh>
 
 class CMSZZTripleZigZagEngine
 {
@@ -30,8 +31,8 @@ private:
    string PivotId(const string symbol,const ENUM_TIMEFRAMES tf,const ENUM_MSZZ_SPEED speed,
                   const ENUM_MSZZ_PIVOT_KIND kind,const datetime pivot_time,const datetime confirmed_time) const
    {
-      return StringFormat("MSZZ|%s|%d|%d|%d|%I64d|%I64d",symbol,(int)tf,(int)speed,(int)kind,
-                          (long)pivot_time,(long)confirmed_time);
+      return CMSZZStructuralEventPolicy::PivotId(symbol,tf,speed,kind,
+                                                 pivot_time,confirmed_time);
    }
 
    ENUM_MSZZ_STRUCTURE_LABEL ClassifyHigh(const double price,const MSZZPivot &previous) const
@@ -73,6 +74,8 @@ private:
       m_snapshot[s].support_now=0.0;
       m_snapshot[s].bullish_event_id="";
       m_snapshot[s].bearish_event_id="";
+      CMSZZStructuralEventPolicy::Blank(m_snapshot[s].bullish_structural_event);
+      CMSZZStructuralEventPolicy::Blank(m_snapshot[s].bearish_structural_event);
    }
 
    void ConfirmHigh(const string symbol,const ENUM_TIMEFRAMES tf,const ENUM_MSZZ_SPEED speed,
@@ -105,10 +108,7 @@ private:
 
    double ProjectLine(const MSZZPivot &a,const MSZZPivot &b,const datetime now) const
    {
-      if(!a.valid || !b.valid || b.pivot_time<=a.pivot_time) return 0.0;
-      double seconds=(double)(b.pivot_time-a.pivot_time);
-      double slope=(b.price-a.price)/seconds;
-      return b.price+slope*(double)(now-b.pivot_time);
+      return CMSZZStructuralEventPolicy::ProjectLevel(a,b,now);
    }
 
    bool BuildSpeed(const string symbol,const ENUM_TIMEFRAMES tf,const MqlRates &rates[],
@@ -122,6 +122,9 @@ private:
       double extreme=0.0;
       int extreme_i=-1;
       int last_pivot_i=-1000000;
+      MSZZPivot origin_for_last_high,origin_for_last_low;
+      BlankPivot(origin_for_last_high);
+      BlankPivot(origin_for_last_low);
 
       for(int i=m_atr_len[s]; i<count; i++)
       {
@@ -143,6 +146,13 @@ private:
             if(extreme-rates[i].low>=threshold && extreme_i-last_pivot_i>=m_min_bars_between)
             {
                ConfirmHigh(symbol,tf,speed,extreme_i,rates[extreme_i].time,rates[i].time,extreme);
+               MSZZPivot confirmed_high=m_snapshot[s].last_high;
+               if(m_snapshot[s].last_low.valid &&
+                  m_snapshot[s].last_low.pivot_time<confirmed_high.pivot_time &&
+                  m_snapshot[s].last_low.confirmed_time<confirmed_high.confirmed_time)
+                  origin_for_last_high=m_snapshot[s].last_low;
+               else
+                  BlankPivot(origin_for_last_high);
                last_pivot_i=extreme_i;
                direction=-1; extreme=rates[i].low; extreme_i=i;
             }
@@ -153,6 +163,13 @@ private:
             if(rates[i].high-extreme>=threshold && extreme_i-last_pivot_i>=m_min_bars_between)
             {
                ConfirmLow(symbol,tf,speed,extreme_i,rates[extreme_i].time,rates[i].time,extreme);
+               MSZZPivot confirmed_low=m_snapshot[s].last_low;
+               if(m_snapshot[s].last_high.valid &&
+                  m_snapshot[s].last_high.pivot_time<confirmed_low.pivot_time &&
+                  m_snapshot[s].last_high.confirmed_time<confirmed_low.confirmed_time)
+                  origin_for_last_low=m_snapshot[s].last_high;
+               else
+                  BlankPivot(origin_for_last_low);
                last_pivot_i=extreme_i;
                direction=1; extreme=rates[i].high; extreme_i=i;
             }
@@ -186,9 +203,27 @@ private:
                                       prev_close>=prev_sup && close_now<m_snapshot[s].support_now);
 
          if(m_snapshot[s].bullish_break)
+         {
             m_snapshot[s].bullish_event_id=StringFormat("BO|%s|%d|%d|L|%I64d|%s",symbol,(int)tf,s,(long)now,m_snapshot[s].last_high.id);
+            double point_size=SymbolInfoDouble(symbol,SYMBOL_POINT);
+            CMSZZStructuralEventPolicy::Build(
+               symbol,tf,speed,MSZZ_DIR_LONG,rates[count-2].time,now,
+               prev_close,close_now,rates[count-1].high,rates[count-1].low,
+               m_snapshot[s].atr,m_snapshot[s].prior_high,
+               m_snapshot[s].last_high,origin_for_last_high,point_size,
+               m_snapshot[s].bullish_structural_event);
+         }
          if(m_snapshot[s].bearish_break)
+         {
             m_snapshot[s].bearish_event_id=StringFormat("BO|%s|%d|%d|S|%I64d|%s",symbol,(int)tf,s,(long)now,m_snapshot[s].last_low.id);
+            double point_size=SymbolInfoDouble(symbol,SYMBOL_POINT);
+            CMSZZStructuralEventPolicy::Build(
+               symbol,tf,speed,MSZZ_DIR_SHORT,rates[count-2].time,now,
+               prev_close,close_now,rates[count-1].high,rates[count-1].low,
+               m_snapshot[s].atr,m_snapshot[s].prior_low,
+               m_snapshot[s].last_low,origin_for_last_low,point_size,
+               m_snapshot[s].bearish_structural_event);
+         }
       }
       return true;
    }

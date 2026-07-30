@@ -20,6 +20,7 @@
 //+------------------------------------------------------------------+
 
 #include <MultiSpeedZigZag/Core/Types.mqh>
+#include <MultiSpeedZigZag/Core/StructuralEventRecord.mqh>
 
 // Per-bar structural state for one speed, as it would have been known
 // causally at the CLOSE of bars[i] (i.e. safe to use starting bars[i+1]).
@@ -35,6 +36,8 @@ struct MSZZSpeedBarState
    bool      new_high_pivot;  // a high pivot was confirmed exactly on this bar
    bool      new_low_pivot;   // a low pivot was confirmed exactly on this bar
    bool      warmed_up;       // false while ATR history is still insufficient
+   MSZZStructuralEventRecord bullish_structural_event;
+   MSZZStructuralEventRecord bearish_structural_event;
 };
 
 class CMSZZStructuralReplay
@@ -77,10 +80,7 @@ private:
 
    static double ProjectLine(const MSZZPivot &a,const MSZZPivot &b,const datetime now)
    {
-      if(!a.valid || !b.valid || b.pivot_time<=a.pivot_time) return 0.0;
-      double seconds=(double)(b.pivot_time-a.pivot_time);
-      double slope=(b.price-a.price)/seconds;
-      return b.price+slope*(double)(now-b.pivot_time);
+      return CMSZZStructuralEventPolicy::ProjectLevel(a,b,now);
    }
 
 public:
@@ -102,6 +102,8 @@ public:
       blank.new_high_pivot=false; blank.new_low_pivot=false; blank.warmed_up=false;
       BlankPivot(blank.last_high); BlankPivot(blank.prior_high);
       BlankPivot(blank.last_low); BlankPivot(blank.prior_low);
+      CMSZZStructuralEventPolicy::Blank(blank.bullish_structural_event);
+      CMSZZStructuralEventPolicy::Blank(blank.bearish_structural_event);
       for(int i=0;i<count;i++) out[i]=blank;
 
       if(count<atr_len+10) return false;
@@ -112,6 +114,9 @@ public:
       int last_pivot_i=-1000000;
       MSZZPivot last_high, prior_high, last_low, prior_low;
       BlankPivot(last_high); BlankPivot(prior_high); BlankPivot(last_low); BlankPivot(prior_low);
+      MSZZPivot origin_for_last_high,origin_for_last_low;
+      BlankPivot(origin_for_last_high); BlankPivot(origin_for_last_low);
+      double point_size=SymbolInfoDouble(symbol,SYMBOL_POINT);
 
       for(int i=atr_len;i<count;i++)
       {
@@ -135,8 +140,15 @@ public:
                   MSZZPivot p; p.valid=true; p.speed=speed; p.kind=MSZZ_PIVOT_HIGH;
                   p.structure_label=ClassifyHigh(extreme,last_high);
                   p.pivot_time=rates[extreme_i].time; p.confirmed_time=rates[i].time;
-                  p.pivot_shift=extreme_i; p.price=extreme; p.id="";
+                  p.pivot_shift=extreme_i; p.price=extreme;
+                  p.id=CMSZZStructuralEventPolicy::PivotId(symbol,tf,speed,
+                     MSZZ_PIVOT_HIGH,p.pivot_time,p.confirmed_time);
                   prior_high=last_high; last_high=p; new_high_pivot=true;
+                  if(last_low.valid && last_low.pivot_time<p.pivot_time &&
+                     last_low.confirmed_time<p.confirmed_time)
+                     origin_for_last_high=last_low;
+                  else
+                     BlankPivot(origin_for_last_high);
                   last_pivot_i=extreme_i;
                   direction=-1; extreme=rates[i].low; extreme_i=i;
                }
@@ -149,8 +161,15 @@ public:
                   MSZZPivot p; p.valid=true; p.speed=speed; p.kind=MSZZ_PIVOT_LOW;
                   p.structure_label=ClassifyLow(extreme,last_low);
                   p.pivot_time=rates[extreme_i].time; p.confirmed_time=rates[i].time;
-                  p.pivot_shift=extreme_i; p.price=extreme; p.id="";
+                  p.pivot_shift=extreme_i; p.price=extreme;
+                  p.id=CMSZZStructuralEventPolicy::PivotId(symbol,tf,speed,
+                     MSZZ_PIVOT_LOW,p.pivot_time,p.confirmed_time);
                   prior_low=last_low; last_low=p; new_low_pivot=true;
+                  if(last_high.valid && last_high.pivot_time<p.pivot_time &&
+                     last_high.confirmed_time<p.confirmed_time)
+                     origin_for_last_low=last_high;
+                  else
+                     BlankPivot(origin_for_last_low);
                   last_pivot_i=extreme_i;
                   direction=1; extreme=rates[i].high; extreme_i=i;
                }
@@ -158,6 +177,9 @@ public:
          }
 
          bool bullish_break=false, bearish_break=false;
+         MSZZStructuralEventRecord bullish_event,bearish_event;
+         CMSZZStructuralEventPolicy::Blank(bullish_event);
+         CMSZZStructuralEventPolicy::Blank(bearish_event);
          if(i>=1)
          {
             double prev_close=rates[i-1].close;
@@ -168,6 +190,16 @@ public:
             double prev_sup=ProjectLine(prior_low,last_low,rates[i-1].time);
             bullish_break=(res_now>0.0 && prev_res>0.0 && prev_close<=prev_res && close_now>res_now);
             bearish_break=(sup_now>0.0 && prev_sup>0.0 && prev_close>=prev_sup && close_now<sup_now);
+            if(bullish_break)
+               CMSZZStructuralEventPolicy::Build(symbol,tf,speed,MSZZ_DIR_LONG,
+                  rates[i-1].time,rates[i].time,prev_close,close_now,
+                  rates[i].high,rates[i].low,atr,prior_high,last_high,
+                  origin_for_last_high,point_size,bullish_event);
+            if(bearish_break)
+               CMSZZStructuralEventPolicy::Build(symbol,tf,speed,MSZZ_DIR_SHORT,
+                  rates[i-1].time,rates[i].time,prev_close,close_now,
+                  rates[i].high,rates[i].low,atr,prior_low,last_low,
+                  origin_for_last_low,point_size,bearish_event);
          }
 
          out[i].last_high=last_high; out[i].prior_high=prior_high;
@@ -176,6 +208,8 @@ public:
          out[i].bullish_break=bullish_break; out[i].bearish_break=bearish_break;
          out[i].new_high_pivot=new_high_pivot; out[i].new_low_pivot=new_low_pivot;
          out[i].warmed_up=true;
+         out[i].bullish_structural_event=bullish_event;
+         out[i].bearish_structural_event=bearish_event;
       }
       return true;
    }
