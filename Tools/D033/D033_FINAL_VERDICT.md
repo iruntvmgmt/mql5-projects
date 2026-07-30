@@ -1,6 +1,6 @@
 # D033 final verdict
 
-**REJECTED — D034 is not authorized.** The frozen broker-executable SSR fails development, holdout, best-quarter-exclusion, and (pending final rerun) full-regression gates.
+**D033_INTEGRATION_DEFECT — D034 is not authorized.** The tested production configuration fails development, holdout, best-quarter-exclusion, and full-regression gates. The frozen hypothesis remains inconclusive because production consumed distinct timestamped re-arm events under one day/direction cluster.
 
 | Mandatory gate | Result |
 |---|---|

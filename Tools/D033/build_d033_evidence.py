@@ -20,7 +20,11 @@ def read(path, delimiter=","):
 def write(name, fields, rows):
     path = OUT / name
     with path.open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fields, extrasaction="ignore")
+        # Preserve the original MT5-compatible CRLF evidence files. Keep the
+        # tracked hash manifest LF-only so git's whitespace check remains clean
+        # when hash rows change.
+        terminator = "\n" if name == "output_hashes.csv" else "\r\n"
+        w = csv.DictWriter(f, fields, extrasaction="ignore", lineterminator=terminator)
         w.writeheader()
         w.writerows(rows)
 
@@ -204,8 +208,11 @@ gates = [
 ]
 (OUT / "D033_FINAL_VERDICT.md").write_text(
     "# D033 final verdict\n\n"
-    "**REJECTED — D034 is not authorized.** The frozen broker-executable SSR fails "
-    "development, holdout, best-quarter-exclusion, and (pending final rerun) full-regression gates.\n\n"
+    "**D033_INTEGRATION_DEFECT — D034 is not authorized.** The tested production "
+    "configuration fails development, holdout, best-quarter-exclusion, and "
+    "full-regression gates. The frozen hypothesis remains inconclusive because "
+    "production consumed distinct timestamped re-arm events under one "
+    "day/direction cluster.\n\n"
     "| Mandatory gate | Result |\n|---|---|\n" +
     "".join(f"| {k} | {'PASS' if v else 'FAIL'} |\n" for k, v in gates) +
     "\nNo thresholds were loosened and no SSR parameter was tuned.\n", encoding="utf-8")

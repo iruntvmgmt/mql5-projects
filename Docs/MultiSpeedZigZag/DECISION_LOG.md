@@ -2685,3 +2685,15 @@ Decision: **REJECTED; D034 not authorized.** No tuning or gate relaxation
 was performed. P4 parity remained byte-identical (330 trades,
 +47.6083R, PF 1.2472). Full detail:
 `D033_PROMOTION_AND_EXECUTION.md`.
+
+### D033 post-verdict audit
+
+Final regression completed 31/32 suites; PortfolioRouting exposed that
+SSR 1090 was omitted from the strategy-qualified consumed-key allowlist.
+All 2,249 duplicate-cluster rejections carried distinct timestamped event
+IDs, 1,545 occurred after the prior broker trade closed, and 471 were
+accepted as distinct D032 trades. Outcome revised to
+**`D033_INTEGRATION_DEFECT`**: the tested coarse production configuration
+remains rejected, but the frozen SSR hypothesis is inconclusive until
+identity plumbing is corrected and D033 is rerun unchanged. D034 remains
+unauthorized. See `D033_POST_VERDICT_AUDIT.md`.

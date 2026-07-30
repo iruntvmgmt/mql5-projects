@@ -1,5 +1,5 @@
 suite,tests,failures,raw_log_timestamp,status,notes
 Test_MSZZ_SessionSweepReversal,8,0,2026-07-30 00:21:54.187,PASS,raw isolated MQL5/Logs/20260730.log
-Test_MSZZ_CandidateHandoff,,,2026-07-30,PENDING_RERUN,modified test compiled 0 errors 0 warnings
-Test_MSZZ_PortfolioRouting,,,2026-07-30,PENDING_RERUN,modified test compiled 0 errors 0 warnings
-complete_regression_suite,,,2026-07-30,PENDING_RERUN,pre-D033 32-suite run was green but final test changes require rerun
+Test_MSZZ_CandidateHandoff,37,0,2026-07-30 00:29:00.656,PASS,final binary; fresh raw log
+Test_MSZZ_PortfolioRouting,13,1,2026-07-30 00:33:20.768,FAIL,SSR 1090 absent from strategy-qualified ConsumedKey allowlist
+complete_regression_suite,32,1,2026-07-30 00:38:11.011,FAIL,31 normalized passes; PortfolioRouting failed because SSR 1090 is absent from ConsumedKey allowlist

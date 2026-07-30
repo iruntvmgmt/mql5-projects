@@ -1,0 +1,8 @@
+metric,value
+duplicate_cluster_rejections,2249
+exact_event_duplicates,0
+distinct_timestamped_rearm_events,2249
+after_first_trade_close,1545
+d032_accepted_as_distinct_trades,471
+after_close_and_d032_accepted,461
+cross_session_from_consumed_event,637

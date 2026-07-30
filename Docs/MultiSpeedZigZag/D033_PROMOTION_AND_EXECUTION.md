@@ -2,7 +2,8 @@
 
 ## Verdict
 
-**REJECTED. D034 is not authorized.**
+**Production configuration rejected; post-verdict audit found
+`D033_INTEGRATION_DEFECT`. D034 is not authorized.**
 
 The frozen Session Sweep Reversal definition was promoted from research
 ID 1200/family 8 to production strategy ID 1090/family 4 and executed as
@@ -118,3 +119,18 @@ byte-identical to the certified reference.
 
 The empirical failures are sufficient to reject promotion regardless of
 the pending full-suite rerun. D034 must not begin.
+
+## Post-verdict audit addendum
+
+The final 32-suite run completed after this report and found 31 passes
+and one real failure: SSR 1090 is absent from
+`CMSZZPortfolioBookRouting::ConsumedKey()`'s allowlist. A separate
+identity audit found that all 2,249 duplicate-cluster rejections had
+distinct timestamped event IDs; 1,545 occurred after the first broker
+trade had closed, and 471 were accepted as distinct D032 trades.
+
+The 389-trade result therefore remains a valid rejection of the tested
+one-event-per-day/direction production architecture, but it is not a
+conclusive rejection of the frozen D032 event stream. See
+`D033_POST_VERDICT_AUDIT.md`. Outcome: `D033_INTEGRATION_DEFECT`; correct
+identity plumbing and rerun D033 unchanged before any D034 work.

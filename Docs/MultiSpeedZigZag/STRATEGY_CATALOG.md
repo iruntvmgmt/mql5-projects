@@ -175,3 +175,11 @@ D033 broker result: 389 trades, PF 1.0533, +13.4257R, +0.0345R
 expectancy. Status: **`REJECTED`** because development, holdout, and
 best-quarter-exclusion mandatory gates failed. It must not be combined
 with P4 or advanced to D034.
+
+Post-verdict audit qualification: status is **`D033_INTEGRATION_DEFECT`**.
+The rejection remains valid for the tested one-event-per-day/direction
+production configuration, but not as a conclusive rejection of the
+underlying frozen hypothesis. Production suppressed 2,249 distinct
+timestamped re-arm events under coarse day/direction cluster identity;
+471 of those were accepted as distinct trades by D032. Correct identity
+plumbing and rerun D033 unchanged before revisiting the hypothesis.
