@@ -2537,6 +2537,17 @@ int OnInit()
       InpMedATRMult<=0.0 || InpSlowATRMult<=0.0 || InpRiskReward<=0.0 || InpHistoryBars<300)
       return INIT_PARAMETERS_INCORRECT;
 
+   if(InpEnableSessionSweepReversal)
+   {
+      string ssr_config_reason;
+      if(!CMSZZSessionSweepReversalStrategy::IsCanonicalConfiguration(
+            InpSignalValidityBars,InpSSRBookTargetR,ssr_config_reason))
+      {
+         Print("MSZZ SSR CANONICAL CONFIG REJECTED: ",ssr_config_reason);
+         return INIT_PARAMETERS_INCORRECT;
+      }
+   }
+
    if(InpEnableMultiBookPortfolio)
    {
       string portfolio_reason;

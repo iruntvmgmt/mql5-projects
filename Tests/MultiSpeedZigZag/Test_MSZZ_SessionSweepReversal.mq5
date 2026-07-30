@@ -142,9 +142,55 @@ void TestEventScopedIdentity()
          "day rollover produces deterministic new event identity");
 }
 
+void TestCanonicalConfiguration()
+{
+   string reason;
+   Check(CMSZZSessionSweepReversalStrategy::IsCanonicalConfiguration(
+            3,2.0,reason) && reason=="",
+         "canonical SSR validity and target are accepted");
+   Check(!CMSZZSessionSweepReversalStrategy::IsCanonicalConfiguration(
+            2,2.0,reason) &&
+         StringFind(reason,"InpSignalValidityBars=3")>=0,
+         "noncanonical SSR validity fails closed");
+   Check(!CMSZZSessionSweepReversalStrategy::IsCanonicalConfiguration(
+            3,1.5,reason) &&
+         StringFind(reason,"InpSSRBookTargetR=2.0")>=0,
+         "noncanonical SSR target fails closed");
+}
+
+void TestSameBarRearmOrdering()
+{
+   MSZZSpeedSnapshot f=Fast(); MSZZCandidate out[];
+
+   CMSZZSessionSweepReversalStrategy expired; expired.Configure(300,3);
+   expired.Evaluate(f,Bar(D'2026.02.12 03:00',100,110,105),out);
+   expired.Evaluate(f,Bar(D'2026.02.12 08:00',98,108,99),out);
+   expired.Evaluate(f,Bar(D'2026.02.12 08:35',98,103,99),out);
+   int expired_count=expired.Evaluate(
+      f,Bar(D'2026.02.12 08:40',99,103,101),out);
+   Check(expired_count==1 &&
+         StringFind(out[0].origin_id,
+                    "SSRP|ASIA_LOW|20260212|1770885300")==0,
+         "expired setup re-arms on its terminal bar before next reclaim");
+
+   CMSZZSessionSweepReversalStrategy invalidated;
+   invalidated.Configure(300,3);
+   invalidated.Evaluate(f,Bar(D'2026.02.13 03:00',100,110,105),out);
+   invalidated.Evaluate(f,Bar(D'2026.02.13 08:00',98,108,99),out);
+   invalidated.Evaluate(f,Bar(D'2026.02.13 08:05',93,102,94),out);
+   int invalidated_count=invalidated.Evaluate(
+      f,Bar(D'2026.02.13 08:10',99,103,101),out);
+   Check(invalidated_count==1 &&
+         StringFind(out[0].origin_id,
+                    "SSRP|ASIA_LOW|20260213|1770969900")==0,
+         "invalidated setup re-arms on its terminal bar before next reclaim");
+}
+
 void OnStart()
 {
    TestLong(); TestShort(); TestMissingInvalidAndExpired();
    TestEventScopedIdentity();
+   TestCanonicalConfiguration();
+   TestSameBarRearmOrdering();
    PrintFormat("TEST_SUMMARY tests=%d failures=%d",g_tests,g_failures);
 }

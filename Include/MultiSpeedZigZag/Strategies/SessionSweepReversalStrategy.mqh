@@ -148,6 +148,26 @@ private:
    }
 
 public:
+   static bool IsCanonicalConfiguration(const int validity_bars,
+                                        const double target_r,
+                                        string &reason)
+   {
+      reason="";
+      if(validity_bars!=MSZZ_SSR_PROD_VALIDITY_BARS)
+      {
+         reason=StringFormat("SSR requires InpSignalValidityBars=%d",
+                             MSZZ_SSR_PROD_VALIDITY_BARS);
+         return false;
+      }
+      if(MathAbs(target_r-MSZZ_SSR_PROD_TARGET_R)>1.0e-12)
+      {
+         reason=StringFormat("SSR requires InpSSRBookTargetR=%.1f",
+                             MSZZ_SSR_PROD_TARGET_R);
+         return false;
+      }
+      return true;
+   }
+
    CMSZZSessionSweepReversalStrategy()
    {
       m_period_seconds=300; m_rr=MSZZ_SSR_PROD_TARGET_R; m_validity_bars=MSZZ_SSR_PROD_VALIDITY_BARS;
@@ -158,7 +178,10 @@ public:
    void Configure(const int period_seconds,const int validity_bars)
    {
       m_period_seconds=MathMax(1,period_seconds);
-      m_validity_bars=MathMax(1,validity_bars);
+      // Canonical SSR validity is frozen. OnInit rejects a noncanonical
+      // input before execution; retaining the constant here is
+      // defense-in-depth for direct/non-EA callers.
+      m_validity_bars=MSZZ_SSR_PROD_VALIDITY_BARS;
    }
 
    int Evaluate(const MSZZSpeedSnapshot &f,const MqlRates &bar,MSZZCandidate &out[])
