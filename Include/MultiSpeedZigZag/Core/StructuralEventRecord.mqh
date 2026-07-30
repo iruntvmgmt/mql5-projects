@@ -40,6 +40,11 @@ public:
       record.valid=false;
       record.speed=MSZZ_SPEED_FAST;
       record.direction=MSZZ_DIR_NONE;
+      record.event_id="";
+      record.source_origin_pivot_id="";
+      record.broken_pivot_id="";
+      record.projection_anchor_1_id="";
+      record.projection_anchor_2_id="";
       record.validation_reason=reason;
    }
 
