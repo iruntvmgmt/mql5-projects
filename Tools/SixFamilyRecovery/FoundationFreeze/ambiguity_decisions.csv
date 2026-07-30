@@ -1,0 +1,23 @@
+family,term,selected_definition,rejected_alternatives,formula,units,bar_timing,reset_semantics,required_metadata,required_tests,approval_status
+MC,event-owned impulse,valid fast MSZZStructuralEventRecord,current snapshot pivot pair,event record fields,price and ATR,event bar,new event required,structural event ID and endpoints,event ownership/replay,FROZEN_SPEC
+MC,pullback depth,impulse-relative adverse excursion,absolute ATR-only depth,adverse_distance/impulse_distance,[0.20 0.50],2-6 bars after event,new event after terminal,extreme and max adverse,boundaries,FROZEN_SPEC
+MC,pause duration,2 through 6 closed bars,unbounded pause,2<=bars<=6,bars,after event,seventh invalidates,pause start/count,equal boundaries,FROZEN_SPEC
+MC,opposite invalidation,opposite medium structural event,opposite fast flag,direction opposite and time after arm,event,active state,new impulse required,medium event ID/time,medium not fast,FROZEN_SPEC
+BRC,broken level,event-owned medium projected level,current resistance/support,event.broken_level_price,price,event bar,new break required,level ID/price,event equality,FROZEN_SPEC
+BRC,rejection,first eligible rejecting touch,latest touch replacement,first touch closing breakout-side with body/range>=0.5,event,2-10 bars after break,new break required,touch/rejection time,first frozen,FROZEN_SPEC
+BRC,penetration,arm-ATR normalized penetration,raw points,penetration/arm_ATR<=0.15,ATR,active retest,new break after failure,penetration/ATR,boundaries,FROZEN_SPEC
+BRC,over-test,third separated touch invalidates,every nearby bar,touches separated by >=1 non-touch bar max 2,count,active retest,new break required,touch times/count,separation,FROZEN_SPEC
+CBR,ATR windows,ATR5 and ATR50,same-period or current inclusive,ATR(5 t-1)/ATR(50 t-1),price,pre-trigger,one decompressed evaluation,ATR values/windows,hand calculation,FROZEN_SPEC
+CBR,compression window,12 prior bars,current-inclusive,max(high)-min(low)<=1.5*ATR50 and ratio<=0.70,price/ratio,t-12 through t-1,condition false resets,window hash/bounds,inclusion,FROZEN_SPEC
+CBR,duration,6 consecutive evaluations,single-bar compression,count>=6,bars,pre-trigger,condition false resets,episode start/count,boundaries,FROZEN_SPEC
+CBR,extension,max 0.50 ATR14,no maximum,abs(close-boundary)/ATR14<=0.50,ATR,trigger bar,new episode required,boundary/close/ATR,boundaries,FROZEN_SPEC
+CBR,obstruction,owned opposing medium level within 1R,current no-break flag,distance_to_level/initial_risk>=1.0,R,trigger evaluation,new episode required,opposing event/level,R geometry,FROZEN_SPEC
+TP,value,UTC-session typical-price VWAP,ALMA or rolling VWAP,sum(typical*volume)/sum(volume),price,from 00:00 UTC,new UTC day,value anchor and series,cross-language,FROZEN_SPEC
+TP,approach,minimum 0.50 ATR distance reduction,correct side only,start_distance-best_distance>=0.50,ATR,after impulse,new impulse required,distance trajectory,boundaries,FROZEN_SPEC
+TP,proximity,best distance <=0.25 ATR,unspecified near,min abs(close-VWAP)/ATR<=0.25,ATR,before resumption,new impulse required,best distance/time,boundaries,FROZEN_SPEC
+TP,impulse ownership,valid fast structural event,current snapshot pair,event record,event,pre-pullback,new event required,event ID/endpoints,ownership,FROZEN_SPEC
+TP,resumption,close beyond prior-bar extreme,pause proxy,long close>prior high short close<prior low,price,after proximity,new event after terminal,prior extreme/close,exact equality,FROZEN_SPEC
+RR,stability,CV of six trailing 24-bar widths,broad ATR band,stdev_population(widths)/mean(widths)<=0.10,ratio,pre-trigger,new 24-bar window,width series,boundaries,FROZEN_SPEC
+RR,touch,confirmed fast pivot near boundary,nearby bars,abs(pivot-boundary)<=0.10*ATR14,ATR,pivot confirmation,new range,pivot IDs/times,confirmation/FROZEN_SPEC,FROZEN_SPEC
+RR,separation,three bars plus rotation away,consecutive bars,bar_delta>=3 and movement>=0.50ATR,bars/ATR,between same-side touches,new range,touch/rotation times,separation,FROZEN_SPEC
+RR,containment,all medium pivots inside and no outside break,current-bar no break,every level in [low high] and zero outside events,bool,range lifetime,new range,medium event stream,lifetime replay,FROZEN_SPEC

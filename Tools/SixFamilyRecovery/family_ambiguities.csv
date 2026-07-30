@@ -1,14 +1,14 @@
 term,family,source_requirement,possible_executable_definitions,repository_evidence,recommended_definition,reason,status
-session windows,SSR,frozen broker/UTC/ET/DST,fixed broker tables|IANA-derived UTC rules,current buckets only,authoritative timezone service plus versioned rules,auditable DST,SPECIFICATION_GAP
+session windows,SSR,frozen broker/UTC/ET/DST,explicit per-dataset schedule|IANA-derived committed table,current buckets only,MSZZ_TIME_AUTH_C1 explicit broker schedule plus committed Eastern table,reproducible independent offsets,FROZEN_SPEC
 fresh excursion,SSR,new sweep after reset,close inside then later cross|tick cross,current same-call rearm observed,closed-bar inside then later closed-bar cross,prevents continuing-excursion duplication,RECOMMENDED_NOT_FROZEN
-meaningful impulse,MC,impulse threshold,event-owned ATR amplitude|return/efficiency,current amplitude not break-owned,event-owned impulse record,coherence,INPUT_OWNERSHIP_GAP
-controlled pullback,MC,shallow pause,depth ATR|impulse fraction|bars,current constants arbitrary,impulse-relative depth plus duration,economic linkage,SPECIFICATION_GAP
-immutable broken level,BRC,level represented by break,event record price|frozen projection,current projection changes,event-owned projected price at break,exact attribution,INPUT_OWNERSHIP_GAP
-confirmed rejection,BRC,retest rejection,first wick-close pattern|pivot,current code replaces touches,freeze first eligible event,determinism,SPECIFICATION_GAP
-compression,CBR,short versus long contraction,ATR ratio|range percentile,current implementation proxy,prior-window ATR+range definition,avoid trigger leakage,SPECIFICATION_GAP
-major opposing structure,CBR,obstruction,next medium level R-distance|slow pivot,no approved formula,next owned opposing level with R threshold,auditable,SPECIFICATION_GAP
-toward value,TP,actual retracement,monotone distance reduction|minimum delta,current side-of-VWAP proxy,minimum distance reduction then proximity band,matches hypothesis,SPECIFICATION_GAP
-value,TP,VWAP or ALMA,session VWAP|rolling VWAP|ALMA,current VWAP use incomplete,versioned session VWAP or separately named ALMA variant,avoid silent variants,SPECIFICATION_GAP
-stable width,RR,width stability,coefficient of variation|max/min|slope,current broad ATR band,variation statistic over prior windows,directly measures stability,SPECIFICATION_GAP
-confirmed touches,RR,multiple touches,pivots with separation|nearby bars,current nearby-bar proxy,pivot-confirmed separated touches plus rotation,avoids bar clusters,SPECIFICATION_GAP
-contained structure,RR,medium contained over range life,no break|all pivots inside,current-bar no-break only,all confirmed medium pivots/breaks within boundaries,lifetime condition,SPECIFICATION_GAP
+meaningful impulse,MC,impulse threshold,event-owned ATR amplitude|return/efficiency,current amplitude not break-owned,event record >=1ATR and efficiency >=0.60,coherence,FROZEN_SPEC
+controlled pullback,MC,shallow pause,depth ATR|impulse fraction|bars,current constants arbitrary,2-6 bars and adverse fraction [0.20 0.50],economic linkage,FROZEN_SPEC
+immutable broken level,BRC,level represented by break,event record price|frozen projection,current projection changes,MSZZStructuralEventRecord broken level,exact attribution,FROZEN_SPEC_INPUT_BLOCKED
+confirmed rejection,BRC,retest rejection,first wick-close pattern|pivot,current code replaces touches,first eligible rejecting touch frozen,determinism,FROZEN_SPEC
+compression,CBR,short versus long contraction,ATR ratio|range percentile,current implementation proxy,ATR5/ATR50<=0.70 plus 12-bar range<=1.50ATR50,avoid trigger leakage,FROZEN_SPEC
+major opposing structure,CBR,obstruction,next medium level R-distance|slow pivot,no approved formula,owned opposing medium level must be >=1R away,auditable,FROZEN_SPEC_INPUT_BLOCKED
+toward value,TP,actual retracement,monotone distance reduction|minimum delta,current side-of-VWAP proxy,distance reduction>=0.50ATR then proximity<=0.25ATR,matches hypothesis,FROZEN_SPEC
+value,TP,VWAP or ALMA,session VWAP|rolling VWAP|ALMA,current VWAP use incomplete,UTC-session typical-price VWAP,deterministic anchor,FROZEN_SPEC
+stable width,RR,width stability,coefficient of variation|max/min|slope,current broad ATR band,CV of six trailing 24-bar widths<=0.10,directly measures stability,FROZEN_SPEC
+confirmed touches,RR,multiple touches,pivots with separation|nearby bars,current nearby-bar proxy,fast pivots within 0.10ATR separated 3 bars and 0.50ATR rotation,avoids bar clusters,FROZEN_SPEC
+contained structure,RR,medium contained over range life,no break|all pivots inside,current-bar no-break only,all medium pivots inside and no outside medium break,lifetime condition,FROZEN_SPEC_INPUT_BLOCKED

@@ -1,0 +1,7 @@
+family,before_authorized,after_authorized,spec_complete,ambiguities_resolved,input_ownership_proven,metadata_schema_complete,simulator_contract_complete,blocking_reason
+SSR,false,false,false,false,false,true,true,dataset transition table and range completeness rule not frozen
+MC,false,false,true,true,false,true,true,MSZZStructuralEventRecord not implemented/proven
+BRC,false,false,true,true,false,true,true,MSZZStructuralEventRecord not implemented/proven
+CBR,false,false,true,true,false,true,true,owned medium obstruction event unavailable
+TP,false,false,true,true,false,true,true,structural event and value service not implemented/proven
+RR,false,false,true,true,false,true,true,owned lifetime medium event stream unavailable
