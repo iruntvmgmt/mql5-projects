@@ -1,0 +1,7 @@
+family,spec_complete,ambiguities_resolved,input_ownership_proven,state_machine_complete,identity_contract_complete,metadata_schema_complete,simulator_contract_complete,test_plan_complete,implementation_authorized,blocking_reason
+SSR,false,false,false,true,true,false,false,true,false,session/DST/numeric formulas and typed metadata unresolved
+MC,false,false,false,true,true,false,false,true,false,coherent impulse owner unavailable and formulas unresolved
+BRC,false,false,false,true,true,false,false,true,false,immutable broken level unavailable and rejection rules unresolved
+CBR,false,false,false,true,true,false,false,true,false,compression/extension/obstruction formulas unresolved
+TP,false,false,false,true,true,false,false,true,false,value and impulse ownership/formulas unresolved
+RR,false,false,false,true,true,false,false,true,false,stability/touch/containment formulas unresolved

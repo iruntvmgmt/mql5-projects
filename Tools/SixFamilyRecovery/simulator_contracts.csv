@@ -5,4 +5,3 @@ BRC,next executable,unresolved,reject while open,one family position,unresolved,
 CBR,next executable,unresolved,reject while open,one family position,unresolved,frozen spread model,explicit close,SPECIFICATION_GAP
 TP,next executable,unresolved,reject while open,one family position,unresolved,frozen spread model,explicit close,SPECIFICATION_GAP
 RR,next executable,midpoint/stop/test-end,reject while open,one family position,unresolved,frozen spread model,explicit close,SPECIFICATION_GAP
-

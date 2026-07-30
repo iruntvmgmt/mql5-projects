@@ -19,4 +19,3 @@ RR,READY,boundary rejection,ARMED,false,false
 RR,ARMED,rotation trigger,EMITTED,true,false
 ALL,ANY_TERMINAL,terminal transition,WAIT_RESET,false,false
 ALL,WAIT_RESET,documented neutral/new event,initial state,false,false
-

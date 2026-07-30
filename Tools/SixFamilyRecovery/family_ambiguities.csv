@@ -12,4 +12,3 @@ value,TP,VWAP or ALMA,session VWAP|rolling VWAP|ALMA,current VWAP use incomplete
 stable width,RR,width stability,coefficient of variation|max/min|slope,current broad ATR band,variation statistic over prior windows,directly measures stability,SPECIFICATION_GAP
 confirmed touches,RR,multiple touches,pivots with separation|nearby bars,current nearby-bar proxy,pivot-confirmed separated touches plus rotation,avoids bar clusters,SPECIFICATION_GAP
 contained structure,RR,medium contained over range life,no break|all pivots inside,current-bar no-break only,all confirmed medium pivots/breaks within boundaries,lifetime condition,SPECIFICATION_GAP
-

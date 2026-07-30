@@ -5,4 +5,3 @@ BRC,Docs/MultiSpeedZigZag/Families/BRC_V2_SPEC.md,INPUT_OWNERSHIP_GAP,immutable 
 CBR,Docs/MultiSpeedZigZag/Families/CBR_V2_SPEC.md,SPECIFICATION_GAP,compression/extension/obstruction formulas
 TP,Docs/MultiSpeedZigZag/Families/TP_V2_SPEC.md,INPUT_OWNERSHIP_GAP,value and impulse ownership/formulas
 RR,Docs/MultiSpeedZigZag/Families/RR_V2_SPEC.md,SPECIFICATION_GAP,stability/touch/containment formulas
-

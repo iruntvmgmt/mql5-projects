@@ -17,4 +17,3 @@ coordinator,execution,Include/MultiSpeedZigZag/Portfolio/ExecutionCoordinator.mq
 ownership,execution,Include/MultiSpeedZigZag/Execution/PositionOwnership.mqh,CMSZZPositionOwnership,broker state,owned records,false,foreign/unknown
 exits,execution,Include/MultiSpeedZigZag/Portfolio/BookExitManager.mqh,CMSZZBookExitManager,book/bar,exit decision,false,policy/protection
 reconcile,accounting,Include/MultiSpeedZigZag/Execution/ExecutionReconciler.mqh,CMSZZExecutionReconciler,intents/deals,reconcile result,false,unknown/volume/price/R
-

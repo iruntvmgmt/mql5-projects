@@ -14,4 +14,3 @@ Execute*,ExecutionCoordinator,3,portfolio,order submission
 OnTradeTransaction,Intent/Book/Deal journals,1,production,broker lifecycle attribution
 closed-bar exit,BookExitManager,1,portfolio,owned ticket only
 history reconciliation,ExecutionReconciler,1,restart/close,all deals weighted
-

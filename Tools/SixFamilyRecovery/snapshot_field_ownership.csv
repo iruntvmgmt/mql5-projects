@@ -10,4 +10,3 @@ bullish_break/bearish_break,MSZZSpeedSnapshot,BuildSpeed,end of rebuild,last-bar
 bullish_event_id/bearish_event_id,MSZZSpeedSnapshot,BuildSpeed,on break,crossing + one pivot ID,true,partially,nonempty iff break,rebuild,does not freeze level
 fast_swing_amplitude_r,MSZZRegimeState,SwingAmplitudeR,regime evaluation,current pivot pair/current ATR,false,false,valid pivots+ATR,next evaluation,not break-owned
 session_id,research helper,MSZZResearchSessionId,family evaluation,broker-hour bucket,false,false,time valid,each bar,no DST authority
-

@@ -9,4 +9,3 @@ candidate,cluster,declared cluster origin,deterministic grouping,reject
 cluster,book,owner/routing/state valid,pending logical position,reject
 book,broker,risk/ownership/intent persisted,order/position or rollback,recovery
 broker,reconcile,complete deals and ownership,weighted exit and R,fail certification
-

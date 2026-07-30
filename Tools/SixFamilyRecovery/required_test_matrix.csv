@@ -1,0 +1,14 @@
+category,test,required_for_each_family
+economic,fresh event,true
+economic,same event reevaluation,true
+economic,fresh after reset,true
+economic,same-bar and still-true rearm rejected,true
+economic,post-expiry/invalidation without reset,true
+ownership,event matches level/amplitude/pivots,true
+ownership,snapshot mutation cannot alter arm,true
+boundary,below/equal/above every threshold,true
+real_history,positive/near miss/expiry/invalidation/reset/session,true
+reachability,distribution and joint-state proof,true
+identity,same/new lifecycle cross-session/day collision duplicate,true
+simulator,target/stop/both/neither/expiry/end/opposite/open/spread,true
+production,research parity cluster consumed ownership exits config,true

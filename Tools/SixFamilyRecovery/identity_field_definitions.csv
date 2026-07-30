@@ -8,4 +8,3 @@ logical_position_id,StrategyBook position lifecycle,StrategyBook/intent,unique p
 order_ticket,broker order,broker,attributed to one intent,broker history
 position_ticket,broker position,broker,owned by one book allocation,broker/intent/book
 deal_ticket,broker fill/exit,broker,each counted once,reconciliation journal
-

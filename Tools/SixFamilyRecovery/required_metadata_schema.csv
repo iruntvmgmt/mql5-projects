@@ -23,4 +23,3 @@ reset_time,datetime,false,preceding reset
 terminal_reason,enum,false,non-emission terminal outcome
 spread_to_risk_ratio,double,true,cost audit
 metadata_json,string,false,escaped supplemental diagnostics only
-

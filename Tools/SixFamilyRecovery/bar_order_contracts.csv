@@ -5,4 +5,3 @@ BRC,true,true,false,false,next executable after continuation trigger
 CBR,true,true,false,false,next executable after breakout
 TP,true,true,false,false,next executable after resumption
 RR,true,true,false,false,next executable after rotation trigger
-
