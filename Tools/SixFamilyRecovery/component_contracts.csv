@@ -1,0 +1,12 @@
+from_component,to_component,required_preconditions,required_output,failure
+engine,family,valid typed/event-owned inputs,copied immutable arm state,fail closed
+family,candidate,one emission valid geometry and IDs,immutable candidate,drop with typed reason
+candidate,journal,schema supported and escapable,one exact row,fail study
+journal,simulator,hash/row/schema valid,deterministic parsed candidates,fail study
+simulator,promotion,declared execution policy,robustness and parity evidence,block
+research,production,parity matrix exact,approved adapter,block
+candidate,cluster,declared cluster origin,deterministic grouping,reject
+cluster,book,owner/routing/state valid,pending logical position,reject
+book,broker,risk/ownership/intent persisted,order/position or rollback,recovery
+broker,reconcile,complete deals and ownership,weighted exit and R,fail certification
+
