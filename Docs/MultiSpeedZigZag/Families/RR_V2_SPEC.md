@@ -1,6 +1,6 @@
 # Range Rotation v2 — Prospective Specification
 
-Status: `SPECIFICATION_GAP`; implementation prohibited.
+Status: formulas `FROZEN_SPEC`; input ownership not proven; implementation prohibited.
 
 ## Hypothesis and opportunity
 
@@ -20,9 +20,9 @@ The construction/comparison window excludes the current trigger bar. Boundaries 
 | active | excess/acceptance/medium escape/expiry | WAIT_RESET | no | no |
 | WAIT_RESET | old range invalid and new construction matures | BUILD | no | no |
 
-## Gaps and identity
+## Frozen formulas and identity
 
-Window, stability statistic/tolerance, pivot-confirmed touch, separation, rotation-away, lifetime medium containment, duration, boundary excess, acceptance, target-R minimum, invalidation and new-range reset are unresolved.
+`SIX_FAMILY_AMBIGUITY_DECISIONS.md` freezes the 24-bar construction, six-width CV `<=0.10`, pivot proximity, three-bar separation, `0.50 ATR` rotation, lifetime containment, `0.15 ATR` excess, two-close acceptance and midpoint `>=1R`. Lifetime containment remains blocked until the owned medium event stream exists.
 
 ```text
 origin_id   = RR2|symbol|tf|range_start|range_end|boundary_hash

@@ -1,6 +1,6 @@
 # Break-Retest Continuation v2 — Prospective Specification
 
-Status: `INPUT_OWNERSHIP_GAP` and `SPECIFICATION_GAP`; implementation prohibited.
+Status: formulas `FROZEN_SPEC`; `INPUT_OWNERSHIP_GAP`; implementation prohibited.
 
 ## Hypothesis and opportunity
 
@@ -23,9 +23,9 @@ Arm input must contain break event ID/time/direction, broken level ID/price/conf
 
 Terminal transitions return. Comparison windows exclude the current trigger bar unless explicitly stated.
 
-## Gaps and identity
+## Frozen formulas and identity
 
-Minimum close/body, retest delay/window, first-versus-latest touch, rejection formula, penetration, over-test count and reset remain unresolved.
+`SIX_FAMILY_AMBIGUITY_DECISIONS.md` freezes break quality, 2-10 bar retest timing, first rejection, `0.15 ATR` penetration, separated-touch counting and third-touch invalidation. The immutable level remains unavailable until `MSZZStructuralEventRecord` is implemented and proven.
 
 ```text
 origin_id   = BRC2|symbol|tf|break_event_id|broken_level_id

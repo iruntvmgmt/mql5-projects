@@ -1,6 +1,6 @@
 # Trend Pullback v2 — Prospective Specification
 
-Status: `SPECIFICATION_GAP` and `INPUT_OWNERSHIP_GAP`; implementation prohibited.
+Status: formulas `FROZEN_SPEC`; `INPUT_OWNERSHIP_GAP`; implementation prohibited.
 
 ## Hypothesis and opportunity
 
@@ -19,9 +19,9 @@ The value measure (VWAP or ALMA), session anchoring, trend event/age, pre-pullba
 | active | opposite transition/overextension/expiry | WAIT_RESET | no | no |
 | WAIT_RESET | neutral/new impulse | WAIT_TREND | no | no |
 
-## Gaps and identity
+## Frozen formulas and identity
 
-Value source/anchor, proximity, trend age, movement-toward formula, pullback start/depth, minimum/maximum distance, resumption, opposition, overextension and reset are unresolved.
+`SIX_FAMILY_AMBIGUITY_DECISIONS.md` freezes UTC-session typical-price VWAP, owned fast impulse, `0.50 ATR` minimum approach, `0.25 ATR` proximity, `0.15 ATR` cross invalidation, resumption and reset. The structural record and value service must be implemented and proven before family work.
 
 ```text
 origin_id   = TP2|symbol|tf|trend_impulse_event_id|value_anchor_id

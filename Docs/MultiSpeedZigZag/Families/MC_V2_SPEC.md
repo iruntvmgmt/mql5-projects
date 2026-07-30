@@ -1,6 +1,6 @@
 # Momentum Continuation v2 — Prospective Specification
 
-Status: `INPUT_OWNERSHIP_GAP` and `SPECIFICATION_GAP`; implementation prohibited.
+Status: formulas `FROZEN_SPEC`; `INPUT_OWNERSHIP_GAP`; implementation prohibited.
 
 ## Hypothesis and opportunity
 
@@ -22,9 +22,9 @@ The impulse must expose one immutable object containing start/end pivot IDs/pric
 
 Active state is evaluated first and terminal transitions return.
 
-## Gaps and formulas
+## Frozen formulas and remaining gap
 
-Impulse owner, efficiency window, alignment timing, pause length, shallow/controlled depth, obstruction, reset, entry/stop/target and maximum extension remain unresolved. Opposite fast break is not an acceptable substitute for opposite medium confirmation.
+`SIX_FAMILY_AMBIGUITY_DECISIONS.md` freezes the event-owned impulse, efficiency, 2-6 bar pause, `[0.20,0.50]` impulse-relative pullback, resumption and opposite-medium-event invalidation. Opposite fast break is not an acceptable substitute. The formulas cannot be implemented until `MSZZStructuralEventRecord` exists and is proven.
 
 ```text
 origin_id   = MC2|symbol|tf|impulse_event_id

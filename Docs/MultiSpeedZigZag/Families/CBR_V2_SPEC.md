@@ -1,6 +1,6 @@
 # Compression Breakout v2 — Prospective Specification
 
-Status: `SPECIFICATION_GAP`; implementation prohibited.
+Status: formulas `FROZEN_SPEC`; input ownership not proven; implementation prohibited.
 
 ## Hypothesis and opportunity
 
@@ -18,9 +18,9 @@ The compression measurement window must contain only bars preceding the trigger 
 | ARMED | decompression/opposition/expiry | WAIT_RESET | no | no |
 | WAIT_RESET | noncompressed interval then new episode | WAIT | no | no |
 
-## Gaps and identity
+## Frozen formulas and identity
 
-Short/long ATR, compression ratio, width, maturity, maximum extension, opposing structure and reset are unresolved. Spread/risk and geometry rejection are mandatory but unfrozen.
+`SIX_FAMILY_AMBIGUITY_DECISIONS.md` freezes ATR(5)/ATR(50), the prior 12-bar window, range/ratio thresholds, six-evaluation maturity, medium-only direction, `0.50 ATR` extension and `1R` obstruction. The obstruction cannot be proven until owned medium structural events are available.
 
 ```text
 origin_id   = CBR2|symbol|tf|compression_start|window_hash
