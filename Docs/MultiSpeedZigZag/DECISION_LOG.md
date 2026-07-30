@@ -2697,3 +2697,22 @@ accepted as distinct D032 trades. Outcome revised to
 remains rejected, but the frozen SSR hypothesis is inconclusive until
 identity plumbing is corrected and D033 is rerun unchanged. D034 remains
 unauthorized. See `D033_POST_VERDICT_AUDIT.md`.
+
+### D033 integration-defect remediation
+
+The verified defect was repaired locally: production SSR now emits its
+existing timestamped `sequence_id` as `origin_id`. The shared cluster
+engine and frozen signal definition were not changed. Strategy 1090 was
+separately added to the consumed-key routing allowlist.
+
+All 2,650 candidate timestamps, directions, event IDs, entries, stops,
+and targets remained unchanged. Duplicate-cluster rejection fell from
+2,249 to zero and broker trades increased from 389 to 906. Corrected
+performance was PF 0.9961, -0.00255R expectancy, and -2.3099R total;
+development, holdout, top-three exclusion, and best-quarter exclusion
+were negative.
+
+Accounting and ownership reconciliation passed with zero mismatches,
+the full regression passed 32/32, and P4 remained byte-identical.
+Decision: **`REJECTED`; D034 is not authorized.** Full detail:
+`D033_INTEGRATION_DEFECT_REMEDIATION.md`.

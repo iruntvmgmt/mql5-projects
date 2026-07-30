@@ -1,0 +1,5 @@
+source,log_timestamp,errors,warnings,fresh_log,result
+Tests/MultiSpeedZigZag/Test_MSZZ_SessionSweepReversal.mq5,2026.07.30 01:08:04.697,0,0,true,PASS
+Tests/MultiSpeedZigZag/Test_MSZZ_PortfolioRouting.mq5,2026.07.30 01:08:05.339,0,0,true,PASS
+Tests/MultiSpeedZigZag/Test_MSZZ_Clusters.mq5,2026.07.30 01:08:10.739,0,0,true,PASS
+Experts/MultiSpeedZigZagEA.mq5,2026.07.30 01:08:38.882,0,0,true,PASS

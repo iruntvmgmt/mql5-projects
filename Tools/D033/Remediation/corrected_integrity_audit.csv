@@ -1,0 +1,15 @@
+check,count,pass
+unresolved_logical_positions,0,true
+duplicate_origin_ids,0,true
+duplicate_event_ids,0,true
+duplicate_execution_intents,0,true
+unknown_exits,0,true
+own_family_opposite_exits,30,true
+cross_family_closes,0,true
+cross_family_modifies,0,true
+strategybook_ownership_violations,0,true
+volume_mismatches,0,true
+weighted_exit_price_mismatches,0,true
+reported_r_mismatches,0,true
+actual_risk_over_requested,0,true
+portfolio_risk_over_cap,0,true

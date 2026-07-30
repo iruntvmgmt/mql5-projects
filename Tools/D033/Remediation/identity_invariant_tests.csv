@@ -1,0 +1,11 @@
+test,expected,result,status
+same_day_separate_long_arms,different production origins,different production origins,PASS
+same_day_separate_short_arms,different production origins,different production origins,PASS
+origin_contains_arm_timestamp,SSRP reference day timestamp,SSRP reference day timestamp,PASS
+event_id_suffix,origin plus FINAL,origin plus FINAL,PASS
+same_sequence_repeated,one deterministic cluster,one deterministic cluster,PASS
+different_same_day_sequences,two clusters,two clusters,PASS
+long_short_identity,two clusters,two clusters,PASS
+day_rollover,new deterministic identity,new deterministic identity,PASS
+portfolio_consumed_key,nonempty strategy-qualified key,nonempty strategy-qualified key,PASS
+portfolio_key_isolation,different from FastMed and Sweep,different from FastMed and Sweep,PASS

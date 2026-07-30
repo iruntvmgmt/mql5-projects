@@ -183,3 +183,13 @@ underlying frozen hypothesis. Production suppressed 2,249 distinct
 timestamped re-arm events under coarse day/direction cluster identity;
 471 of those were accepted as distinct trades by D032. Correct identity
 plumbing and rerun D033 unchanged before revisiting the hypothesis.
+
+Remediation result: production now uses the existing timestamped
+`sequence_id` as event-scoped cluster origin, and strategy 1090 is in
+strategy-qualified consumed-key routing. Candidate geometry remained
+identical across all 2,650 candidates. The corrected run executed 906
+trades but produced PF 0.9961, -0.00255R expectancy, and -2.3099R, with
+development, holdout, top-three, and best-quarter-exclusion gates
+negative. Full regression passed 32/32, P4 parity remained exact, and
+accounting/ownership remained clean. Final status: **`REJECTED`; not
+eligible for D034.**

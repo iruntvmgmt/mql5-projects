@@ -1,0 +1,9 @@
+invariant,expected,actual,passed
+production_candidate_count,2650,2650,true
+event_ids_unchanged,2650,2650,true
+directions_unchanged,identity mapping,identity mapping,true
+signal_times_unchanged,identity mapping,identity mapping,true
+entry_stop_target_unchanged,true,true,true
+old_daily_origin_count,coarser than events,395,true
+corrected_event_origin_count,2650,2650,true
+corrected_runtime_field_parity,2650 rows identical except corrected origin,2650 rows identical except corrected origin,true

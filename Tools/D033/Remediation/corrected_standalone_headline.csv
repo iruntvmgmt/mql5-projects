@@ -1,0 +1,2 @@
+production_candidates,unique_event_scoped_clusters,true_duplicate_rejections,same_book_open_rejections,opposite_close_reversals,spread_rejections,expiry_rejections,risk_rejections,broker_trades,profit_factor_r,expectancy_r,total_r,max_drawdown_r,win_rate,average_win_r,average_loss_r
+2650,2650,0,1730,30,7,7,0,906,0.996093777083684,-0.002549558498896246,-2.309899999999999,41.6167,0.34105960264900664,1.90624142394822,-0.9905167504187604
