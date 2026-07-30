@@ -1,0 +1,20 @@
+component,stage,file,symbol,input,output,persistent,reject_or_risk
+closed_bar,market,Experts/MultiSpeedZigZagEA.mq5,ProcessClosedBar,CopyRates,closed prefix,false,insufficient bars
+structure_engine,structure,Include/MultiSpeedZigZag/Core/TripleZigZagEngine.mqh,CMSZZTripleZigZagEngine::Rebuild,MqlRates,three snapshots,false,rebuild failure
+regime,research,Include/MultiSpeedZigZag/Research/RegimeClassifier.mqh,CMSZZRegimeClassifier::Evaluate,snapshots,regime state,false,current-state not event-owned
+six_family,research,Include/MultiSpeedZigZag/Research/SixFamilyResearchSuite.mqh,CMSZZSixFamilyResearchSuite::Evaluate,snapshots/regime/bar,research candidates,true,family guards
+journal,research,Include/MultiSpeedZigZag/Research/SixFamilyResearchSuite.mqh,Journal,research candidate,semicolon CSV,true,unsafe historical free text
+simulator,screening,Tools/D032/simulate_and_screen.py,simulate_family,journal/rates,simulated trades,false,open-family/spread/geometry
+handoff,production,Include/MultiSpeedZigZag/Core/CandidateHandoff.mqh,CMSZZCandidateHandoff,MSZZCandidate,eligible candidate,false,identity/geometry/expiry
+cluster,production,Include/MultiSpeedZigZag/Arbitration/OpportunityClusterEngine.mqh,Build/SelectBest,candidates,cluster,false,duplicate/coherence
+event_store,persistence,Include/MultiSpeedZigZag/Execution/EventStore.mqh,CMSZZEventStore,consumed key,event set,true,duplicate/corruption
+routing,production,Include/MultiSpeedZigZag/Portfolio/PortfolioBookRouting.mqh,CMSZZPortfolioBookRouting,cluster/strategy,book route,false,unsupported strategy
+book,ownership,Include/MultiSpeedZigZag/Portfolio/StrategyBook.mqh,CMSZZStrategyBook,owner candidate,pending/open/flat,true,wrong owner/state
+sizing,risk,Include/MultiSpeedZigZag/Portfolio/PositionSizing.mqh,CMSZZPositionSizing,risk/geometry,normalized volume,false,invalid/excess risk
+portfolio_risk,risk,Include/MultiSpeedZigZag/Portfolio/PortfolioRiskManager.mqh,ApproveOpen,books/ownership,approval,false,cap
+intent,execution,Include/MultiSpeedZigZag/Execution/ExecutionIntentStore.mqh,CMSZZExecutionIntentStore,plan,persisted intent,true,collision/corruption
+coordinator,execution,Include/MultiSpeedZigZag/Portfolio/ExecutionCoordinator.mqh,CMSZZExecutionCoordinator,plan,broker order,false,order failure
+ownership,execution,Include/MultiSpeedZigZag/Execution/PositionOwnership.mqh,CMSZZPositionOwnership,broker state,owned records,false,foreign/unknown
+exits,execution,Include/MultiSpeedZigZag/Portfolio/BookExitManager.mqh,CMSZZBookExitManager,book/bar,exit decision,false,policy/protection
+reconcile,accounting,Include/MultiSpeedZigZag/Execution/ExecutionReconciler.mqh,CMSZZExecutionReconciler,intents/deals,reconcile result,false,unknown/volume/price/R
+

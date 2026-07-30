@@ -1,0 +1,14 @@
+family,requirement,current_behavior,deviation,status
+SSR,frozen sessions and DST,hour>=8 and coarse buckets,session semantics mismatch,CONFIRMED
+SSR,fresh reset,no terminal return permits same-call rearm,1825 emitted same-bar re-arms,CONFIRMED
+MC,opposite medium invalidation,opposite fast break,wrong structural speed,CONFIRMED
+MC,coherent impulse,current break+pivots+regime amplitude,ownership unproven,CONFIRMED
+BRC,immutable broken level,current projected resistance/support,ownership unproven,CONFIRMED
+BRC,defined rejection event,repeated touch replaces reference,event semantics mismatch,CONFIRMED
+CBR,medium alignment,medium OR slow,loosened direction proxy,CONFIRMED
+CBR,extension/opposition/cost invalidations,not fully enforced,missing invalidations,CONFIRMED
+TP,pullback toward value,correct side plus depth,proximity absent,CONFIRMED
+RR,stable width,broad ATR band,proxy mismatch,CONFIRMED
+RR,confirmed touches,nearby bars,pivot/separation absent,CONFIRMED
+shared,safe typed journal,delimiter collision/generic context,evidence schema unsafe,CONFIRMED
+

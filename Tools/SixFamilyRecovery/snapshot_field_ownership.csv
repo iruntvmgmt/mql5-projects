@@ -1,0 +1,13 @@
+field,struct,producer,update_timing,bar_or_event,immutable,event_owned,validity,reset,stale_risk
+atr,MSZZSpeedSnapshot,BuildSpeed,last scan bar,closed bar,false,false,positive,rebuild,changes each bar
+reversal_threshold,MSZZSpeedSnapshot,BuildSpeed,last scan bar,closed bar,false,false,positive,rebuild,changes each bar
+leg_direction,MSZZSpeedSnapshot,BuildSpeed,end of rebuild,current unfinished leg,false,false,non-NONE,rebuild,not confirmed structure
+current_extreme,MSZZSpeedSnapshot,BuildSpeed,end of rebuild,current leg,false,false,positive,rebuild,unfinished
+last_high/low,MSZZSpeedSnapshot,ConfirmHigh/Low,during scan,confirmed pivot record,true,true,pivot.valid,rebuild slot replaced,later pivot changes slot
+prior_high/low,MSZZSpeedSnapshot,ConfirmHigh/Low,during scan,confirmed pivot record,true,true,pivot.valid,rebuild slot replaced,later pivot changes slot
+resistance_now/support_now,MSZZSpeedSnapshot,ProjectLine,end of rebuild,current bar projection,false,false,two valid pivots,rebuild,time/pivot dependent
+bullish_break/bearish_break,MSZZSpeedSnapshot,BuildSpeed,end of rebuild,last-bar crossing,false,true,current closed bar,rebuild,true for one represented bar
+bullish_event_id/bearish_event_id,MSZZSpeedSnapshot,BuildSpeed,on break,crossing + one pivot ID,true,partially,nonempty iff break,rebuild,does not freeze level
+fast_swing_amplitude_r,MSZZRegimeState,SwingAmplitudeR,regime evaluation,current pivot pair/current ATR,false,false,valid pivots+ATR,next evaluation,not break-owned
+session_id,research helper,MSZZResearchSessionId,family evaluation,broker-hour bucket,false,false,time valid,each bar,no DST authority
+

@@ -1,0 +1,17 @@
+caller,callee,order,mode,contract
+OnTick,ProcessClosedBar,1,all,new closed bar only
+ProcessClosedBar,CopyRates,1,all,chronological prefix ending at closed bar
+ProcessClosedBar,CMSZZTripleZigZagEngine::Rebuild,2,all,three snapshots
+ProcessClosedBar,CMSZZRegimeClassifier::Evaluate,3,all,current snapshots
+ProcessClosedBar,CMSZZSixFamilyResearchSuite::Evaluate,4,shadow,research only
+SixFamilyResearchSuite,SSR/MC/BRC/CBR/TP/RR Evaluate,1..6,shadow,separate private state
+ProcessClosedBar,CandidateHandoff,5,production,eligible production candidates
+ProcessClosedBar,OpportunityClusterEngine::Build/SelectBest,6,production,one selected cluster
+ExecuteCluster,EventStore/guards/PrepareMarketCandidate,1,standalone,fail closed
+ExecutePortfolioBookCandidate,Routing/Book/Risk,1,portfolio,strategy ownership
+Execute*,ExecutionIntentStore,2,production,persist before transmit
+Execute*,ExecutionCoordinator,3,portfolio,order submission
+OnTradeTransaction,Intent/Book/Deal journals,1,production,broker lifecycle attribution
+closed-bar exit,BookExitManager,1,portfolio,owned ticket only
+history reconciliation,ExecutionReconciler,1,restart/close,all deals weighted
+

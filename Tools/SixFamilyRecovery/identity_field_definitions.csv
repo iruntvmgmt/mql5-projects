@@ -1,0 +1,11 @@
+field,semantic_scope,construction_owner,invariant,persistence
+origin_id,immutable market/hypothesis source,family,same source may group lifecycles but cannot suppress distinct events,journal
+sequence_id,one armed lifecycle,family,same lifecycle stable/new lifecycle unique,required v2 journal field
+event_id,one final emission,family,stable on reevaluation/unique per emission,journal and candidate
+cluster_id,execution opportunity,OpportunityClusterEngine,only same economic opportunity clusters,EventStore scope
+consumed_key,strategy-qualified duplicate protection,PortfolioBookRouting,namespace plus cluster stable across restart,EventStore
+logical_position_id,StrategyBook position lifecycle,StrategyBook/intent,unique pending-open-closed lifecycle,book/intent/ledger
+order_ticket,broker order,broker,attributed to one intent,broker history
+position_ticket,broker position,broker,owned by one book allocation,broker/intent/book
+deal_ticket,broker fill/exit,broker,each counted once,reconciliation journal
+
