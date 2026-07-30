@@ -163,3 +163,15 @@ or collide with the table above:
 Full ID inspection: `Tools/D031/id_allocation.csv`. Full D032 screening
 detail: `D032_SIX_FAMILY_SCREENING.md`. Only Session Sweep Reversal (1200)
 was promoted; D033 will integrate it alone, not all six.
+
+## D033 addendum — production SSR rejected
+
+Production strategy `1090`, Session Sweep Reversal, family
+`MSZZ_FAMILY_REVERSAL` (4), is a standalone-only, default-disabled
+StrategyBook implementation of the frozen research definition
+`1200`/family 8. The namespaces remain separate.
+
+D033 broker result: 389 trades, PF 1.0533, +13.4257R, +0.0345R
+expectancy. Status: **`REJECTED`** because development, holdout, and
+best-quarter-exclusion mandatory gates failed. It must not be combined
+with P4 or advanced to D034.

@@ -1,0 +1,5 @@
+suite,tests,failures,raw_log_timestamp,status,notes
+Test_MSZZ_SessionSweepReversal,8,0,2026-07-30 00:21:54.187,PASS,raw isolated MQL5/Logs/20260730.log
+Test_MSZZ_CandidateHandoff,,,2026-07-30,PENDING_RERUN,modified test compiled 0 errors 0 warnings
+Test_MSZZ_PortfolioRouting,,,2026-07-30,PENDING_RERUN,modified test compiled 0 errors 0 warnings
+complete_regression_suite,,,2026-07-30,PENDING_RERUN,pre-D033 32-suite run was green but final test changes require rerun

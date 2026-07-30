@@ -2672,3 +2672,16 @@ No family definition, frozen constant, or screening gate was changed
 based on any result. No FastMedConfluence/SweepReclaim/P4 logic touched.
 
 D033 (full execution integration for Session Sweep Reversal only) has not started.
+
+## D033 — Session Sweep Reversal broker execution
+
+Session Sweep Reversal was integrated alone as production strategy 1090,
+family 4, preserving research ID 1200/family 8 and every frozen D032
+rule. The broker run produced 389 trades, PF 1.0533, +0.0345R expectancy,
+and +13.4257R overall, but development (-5.6663R), holdout (-1.9878R),
+and best-quarter exclusion (-7.6583R) were negative.
+
+Decision: **REJECTED; D034 not authorized.** No tuning or gate relaxation
+was performed. P4 parity remained byte-identical (330 trades,
++47.6083R, PF 1.2472). Full detail:
+`D033_PROMOTION_AND_EXECUTION.md`.

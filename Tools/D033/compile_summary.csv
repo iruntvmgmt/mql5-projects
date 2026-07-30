@@ -1,0 +1,5 @@
+source,compile_timestamp,errors,warnings,evidence,status
+Experts/MultiSpeedZigZagEA.mq5,2026-07-30 00:15:09.728,0,0,live logs/metaeditor.log UTF-16LE fresh entry,PASS
+Tests/MultiSpeedZigZag/Test_MSZZ_SessionSweepReversal.mq5,2026-07-30 00:21:00.814,0,0,live logs/metaeditor.log UTF-16LE fresh entry,PASS
+Tests/MultiSpeedZigZag/Test_MSZZ_CandidateHandoff.mq5,2026-07-30 00:16:40.975,0,0,live logs/metaeditor.log UTF-16LE fresh entry,PASS
+Tests/MultiSpeedZigZag/Test_MSZZ_PortfolioRouting.mq5,2026-07-30 00:16:41.817,0,0,live logs/metaeditor.log UTF-16LE fresh entry,PASS
