@@ -1,0 +1,15 @@
+term,family,source_requirement,possible_executable_definitions,repository_evidence,recommended_definition,reason,status
+session windows,SSR,frozen broker/UTC/ET/DST,fixed broker tables|IANA-derived UTC rules,current buckets only,authoritative timezone service plus versioned rules,auditable DST,SPECIFICATION_GAP
+fresh excursion,SSR,new sweep after reset,close inside then later cross|tick cross,current same-call rearm observed,closed-bar inside then later closed-bar cross,prevents continuing-excursion duplication,RECOMMENDED_NOT_FROZEN
+meaningful impulse,MC,impulse threshold,event-owned ATR amplitude|return/efficiency,current amplitude not break-owned,event-owned impulse record,coherence,INPUT_OWNERSHIP_GAP
+controlled pullback,MC,shallow pause,depth ATR|impulse fraction|bars,current constants arbitrary,impulse-relative depth plus duration,economic linkage,SPECIFICATION_GAP
+immutable broken level,BRC,level represented by break,event record price|frozen projection,current projection changes,event-owned projected price at break,exact attribution,INPUT_OWNERSHIP_GAP
+confirmed rejection,BRC,retest rejection,first wick-close pattern|pivot,current code replaces touches,freeze first eligible event,determinism,SPECIFICATION_GAP
+compression,CBR,short versus long contraction,ATR ratio|range percentile,current implementation proxy,prior-window ATR+range definition,avoid trigger leakage,SPECIFICATION_GAP
+major opposing structure,CBR,obstruction,next medium level R-distance|slow pivot,no approved formula,next owned opposing level with R threshold,auditable,SPECIFICATION_GAP
+toward value,TP,actual retracement,monotone distance reduction|minimum delta,current side-of-VWAP proxy,minimum distance reduction then proximity band,matches hypothesis,SPECIFICATION_GAP
+value,TP,VWAP or ALMA,session VWAP|rolling VWAP|ALMA,current VWAP use incomplete,versioned session VWAP or separately named ALMA variant,avoid silent variants,SPECIFICATION_GAP
+stable width,RR,width stability,coefficient of variation|max/min|slope,current broad ATR band,variation statistic over prior windows,directly measures stability,SPECIFICATION_GAP
+confirmed touches,RR,multiple touches,pivots with separation|nearby bars,current nearby-bar proxy,pivot-confirmed separated touches plus rotation,avoids bar clusters,SPECIFICATION_GAP
+contained structure,RR,medium contained over range life,no break|all pivots inside,current-bar no-break only,all confirmed medium pivots/breaks within boundaries,lifetime condition,SPECIFICATION_GAP
+

@@ -1,0 +1,26 @@
+column,type,required,meaning
+schema_version,string,true,immutable journal schema version
+strategy_id,int,true,research/production strategy namespace
+family_id,int,true,family namespace
+canonical_variant_id,string,true,frozen variant
+hypothesis_version,string,true,specification version/hash
+signal_time,datetime,true,closed trigger time
+expiry_time,datetime,true,last eligible time
+direction,enum,true,LONG/SHORT
+origin_id,string,true,market source
+sequence_id,string,true,armed lifecycle
+event_id,string,true,final emission
+entry,double,true,synthetic reference entry
+stop,double,true,frozen stop
+target,double,true,frozen target
+regime_id,string,true,typed regime record ID
+session_id,string,true,authoritative clock/session record
+source_event_id,string,true,owned structural event
+source_level_id,string,true,owned structural level
+source_level_price,double,true,frozen level price
+arm_time,datetime,true,lifecycle arm
+reset_time,datetime,false,preceding reset
+terminal_reason,enum,false,non-emission terminal outcome
+spread_to_risk_ratio,double,true,cost audit
+metadata_json,string,false,escaped supplemental diagnostics only
+
