@@ -1,0 +1,22 @@
+family,state,input_guard,next_state,emit,rearm_same_call
+SSR,WAIT_RANGE,range frozen,INSIDE_READY,false,false
+SSR,INSIDE_READY,fresh outside cross,ARMED,false,false
+SSR,ARMED,reclaim valid,EMITTED,true,false
+SSR,ARMED,expiry/invalidation,WAIT_RESET,false,false
+MC,WAIT_IMPULSE,owned impulse valid,PAUSE,false,false
+MC,PAUSE,resumption valid,EMITTED,true,false
+MC,PAUSE,opposite medium/expiry,WAIT_RESET,false,false
+BRC,WAIT_BREAK,owned break valid,WAIT_RETEST,false,false
+BRC,WAIT_RETEST,first eligible touch,REJECTION_FROZEN,false,false
+BRC,REJECTION_FROZEN,continuation trigger,EMITTED,true,false
+CBR,WAIT,compression matures,ARMED,false,false
+CBR,ARMED,valid medium-aligned breakout,EMITTED,true,false
+TP,WAIT_TREND,owned trend,WAIT_APPROACH,false,false
+TP,WAIT_APPROACH,moves into value,IN_VALUE,false,false
+TP,IN_VALUE,resumption,EMITTED,true,false
+RR,BUILD,range matures,READY,false,false
+RR,READY,boundary rejection,ARMED,false,false
+RR,ARMED,rotation trigger,EMITTED,true,false
+ALL,ANY_TERMINAL,terminal transition,WAIT_RESET,false,false
+ALL,WAIT_RESET,documented neutral/new event,initial state,false,false
+

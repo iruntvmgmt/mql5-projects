@@ -1,0 +1,8 @@
+family,active_before_arm,terminal_returns,current_bar_in_window,trigger_in_comparison_window,entry_timing
+SSR,true,true,not applicable,not applicable,next executable after confirmed reclaim
+MC,true,true,false,false,next executable after resumption
+BRC,true,true,false,false,next executable after continuation trigger
+CBR,true,true,false,false,next executable after breakout
+TP,true,true,false,false,next executable after resumption
+RR,true,true,false,false,next executable after rotation trigger
+
