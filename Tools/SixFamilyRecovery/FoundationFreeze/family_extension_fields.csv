@@ -5,29 +5,29 @@ SSR,ssr_range_high,double,true,range builder,positive
 SSR,ssr_range_low,double,true,range builder,high greater than low
 SSR,ssr_sweep_extreme,double,true,setup,state-consistent
 SSR,ssr_reclaim_close,double,true,trigger,equals trigger close
-MC,mc_structural_event_id,string,true,engine,event record valid
-MC,mc_impulse_origin_price,double,true,event record,event-equal
-MC,mc_impulse_extreme_price,double,true,event record,event-equal
-MC,mc_impulse_distance_atr,double,true,event record,recomputable
+MC,mc_structural_event_id,string,true,structural binding,equals bound record event ID
+MC,mc_impulse_origin_price,double,true,structural binding,equals bound record
+MC,mc_impulse_extreme_price,double,true,structural binding,equals bound record
+MC,mc_impulse_distance_atr,double,true,structural binding,equals bound record
 MC,mc_efficiency,double,true,family,zero to one
 MC,mc_pause_bars,int,true,family,in frozen bounds
 MC,mc_pullback_fraction,double,true,family,recomputable
-BRC,brc_break_event_id,string,true,engine,event record valid
-BRC,brc_broken_level_id,string,true,engine,event-equal
-BRC,brc_broken_level_price,double,true,engine,event-equal
-BRC,brc_first_touch_time,datetime_utc,true,family,after minimum delay
-BRC,brc_rejection_time,datetime_utc,true,family,frozen first event
+BRC,brc_break_event_id,string,true,structural binding,equals bound record event ID
+BRC,brc_broken_level_id,string,true,structural binding,equals bound broken pivot ID
+BRC,brc_broken_level_price,double,true,structural binding,equals bound event projected level
+BRC,brc_first_touch_time_raw,datetime_raw,true,family,after minimum delay
+BRC,brc_rejection_time_raw,datetime_raw,true,family,frozen first event
 BRC,brc_penetration_atr,double,true,family,recomputable
 BRC,brc_test_count,int,true,family,nonnegative
-CBR,cbr_window_start,datetime_utc,true,family,before window end
-CBR,cbr_window_end,datetime_utc,true,family,before trigger
+CBR,cbr_window_start_raw,datetime_raw,true,family,before window end
+CBR,cbr_window_end_raw,datetime_raw,true,family,before trigger
 CBR,cbr_window_hash,string,true,family,source bars hash
 CBR,cbr_short_atr,double,true,family,positive
 CBR,cbr_long_atr,double,true,family,positive
 CBR,cbr_range_atr,double,true,family,recomputable
 CBR,cbr_extension_atr,double,true,family,recomputable
 CBR,cbr_obstruction_r,double,true,family,recomputable
-TP,tp_impulse_event_id,string,true,engine,event record valid
+TP,tp_impulse_event_id,string,true,structural binding,equals bound record event ID
 TP,tp_value_type,enum_value,true,value service,VWAP_SESSION
 TP,tp_value_anchor_id,string,true,value service,nonempty
 TP,tp_distance_start_atr,double,true,family,recomputable

@@ -3,10 +3,13 @@
 Implementation status: `IMPLEMENTED_NOT_RUNTIME_CERTIFIED`.
 
 The additive typed record, derived-field policy, family extension validation,
-MSZZSE2 ownership gate, canonical RFC-4180 serializer, focused deterministic
-test source, and documentation are complete. No family generator or production
-path was modified. All 34 MSZZ test sources and the EA compile from fresh
-MetaEditor log entries at zero errors and zero warnings.
+full-record MSZZSE2 ownership binding, raw broker-clock contract, canonical
+RFC-4180 serializer, focused deterministic test source, and documentation are
+complete. An MSZZSE2-looking string alone is insufficient; MC, BRC and TP must
+bind one validated structural record and their direction, references and
+structural geometry must match it. Broker timestamps are serialized as raw
+integers with an explicit domain/authority and are never falsely labeled UTC.
+No family generator or production path was modified.
 
 Runtime certification is pending. The isolated Bash/Wine terminal loads both
 the new focused script and the previously certified structural-event control

@@ -2,8 +2,9 @@ component,file,status,scope
 common_type,Include/MultiSpeedZigZag/Research/ResearchCandidateSchemaV2.mqh,IMPLEMENTED,typed common and family extension fields
 validator,Include/MultiSpeedZigZag/Research/ResearchCandidateSchemaV2.mqh,IMPLEMENTED,fail-closed common and family evidence
 derived_fields,Include/MultiSpeedZigZag/Research/ResearchCandidateSchemaV2.mqh,IMPLEMENTED,stop distance target R spread/risk
-structural_event_handoff,Include/MultiSpeedZigZag/Research/ResearchCandidateSchemaV2.mqh,IMPLEMENTED,MSZZSE2 only
-canonical_serializer,Include/MultiSpeedZigZag/Research/ResearchCandidateCsvV2.mqh,IMPLEMENTED,UTF-8 RFC-4180 CRLF fixed columns
+structural_event_handoff,Include/MultiSpeedZigZag/Research/ResearchCandidateSchemaV2.mqh,IMPLEMENTED,typed full-record binding with record-equal family fields
+clock_contract,Include/MultiSpeedZigZag/Research/ResearchCandidateSchemaV2.mqh,IMPLEMENTED,BROKER_SERVER_RAW only until conversion authority exists
+canonical_serializer,Include/MultiSpeedZigZag/Research/ResearchCandidateCsvV2.mqh,IMPLEMENTED,UTF-8 RFC-4180 CRLF raw time and full structural ownership columns
 family_generators,Include/MultiSpeedZigZag/Research/Families,NOT_MODIFIED,no v2 emission authorized
 legacy_journal,Include/MultiSpeedZigZag/Research/SixFamilyResearchSuite.mqh,PRESERVED,historical evidence only
 dataset_manifest,not implemented,PENDING,separate family-neutral infrastructure

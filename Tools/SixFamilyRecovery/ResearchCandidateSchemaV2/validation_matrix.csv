@@ -6,10 +6,20 @@ common,expiry not after signal,FAIL
 common,stop distance mismatch,FAIL
 common,target R mismatch,FAIL
 common,spread/risk mismatch,FAIL
-ownership,MSZZSE1 used by MC BRC or TP,FAIL
-ownership,valid MSZZSE2 identity,PASS
+ownership,MSZZSE2-looking string without typed binding,FAIL
+ownership,valid full MSZZSE2 record binding,PASS
+ownership,candidate direction differs from binding,FAIL
+ownership,structural reference differs from binding,FAIL
+ownership,MC impulse geometry differs from binding,FAIL
+ownership,BRC projected level or broken pivot differs from binding,FAIL
+ownership,TP event ID differs from binding,FAIL
+time,BROKER_SERVER_RAW plus MSZZ_TIME_RAW_BROKER_V1,PASS
+time,UTC_CONVERTED before authority implementation,FAIL
+time,raw broker value serialized with Z,FAIL
 family,missing required extension,FAIL
 serialization,embedded quote,doubled quote
 serialization,embedded comma,quoted field
 serialization,unused family extension,empty columns
+serialization,structural binding,pivots projection level impulse and ATR columns
 journal,invalid candidate,no row
+invalid_contract,late validation failure,all consumable fields blank

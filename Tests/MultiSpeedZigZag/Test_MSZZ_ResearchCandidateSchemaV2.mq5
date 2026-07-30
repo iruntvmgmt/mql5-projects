@@ -12,6 +12,52 @@ void Check(const bool condition,const string name)
    else { Print("FAIL: ",name); g_failures++; }
 }
 
+int CsvColumnCount(const string row)
+{
+   bool quoted=false;
+   int columns=1;
+   int length=StringLen(row);
+   for(int i=0;i<length;i++)
+   {
+      string character=StringSubstr(row,i,1);
+      if(character=="\"")
+      {
+         if(quoted && i+1<length && StringSubstr(row,i+1,1)=="\"") i++;
+         else quoted=!quoted;
+      }
+      else if(character=="," && !quoted) columns++;
+   }
+   return columns;
+}
+
+MSZZPivot Pivot(const ENUM_MSZZ_SPEED speed,const ENUM_MSZZ_PIVOT_KIND kind,
+                const string id,const datetime pivot_time,
+                const datetime confirmed_time,const double price)
+{
+   MSZZPivot pivot; ZeroMemory(pivot);
+   pivot.valid=true; pivot.speed=speed; pivot.kind=kind; pivot.id=id;
+   pivot.pivot_time=pivot_time; pivot.confirmed_time=confirmed_time;
+   pivot.price=price;
+   return pivot;
+}
+
+MSZZStructuralEventRecord BullishStructuralEvent()
+{
+   MSZZPivot anchor_1=Pivot(MSZZ_SPEED_FAST,MSZZ_PIVOT_HIGH,"HIGH|1",
+      D'2026.01.05 09:00:00',D'2026.01.05 09:05:00',100.0);
+   MSZZPivot anchor_2=Pivot(MSZZ_SPEED_FAST,MSZZ_PIVOT_HIGH,"HIGH|2",
+      D'2026.01.05 09:30:00',D'2026.01.05 09:35:00',101.0);
+   MSZZPivot origin=Pivot(MSZZ_SPEED_FAST,MSZZ_PIVOT_LOW,"LOW|ORIGIN",
+      D'2026.01.05 09:15:00',D'2026.01.05 09:20:00',98.0);
+   MSZZStructuralEventRecord record;
+   bool built=CMSZZStructuralEventPolicy::Build("XAUUSD",PERIOD_M5,
+      MSZZ_SPEED_FAST,MSZZ_DIR_LONG,D'2026.01.05 09:45:00',
+      D'2026.01.05 09:50:00',101.4,102.0,103.0,101.0,2.0,
+      anchor_1,anchor_2,origin,0.01,record);
+   Check(built,"structural binding fixture builds");
+   return record;
+}
+
 void Common(MSZZResearchCandidateV2 &c,const int family_id)
 {
    CMSZZResearchCandidateSchemaV2::Initialize(c);
@@ -60,9 +106,14 @@ void ValidSSR()
 
    string row=CMSZZResearchCandidateCsvV2::Row(c);
    Check(StringFind(row,"\"MSZZ_RESEARCH_CANDIDATE_V2\"")==0,"row begins with quoted schema");
-   Check(StringFind(row,"\"2026-01-05T10:00:00Z\"")>=0,"timestamps use ISO-8601 UTC form");
+   Check(StringFind(row,"\"BROKER_SERVER_RAW\"")>=0,"row declares raw broker clock domain");
+   Check(StringFind(row,"\""+IntegerToString((long)c.signal_time)+"\"")>=0,
+         "timestamps serialize as raw integers");
+   Check(StringFind(row,"T10:00:00Z")<0,"raw broker time is never labeled UTC");
    Check(StringFind(row,"comma,quote")>=0 && StringFind(row,"\"\"")>=0,
          "RFC-4180 quotes embedded evidence");
+   Check(CsvColumnCount(row)==CsvColumnCount(CMSZZResearchCandidateCsvV2::Header()),
+         "SSR row matches fixed header column count");
 }
 
 void CommonFailures()
@@ -89,45 +140,91 @@ void CommonFailures()
    c.expiry_time=c.signal_time;
    Check(!CMSZZResearchCandidateSchemaV2::Validate(c,0.01) &&
          c.validation_reason=="INVALID_LIFECYCLE_TIME","invalid lifecycle fails closed");
+   Check(c.origin_id=="" && c.entry==0.0 && c.event_id=="",
+         "invalid candidate blanks every consumable identity and price");
+
+   Common(c,8); c.ssr.ssr_clock_rule_id="CLOCK"; c.ssr.ssr_range_id="RANGE";
+   c.ssr.ssr_range_high=2.0; c.ssr.ssr_range_low=1.0;
+   c.ssr.ssr_sweep_extreme=1.0; c.ssr.ssr_reclaim_close=1.5;
+   c.clock_domain=MSZZ_RESEARCH_CLOCK_UTC_CONVERTED;
+   c.time_authority_id="MSZZ_TIME_AUTH_C1";
+   Check(!CMSZZResearchCandidateSchemaV2::Validate(c,0.01) &&
+         c.validation_reason=="UNSUPPORTED_TIME_AUTHORITY",
+         "unimplemented UTC conversion fails closed");
 }
 
 void StructuralOwnership()
 {
+   MSZZStructuralEventRecord record=BullishStructuralEvent();
    MSZZResearchCandidateV2 c; Common(c,9);
-   c.reference_type=MSZZ_RESEARCH_REFERENCE_STRUCTURAL_EVENT;
-   c.reference_id="MSZZSE2|REFERENCE";
-   c.mc.mc_structural_event_id="MSZZSE1|HISTORICAL";
-   c.mc.mc_impulse_origin_price=98.0;
-   c.mc.mc_impulse_extreme_price=101.0;
-   c.mc.mc_impulse_distance_atr=1.5;
+   c.mc.mc_structural_event_id="MSZZSE2|FORGED";
+   c.mc.mc_impulse_origin_price=record.impulse_origin_price;
+   c.mc.mc_impulse_extreme_price=record.impulse_extreme_price;
+   c.mc.mc_impulse_distance_atr=record.impulse_distance_atr;
    c.mc.mc_efficiency=0.8;
    c.mc.mc_pause_bars=2;
    c.mc.mc_pullback_fraction=0.3;
    Check(!CMSZZResearchCandidateSchemaV2::Validate(c,0.01) &&
-         c.validation_reason=="MC_REQUIRES_MSZZSE2","MSZZSE1 rejected as historical only");
+         c.validation_reason=="MISSING_STRUCTURAL_BINDING",
+         "MSZZSE2-looking string without typed record fails closed");
 
-   c.mc.mc_structural_event_id="MSZZSE2|CERTIFIED";
+   Common(c,9);
+   Check(CMSZZResearchCandidateSchemaV2::BindCertifiedStructuralEvent(c,record,0.01),
+         "candidate binds an actual certified structural record");
+   c.mc.mc_structural_event_id=record.event_id;
+   c.mc.mc_impulse_origin_price=record.impulse_origin_price;
+   c.mc.mc_impulse_extreme_price=record.impulse_extreme_price;
+   c.mc.mc_impulse_distance_atr=record.impulse_distance_atr;
+   c.mc.mc_efficiency=0.8; c.mc.mc_pause_bars=2; c.mc.mc_pullback_fraction=0.3;
    Check(CMSZZResearchCandidateSchemaV2::Validate(c,0.01),
-         "MC extension consumes certified MSZZSE2 identity");
+         "MC extension matches its bound MSZZSE2 record");
+   string row=CMSZZResearchCandidateCsvV2::Row(c);
+   Check(StringFind(row,record.source_origin_pivot_id)>=0 &&
+         StringFind(row,record.projection_anchor_1_id)>=0 &&
+         StringFind(row,record.projection_anchor_2_id)>=0,
+         "serialized binding carries pivot and projection ownership");
+   Check(CsvColumnCount(row)==CsvColumnCount(CMSZZResearchCandidateCsvV2::Header()),
+         "structural row matches fixed header column count");
 
-   MSZZStructuralEventRecord record; ZeroMemory(record);
-   record.valid=true; record.event_id="MSZZSE2|COPIED";
-   string copied="";
-   Check(CMSZZResearchCandidateSchemaV2::CopyCertifiedStructuralEvent(record,copied) &&
-         copied=="MSZZSE2|COPIED","certified structural event copy");
-   record.event_id="MSZZSE1|OLD";
-   Check(!CMSZZResearchCandidateSchemaV2::CopyCertifiedStructuralEvent(record,copied) &&
-         copied=="","historical identity cannot enter v2 typed schema");
+   string copied_event_id=c.structural_binding.record.event_id;
+   record.event_id="MUTATED_AFTER_BIND";
+   Check(c.structural_binding.record.event_id==copied_event_id,
+         "binding is an immutable copy of the source record");
+   record=BullishStructuralEvent();
+
+   Common(c,9); CMSZZResearchCandidateSchemaV2::BindCertifiedStructuralEvent(c,record,0.01);
+   c.mc.mc_structural_event_id=record.event_id;
+   c.mc.mc_impulse_origin_price=record.impulse_origin_price+1.0;
+   c.mc.mc_impulse_extreme_price=record.impulse_extreme_price;
+   c.mc.mc_impulse_distance_atr=record.impulse_distance_atr;
+   c.mc.mc_efficiency=0.8; c.mc.mc_pause_bars=2; c.mc.mc_pullback_fraction=0.3;
+   Check(!CMSZZResearchCandidateSchemaV2::Validate(c,0.01) &&
+         c.validation_reason=="MC_STRUCTURAL_BINDING_MISMATCH",
+         "independently supplied impulse geometry cannot mix with binding");
+
+   Common(c,9); CMSZZResearchCandidateSchemaV2::BindCertifiedStructuralEvent(c,record,0.01);
+   c.direction=MSZZ_DIR_SHORT; c.entry=100.0; c.stop=101.0; c.target=98.0;
+   CMSZZResearchCandidateSchemaV2::PopulateDerived(c,0.01);
+   c.mc.mc_structural_event_id=record.event_id;
+   c.mc.mc_impulse_origin_price=record.impulse_origin_price;
+   c.mc.mc_impulse_extreme_price=record.impulse_extreme_price;
+   c.mc.mc_impulse_distance_atr=record.impulse_distance_atr;
+   c.mc.mc_efficiency=0.8; c.mc.mc_pause_bars=2; c.mc.mc_pullback_fraction=0.3;
+   Check(!CMSZZResearchCandidateSchemaV2::Validate(c,0.01) &&
+         c.validation_reason=="STRUCTURAL_DIRECTION_MISMATCH",
+         "candidate direction must match bound event");
 }
 
 void AllFamilyExtensions()
 {
    MSZZResearchCandidateV2 c;
+   MSZZStructuralEventRecord record=BullishStructuralEvent();
 
    Common(c,10);
-   c.brc.brc_break_event_id="MSZZSE2|BRC";
-   c.brc.brc_broken_level_id="PIVOT|HIGH";
-   c.brc.brc_broken_level_price=100.0;
+   CMSZZResearchCandidateSchemaV2::BindCertifiedStructuralEvent(c,record,0.01);
+   c.brc.brc_break_event_id=record.event_id;
+   c.brc.brc_broken_level_id=record.broken_pivot_id;
+   c.brc.brc_broken_level_price=record.projected_level_event_bar;
    c.brc.brc_first_touch_time=D'2026.01.05 09:56:00';
    c.brc.brc_rejection_time=D'2026.01.05 09:57:00';
    c.brc.brc_penetration_atr=0.1; c.brc.brc_test_count=1;
@@ -142,7 +239,8 @@ void AllFamilyExtensions()
    Check(CMSZZResearchCandidateSchemaV2::Validate(c,0.01),"valid CBR extension");
 
    Common(c,12);
-   c.tp.tp_impulse_event_id="MSZZSE2|TP";
+   CMSZZResearchCandidateSchemaV2::BindCertifiedStructuralEvent(c,record,0.01);
+   c.tp.tp_impulse_event_id=record.event_id;
    c.tp.tp_value_type=MSZZ_RESEARCH_VALUE_VWAP_SESSION;
    c.tp.tp_value_anchor_id="VWAP|SESSION";
    c.tp.tp_distance_start_atr=1.0; c.tp.tp_distance_min_atr=0.2;

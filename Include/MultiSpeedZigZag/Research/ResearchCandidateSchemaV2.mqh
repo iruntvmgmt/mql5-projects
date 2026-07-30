@@ -5,6 +5,14 @@
 #include <MultiSpeedZigZag/Core/StructuralEventRecord.mqh>
 
 #define MSZZ_RESEARCH_CANDIDATE_SCHEMA_V2 "MSZZ_RESEARCH_CANDIDATE_V2"
+#define MSZZ_RESEARCH_RAW_BROKER_AUTHORITY_V2 "MSZZ_TIME_RAW_BROKER_V1"
+
+enum ENUM_MSZZ_RESEARCH_CLOCK_DOMAIN_V2
+{
+   MSZZ_RESEARCH_CLOCK_NONE=0,
+   MSZZ_RESEARCH_CLOCK_BROKER_SERVER_RAW=1,
+   MSZZ_RESEARCH_CLOCK_UTC_CONVERTED=2
+};
 
 enum ENUM_MSZZ_RESEARCH_REFERENCE_V2
 {
@@ -110,6 +118,12 @@ struct MSZZResearchCandidateRRFieldsV2
    double rr_midpoint;
 };
 
+struct MSZZResearchStructuralBindingV2
+{
+   bool                      bound;
+   MSZZStructuralEventRecord record;
+};
+
 struct MSZZResearchCandidateV2
 {
    bool                                  valid;
@@ -122,6 +136,8 @@ struct MSZZResearchCandidateV2
    string                                origin_id;
    string                                sequence_id;
    string                                event_id;
+   ENUM_MSZZ_RESEARCH_CLOCK_DOMAIN_V2    clock_domain;
+   string                                time_authority_id;
    datetime                              signal_time;
    datetime                              expiry_time;
    ENUM_MSZZ_DIRECTION                   direction;
@@ -152,6 +168,7 @@ struct MSZZResearchCandidateV2
    MSZZResearchCandidateCBRFieldsV2      cbr;
    MSZZResearchCandidateTPFieldsV2       tp;
    MSZZResearchCandidateRRFieldsV2       rr;
+   MSZZResearchStructuralBindingV2       structural_binding;
 };
 
 class CMSZZResearchCandidateSchemaV2
@@ -167,16 +184,45 @@ private:
       return MathAbs(a-b)<=tolerance;
    }
 
-   static bool CertifiedStructuralEventId(const string id)
+   static void BlankInvalid(MSZZResearchCandidateV2 &candidate,
+                            const string reason)
    {
-      return StringFind(id,"MSZZSE2|")==0;
+      ZeroMemory(candidate);
+      candidate.valid=false;
+      candidate.schema_version=MSZZ_RESEARCH_CANDIDATE_SCHEMA_V2;
+      candidate.validation_reason=reason;
    }
 
    static bool Fail(MSZZResearchCandidateV2 &candidate,const string reason)
    {
-      candidate.valid=false;
-      candidate.validation_reason=reason;
+      BlankInvalid(candidate,reason);
       return false;
+   }
+
+   static bool ValidateStructuralBinding(MSZZResearchCandidateV2 &candidate,
+                                         const double point_size)
+   {
+      if(!candidate.structural_binding.bound)
+         return Fail(candidate,"MISSING_STRUCTURAL_BINDING");
+      MSZZStructuralEventRecord certified=candidate.structural_binding.record;
+      string reason="";
+      if(!CMSZZStructuralEventPolicy::Validate(certified,point_size,reason))
+         return Fail(candidate,"INVALID_STRUCTURAL_BINDING_"+reason);
+      MSZZStructuralEventRecord record=candidate.structural_binding.record;
+      double tolerance=MathMax(point_size*0.1,1.0e-10);
+      if(!record.valid || record.event_id=="" ||
+         StringFind(record.event_id,"MSZZSE2|")!=0)
+         return Fail(candidate,"STRUCTURAL_BINDING_NOT_CERTIFIED");
+      if(candidate.direction!=record.direction)
+         return Fail(candidate,"STRUCTURAL_DIRECTION_MISMATCH");
+      if(record.event_time>candidate.arm_time)
+         return Fail(candidate,"STRUCTURAL_EVENT_AFTER_ARM");
+      if(candidate.reference_type!=MSZZ_RESEARCH_REFERENCE_STRUCTURAL_EVENT ||
+         candidate.reference_id!=record.event_id ||
+         !CloseEnough(candidate.reference_price,
+                      record.projected_level_event_bar,tolerance))
+         return Fail(candidate,"STRUCTURAL_REFERENCE_MISMATCH");
+      return true;
    }
 
    static bool ValidateCommon(MSZZResearchCandidateV2 &candidate,const double point_size)
@@ -189,6 +235,9 @@ private:
          return Fail(candidate,"MISSING_HYPOTHESIS_IDENTITY");
       if(candidate.origin_id=="" || candidate.sequence_id=="" || candidate.event_id=="")
          return Fail(candidate,"MISSING_EVENT_IDENTITY");
+      if(candidate.clock_domain!=MSZZ_RESEARCH_CLOCK_BROKER_SERVER_RAW ||
+         candidate.time_authority_id!=MSZZ_RESEARCH_RAW_BROKER_AUTHORITY_V2)
+         return Fail(candidate,"UNSUPPORTED_TIME_AUTHORITY");
       if(candidate.signal_time<=0 || candidate.trigger_time!=candidate.signal_time ||
          candidate.arm_time<=0 || candidate.arm_time>candidate.trigger_time ||
          candidate.expiry_time<=candidate.signal_time)
@@ -246,8 +295,14 @@ private:
       return true;
    }
 
-   static bool ValidateFamily(MSZZResearchCandidateV2 &candidate)
+   static bool ValidateFamily(MSZZResearchCandidateV2 &candidate,
+                              const double point_size)
    {
+      bool structural_family=(candidate.family_id==9 ||
+                              candidate.family_id==10 ||
+                              candidate.family_id==12);
+      if(!structural_family && candidate.structural_binding.bound)
+         return Fail(candidate,"UNEXPECTED_STRUCTURAL_BINDING");
       switch(candidate.family_id)
       {
          case 8:
@@ -257,8 +312,20 @@ private:
                return Fail(candidate,"INVALID_SSR_EXTENSION");
             return true;
          case 9:
-            if(!CertifiedStructuralEventId(candidate.mc.mc_structural_event_id))
-               return Fail(candidate,"MC_REQUIRES_MSZZSE2");
+            if(!ValidateStructuralBinding(candidate,point_size)) return false;
+            {
+               MSZZStructuralEventRecord record=
+                  candidate.structural_binding.record;
+               double tolerance=MathMax(point_size*0.1,1.0e-10);
+               if(candidate.mc.mc_structural_event_id!=record.event_id ||
+                  !CloseEnough(candidate.mc.mc_impulse_origin_price,
+                               record.impulse_origin_price,tolerance) ||
+                  !CloseEnough(candidate.mc.mc_impulse_extreme_price,
+                               record.impulse_extreme_price,tolerance) ||
+                  !CloseEnough(candidate.mc.mc_impulse_distance_atr,
+                               record.impulse_distance_atr,1.0e-9))
+                  return Fail(candidate,"MC_STRUCTURAL_BINDING_MISMATCH");
+            }
             if(candidate.mc.mc_impulse_origin_price<=0.0 ||
                candidate.mc.mc_impulse_extreme_price<=0.0 ||
                candidate.mc.mc_impulse_distance_atr<=0.0 ||
@@ -268,8 +335,17 @@ private:
                return Fail(candidate,"INVALID_MC_EXTENSION");
             return true;
          case 10:
-            if(!CertifiedStructuralEventId(candidate.brc.brc_break_event_id))
-               return Fail(candidate,"BRC_REQUIRES_MSZZSE2");
+            if(!ValidateStructuralBinding(candidate,point_size)) return false;
+            {
+               MSZZStructuralEventRecord record=
+                  candidate.structural_binding.record;
+               double tolerance=MathMax(point_size*0.1,1.0e-10);
+               if(candidate.brc.brc_break_event_id!=record.event_id ||
+                  candidate.brc.brc_broken_level_id!=record.broken_pivot_id ||
+                  !CloseEnough(candidate.brc.brc_broken_level_price,
+                               record.projected_level_event_bar,tolerance))
+                  return Fail(candidate,"BRC_STRUCTURAL_BINDING_MISMATCH");
+            }
             if(candidate.brc.brc_broken_level_id=="" ||
                candidate.brc.brc_broken_level_price<=0.0 ||
                candidate.brc.brc_first_touch_time<=candidate.arm_time ||
@@ -287,8 +363,10 @@ private:
                return Fail(candidate,"INVALID_CBR_EXTENSION");
             return true;
          case 12:
-            if(!CertifiedStructuralEventId(candidate.tp.tp_impulse_event_id))
-               return Fail(candidate,"TP_REQUIRES_MSZZSE2");
+            if(!ValidateStructuralBinding(candidate,point_size)) return false;
+            if(candidate.tp.tp_impulse_event_id!=
+               candidate.structural_binding.record.event_id)
+               return Fail(candidate,"TP_STRUCTURAL_BINDING_MISMATCH");
             if(candidate.tp.tp_value_type==MSZZ_RESEARCH_VALUE_NONE ||
                candidate.tp.tp_value_anchor_id=="" ||
                candidate.tp.tp_distance_start_atr<0.0 ||
@@ -314,6 +392,8 @@ public:
       ZeroMemory(candidate);
       candidate.schema_version=MSZZ_RESEARCH_CANDIDATE_SCHEMA_V2;
       candidate.validation_reason="NOT_VALIDATED";
+      candidate.clock_domain=MSZZ_RESEARCH_CLOCK_BROKER_SERVER_RAW;
+      candidate.time_authority_id=MSZZ_RESEARCH_RAW_BROKER_AUTHORITY_V2;
    }
 
    static bool PopulateDerived(MSZZResearchCandidateV2 &candidate,
@@ -330,15 +410,22 @@ public:
       return true;
    }
 
-   static bool CopyCertifiedStructuralEvent(const MSZZStructuralEventRecord &record,
-                                            string &event_id)
+   static bool BindCertifiedStructuralEvent(MSZZResearchCandidateV2 &candidate,
+                                            const MSZZStructuralEventRecord &record,
+                                            const double point_size)
    {
-      if(!record.valid || !CertifiedStructuralEventId(record.event_id))
+      MSZZStructuralEventRecord certified=record;
+      string reason="";
+      if(!record.valid ||
+         !CMSZZStructuralEventPolicy::Validate(certified,point_size,reason))
       {
-         event_id="";
-         return false;
+         return Fail(candidate,"STRUCTURAL_BIND_FAILED_"+reason);
       }
-      event_id=record.event_id;
+      candidate.structural_binding.bound=true;
+      candidate.structural_binding.record=certified;
+      candidate.reference_type=MSZZ_RESEARCH_REFERENCE_STRUCTURAL_EVENT;
+      candidate.reference_id=certified.event_id;
+      candidate.reference_price=certified.projected_level_event_bar;
       return true;
    }
 
@@ -347,7 +434,7 @@ public:
       candidate.valid=false;
       candidate.validation_reason="NOT_VALIDATED";
       if(!ValidateCommon(candidate,point_size)) return false;
-      if(!ValidateFamily(candidate)) return false;
+      if(!ValidateFamily(candidate,point_size)) return false;
       candidate.valid=true;
       candidate.validation_reason="OK";
       return true;
@@ -403,6 +490,17 @@ public:
          case MSZZ_RESEARCH_VALUE_NONE: return "NONE";
          case MSZZ_RESEARCH_VALUE_VWAP_SESSION: return "VWAP_SESSION";
          case MSZZ_RESEARCH_VALUE_ALMA: return "ALMA";
+      }
+      return "INVALID";
+   }
+
+   static string ClockDomainToken(const ENUM_MSZZ_RESEARCH_CLOCK_DOMAIN_V2 value)
+   {
+      switch(value)
+      {
+         case MSZZ_RESEARCH_CLOCK_NONE: return "NONE";
+         case MSZZ_RESEARCH_CLOCK_BROKER_SERVER_RAW: return "BROKER_SERVER_RAW";
+         case MSZZ_RESEARCH_CLOCK_UTC_CONVERTED: return "UTC_CONVERTED";
       }
       return "INVALID";
    }
