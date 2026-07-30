@@ -1,0 +1,33 @@
+ordinal,field,type,required,producer,immutable,default,validation
+1,schema_version,string,true,candidate factory,true,none,equals MSZZ_RESEARCH_CANDIDATE_V2
+2,strategy_id,int,true,family,true,none,allocated research ID
+3,family_id,int,true,family,true,none,allocated family ID
+4,hypothesis_version,string,true,family,true,none,frozen spec hash/version
+5,canonical_variant_id,string,true,family,true,none,frozen variant
+6,origin_id,string,true,family,true,none,nonempty deterministic source
+7,sequence_id,string,true,family,true,none,nonempty deterministic lifecycle
+8,event_id,string,true,family,true,none,nonempty unique emission
+9,signal_time,datetime_utc,true,family,true,none,equals trigger_time
+10,expiry_time,datetime_utc,true,family,true,none,greater than signal_time
+11,direction,enum_direction,true,family,true,none,LONG or SHORT
+12,entry,double,true,family,true,none,finite positive
+13,stop,double,true,family,true,none,directionally valid
+14,target,double,true,family,true,none,directionally valid
+15,score,double,true,family,true,none,finite documented scale
+16,reference_type,enum_reference,true,family,true,NONE,known token
+17,reference_id,string,true,family,true,none,required unless reference NONE
+18,reference_price,double,true,family,true,0,positive unless reference NONE
+19,arm_time,datetime_utc,true,family,true,none,not after trigger
+20,trigger_time,datetime_utc,true,family,true,none,equals signal_time
+21,bars_armed,int,true,family,true,none,nonnegative recomputable
+22,terminal_prior_state,enum_state,true,family,true,NONE,known token
+23,reset_classification,enum_reset,true,family,true,NONE,known family token
+24,atr_at_arm,double,true,family,true,none,finite positive
+25,atr_at_trigger,double,true,family,true,none,finite positive
+26,stop_distance_points,double,true,factory,true,none,recomputes from geometry
+27,target_r,double,true,factory,true,none,recomputes from geometry
+28,spread_points,int,true,bar/tick adapter,true,none,nonnegative
+29,spread_to_risk_ratio,double,true,factory,true,none,recomputes
+30,session_id,string,true,session authority,true,none,versioned deterministic
+31,regime_id,string,true,regime classifier,true,none,nonempty typed record ID
+32,diagnostic_json,string,false,family,true,empty,valid escaped JSON if present
