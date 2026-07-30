@@ -1,0 +1,5 @@
+test,attempt,evidence,result,detail
+ResearchCandidateSchemaV2 focused,Bash/Wine isolated terminal,script loaded but no OnStart output,TOOLING_NO_OP,EURUSD and XAUUSD attempts produced no fresh MQL5 rows
+StructuralEventRecord control,Bash/Wine isolated terminal,certified control script loaded but no OnStart output,TOOLING_NO_OP,proves failure is terminal script runner not schema-specific
+complete regression,not launched after control no-op,no trustworthy runtime route,PENDING,would only repeat known terminal script-runner no-op
+P4 parity,not launched after control no-op,last certified at d1b891c,PENDING,new headers are not included by EA but fresh run still required for phase certification

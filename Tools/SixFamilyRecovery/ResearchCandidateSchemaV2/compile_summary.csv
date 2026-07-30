@@ -1,0 +1,4 @@
+target,timestamp,errors,warnings,fresh_evidence,result
+MultiSpeedZigZagEA.mq5,2026-07-30T16:42:20.963-04:00,0,0,true,PASS
+Test_MSZZ_ResearchCandidateSchemaV2.mq5,2026-07-30T16:52:45.134-04:00,0,0,true,PASS
+all_MSZZ_test_sources,2026-07-30T16:46:45.797-04:00/2026-07-30T16:50:58.034-04:00,0,0,true,34_OF_34_PASS

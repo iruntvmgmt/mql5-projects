@@ -1,7 +1,7 @@
 family,spec_complete,ambiguities_resolved,input_ownership_proven,state_machine_complete,identity_contract_complete,metadata_schema_complete,simulator_contract_complete,test_plan_complete,implementation_authorized,blocking_reason
 SSR,false,false,false,true,true,true,true,true,false,dataset transition table and range completeness rule not frozen
-MC,true,true,true,true,true,true,true,true,false,structural ownership proven; typed schema and family adapter remain unimplemented
-BRC,true,true,true,true,true,true,true,true,false,immutable broken-level ownership proven; typed schema and rejection/penetration family adapter remain unimplemented
-CBR,true,true,true,true,true,true,true,true,false,owned medium-event data available; typed schema and obstruction/compression family adapter remain unimplemented
-TP,true,true,true,true,true,true,true,true,false,structural ownership proven; value service typed schema and family adapter remain unimplemented
-RR,true,true,true,true,true,true,true,true,false,owned medium-event data available; typed schema and lifetime-containment family adapter remain unimplemented
+MC,true,true,true,true,true,true,true,true,false,structural ownership and shared schema available; MC v2 family adapter remains unimplemented
+BRC,true,true,true,true,true,true,true,true,false,immutable broken-level ownership and shared schema available; rejection/penetration adapter remains unimplemented
+CBR,true,true,true,true,true,true,true,true,false,owned medium-event data and shared schema available; obstruction/compression adapter remains unimplemented
+TP,true,true,true,true,true,true,true,true,false,structural ownership and shared schema available; value service and TP adapter remain unimplemented
+RR,true,true,true,true,true,true,true,true,false,owned medium-event data and shared schema available; lifetime-containment adapter remains unimplemented

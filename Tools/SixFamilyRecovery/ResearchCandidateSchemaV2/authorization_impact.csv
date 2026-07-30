@@ -1,0 +1,7 @@
+family,input_ownership_effect,schema_effect,implementation_authorized,blocking_reason
+SSR,unchanged,typed container available,false,session transition data and range completeness
+MC,MSZZSE2 required,typed container available,false,family adapter and remaining gates
+BRC,MSZZSE2 required,typed container available,false,rejection and penetration adapter gates
+CBR,medium events available,typed container available,false,formula adapter gates
+TP,MSZZSE2 required,typed container available,false,value service and adapter gates
+RR,medium events available,typed container available,false,range quality adapter gates

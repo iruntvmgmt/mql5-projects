@@ -1,0 +1,15 @@
+category,case,expected
+common,valid directional geometry,PASS
+common,missing origin sequence or event,FAIL
+common,trigger differs from signal,FAIL
+common,expiry not after signal,FAIL
+common,stop distance mismatch,FAIL
+common,target R mismatch,FAIL
+common,spread/risk mismatch,FAIL
+ownership,MSZZSE1 used by MC BRC or TP,FAIL
+ownership,valid MSZZSE2 identity,PASS
+family,missing required extension,FAIL
+serialization,embedded quote,doubled quote
+serialization,embedded comma,quoted field
+serialization,unused family extension,empty columns
+journal,invalid candidate,no row

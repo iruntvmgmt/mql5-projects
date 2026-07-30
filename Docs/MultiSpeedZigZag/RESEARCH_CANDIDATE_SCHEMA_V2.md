@@ -1,6 +1,12 @@
 # Research Candidate Schema v2
 
-Schema identifier: `MSZZ_RESEARCH_CANDIDATE_V2`. This is a design freeze, not an implementation.
+Schema identifier: `MSZZ_RESEARCH_CANDIDATE_V2`.
+
+The shared type, validator, derived-field policy, certified structural-event
+handoff and canonical CSV writer are implemented in
+`ResearchCandidateSchemaV2.mqh` and `ResearchCandidateCsvV2.mqh`. This is
+additive infrastructure: no six-family generator emits v2 yet, and the legacy
+D031 journal remains unchanged evidence.
 
 ## Common record
 
@@ -46,6 +52,10 @@ V1 rows are not silently promoted. A separate offline migration tool may emit v2
 ## Family extensions
 
 Extensions are fixed columns following common columns, prefixed `ssr_`, `mc_`, `brc_`, `cbr_`, `tp_`, or `rr_`. Columns for other families remain empty. Each family validates its required extension set before emission.
+
+MC, BRC and TP structural extension identities accept only certified
+`MSZZSE2` IDs. `MSZZSE1` is historical infrastructure evidence and cannot
+enter a v2 record.
 
 - SSR: authoritative clock rule/version, range and level IDs/prices, reset, sweep extreme, reclaim.
 - MC: immutable structural event, impulse endpoints/ATR, efficiency, pause/pullback, medium invalidation.
