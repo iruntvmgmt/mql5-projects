@@ -1,0 +1,23 @@
+key,type,value,meaning
+policy_id,string,MSZZ_SIX_FAMILY_EXEC_V2_FIXED_ST,canonical policy
+entry_timing,enum,NEXT_EXECUTABLE_AFTER_SIGNAL,strictly after closed signal
+bar_data_side,enum,BID_OHLC,historical bars are bid
+long_entry,formula,NEXT_OPEN_PLUS_SPREAD,ask entry
+short_entry,formula,NEXT_OPEN,bid entry
+spread_source,enum,RECORDED_POINTS,no fallback
+stop_grid_long,enum,ROUND_DOWN,never closer
+stop_grid_short,enum,ROUND_UP,never closer
+minimum_stop_distance,enum,DATASET_BROKER_RULE,frozen per dataset
+target_reconstruction,enum,AFTER_ENTRY_AND_STOP,fixed R from executable geometry
+positions_per_family,int,1,no stacking
+signal_while_open,enum,REJECT_FAMILY_OPEN,both directions
+opposite_exit,bool,false,stop target test-end only
+immediate_reversal,bool,false,no reversal
+both_hit_rule,enum,STOP_FIRST_CONSERVATIVE,intrabar unknown
+expiry_scope,enum,ENTRY_ONLY,does not close open trade
+test_end,enum,CLOSE_EXECUTABLE_SIDE,include in metrics
+mfe_mae,enum,ENTRY_THROUGH_EXIT_INCLUSIVE,capped at exit
+holding_bars,enum,INCLUSIVE_ENTRY_EXIT,entry bar is one
+r_formula,enum,GROSS_PRICE_R,price move over initial risk
+commission_swap,enum,SEPARATE_MONEY_FIELDS,no implicit R conversion
+tolerance,double,1e-9,post-normalization parity
