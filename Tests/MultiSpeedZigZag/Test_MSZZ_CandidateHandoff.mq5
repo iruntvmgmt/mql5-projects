@@ -165,6 +165,16 @@ void TestEveryRequiredIdentityField()
    }
 }
 
+void TestSessionSweepProductionIdentity()
+{
+   MSZZCandidate ssr=Candidate(MSZZ_STRAT_SESSION_SWEEP_REVERSAL,MSZZ_FAMILY_REVERSAL,
+                               MSZZ_DIR_LONG,"SSR",7.0);
+   ssr.origin_type=MSZZ_ORIGIN_PIVOT_SWEEP;
+   string reason;
+   AssertTrue(CMSZZCandidateHandoff::Validate(ssr,reason),
+              "production SSR 1090 is accepted by the candidate handoff");
+}
+
 void OnStart()
 {
    TestFirstAppend();
@@ -172,6 +182,7 @@ void OnStart()
    TestSparseAndInvalidFailClosed();
    TestTwoStrategiesAndReordering();
    TestEveryRequiredIdentityField();
+   TestSessionSweepProductionIdentity();
    PrintFormat("TEST_SUMMARY tests=%d failures=%d",g_tests,g_failures);
    if(g_failures>0) ExpertRemove();
 }

@@ -16,8 +16,13 @@ void OnStart()
          "FastMed single book supported",failures);
    Check(CMSZZPortfolioBookRouting::IsSupportedSelection(1,false,true),
          "Sweep single book supported",failures);
-   Check(CMSZZPortfolioBookRouting::IsSupportedSelection(2,true,true),
+   Check(CMSZZPortfolioBookRouting::IsSupportedSelection(1,false,false,true),
+         "SSR single book supported",failures);
+   Check(CMSZZPortfolioBookRouting::IsSupportedSelection(2,true,true,false),
          "exact combined pair supported",failures);
+   Check(!CMSZZPortfolioBookRouting::IsSupportedSelection(2,true,false,true) &&
+         !CMSZZPortfolioBookRouting::IsSupportedSelection(2,false,true,true),
+         "SSR remains standalone-only in D033",failures);
    Check(!CMSZZPortfolioBookRouting::IsSupportedSelection(2,true,false),
          "malformed two-count selection rejected",failures);
    Check(!CMSZZPortfolioBookRouting::IsSupportedSelection(3,true,true),
@@ -26,7 +31,9 @@ void OnStart()
       MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE,"CLUSTER");
    string sweep=CMSZZPortfolioBookRouting::ConsumedKey(
       MSZZ_STRAT_SWEEP_RECLAIM,"CLUSTER");
-   Check(a!="" && sweep!="" && a!=sweep,
+   string ssr=CMSZZPortfolioBookRouting::ConsumedKey(
+      MSZZ_STRAT_SESSION_SWEEP_REVERSAL,"CLUSTER");
+   Check(a!="" && sweep!="" && ssr!="" && a!=sweep && a!=ssr && sweep!=ssr,
          "duplicate keys are strategy-qualified",failures);
    Check(CMSZZPortfolioBookRouting::ConsumedKey(MSZZ_STRAT_NONE,"CLUSTER")=="",
          "unsupported strategy key fails closed",failures);
@@ -43,5 +50,5 @@ void OnStart()
    Check(CMSZZPortfolioBookRouting::CloseReason(true)=="OWN_FAMILY_OPPOSITE" &&
          CMSZZPortfolioBookRouting::CloseReason(false)=="BROKER_SL_TP_OR_TEST_END",
          "close attribution reason survives reconciliation timing",failures);
-   PrintFormat("TEST_SUMMARY tests=11 failures=%d",failures);
+   PrintFormat("TEST_SUMMARY tests=13 failures=%d",failures);
 }
