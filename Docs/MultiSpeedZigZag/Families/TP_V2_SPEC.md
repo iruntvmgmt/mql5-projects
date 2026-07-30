@@ -30,4 +30,3 @@ event_id    = sequence_id|RESUME|trigger_time
 ```
 
 Typed metadata includes the value series/anchor, distance at impulse/start/minimum/trigger, owned pivots, trend age, pullback extrema and all invalidations. Simulator/production parity and v2 production allocation remain blocked.
-

@@ -34,4 +34,3 @@ event_id    = sequence_id|TRIGGER|trigger_time
 ```
 
 Typed metadata includes the complete break record, touch count/times, frozen rejection bar, penetration, invalidation and geometry. Simulator and production must share occupancy, opposite behavior, entry and exits. V2 production allocation is deferred.
-

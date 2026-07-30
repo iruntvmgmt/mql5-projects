@@ -41,4 +41,3 @@ Position ticket, entry and every exit/partial deal are attributed to the persist
 ## Restart
 
 `EventStore`, `ExecutionIntentStore`, `StrategyBook`, and `VirtualNettingLedger` persistence are loaded and reconciled to broker history/positions before new entry. Corruption or ambiguity enters recovery-required state; it never guesses ownership.
-

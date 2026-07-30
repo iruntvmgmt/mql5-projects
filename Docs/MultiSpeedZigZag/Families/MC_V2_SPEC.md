@@ -33,4 +33,3 @@ event_id    = sequence_id|RESUME|trigger_time
 ```
 
 Metadata must type every owned impulse field, medium alignment event/time, pause extrema/depth/bars, obstruction, trigger and geometry. Simulator/production share one-position occupancy and a frozen stop/target-only policy unless explicitly reviewed before screening. V2 production allocation is deferred.
-

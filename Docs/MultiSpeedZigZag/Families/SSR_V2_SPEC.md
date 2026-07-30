@@ -45,4 +45,3 @@ Required metadata: clock regime, broker/UTC/ET timestamps, range open/close/high
 ## Simulator/production
 
 Both must use one open family position; candidates while open are rejected; stop/target/test-end are the only exits; no opposite close or reversal; fixed declared risk and target. Production IDs/book/magic remain unallocated for v2. Cluster origin is `sequence_id`; consumed key is strategy-qualified cluster ID.
-

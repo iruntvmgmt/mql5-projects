@@ -31,4 +31,3 @@ event_id    = sequence_id|ROTATE|trigger_time
 ```
 
 Metadata types every boundary pivot ID/time, separation and rotation measure, rolling widths/stability, medium events over range life, rejection, midpoint and R. Target is frozen midpoint; entry/stop require reviewed formulas. Simulator/production parity and v2 production allocation remain blocked.
-

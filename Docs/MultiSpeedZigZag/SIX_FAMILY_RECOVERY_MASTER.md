@@ -27,4 +27,3 @@ The accepted findings are: SSR used incomplete session semantics, same-call re-a
 ## Exact next action
 
 Review and freeze the alternatives in `family_ambiguities.csv`, beginning with the shared time/session/DST authority and structural-event ownership model. Then enrich the engine with event-owned fields only if the approved specifications require data the current snapshots cannot provide. Family implementation remains prohibited until its row is fully authorized.
-

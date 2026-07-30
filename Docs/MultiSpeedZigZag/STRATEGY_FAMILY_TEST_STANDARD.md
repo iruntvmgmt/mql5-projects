@@ -20,4 +20,3 @@ Each test records fixture provenance, input hashes, expected transition/output, 
 ## Certification
 
 All invariant tests, real replay tests, complete regression, P4 parity, accounting, ownership, and the declared promotion gates must pass. Tooling no-ops, stale logs, malformed journal rows, or unexplained differences are failures.
-

@@ -30,4 +30,3 @@ Any proxy must state the original concept, proxy, information lost, expected fal
 ## Stop conditions
 
 Stop when common event ownership is unproven, a structural level cannot be tied to its event ID, required data is unavailable, an event cannot be deterministic, audit metadata is unavailable, bar ordering or resets are undefined, a positive fixture is unreachable, the schema is unsafe, or simulator and production policy differ.
-

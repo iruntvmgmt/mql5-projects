@@ -29,4 +29,3 @@ event_id    = sequence_id|BREAK|trigger_time|direction
 ```
 
 Metadata types every window endpoint/hash, ATR/range statistic, medium event/alignment, boundaries, extension, obstruction and geometry. Simulator/production must use the same bar window, next-entry, occupancy, exits and costs. V2 production allocation is deferred.
-
