@@ -1,6 +1,6 @@
 # ResearchCandidateSchemaV2 Status
 
-Implementation status: `IMPLEMENTED_NOT_RUNTIME_CERTIFIED`.
+Implementation status: `RUNTIME_CERTIFIED`.
 
 The additive typed record, derived-field policy, family extension validation,
 full-record MSZZSE2 ownership binding, raw broker-clock contract, canonical
@@ -11,15 +11,24 @@ structural geometry must match it. Broker timestamps are serialized as raw
 integers with an explicit domain/authority and are never falsely labeled UTC.
 No family generator or production path was modified.
 
-Runtime certification is pending. The isolated Bash/Wine terminal loads both
-the new focused script and the previously certified structural-event control
-script but executes neither `OnStart`; neither produces fresh MQL5 log rows.
-Both attempts are classified `TOOLING_NO_OP`. The available MCP discovery
-surface exposes no MT5 compile or script-runner tool, so there is no independent
-MCP route in this session.
+The isolated terminal runner was recovered after the demo account was
+authenticated. The focused suite then exposed one late-failure defect:
+`ZeroMemory()` did not clear reused string members. Explicit common, extension,
+and bound-record string clearing now enforces the blank-invalid contract.
 
-Do not treat this status as a test pass. Full regression and fresh P4 parity
-remain mandatory before this phase is certified or any family adapter consumes
-the schema.
+Fresh certification evidence now proves:
+
+- EA and all 34 test sources compile with 0 errors and 0 warnings;
+- the focused Schema V2 suite passes with zero failures;
+- the structural-event control passes with 217 certified events, zero
+  engine/replay mismatches, and zero duplicate IDs;
+- the complete regression passes 32/32 with zero failures and zero tooling
+  no-ops;
+- P4 is byte-identical at 330 trades, `+47.6083336413R`, PF
+  `1.2472234619`, and SHA-256
+  `9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f`.
 
 All six families remain unauthorized. D034 and D035 remain blocked.
+
+The exact next authorized phase is the family-neutral journal manifest and
+strict cross-language parser parity implementation.

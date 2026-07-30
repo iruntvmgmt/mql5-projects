@@ -184,10 +184,40 @@ private:
       return MathAbs(a-b)<=tolerance;
    }
 
+   static void BlankStorage(MSZZResearchCandidateV2 &candidate)
+   {
+      ZeroMemory(candidate);
+      candidate.schema_version="";
+      candidate.validation_reason="";
+      candidate.hypothesis_version="";
+      candidate.canonical_variant_id="";
+      candidate.origin_id="";
+      candidate.sequence_id="";
+      candidate.event_id="";
+      candidate.time_authority_id="";
+      candidate.reference_id="";
+      candidate.session_id="";
+      candidate.regime_id="";
+      candidate.diagnostic_json="";
+      candidate.ssr.ssr_clock_rule_id="";
+      candidate.ssr.ssr_range_id="";
+      candidate.mc.mc_structural_event_id="";
+      candidate.brc.brc_break_event_id="";
+      candidate.brc.brc_broken_level_id="";
+      candidate.cbr.cbr_window_hash="";
+      candidate.tp.tp_impulse_event_id="";
+      candidate.tp.tp_value_anchor_id="";
+      candidate.rr.rr_range_id="";
+      candidate.rr.rr_high_touch_ids="";
+      candidate.rr.rr_low_touch_ids="";
+      candidate.structural_binding.bound=false;
+      CMSZZStructuralEventPolicy::Blank(candidate.structural_binding.record);
+   }
+
    static void BlankInvalid(MSZZResearchCandidateV2 &candidate,
                             const string reason)
    {
-      ZeroMemory(candidate);
+      BlankStorage(candidate);
       candidate.valid=false;
       candidate.schema_version=MSZZ_RESEARCH_CANDIDATE_SCHEMA_V2;
       candidate.validation_reason=reason;
@@ -389,7 +419,7 @@ private:
 public:
    static void Initialize(MSZZResearchCandidateV2 &candidate)
    {
-      ZeroMemory(candidate);
+      BlankStorage(candidate);
       candidate.schema_version=MSZZ_RESEARCH_CANDIDATE_SCHEMA_V2;
       candidate.validation_reason="NOT_VALIDATED";
       candidate.clock_domain=MSZZ_RESEARCH_CLOCK_BROKER_SERVER_RAW;

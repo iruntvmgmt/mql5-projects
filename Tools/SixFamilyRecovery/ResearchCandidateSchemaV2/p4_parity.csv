@@ -1,0 +1,2 @@
+artifact,expected_sha256,actual_sha256,identical,trades,total_r,pf,result
+MSZZ_PortfolioTradeAnalytics.csv,9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f,9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f,true,330,47.6083336413,1.2472234619,PASS

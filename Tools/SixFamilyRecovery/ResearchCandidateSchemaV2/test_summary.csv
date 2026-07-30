@@ -1,5 +1,5 @@
 test,attempt,evidence,result,detail
-ResearchCandidateSchemaV2 focused,Bash/Wine isolated terminal,script loaded but no OnStart output,TOOLING_NO_OP,EURUSD and XAUUSD attempts produced no fresh MQL5 rows
-StructuralEventRecord control,Bash/Wine isolated terminal,certified control script loaded but no OnStart output,TOOLING_NO_OP,proves failure is terminal script runner not schema-specific
-complete regression,not launched after control no-op,no trustworthy runtime route,PENDING,would only repeat known terminal script-runner no-op
-P4 parity,not launched after control no-op,last certified at d1b891c,PENDING,new headers are not included by EA but fresh run still required for phase certification
+ResearchCandidateSchemaV2 focused,Bash/Wine isolated terminal,fresh raw MQL5 log and summary file,PASS,all focused checks pass failures=0 after runtime-discovered string blanking repair
+StructuralEventRecord control,Bash/Wine isolated terminal,fresh raw MQL5 log and summary file,PASS,failures=0 certified_events=217 replay_mismatches=0 duplicate_ids=0
+complete regression,Bash/Wine isolated terminal,32 fresh per-suite raw MQL5 logs,PASS,32/32 pass zero failures zero tooling no-ops; Determinism and PositionSizing verified from suite-specific raw pass summaries
+P4 parity,Bash/Wine isolated tester,fresh tester and agent logs plus canonical analytics,PASS,330 trades total_r=47.6083336413 pf=1.2472234619 sha256=9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f
