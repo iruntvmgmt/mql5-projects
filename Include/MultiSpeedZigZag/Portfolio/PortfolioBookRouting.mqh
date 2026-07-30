@@ -28,7 +28,8 @@ public:
                              const string cluster_id)
    {
       if((strategy_id!=MSZZ_STRAT_FAST_MEDIUM_CONFLUENCE &&
-          strategy_id!=MSZZ_STRAT_SWEEP_RECLAIM) || cluster_id=="")
+          strategy_id!=MSZZ_STRAT_SWEEP_RECLAIM &&
+          strategy_id!=MSZZ_STRAT_SESSION_SWEEP_REVERSAL) || cluster_id=="")
          return "";
       return IntegerToString((int)strategy_id)+"|"+cluster_id;
    }
