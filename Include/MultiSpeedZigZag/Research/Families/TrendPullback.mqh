@@ -127,7 +127,7 @@ private:
 
       double stop=(s.direction==MSZZ_DIR_LONG ? s.pause_low-atr*MSZZ_TP_STOP_BUFFER_ATR
                                                 : s.pause_high+atr*MSZZ_TP_STOP_BUFFER_ATR);
-      string structural_context=StringFormat("value_at_arm=%.5f;pullback_depth_frac=%.3f",
+      string structural_context=StringFormat("value_at_arm=%.5f|pullback_depth_frac=%.3f",
                                               s.value_at_arm,PullbackDepthFraction(s));
       CMSZZResearchCandidateFactory::Emit(out,count,MSZZ_RSRCH_STRAT_TREND_PULLBACK,
          MSZZ_RSRCH_FAMILY_TREND_PULLBACK,s.direction,bar.time,

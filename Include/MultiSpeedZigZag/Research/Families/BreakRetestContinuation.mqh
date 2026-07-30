@@ -117,7 +117,7 @@ private:
       if(!trigger) return;
 
       double stop=(s.direction==MSZZ_DIR_LONG ? s.rejection_bar_low : s.rejection_bar_high);
-      string structural_context=StringFormat("break_level=%.5f;bars_since_break=%d",s.break_level,s.bars_since_break);
+      string structural_context=StringFormat("break_level=%.5f|bars_since_break=%d",s.break_level,s.bars_since_break);
       CMSZZResearchCandidateFactory::Emit(out,count,MSZZ_RSRCH_STRAT_BREAK_RETEST_CONTINUATION,
          MSZZ_RSRCH_FAMILY_BREAK_RETEST_CONTINUATION,s.direction,bar.time,
          bar.time+(datetime)(MSZZ_BRC_VALIDITY_BARS*m_period_seconds),bar.close,stop,MSZZ_BRC_TARGET_R,

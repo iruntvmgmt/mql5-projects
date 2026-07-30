@@ -2622,3 +2622,53 @@ by PID directly, not inferred from the GUI process — two premature reads
   prohibits); flagged for attention during D032.
 
 **D031 is certified. D032 (standalone synthetic screening) may begin.**
+
+## D032 — standalone synthetic screening
+
+Full detail: `D032_SIX_FAMILY_SCREENING.md`. Ran all six D031 families'
+real candidate stream (the 3,234 candidates D031's own certification
+Config B backtest already produced -- no new backtest needed) through one
+shared, frozen simulator (`Tools/D032/simulate_and_screen.py`) and the
+handoff's frozen screening gates.
+
+- **Bug found and fixed**: `MSZZ_SixFamilyResearchJournal.csv`'s
+  `structural_context` field embedded its own `;`-separated sub-fields,
+  colliding with the CSV's own `;` delimiter (MQL5's `FileWrite` doesn't
+  escape delimiters inside a field), misaligning every row's trailing
+  columns. All six `Research/Families/*.mqh` files switched to `|`
+  internally; recompiled clean (0 errors, 0 warnings). This analysis
+  itself worked around the already-generated evidence rather than
+  requiring a fresh backtest.
+- **Only Session Sweep Reversal (1200) passes every mandatory gate**: 822
+  trades, PF 1.079, positive expectancy in development/validation/holdout,
+  top-3 and best-quarter exclusion both still positive, no one-direction
+  dependency, and empirically low-correlation with the existing
+  SweepReclaim book despite the conceptual similarity (only 3.9% trade-
+  window overlap). Does not clear the *optional* PF>=1.15 preference.
+- **Momentum Continuation (1201) produced zero trades** over the full
+  17-month real window, despite passing D031's synthetic unit tests --
+  its frozen arm condition (efficiency>=0.55 AND fast_swing_amplitude_r
+  >=1.5 AND fast/medium alignment, simultaneously) appears too strict for
+  this instrument/timeframe's real regime distribution. Not loosened
+  (would be exactly the "tune after seeing results" the handoff
+  prohibits). `REDESIGN_REQUIRED`, not `REJECTED` -- the hypothesis is
+  untested, not disproven.
+- **Break-Retest Continuation (1202)** and **Range Rotation (1205)**:
+  `REJECTED` -- negative expectancy, broad (not concentration-driven:
+  top-3/best-quarter exclusion still negative for both).
+- **Compression Breakout Research (1203)**: `RESEARCH_ONLY` -- positive
+  overall (PF 1.155, +25.0R) and positive in development/holdout, but
+  validation alone is negative (-0.050), failing one mandatory gate by a
+  single split.
+- **Trend Pullback (1204)**: `RESEARCH_ONLY` -- only 5 resolved trades
+  (12 raw candidates, 7 rejected by the frozen no-same-family-stacking
+  rule), statistically inconclusive.
+- **Promotion: Session Sweep Reversal only**, forwarded to D033. Per the
+  handoff, promoting a family that failed a mandatory gate (even
+  Compression Breakout's single-split near-miss) would be "lowering gates
+  after results" -- not done.
+
+No family definition, frozen constant, or screening gate was changed
+based on any result. No FastMedConfluence/SweepReclaim/P4 logic touched.
+
+D033 (full execution integration for Session Sweep Reversal only) has not started.

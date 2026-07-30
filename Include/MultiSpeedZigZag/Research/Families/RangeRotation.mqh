@@ -143,7 +143,7 @@ private:
       double target_r=MathAbs(midpoint-bar.close)/risk;
       if(target_r<MSZZ_RR_MIN_TARGET_R) { s.active=false; s.state=MSZZ_RR_INVALIDATED; return; } // "midpoint reward-to-risk is inadequate"
 
-      string ctx=StringFormat("range_high=%.5f;range_low=%.5f;midpoint=%.5f",
+      string ctx=StringFormat("range_high=%.5f|range_low=%.5f|midpoint=%.5f",
                                s.range_high_at_arm,s.range_low_at_arm,midpoint);
       CMSZZResearchCandidateFactory::EmitWithExplicitTarget(out,count,MSZZ_RSRCH_STRAT_RANGE_ROTATION,
          MSZZ_RSRCH_FAMILY_RANGE_ROTATION,s.direction,bar.time,

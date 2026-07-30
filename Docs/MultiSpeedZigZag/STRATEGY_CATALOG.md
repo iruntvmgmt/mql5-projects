@@ -151,15 +151,15 @@ namespace (plain `int` constants, not `ENUM_MSZZ_STRATEGY_ID`/
 `ENUM_MSZZ_STRATEGY_FAMILY`) precisely so they can never be confused with
 or collide with the table above:
 
-| Research strategy ID | Name | Research family ID | Status |
-|---:|---|---:|---|
-| 1200 | Session Sweep Reversal | 8 | SHADOW_RESEARCH, no execution path, default disabled |
-| 1201 | Momentum Continuation | 9 | SHADOW_RESEARCH, no execution path, default disabled |
-| 1202 | Break-Retest Continuation | 10 | SHADOW_RESEARCH, no execution path, default disabled |
-| 1203 | Compression Breakout (Research) | 11 | SHADOW_RESEARCH, no execution path, default disabled — distinct implementation from row `1060` above, see D031 doc's "Audit of existing strategy 1060" |
-| 1204 | Trend Pullback | 12 | SHADOW_RESEARCH, no execution path, default disabled |
-| 1205 | Range Rotation | 13 | SHADOW_RESEARCH, no execution path, default disabled — does not use `MSZZ_PHASE_RANGE` (confirmed never firing in D030), builds its own range detector |
+| Research strategy ID | Name | Research family ID | D031 status | D032 status |
+|---:|---|---:|---|---|
+| 1200 | Session Sweep Reversal | 8 | SHADOW_RESEARCH, no execution path, default disabled | `PORTFOLIO_VALIDATION_CANDIDATE` — passed every mandatory D032 gate (822 trades, PF 1.079, positive dev/val/holdout expectancy); promoted to D033 |
+| 1201 | Momentum Continuation | 9 | SHADOW_RESEARCH, no execution path, default disabled | `REDESIGN_REQUIRED` — 0 real-data trades over the full 17-month window despite passing synthetic unit tests; frozen arm condition too strict for this instrument/timeframe, not loosened |
+| 1202 | Break-Retest Continuation | 10 | SHADOW_RESEARCH, no execution path, default disabled | `REJECTED` — PF 0.72, negative expectancy in all three splits, highest P4 overlap (64.7%) |
+| 1203 | Compression Breakout (Research) | 11 | SHADOW_RESEARCH, no execution path, default disabled — distinct implementation from row `1060` above, see D031 doc's "Audit of existing strategy 1060" | `RESEARCH_ONLY` — PF 1.155 overall, positive dev/holdout, but validation split alone negative (-0.050); fails one mandatory gate |
+| 1204 | Trend Pullback | 12 | SHADOW_RESEARCH, no execution path, default disabled | `RESEARCH_ONLY` — only 5 resolved trades, statistically inconclusive |
+| 1205 | Range Rotation | 13 | SHADOW_RESEARCH, no execution path, default disabled — does not use `MSZZ_PHASE_RANGE` (confirmed never firing in D030), builds its own range detector | `REJECTED` — PF 0.855, negative in validation and holdout, not concentration-driven |
 
-Full ID inspection: `Tools/D031/id_allocation.csv`. None of these six have
-been standalone-screened (D032) or promoted; this table entry exists only
-so a future ID allocation never collides with 1200-1205/8-13 by accident.
+Full ID inspection: `Tools/D031/id_allocation.csv`. Full D032 screening
+detail: `D032_SIX_FAMILY_SCREENING.md`. Only Session Sweep Reversal (1200)
+was promoted; D033 will integrate it alone, not all six.

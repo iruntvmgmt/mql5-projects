@@ -126,7 +126,7 @@ private:
 
       double stop=(s.direction==MSZZ_DIR_LONG ? s.sweep_extreme-atr*MSZZ_SSR_RECLAIM_BUFFER_ATR
                                                  : s.sweep_extreme+atr*MSZZ_SSR_RECLAIM_BUFFER_ATR);
-      string structural_context=StringFormat("asian_high=%.5f;asian_low=%.5f;sweep_extreme=%.5f",
+      string structural_context=StringFormat("asian_high=%.5f|asian_low=%.5f|sweep_extreme=%.5f",
                                               m_asian_high,m_asian_low,s.sweep_extreme);
       CMSZZResearchCandidateFactory::Emit(out,count,MSZZ_RSRCH_STRAT_SESSION_SWEEP_REVERSAL,
          MSZZ_RSRCH_FAMILY_SESSION_SWEEP_REVERSAL,s.direction,bar.time,

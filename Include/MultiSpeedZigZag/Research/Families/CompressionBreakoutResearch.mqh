@@ -124,7 +124,7 @@ public:
          bool bear_ctx=(m.leg_direction==MSZZ_DIR_SHORT || s.leg_direction==MSZZ_DIR_SHORT);
          if(bar.close>=m_compression_high+min_dist && bull_ctx)
          {
-            string ctx=StringFormat("compression_high=%.5f;compression_low=%.5f;atr_ratio=%.3f",
+            string ctx=StringFormat("compression_high=%.5f|compression_low=%.5f|atr_ratio=%.3f",
                                      m_compression_high,m_compression_low,regime.normalized_atr);
             CMSZZResearchCandidateFactory::Emit(out,count,MSZZ_RSRCH_STRAT_COMPRESSION_BREAKOUT,
                MSZZ_RSRCH_FAMILY_COMPRESSION_BREAKOUT,MSZZ_DIR_LONG,bar.time,
@@ -136,7 +136,7 @@ public:
          }
          if(bar.close<=m_compression_low-min_dist && bear_ctx)
          {
-            string ctx=StringFormat("compression_high=%.5f;compression_low=%.5f;atr_ratio=%.3f",
+            string ctx=StringFormat("compression_high=%.5f|compression_low=%.5f|atr_ratio=%.3f",
                                      m_compression_high,m_compression_low,regime.normalized_atr);
             CMSZZResearchCandidateFactory::Emit(out,count,MSZZ_RSRCH_STRAT_COMPRESSION_BREAKOUT,
                MSZZ_RSRCH_FAMILY_COMPRESSION_BREAKOUT,MSZZ_DIR_SHORT,bar.time,

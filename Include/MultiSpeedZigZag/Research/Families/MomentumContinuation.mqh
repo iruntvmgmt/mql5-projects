@@ -132,7 +132,7 @@ public:
       int count=0; ArrayResize(out,0);
       double atr=f.atr;
       if(atr<=0.0 || !regime.valid) return 0;
-      string structural_context=StringFormat("efficiency=%.3f;fast_amp_r=%.3f",
+      string structural_context=StringFormat("efficiency=%.3f|fast_amp_r=%.3f",
                                               regime.directional_efficiency,regime.fast_swing_amplitude_r);
 
       // Process previously armed pauses before arming a new one this bar,
