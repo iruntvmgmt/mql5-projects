@@ -137,7 +137,12 @@ private:
 
       double stop=(s.direction==MSZZ_DIR_LONG ? s.sweep_extreme-atr*MSZZ_SSR_PROD_RECLAIM_BUFFER_ATR
                                                  : s.sweep_extreme+atr*MSZZ_SSR_PROD_RECLAIM_BUFFER_ATR);
-      Emit(out,count,s.direction,bar.time,bar.close,stop,7.0,s.origin_id,s.sequence_id+"|FINAL",
+      // D033 remediation: the production cluster engine intentionally uses
+      // origin_id as its persistent identity. SSR can re-arm the same Asian
+      // reference more than once per day, so its event-scoped sequence_id
+      // (which already contains the arm timestamp) is the correct production
+      // origin granularity. Keep event_id as that sequence plus |FINAL.
+      Emit(out,count,s.direction,bar.time,bar.close,stop,7.0,s.sequence_id,s.sequence_id+"|FINAL",
            "Asia session level swept during London/NewYork, closed-bar reclaim within frozen window");
       s.active=false; s.state=MSZZ_SSR_PROD_TRIGGERED;
    }
