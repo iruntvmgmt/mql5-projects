@@ -1,0 +1,10 @@
+record_type,id,start_basis,end_basis,timezone_or_offset,rule,required
+authority,MSZZ_TIME_AUTH_C1,DATASET_START_UTC,DATASET_END_UTC,UTC,committed explicit schedule,true
+transition_row,BROKER_ROW_N,start_utc,end_utc,broker_utc_offset_seconds,contiguous half-open per dataset,true
+transition_row,EASTERN_ROW_N,start_utc,end_utc,eastern_utc_offset_seconds,IANA America/New_York generated then committed,true
+window,ASIA_RANGE,00:00,08:00,UTC,bar open time half-open,true
+window,LONDON_SWEEP,08:00,12:00,UTC,bar open time half-open,true
+window,NEW_YORK_SWEEP,08:30,12:00,US_EASTERN,converted using committed row,true
+day,SSR_TRADING_DAY,00:00,24:00,UTC,terminate lifecycle at boundary,true
+failure,TIME_AUTHORITY_UNAVAILABLE,any,any,none,gap overlap ambiguity missing hash or coverage,true
+holiday,NO_CLOCK_OVERRIDE,window,window,authority timezone,sparse bars allowed no synthetic bars,true

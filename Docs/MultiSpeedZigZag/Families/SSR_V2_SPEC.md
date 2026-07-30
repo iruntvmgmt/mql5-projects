@@ -8,9 +8,9 @@ An accepted session-range extreme is swept during a later eligible liquidity win
 
 Freshness requires a closed bar at or inside the range after the preceding lifecycle terminates, followed on a later closed bar by an outside transition. Same-call, same-trigger-bar, and still-outside re-arms are forbidden. Expiry/invalidation cannot re-arm until reset. One excursion may emit once.
 
-## Unresolved clock contract
+## Frozen clock contract
 
-Exact Asia construction, London/New York sweep windows, broker-to-UTC mapping, US-Eastern mapping, DST authority and transition behavior are not recoverable from current code. Current `<8/<16/else` broker buckets and `hour>=8` eligibility are rejected as specification evidence. Alternatives are recorded in `family_ambiguities.csv`; no session formula is frozen.
+`SESSION_TIME_AUTHORITY.md` authority `MSZZ_TIME_AUTH_C1` governs SSR. The Asian range is `[00:00,08:00)` UTC; London eligibility is `[08:00,12:00)` UTC; New York eligibility is `[08:30,12:00)` US Eastern. Broker and Eastern offsets come only from a reviewed, committed per-dataset transition schedule. Host timezone lookup and inferred broker DST are forbidden. Missing authority fails closed. The UTC day boundary terminates active state and the next day requires a newly frozen range.
 
 ## Inputs and ownership
 
