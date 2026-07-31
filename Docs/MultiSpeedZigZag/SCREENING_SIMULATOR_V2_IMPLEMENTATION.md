@@ -56,14 +56,21 @@ The transport is therefore **integer**:
   point_size`); the finest quote grid, so ordinary decimal prices are exact.
 - Spread is an integer number of points.
 - Instrument sizes are integer **1e-8 units** (`point_size_1e8`,
-  `tick_size_1e8`); `point_size = point_size_1e8 / 1e8` and `1e8` is binary-exact
-  (`< 2^53`), so both languages reconstruct the identical double.
+  `tick_size_1e8`); `point_size = point_size_1e8 / 1e8`.
 - Grid alignment is an exact integer check (`tick_size_1e8 % point_size_1e8 == 0`);
   the producer converts a decimal price to points and rejects any off-grid value.
 - Nothing in the canonical transport or the SHA-256 uses float formatting.
 
-Prices are reconstructed only at simulation time as `points * point_size`
-(identical integer→double arithmetic in MQL5 and Python).
+Precisely:
+
+- canonical transport bytes are integer-exact;
+- hashes and parser parity do not depend on floating-point formatting;
+- reconstructed runtime prices (`points * point_size`) may still be
+  non-binary-exact — e.g. `0.01` is not exactly representable — so the
+  reconstructed decimal value is not claimed to be exact;
+- MQL5/Python numerical parity on reconstructed prices and derived metrics is
+  enforced **after tick normalization**, using the frozen `1e-9` comparison
+  tolerance and identical operation order in both languages.
 
 ## MSZZ_SCREENING_MARKET_DATA_V2
 
