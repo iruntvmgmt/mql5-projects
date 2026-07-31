@@ -1,0 +1,4 @@
+"artifact","sha256","detail"
+"market_data_fixture.csv","52f1e419b6c1c5ed723c6fb1f4b068a3a6ce30699ac6a55751b46c2f37f8601a","row_count=3"
+"market_manifest_fixture.csv","daa87892a2bffe3e001dd314ebedf536934109f9195a14eae7b65a224e3ef17e","symbol=XAUUSD"
+"instrument_params_fixture.csv","1fb4118a7eeb2b054ae2f4cb5499acf184148919bc5ebf28aeb4009e18e8f752","min_distance_points=0"

@@ -1,0 +1,2 @@
+manifest_version,market_data_version,symbol,timeframe,clock_domain,time_authority_id,row_count,market_data_sha256
+"MSZZ_SCREENING_MARKET_MANIFEST_V2","MSZZ_SCREENING_MARKET_DATA_V2","XAUUSD","5","BROKER_SERVER_RAW","MSZZ_TIME_RAW_BROKER_V1","3","52f1e419b6c1c5ed723c6fb1f4b068a3a6ce30699ac6a55751b46c2f37f8601a"
