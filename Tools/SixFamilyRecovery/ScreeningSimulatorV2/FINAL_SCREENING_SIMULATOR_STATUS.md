@@ -1,66 +1,95 @@
 # Screening Simulator V2 — Status
 
-**Phase status: `IN_PROGRESS` — commit 1 of 2 (market/instrument transport
-sub-layer) RUNTIME-CERTIFIED; simulator loop pending (commit 2).**
+**Phase status: `CROSS_LANGUAGE_CERTIFIED` — commit 2 of 2 (family-neutral
+standalone screening simulator) implemented and certified. No family is
+authorized by this work.**
 
-The overall standalone screening simulator is **not** certified yet. Do not
-treat this as `SCREENING_SIMULATOR_V2_RUNTIME_CERTIFIED`.
+The standalone screening simulator reproduces byte-identical canonical
+outcomes across Python and MQL5 over the full fixture matrix, on top of the
+certified market/instrument transport (commit 1) and the shared
+ScreeningExecutionPolicyV2. It remains research tooling: it is not wired into
+any production path and authorizes no family.
 
-## Commit 1 — market/instrument transport sub-layer (this commit)
+## Commits
 
 - Starting HEAD: `784d2493429282ee83147ea948294cf5884fd6b7`
 - Branch: `recovery/research-journal-manifest-parser-v2`
-- Policy consumed (unchanged): `MSZZ_SIX_FAMILY_EXEC_V2_FIXED_ST`
+- Policy consumed: `MSZZ_SIX_FAMILY_EXEC_V2_FIXED_ST` (MQL5 `.mqh` unchanged)
+- `87e53f1`, `7159e4d` — commit 1: integer market/instrument transport
+- bounded policy correction — Python tick-boundary epsilon aligned to the
+  certified MQL5 behavior (see below); its own commit, immediately before this
+  one
+- commit 2 (this commit) — the simulator loop, fixtures, parity, evidence
 
-Frozen sub-layers (user-approved 2026-07-30): `MSZZ_SCREENING_MARKET_DATA_V2`,
-`MSZZ_SCREENING_MARKET_MANIFEST_V2`, `MSZZ_SCREENING_INSTRUMENT_PARAMS_V2`, and
-the frozen candidate iteration order. Instrument geometry lives only in the
-instrument-params file (manifest/params reconciliation — see the implementation
-doc); the certified JournalTransportV2 manifest is untouched.
+## Bounded policy correction
 
-### Files added (no existing file modified)
+The certified MQL5 `NormalizeStop`/`NormalizeTarget` apply a `+/-1e-9`
+grid-boundary epsilon; the Python `_ticks` helper did not, producing a
+one-tick divergence at exact tick boundaries (fixture F15: short target
+`raw/tick=1996.0000000000002` → `99.85` Python vs `99.80` MQL5). Frozen as
+parity fixture `short_tick_boundary`, then fixed in `screening_execution_v2.py`
+only (floor `+1e-9`, ceil `-1e-9`; minimum-distance fallbacks stay
+epsilon-free). MQL5 source unchanged. The epsilon sign is hard-bound to the
+rounding direction via explicit `_floor_ticks`/`_ceil_ticks` helpers (no
+`mode is math.floor` callable-identity check), so no caller can supply the
+wrong sign. Policy re-certified: Python tests pass; MQL5
+`Test_MSZZ_ScreeningExecutionPolicyV2` 12/12. Recorded in
+`Docs/MultiSpeedZigZag/SCREENING_EXECUTION_CONTRACT_V2.md`.
+
+## Files added (commit 2, no existing production file modified)
 
 ```text
-MQL5/Include/MultiSpeedZigZag/Research/ScreeningMarketV2.mqh
-MQL5/Tests/MultiSpeedZigZag/Test_MSZZ_ScreeningMarketV2.mq5
-Docs/MultiSpeedZigZag/SCREENING_SIMULATOR_V2_IMPLEMENTATION.md
-MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/screening_market_v2.py
-MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/test_screening_market_v2.py
-MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/make_market_fixtures.py
-MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/*_fixture.csv (3)
-MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/cross_language_market_hashes.csv
-MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/Test_MSZZ_ScreeningMarketV2.ini
-MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/{compile,test}_summary.csv
-MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/cross_language_parity.csv
-MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/output_hashes.csv
+MQL5/Include/MultiSpeedZigZag/Research/ScreeningSimulatorV2.mqh
+MQL5/Tests/MultiSpeedZigZag/Test_MSZZ_ScreeningSimulatorV2.mq5
+MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/screening_simulator_v2.py
+MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/simulator_fixtures.py
+MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/make_simulator_fixtures.py
+MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/test_screening_simulator_v2.py
+MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/collect_mql5_results.py
+MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/simulator_fixtures.csv
+MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/expected_outcomes.csv
+MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/fixture_coverage.csv
+MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/mql5_results.csv
 ```
 
-### Representation — integer transport (real-data-safe)
+## Fixture matrix
 
-OHLC are signed integer point counts; instrument sizes are integer 1e-8 units.
-Ordinary decimal prices (100.20, 2000.37, 1.23456, ...) are exact; nothing in
-the transport or the SHA-256 uses float formatting. This replaced an earlier
-16-digit float draft whose cross-language parity depended on values being
-binary-exact (the MQL5 runtime gate caught the divergence). See the
-implementation doc.
+58 language-neutral fixtures (F01–F58) in `simulator_fixtures.py`, serialized
+to `simulator_fixtures.csv` (+ `expected_outcomes.csv`) consumed identically by
+both languages. Coverage in `fixture_coverage.csv`: 58/58 PASS in
+`python_result`, `mql5_result`, and `parity_result`.
 
-### Evidence (fresh, this session)
+## Evidence (fresh, this session, 2026-07-31)
 
-- MQL5 compile (`wine start /Unix metaeditor64 /compile /log`): market test
-  `0 errors, 0 warnings` (2026.07.30 23:55:18, fresh ex5 51676 B).
-- MQL5 runtime (isolated `/portable` terminal, demo login 870012, fresh
-  `OnStart`): `TEST_SUMMARY tests=30 failures=0` at 2026.07.30 23:55:45.
-- Python: `test_screening_market_v2` 22 tests, 0 failures.
-- Cross-language byte parity: MQL5-reconstructed SHA-256 equals the Python
-  fixtures — market `78067caf…`, manifest `32322955…`, params `fe608f32…`.
-
-## Not yet done (commit 2)
-
-Simulator loop, `MSZZ_SCREENING_OUTCOME_V2`, additive status/rejection taxonomy,
-next-executable-bar entry, bid/ask + gap-fill geometry, occupancy, MFE/MAE,
-holding bars, test-end closure, full ~50-case fixture matrix, MQL5/Python
-outcome parity, full 32-suite regression, and fresh canonical P4 parity
-(`330 / +47.6083336413R / PF 1.2472234619 / SHA 9ebf2f41…eb5f`).
+- **Compiles** (`wine start /Unix metaeditor64 /compile /log`): policy test
+  `0 errors, 0 warnings` (ex5 8782 B); simulator test `0 errors, 0 warnings`
+  (ex5 60066 B). Production `MultiSpeedZigZagEA` not recompiled (unchanged).
+- **Python**: `test_screening_execution_v2` pass; `test_screening_simulator_v2`
+  58/58 (incl. shuffled-determinism re-run).
+- **MQL5 isolated `/portable` (login 870012)**: policy `TEST_SUMMARY tests=12
+  failures=0` (11:49); simulator `TEST_SUMMARY tests=114 failures=0` (11:53) —
+  per-fixture run-status + byte-identical canonical outcome SHA-256 vs the
+  Python reference.
+- **Full regression (split)**: legacy D033 suite **32/32 PASS**; newly added
+  suites **4/4 PASS** (`D032_ExportRates`, `Export_MSZZ_Parity`,
+  `ScreeningMarketV2`, `ScreeningSimulatorV2`); expanded total **36/36 PASS**,
+  **0 failures, 0 tooling no-ops**. No legacy suite was dropped or renamed
+  (verified against the D033 roster `Tools/D033/Remediation/test_summary.csv`).
+  Evidence source: the **corrected** harness — `run_full_regression.sh` was
+  rebuilt to derive each suite's result from a per-suite byte-offset window,
+  its own script name, its own fresh completion line, PID lifecycle, and an
+  explicit `TOOLING_NO_OP` when no fresh matching summary appears (the prior
+  harness used `tail -1` of the whole shared daily log; classification now
+  lives in the testable `classify_regression.py`, validated against a
+  TEST_SUMMARY suite, `Determinism`, `PositionSizing`, `ScreeningMarketV2`,
+  `ScreeningSimulatorV2`, and a negative control). Fresh isolated `/portable`
+  run 2026-07-31 12:15–12:40, distinct PID per suite; see
+  `Tools_D031_regression_results.txt`.
+- **P4 parity (fresh backtest, 2026-07-31 11:54)**: 330 trades,
+  `+47.6083336413R`, PF `1.2472234619`, canonical journal
+  `MSZZ_PortfolioTradeAnalytics.csv` SHA-256
+  `9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f` —
+  **byte-identical** to the certified reference.
 
 ## Family authorization / D034-D035
 
