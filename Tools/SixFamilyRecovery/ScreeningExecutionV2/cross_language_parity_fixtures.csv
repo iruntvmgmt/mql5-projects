@@ -1,0 +1,8 @@
+fixture,direction,raw_stop,raw_target,entry,tick_size,normalized_stop,normalized_target,family_open,entry_time,expiry_time,status,high,low,exit,exit_price,gross_r
+long_geometry,1,98.017,104.019,100.003,0.01,98.01,104.01,false,100,110,ACCEPT,100.5,99.5,TEST_END,100.003,0.0000000000
+short_geometry,-1,102.017,95.019,100.003,0.01,102.02,95.02,false,100,110,ACCEPT,100.5,99.5,TEST_END,100.003,0.0000000000
+family_open,1,98.0,104.0,100.0,0.01,98.0,104.0,true,100,110,FAMILY_OPEN,100.5,99.5,TEST_END,100.0,0.0
+expired,1,98.0,104.0,100.0,0.01,98.0,104.0,false,111,110,EXPIRED,100.5,99.5,TEST_END,100.0,0.0
+stop_first_long,1,98.0,104.0,100.0,0.01,98.0,104.0,false,100,110,ACCEPT,105.0,97.0,STOP,98.0,-1.0
+target_only_long,1,98.0,104.0,100.0,0.01,98.0,104.0,false,100,110,ACCEPT,104.0,99.0,TARGET,104.0,2.0
+stop_first_short,-1,102.0,96.0,100.0,0.01,102.0,96.0,false,100,110,ACCEPT,103.0,95.0,STOP,102.0,-1.0

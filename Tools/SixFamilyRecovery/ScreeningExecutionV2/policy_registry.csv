@@ -1,0 +1,2 @@
+policy_id,schema_version,entry_offset_bars,spread_embedded_once,stop_rounding,target_rounding,one_position_per_family,reject_while_open,opposite_signal_close,immediate_reversal,stop_first,expiry_entry_only,test_end_in_metrics,gross_r_includes_commission
+MSZZ_SIX_FAMILY_EXEC_V2_FIXED_ST,2,1,true,conservative,conservative,true,true,false,false,true,true,true,false

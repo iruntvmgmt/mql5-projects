@@ -1,0 +1,2 @@
+target,timestamp,errors,warnings,fresh_evidence,result
+Test_MSZZ_ScreeningExecutionPolicyV2.mq5,2026-07-30T21:48:42.000-04:00,0,0,true,PASS

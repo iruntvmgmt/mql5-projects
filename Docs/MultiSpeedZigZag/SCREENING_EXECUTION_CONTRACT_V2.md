@@ -39,3 +39,13 @@ Python and MQL5 may use native structs/classes, but their values must be loaded 
 ## Parity gate
 
 Each implementation consumes identical fixture columns and emits status, normalized geometry, entry/exit time and price, exit reason, holding bars, MFE, MAE and R. Decimal comparison tolerance is `1e-9` in price/R after tick normalization. Any differing expectation is a contract failure and blocks screening and production.
+
+## Implementation status
+
+The pure shared policy layer is certified in
+`Include/MultiSpeedZigZag/Research/ScreeningExecutionPolicyV2.mqh` and
+`Tools/SixFamilyRecovery/ScreeningExecutionV2/screening_execution_v2.py`.
+They validate the frozen registry and pass the committed cross-language
+fixtures. This certification covers policy constants and deterministic
+normalization/rejection/exit primitives only; the full candidate/rates
+screening loop remains pending and no family is authorized by this step.

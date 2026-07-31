@@ -1,0 +1,5 @@
+test,evidence,result,detail
+MQL5 policy runtime,fresh isolated MQL5 log,PASS,10 tests failures=0
+Python policy parity,Python unittest output,PASS,2 tests failures=0
+cross-language fixtures,shared CSV fixture and equivalent policy functions,PASS,normalization occupancy expiry same-bar and R cases
+full historical screening,not implemented,PENDING,requires candidate/rates simulator integration
