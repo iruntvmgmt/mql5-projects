@@ -3,5 +3,5 @@ MQL5 focused transport,fresh isolated-terminal raw log,PASS,canonical typed roun
 Python focused transport,Python unittest raw output,PASS,4/4 test methods pass
 MQL5 journal to Python parser,exact isolated Files artifact,PASS,116 columns 1 row identical journal hash
 MQL5 versus Python manifest,byte comparison and SHA-256,PASS,byte-identical sha256=4bd9c266ebc1e36dde8d465513de948c684e462358828f19e4ba5da478bdb602
-full regression,not run for final phase source,PENDING,required before certification
-P4 parity,not run for final phase source,PENDING,required before certification
+full regression,fresh isolated-terminal raw logs,PASS,32/32 suites zero failures zero tooling no-ops; 30 standard summaries plus Determinism and PositionSizing raw-log reconciliation
+P4 parity,fresh isolated-terminal analytics journal,PASS,330 trades total_r=47.6083336413 pf=1.2472234619 canonical_sha256=9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f

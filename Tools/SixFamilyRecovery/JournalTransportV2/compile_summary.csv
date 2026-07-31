@@ -1,2 +1,4 @@
 target,timestamp,errors,warnings,fresh_evidence,result
 Test_MSZZ_ResearchJournalTransportV2.mq5,2026-07-30T20:43:59.703-04:00,0,0,true,PASS
+MultiSpeedZigZagEA.mq5,2026-07-30T20:48:42.939-04:00,0,0,true,PASS
+all 35 test sources,2026-07-30T20:49:17.978-04:00 through 2026-07-30T20:55:35.176-04:00,0,0,true,PASS
