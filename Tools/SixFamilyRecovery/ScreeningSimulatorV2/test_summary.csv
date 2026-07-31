@@ -1,3 +1,3 @@
 layer,language,tests,failures,evidence
-market_transport,python,18,0,python3 -m unittest test_screening_market_v2 (18 ok)
-market_transport,mql5,29,0,isolated portable terminal /portable login 870012 fresh OnStart 2026.07.30 23:35:40 TEST_SUMMARY tests=29 failures=0
+market_transport,python,22,0,python3 -m unittest test_screening_market_v2 (22 ok) - integer transport
+market_transport,mql5,30,0,isolated /portable terminal login 870012 fresh OnStart 2026.07.30 23:55:45 TEST_SUMMARY tests=30 failures=0

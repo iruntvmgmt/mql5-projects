@@ -35,22 +35,24 @@ MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/cross_language_parity.csv
 MQL5/Tools/SixFamilyRecovery/ScreeningSimulatorV2/output_hashes.csv
 ```
 
+### Representation — integer transport (real-data-safe)
+
+OHLC are signed integer point counts; instrument sizes are integer 1e-8 units.
+Ordinary decimal prices (100.20, 2000.37, 1.23456, ...) are exact; nothing in
+the transport or the SHA-256 uses float formatting. This replaced an earlier
+16-digit float draft whose cross-language parity depended on values being
+binary-exact (the MQL5 runtime gate caught the divergence). See the
+implementation doc.
+
 ### Evidence (fresh, this session)
 
 - MQL5 compile (`wine start /Unix metaeditor64 /compile /log`): market test
-  `0 errors, 0 warnings` (2026.07.30 23:35:27, fresh ex5 54022 B); known-good
-  control recompiled `0 errors, 0 warnings` through the same route.
+  `0 errors, 0 warnings` (2026.07.30 23:55:18, fresh ex5 51676 B).
 - MQL5 runtime (isolated `/portable` terminal, demo login 870012, fresh
-  `OnStart`): `TEST_SUMMARY tests=29 failures=0` at 2026.07.30 23:35:40.
-- Python: `test_screening_market_v2` 18 tests, 0 failures.
+  `OnStart`): `TEST_SUMMARY tests=30 failures=0` at 2026.07.30 23:55:45.
+- Python: `test_screening_market_v2` 22 tests, 0 failures.
 - Cross-language byte parity: MQL5-reconstructed SHA-256 equals the Python
-  fixtures — market `52f1e419…`, manifest `daa87892…`, params `1fb4118a…`.
-
-### Known limitation
-
-16-digit canonical decimals are only cross-language byte-identical within double
-precision; committed fixtures use exactly-representable OHLC values. See the
-implementation doc.
+  fixtures — market `78067caf…`, manifest `32322955…`, params `fe608f32…`.
 
 ## Not yet done (commit 2)
 

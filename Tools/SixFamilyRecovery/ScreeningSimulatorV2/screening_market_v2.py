@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Strict canonical transports for the MSZZ standalone screening simulator.
+"""Strict canonical INTEGER transports for the MSZZ screening simulator.
 
-This module freezes three family-neutral simulator input sub-layers. None of
-them modifies a family generator, production path, or the certified candidate
-JournalTransportV2:
+Real-data-safe: OHLC are stored as signed integer point counts and instrument
+sizes as integer 1e-8 units, so ordinary decimal instrument prices
+(100.20, 2000.37, 1.23456, ...) are represented exactly. Nothing in the
+canonical transport or the SHA-256 depends on cross-language float formatting.
+Prices are reconstructed only at simulation time as ``points * point_size``,
+where ``point_size = point_size_1e8 / 1e8`` (1e8 is binary-exact, so MQL5 and
+Python compute the identical double).
 
-* ``MSZZ_SCREENING_MARKET_DATA_V2``      - bid OHLC + integer spread bars.
-* ``MSZZ_SCREENING_MARKET_MANIFEST_V2``  - market-data descriptor + hash.
-* ``MSZZ_SCREENING_INSTRUMENT_PARAMS_V2`` - broker geometry for normalization.
+Family-neutral; does not modify a family generator, production path, or the
+certified candidate JournalTransportV2.
 
-Byte and canonical conventions are identical to the certified research
-transport: UTF-8 without BOM, CRLF after every record including the final one,
-an unquoted header line, fully double-quoted canonical data records, integers
-matching ``-?(0|[1-9][0-9]*)`` and doubles matching ``-?(0|[1-9][0-9]*)\\.[0-9]{16}``.
+Byte conventions match the certified research transport: UTF-8 no BOM, CRLF
+after every record including the final one, an unquoted header line, fully
+double-quoted canonical data records, integers matching ``-?(0|[1-9][0-9]*)``.
 Every accepted record must reserialize byte-for-byte. Nothing is repaired,
 inferred, forward-filled, or normalized from an alternate spelling.
 """
@@ -22,7 +24,6 @@ from __future__ import annotations
 import hashlib
 import io
 import csv
-import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,10 @@ INSTRUMENT_PARAMS_VERSION = "MSZZ_SCREENING_INSTRUMENT_PARAMS_V2"
 CLOCK_DOMAIN = "BROKER_SERVER_RAW"
 TIME_AUTHORITY = "MSZZ_TIME_RAW_BROKER_V1"
 
+# Fixed integer scale for instrument sizes. MT5 SYMBOL_DIGITS <= 8, so every
+# real point/tick size is an exact multiple of 1e-8. 1e8 < 2^53 is binary-exact.
+PRICE_SCALE_1E8 = 100_000_000
+
 MARKET_DATA_HEADER = [
     "market_data_version",
     "symbol",
@@ -41,10 +46,10 @@ MARKET_DATA_HEADER = [
     "clock_domain",
     "time_authority_id",
     "time_raw",
-    "open_bid",
-    "high_bid",
-    "low_bid",
-    "close_bid",
+    "open_points",
+    "high_points",
+    "low_points",
+    "close_points",
     "spread_points",
 ]
 
@@ -63,15 +68,12 @@ INSTRUMENT_PARAMS_HEADER = [
     "params_version",
     "symbol",
     "timeframe",
-    "point_size",
-    "tick_size",
+    "point_size_1e8",
+    "tick_size_1e8",
     "stops_level_points",
     "freeze_level_points",
     "minimum_distance_points",
 ]
-
-# Tolerance for the tick/point grid-compatibility check.
-GRID_TOLERANCE = 1.0e-9
 
 
 class MarketTransportError(ValueError):
@@ -79,7 +81,7 @@ class MarketTransportError(ValueError):
 
 
 # --------------------------------------------------------------------------
-# Shared byte / canonical primitives (mirrors the certified research transport)
+# Shared byte / canonical primitives
 # --------------------------------------------------------------------------
 def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -87,10 +89,6 @@ def sha256_hex(data: bytes) -> str:
 
 def is_sha256(value: str) -> bool:
     return len(value) == 64 and all(c in "0123456789abcdef" for c in value)
-
-
-def canonical_decimal(value: float) -> str:
-    return f"{value:.16f}"
 
 
 def _decode_utf8(data: bytes) -> str:
@@ -122,17 +120,7 @@ def _integer_exact(value: str) -> int:
     return int(value)
 
 
-def _double_exact(value: str) -> float:
-    if not re.fullmatch(r"-?(0|[1-9][0-9]*)\.[0-9]{16}", value):
-        raise MarketTransportError("INVALID_NUMBER")
-    parsed = float(value)
-    if not math.isfinite(parsed) or f"{parsed:.16f}" != value:
-        raise MarketTransportError("INVALID_NUMBER")
-    return parsed
-
-
 def _text_record_at(text: str, index: int) -> str:
-    """Return one logical RFC-4180 record without its terminal CRLF."""
     quoted = False
     start = 0
     current = 0
@@ -182,15 +170,15 @@ def _require_quoted_canonical(text: str, row: list[str], record_index: int) -> N
 
 
 # --------------------------------------------------------------------------
-# Market data (MSZZ_SCREENING_MARKET_DATA_V2)
+# Market data (MSZZ_SCREENING_MARKET_DATA_V2) — integer point counts
 # --------------------------------------------------------------------------
 @dataclass(frozen=True)
 class MarketBar:
     time_raw: int
-    open_bid: float
-    high_bid: float
-    low_bid: float
-    close_bid: float
+    open_points: int
+    high_points: int
+    low_points: int
+    close_points: int
     spread_points: int
 
 
@@ -214,10 +202,10 @@ def market_bar_fields(symbol: str, timeframe: int, bar: MarketBar) -> list[str]:
         CLOCK_DOMAIN,
         TIME_AUTHORITY,
         str(bar.time_raw),
-        canonical_decimal(bar.open_bid),
-        canonical_decimal(bar.high_bid),
-        canonical_decimal(bar.low_bid),
-        canonical_decimal(bar.close_bid),
+        str(bar.open_points),
+        str(bar.high_points),
+        str(bar.low_points),
+        str(bar.close_points),
         str(bar.spread_points),
     ]
 
@@ -256,10 +244,10 @@ def parse_market_data(data: bytes) -> MarketData:
             raise MarketTransportError("INCONSISTENT_MARKET_MARKET")
 
         time_raw = _integer_exact(row[5])
-        open_bid = _double_exact(row[6])
-        high_bid = _double_exact(row[7])
-        low_bid = _double_exact(row[8])
-        close_bid = _double_exact(row[9])
+        open_points = _integer_exact(row[6])
+        high_points = _integer_exact(row[7])
+        low_points = _integer_exact(row[8])
+        close_points = _integer_exact(row[9])
         spread_points = _integer_exact(row[10])
 
         if time_raw <= 0:
@@ -269,16 +257,18 @@ def parse_market_data(data: bytes) -> MarketData:
                 raise MarketTransportError("DUPLICATE_MARKET_TIME")
             if time_raw < previous_time:
                 raise MarketTransportError("NON_MONOTONIC_MARKET_TIME")
-        if not (open_bid > 0 and high_bid > 0 and low_bid > 0 and close_bid > 0):
+        if not (open_points > 0 and high_points > 0 and low_points > 0 and close_points > 0):
             raise MarketTransportError("INVALID_MARKET_BAR")
-        if high_bid < max(open_bid, close_bid) or low_bid > min(open_bid, close_bid):
+        if high_points < max(open_points, close_points) or low_points > min(open_points, close_points):
             raise MarketTransportError("INVALID_MARKET_BAR")
-        if high_bid < low_bid:
+        if high_points < low_points:
             raise MarketTransportError("INVALID_MARKET_BAR")
         if spread_points < 0:
             raise MarketTransportError("INVALID_SPREAD")
 
-        bars.append(MarketBar(time_raw, open_bid, high_bid, low_bid, close_bid, spread_points))
+        bars.append(
+            MarketBar(time_raw, open_points, high_points, low_points, close_points, spread_points)
+        )
         previous_time = time_raw
 
     if symbol is None or timeframe is None or not bars:
@@ -372,30 +362,46 @@ def verify_market_manifest(manifest: MarketManifest, market: MarketData) -> None
 
 
 # --------------------------------------------------------------------------
-# Instrument params (MSZZ_SCREENING_INSTRUMENT_PARAMS_V2)
+# Instrument params (MSZZ_SCREENING_INSTRUMENT_PARAMS_V2) — integer 1e-8 units
 # --------------------------------------------------------------------------
 @dataclass(frozen=True)
 class InstrumentParams:
     params_version: str
     symbol: str
     timeframe: int
-    point_size: float
-    tick_size: float
+    point_size_1e8: int
+    tick_size_1e8: int
     stops_level_points: int
     freeze_level_points: int
     minimum_distance_points: int
     params_sha256: str
 
     @property
+    def point_size(self) -> float:
+        return self.point_size_1e8 / PRICE_SCALE_1E8
+
+    @property
+    def tick_size(self) -> float:
+        return self.tick_size_1e8 / PRICE_SCALE_1E8
+
+    @property
+    def tick_ratio_points(self) -> int:
+        return self.tick_size_1e8 // self.point_size_1e8
+
+    @property
     def minimum_distance_price(self) -> float:
         return self.minimum_distance_points * self.point_size
+
+    def price(self, points: int) -> float:
+        """Reconstruct an actual price from an integer point count."""
+        return points * self.point_size
 
 
 def instrument_params_bytes(
     symbol: str,
     timeframe: int,
-    point_size: float,
-    tick_size: float,
+    point_size_1e8: int,
+    tick_size_1e8: int,
     stops_level_points: int,
     freeze_level_points: int,
 ) -> bytes:
@@ -404,8 +410,8 @@ def instrument_params_bytes(
         INSTRUMENT_PARAMS_VERSION,
         symbol,
         str(timeframe),
-        canonical_decimal(point_size),
-        canonical_decimal(tick_size),
+        str(point_size_1e8),
+        str(tick_size_1e8),
         str(stops_level_points),
         str(freeze_level_points),
         str(minimum),
@@ -413,14 +419,6 @@ def instrument_params_bytes(
     return (
         ",".join(INSTRUMENT_PARAMS_HEADER) + "\r\n" + _canonical_record(fields) + "\r\n"
     ).encode("utf-8")
-
-
-def _grid_compatible(point_size: float, tick_size: float) -> bool:
-    ratio = tick_size / point_size
-    nearest = round(ratio)
-    return nearest >= 1 and abs(tick_size - nearest * point_size) <= max(
-        GRID_TOLERANCE, point_size * 1.0e-6
-    )
 
 
 def parse_instrument_params(data: bytes) -> InstrumentParams:
@@ -433,23 +431,23 @@ def parse_instrument_params(data: bytes) -> InstrumentParams:
     if len(values) != len(INSTRUMENT_PARAMS_HEADER):
         raise MarketTransportError("INSTRUMENT_PARAMS_SHAPE_MISMATCH")
     timeframe = _integer_exact(values[2])
-    point_size = _double_exact(values[3])
-    tick_size = _double_exact(values[4])
+    point_size_1e8 = _integer_exact(values[3])
+    tick_size_1e8 = _integer_exact(values[4])
     stops = _integer_exact(values[5])
     freeze = _integer_exact(values[6])
     minimum = _integer_exact(values[7])
     if values[0] != INSTRUMENT_PARAMS_VERSION or not values[1]:
         raise MarketTransportError("INVALID_INSTRUMENT_PARAMS_FIELD")
-    if point_size <= 0 or tick_size <= 0:
+    if point_size_1e8 <= 0 or tick_size_1e8 <= 0:
         raise MarketTransportError("INVALID_INSTRUMENT_PARAMS_FIELD")
     if stops < 0 or freeze < 0 or minimum < 0:
         raise MarketTransportError("INVALID_INSTRUMENT_PARAMS_FIELD")
     if minimum != max(stops, freeze):
         raise MarketTransportError("INSTRUMENT_MINIMUM_DISTANCE_MISMATCH")
-    if not _grid_compatible(point_size, tick_size):
+    if tick_size_1e8 % point_size_1e8 != 0:
         raise MarketTransportError("INSTRUMENT_GRID_INCOMPATIBLE")
     return InstrumentParams(
-        values[0], values[1], timeframe, point_size, tick_size, stops, freeze, minimum,
+        values[0], values[1], timeframe, point_size_1e8, tick_size_1e8, stops, freeze, minimum,
         sha256_hex(data),
     )
 
@@ -466,8 +464,33 @@ def verify_candidate_point_size(
     if stop_distance_points <= 0 or risk_price <= 0:
         raise MarketTransportError("INSTRUMENT_POINT_SIZE_UNVERIFIABLE")
     derived = risk_price / stop_distance_points
-    if abs(derived - params.point_size) > max(GRID_TOLERANCE, params.point_size * 1.0e-6):
+    if abs(derived - params.point_size) > max(1.0e-12, params.point_size * 1.0e-6):
         raise MarketTransportError("INSTRUMENT_POINT_SIZE_MISMATCH")
+
+
+# --------------------------------------------------------------------------
+# Producer helpers (decimal price -> integer points, grid-checked)
+# --------------------------------------------------------------------------
+def point_size_1e8_from_decimal(point_size: float) -> int:
+    """Convert a decimal point size to exact integer 1e-8 units (grid-checked)."""
+    scaled = round(point_size * PRICE_SCALE_1E8)
+    if scaled <= 0 or abs(scaled - point_size * PRICE_SCALE_1E8) > 1.0e-3:
+        raise MarketTransportError("POINT_SIZE_NOT_ON_1E8_GRID")
+    return int(scaled)
+
+
+def points_from_price(price: float, point_size_1e8: int) -> int:
+    """Convert a decimal price to an exact integer point count, or reject off-grid.
+
+    points = price / point_size, computed as (price * 1e8) / point_size_1e8 so the
+    only division is by an integer; the result must be an exact integer.
+    """
+    scaled = price * PRICE_SCALE_1E8
+    ratio = scaled / point_size_1e8
+    nearest = round(ratio)
+    if abs(ratio - nearest) > 1.0e-6:
+        raise MarketTransportError("PRICE_NOT_ON_POINT_GRID")
+    return int(nearest)
 
 
 def read_bytes(path: Path) -> bytes:

@@ -1,27 +1,31 @@
 #ifndef __MSZZ_SCREENING_MARKET_V2_MQH__
 #define __MSZZ_SCREENING_MARKET_V2_MQH__
 
-// Strict canonical market/instrument transports for the standalone screening
-// simulator. Family-neutral; does not touch a family generator, production
-// path, or the certified candidate JournalTransportV2. Byte and canonical
-// conventions mirror the certified research transport exactly and match the
-// Python module screening_market_v2.py field-for-field and reason-for-reason.
+// Strict canonical INTEGER market/instrument transports for the standalone
+// screening simulator. Real-data-safe: OHLC are signed integer point counts and
+// instrument sizes are integer 1e-8 units, so ordinary decimal prices are exact
+// and nothing in the transport or the SHA-256 depends on float formatting.
+// Prices are reconstructed only at simulation time as points * point_size, where
+// point_size = point_size_1e8 / 1e8 (1e8 is binary-exact -> identical double in
+// MQL5 and Python). Family-neutral; touches no family generator, production
+// path, or the certified candidate JournalTransportV2. Byte conventions mirror
+// the certified research transport and match screening_market_v2.py.
 
-#define MSZZ_SCREENING_MARKET_DATA_V2      "MSZZ_SCREENING_MARKET_DATA_V2"
-#define MSZZ_SCREENING_MARKET_MANIFEST_V2  "MSZZ_SCREENING_MARKET_MANIFEST_V2"
+#define MSZZ_SCREENING_MARKET_DATA_V2       "MSZZ_SCREENING_MARKET_DATA_V2"
+#define MSZZ_SCREENING_MARKET_MANIFEST_V2   "MSZZ_SCREENING_MARKET_MANIFEST_V2"
 #define MSZZ_SCREENING_INSTRUMENT_PARAMS_V2 "MSZZ_SCREENING_INSTRUMENT_PARAMS_V2"
-#define MSZZ_SCREENING_CLOCK_DOMAIN        "BROKER_SERVER_RAW"
-#define MSZZ_SCREENING_TIME_AUTHORITY      "MSZZ_TIME_RAW_BROKER_V1"
-#define MSZZ_SCREENING_GRID_TOLERANCE      1.0e-9
+#define MSZZ_SCREENING_CLOCK_DOMAIN         "BROKER_SERVER_RAW"
+#define MSZZ_SCREENING_TIME_AUTHORITY       "MSZZ_TIME_RAW_BROKER_V1"
+#define MSZZ_SCREENING_PRICE_SCALE_1E8      100000000.0
 
 struct MSZZScreeningMarketBarV2
 {
-   long   time_raw;
-   double open_bid;
-   double high_bid;
-   double low_bid;
-   double close_bid;
-   int    spread_points;
+   long time_raw;
+   long open_points;
+   long high_points;
+   long low_points;
+   long close_points;
+   long spread_points;
 };
 
 struct MSZZScreeningMarketManifestV2
@@ -41,8 +45,8 @@ struct MSZZScreeningInstrumentParamsV2
    string params_version;
    string symbol;
    int    timeframe;
-   double point_size;
-   double tick_size;
+   long   point_size_1e8;
+   long   tick_size_1e8;
    long   stops_level_points;
    long   freeze_level_points;
    long   minimum_distance_points;
@@ -150,13 +154,6 @@ private:
       return StringFormat("%I64d",parsed)==value;
    }
 
-   static bool DoubleExact(const string value,double &parsed)
-   {
-      if(value=="") return false;
-      parsed=StringToDouble(value);
-      return MathIsValidNumber(parsed) && DoubleToString(parsed,16)==value;
-   }
-
    static bool ReadBytes(const string file_name,uchar &data[],string &reason)
    {
       ArrayResize(data,0);
@@ -172,11 +169,6 @@ private:
    }
 
 public:
-   static string CanonicalDecimal(const double value)
-   {
-      return DoubleToString(value,16);
-   }
-
    static bool IsSha256(const string value)
    {
       if(StringLen(value)!=64) return false;
@@ -198,7 +190,6 @@ public:
       return true;
    }
 
-   // Parse one fully-quoted canonical record. Rejects any unquoted field.
    static bool ParseQuotedRecord(const string record,string &fields[],string &reason)
    {
       ArrayResize(fields,0);
@@ -234,13 +225,20 @@ public:
       return true;
    }
 
+   // Reconstruct an actual price from an integer point count and point_size_1e8.
+   static double PointsToPrice(const long points,const long point_size_1e8)
+   {
+      double point_size=(double)point_size_1e8/MSZZ_SCREENING_PRICE_SCALE_1E8;
+      return (double)points*point_size;
+   }
+
    // ------------------------------------------------------------------
-   // Market data (MSZZ_SCREENING_MARKET_DATA_V2)
+   // Market data (MSZZ_SCREENING_MARKET_DATA_V2) — integer point counts
    // ------------------------------------------------------------------
    static string MarketDataHeader()
    {
       return "market_data_version,symbol,timeframe,clock_domain,time_authority_id,"
-             "time_raw,open_bid,high_bid,low_bid,close_bid,spread_points";
+             "time_raw,open_points,high_points,low_points,close_points,spread_points";
    }
 
    static string MarketBarRow(const string symbol,const int timeframe,
@@ -253,11 +251,11 @@ public:
       fields[3]=MSZZ_SCREENING_CLOCK_DOMAIN;
       fields[4]=MSZZ_SCREENING_TIME_AUTHORITY;
       fields[5]=StringFormat("%I64d",bar.time_raw);
-      fields[6]=CanonicalDecimal(bar.open_bid);
-      fields[7]=CanonicalDecimal(bar.high_bid);
-      fields[8]=CanonicalDecimal(bar.low_bid);
-      fields[9]=CanonicalDecimal(bar.close_bid);
-      fields[10]=IntegerToString(bar.spread_points);
+      fields[6]=StringFormat("%I64d",bar.open_points);
+      fields[7]=StringFormat("%I64d",bar.high_points);
+      fields[8]=StringFormat("%I64d",bar.low_points);
+      fields[9]=StringFormat("%I64d",bar.close_points);
+      fields[10]=StringFormat("%I64d",bar.spread_points);
       return CanonicalRecord(fields);
    }
 
@@ -304,12 +302,11 @@ public:
          else if(f[1]!=symbol || (int)tf!=timeframe)
          { reason="INCONSISTENT_MARKET_MARKET"; return false; }
 
-         long time_raw=0; double open_bid=0,high_bid=0,low_bid=0,close_bid=0; long spread=0;
-         if(!IntegerExact(f[5],time_raw)) { reason="INVALID_INTEGER"; return false; }
-         if(!DoubleExact(f[6],open_bid) || !DoubleExact(f[7],high_bid) ||
-            !DoubleExact(f[8],low_bid) || !DoubleExact(f[9],close_bid))
-         { reason="INVALID_NUMBER"; return false; }
-         if(!IntegerExact(f[10],spread)) { reason="INVALID_INTEGER"; return false; }
+         long time_raw=0,open_points=0,high_points=0,low_points=0,close_points=0,spread=0;
+         if(!IntegerExact(f[5],time_raw) || !IntegerExact(f[6],open_points) ||
+            !IntegerExact(f[7],high_points) || !IntegerExact(f[8],low_points) ||
+            !IntegerExact(f[9],close_points) || !IntegerExact(f[10],spread))
+         { reason="INVALID_INTEGER"; return false; }
 
          if(time_raw<=0) { reason="INVALID_MARKET_BAR"; return false; }
          if(r>1)
@@ -317,21 +314,23 @@ public:
             if(time_raw==previous_time) { reason="DUPLICATE_MARKET_TIME"; return false; }
             if(time_raw<previous_time) { reason="NON_MONOTONIC_MARKET_TIME"; return false; }
          }
-         if(open_bid<=0.0 || high_bid<=0.0 || low_bid<=0.0 || close_bid<=0.0)
+         if(open_points<=0 || high_points<=0 || low_points<=0 || close_points<=0)
          { reason="INVALID_MARKET_BAR"; return false; }
-         if(high_bid<MathMax(open_bid,close_bid) || low_bid>MathMin(open_bid,close_bid))
+         long hi_ref=(open_points>close_points ? open_points : close_points);
+         long lo_ref=(open_points<close_points ? open_points : close_points);
+         if(high_points<hi_ref || low_points>lo_ref)
          { reason="INVALID_MARKET_BAR"; return false; }
-         if(high_bid<low_bid) { reason="INVALID_MARKET_BAR"; return false; }
+         if(high_points<low_points) { reason="INVALID_MARKET_BAR"; return false; }
          if(spread<0) { reason="INVALID_SPREAD"; return false; }
 
          int count=ArraySize(bars);
          ArrayResize(bars,count+1);
          bars[count].time_raw=time_raw;
-         bars[count].open_bid=open_bid;
-         bars[count].high_bid=high_bid;
-         bars[count].low_bid=low_bid;
-         bars[count].close_bid=close_bid;
-         bars[count].spread_points=(int)spread;
+         bars[count].open_points=open_points;
+         bars[count].high_points=high_points;
+         bars[count].low_points=low_points;
+         bars[count].close_points=close_points;
+         bars[count].spread_points=spread;
          previous_time=time_raw;
       }
       if(!have_market || ArraySize(bars)==0) { reason="EMPTY_MARKET_DATA"; return false; }
@@ -432,16 +431,26 @@ public:
    }
 
    // ------------------------------------------------------------------
-   // Instrument params (MSZZ_SCREENING_INSTRUMENT_PARAMS_V2)
+   // Instrument params (MSZZ_SCREENING_INSTRUMENT_PARAMS_V2) — integer 1e-8 units
    // ------------------------------------------------------------------
    static string InstrumentParamsHeader()
    {
-      return "params_version,symbol,timeframe,point_size,tick_size,"
+      return "params_version,symbol,timeframe,point_size_1e8,tick_size_1e8,"
              "stops_level_points,freeze_level_points,minimum_distance_points";
    }
 
+   static double PointSize(const MSZZScreeningInstrumentParamsV2 &params)
+   {
+      return (double)params.point_size_1e8/MSZZ_SCREENING_PRICE_SCALE_1E8;
+   }
+
+   static double TickSize(const MSZZScreeningInstrumentParamsV2 &params)
+   {
+      return (double)params.tick_size_1e8/MSZZ_SCREENING_PRICE_SCALE_1E8;
+   }
+
    static string InstrumentParamsRow(const string symbol,const int timeframe,
-                                     const double point_size,const double tick_size,
+                                     const long point_size_1e8,const long tick_size_1e8,
                                      const long stops_level_points,
                                      const long freeze_level_points)
    {
@@ -451,8 +460,8 @@ public:
       fields[0]=MSZZ_SCREENING_INSTRUMENT_PARAMS_V2;
       fields[1]=symbol;
       fields[2]=IntegerToString(timeframe);
-      fields[3]=CanonicalDecimal(point_size);
-      fields[4]=CanonicalDecimal(tick_size);
+      fields[3]=StringFormat("%I64d",point_size_1e8);
+      fields[4]=StringFormat("%I64d",tick_size_1e8);
       fields[5]=StringFormat("%I64d",stops_level_points);
       fields[6]=StringFormat("%I64d",freeze_level_points);
       fields[7]=StringFormat("%I64d",minimum);
@@ -460,21 +469,13 @@ public:
    }
 
    static string InstrumentParamsDocument(const string symbol,const int timeframe,
-                                          const double point_size,const double tick_size,
+                                          const long point_size_1e8,const long tick_size_1e8,
                                           const long stops_level_points,
                                           const long freeze_level_points)
    {
       return InstrumentParamsHeader()+"\r\n"+
-             InstrumentParamsRow(symbol,timeframe,point_size,tick_size,
+             InstrumentParamsRow(symbol,timeframe,point_size_1e8,tick_size_1e8,
                                  stops_level_points,freeze_level_points)+"\r\n";
-   }
-
-   static bool GridCompatible(const double point_size,const double tick_size)
-   {
-      double ratio=tick_size/point_size;
-      long nearest=(long)MathRound(ratio);
-      double tolerance=MathMax(MSZZ_SCREENING_GRID_TOLERANCE,point_size*1.0e-6);
-      return nearest>=1 && MathAbs(tick_size-nearest*point_size)<=tolerance;
    }
 
    static bool ParseInstrumentParamsBytes(const uchar &data[],
@@ -493,25 +494,24 @@ public:
       if(!ParseQuotedRecord(records[1],f,reason)) return false;
       if(ArraySize(f)!=8 || CanonicalRecord(f)!=records[1])
       { reason="INSTRUMENT_PARAMS_SHAPE_MISMATCH"; return false; }
-      long timeframe=0,stops=0,freeze=0,minimum=0;
-      double point_size=0.0,tick_size=0.0;
-      if(!IntegerExact(f[2],timeframe) || !DoubleExact(f[3],point_size) ||
-         !DoubleExact(f[4],tick_size) || !IntegerExact(f[5],stops) ||
+      long timeframe=0,point_size_1e8=0,tick_size_1e8=0,stops=0,freeze=0,minimum=0;
+      if(!IntegerExact(f[2],timeframe) || !IntegerExact(f[3],point_size_1e8) ||
+         !IntegerExact(f[4],tick_size_1e8) || !IntegerExact(f[5],stops) ||
          !IntegerExact(f[6],freeze) || !IntegerExact(f[7],minimum))
       { reason="INVALID_INSTRUMENT_PARAMS_FIELD"; return false; }
       if(f[0]!=MSZZ_SCREENING_INSTRUMENT_PARAMS_V2 || f[1]=="")
       { reason="INVALID_INSTRUMENT_PARAMS_FIELD"; return false; }
-      if(point_size<=0.0 || tick_size<=0.0 || stops<0 || freeze<0 || minimum<0)
+      if(point_size_1e8<=0 || tick_size_1e8<=0 || stops<0 || freeze<0 || minimum<0)
       { reason="INVALID_INSTRUMENT_PARAMS_FIELD"; return false; }
       if(minimum!=(stops>freeze ? stops : freeze))
       { reason="INSTRUMENT_MINIMUM_DISTANCE_MISMATCH"; return false; }
-      if(!GridCompatible(point_size,tick_size))
+      if((tick_size_1e8%point_size_1e8)!=0)
       { reason="INSTRUMENT_GRID_INCOMPATIBLE"; return false; }
       params.params_version=f[0];
       params.symbol=f[1];
       params.timeframe=(int)timeframe;
-      params.point_size=point_size;
-      params.tick_size=tick_size;
+      params.point_size_1e8=point_size_1e8;
+      params.tick_size_1e8=tick_size_1e8;
       params.stops_level_points=stops;
       params.freeze_level_points=freeze;
       params.minimum_distance_points=minimum;
@@ -537,9 +537,10 @@ public:
    {
       if(stop_distance_points<=0.0 || risk_price<=0.0)
       { reason="INSTRUMENT_POINT_SIZE_UNVERIFIABLE"; return false; }
+      double point_size=PointSize(params);
       double derived=risk_price/stop_distance_points;
-      double tolerance=MathMax(MSZZ_SCREENING_GRID_TOLERANCE,params.point_size*1.0e-6);
-      if(MathAbs(derived-params.point_size)>tolerance)
+      double tolerance=MathMax(1.0e-12,point_size*1.0e-6);
+      if(MathAbs(derived-point_size)>tolerance)
       { reason="INSTRUMENT_POINT_SIZE_MISMATCH"; return false; }
       reason="OK";
       return true;

@@ -41,42 +41,47 @@ JournalTransportV2 manifest is not modified.
   forward-filled, or interpolated.
 - SHA-256 is over the exact document bytes, lowercase hex.
 
-## Known limitation — decimal precision vs. cross-language parity
+## Real-data-safe integer representation (resolved)
 
-The 16-fractional-digit canonical decimal (inherited from the certified research
-transport) is only guaranteed byte-identical between `DoubleToString(v,16)`
-(MQL5) and `f"{v:.16f}"` (Python) when 16 fractional digits stay within IEEE-754
-double precision. For a small magnitude such as `0.01` that holds; for a
-large-magnitude price such as `100.25` it holds only when the value is exactly
-representable in binary (a multiple of a negative power of two). A
-non-representable large-magnitude price (e.g. `100.20`) pushes past ~15-17
-significant digits and the two formatters can disagree on the trailing noise
-digits, which the fail-closed canonical-reserialization check then rejects.
+An earlier draft stored OHLC as 16-fractional-digit decimals (mirroring the
+research transport). That is unsafe for real prices: even `0.01` is not
+binary-exact, and a large-magnitude non-representable price (e.g. `100.20`)
+pushes past ~15-17 significant digits, so `DoubleToString(v,16)` (MQL5) and
+`f"{v:.16f}"` (Python) can disagree on the trailing digits. The MQL5 runtime
+parity gate caught this directly (`TEST_SUMMARY tests=29 failures=7`).
 
-The committed fixtures therefore use exactly-representable OHLC values (multiples
-of 0.25). This surfaced during MQL5 runtime parity (`TEST_SUMMARY tests=29
-failures=7` before the fix) and is exactly the kind of divergence the
-cross-language byte-parity gate exists to catch. Downstream real-data producers
-must emit market bars already on the broker tick grid; if a future dataset needs
-non-representable prices, the canonical decimal precision must be reconsidered
-(a follow-up item, not a blocker for this sublayer).
+The transport is therefore **integer**:
+
+- OHLC are signed canonical integer **point counts** (`price = points *
+  point_size`); the finest quote grid, so ordinary decimal prices are exact.
+- Spread is an integer number of points.
+- Instrument sizes are integer **1e-8 units** (`point_size_1e8`,
+  `tick_size_1e8`); `point_size = point_size_1e8 / 1e8` and `1e8` is binary-exact
+  (`< 2^53`), so both languages reconstruct the identical double.
+- Grid alignment is an exact integer check (`tick_size_1e8 % point_size_1e8 == 0`);
+  the producer converts a decimal price to points and rejects any off-grid value.
+- Nothing in the canonical transport or the SHA-256 uses float formatting.
+
+Prices are reconstructed only at simulation time as `points * point_size`
+(identical integer→double arithmetic in MQL5 and Python).
 
 ## MSZZ_SCREENING_MARKET_DATA_V2
 
 Header:
 
 ```text
-market_data_version,symbol,timeframe,clock_domain,time_authority_id,time_raw,open_bid,high_bid,low_bid,close_bid,spread_points
+market_data_version,symbol,timeframe,clock_domain,time_authority_id,time_raw,open_points,high_points,low_points,close_points,spread_points
 ```
 
 Rules: `market_data_version` constant; `symbol`/`timeframe` identical on every
 row; `clock_domain` = `BROKER_SERVER_RAW`; `time_authority_id` =
-`MSZZ_TIME_RAW_BROKER_V1`; `time_raw` strictly increasing, unique, positive;
-OHLC are **bid** prices, finite and positive, with `high >= max(open,close)`,
-`low <= min(open,close)`, `high >= low`; `spread_points` a nonnegative integer.
-Ask is derived as `ask = bid + spread_points * point_size`. Any missing,
-malformed, noncanonical, duplicate, or non-monotonic row fails the whole
-dataset. `source_data_sha256` is the SHA-256 of these exact bytes.
+`MSZZ_TIME_RAW_BROKER_V1`; `time_raw` strictly increasing, unique, positive.
+`open/high/low/close_points` are integer **bid** point counts, all `> 0`, with
+`high >= max(open,close)`, `low <= min(open,close)`, `high >= low`;
+`spread_points` a nonnegative integer. Bid price = `points * point_size`; ask =
+`(points + spread_points) * point_size`. Any missing, malformed, noncanonical,
+duplicate, or non-monotonic row fails the whole dataset. The candidate manifest's
+`source_data_sha256` is the SHA-256 of these exact bytes.
 
 ## MSZZ_SCREENING_MARKET_MANIFEST_V2
 
@@ -98,15 +103,16 @@ and both must agree.
 Header:
 
 ```text
-params_version,symbol,timeframe,point_size,tick_size,stops_level_points,freeze_level_points,minimum_distance_points
+params_version,symbol,timeframe,point_size_1e8,tick_size_1e8,stops_level_points,freeze_level_points,minimum_distance_points
 ```
 
-`point_size`, `tick_size` finite and positive; `stops_level_points`,
-`freeze_level_points`, `minimum_distance_points` nonnegative integers;
-`minimum_distance_points = max(stops_level_points, freeze_level_points)` and the
-stored value must match that derivation exactly; `tick_size/point_size` must be
-a positive integer multiple within the frozen grid tolerance. At simulation
-time the frozen `point_size` is cross-checked against candidate
+`point_size_1e8`, `tick_size_1e8` positive integers (price size in 1e-8 units);
+`stops_level_points`, `freeze_level_points`, `minimum_distance_points`
+nonnegative integers; `minimum_distance_points = max(stops_level_points,
+freeze_level_points)` and the stored value must match that derivation exactly;
+grid compatibility is the exact integer check `tick_size_1e8 % point_size_1e8 ==
+0`. `point_size = point_size_1e8 / 1e8`, `tick_size = tick_size_1e8 / 1e8`. At
+simulation time the reconstructed `point_size` is cross-checked against candidate
 `|entry-stop| / stop_distance_points` within tolerance. No live `SymbolInfo*`
 value, default, or inference is ever used. `minimum_distance_price =
 minimum_distance_points * point_size`. `params_sha256` is the SHA-256 of the

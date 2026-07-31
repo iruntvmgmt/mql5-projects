@@ -4,9 +4,9 @@
 
 // Cross-language byte-parity constants produced by
 // Tools/SixFamilyRecovery/ScreeningSimulatorV2/make_market_fixtures.py.
-#define EXPECTED_MARKET_SHA   "52f1e419b6c1c5ed723c6fb1f4b068a3a6ce30699ac6a55751b46c2f37f8601a"
-#define EXPECTED_MANIFEST_SHA "daa87892a2bffe3e001dd314ebedf536934109f9195a14eae7b65a224e3ef17e"
-#define EXPECTED_PARAMS_SHA   "1fb4118a7eeb2b054ae2f4cb5499acf184148919bc5ebf28aeb4009e18e8f752"
+#define EXPECTED_MARKET_SHA   "78067caf702df82808a0c705d4043065d13f559b535c978ac30d4cfc6ddf9a83"
+#define EXPECTED_MANIFEST_SHA "3232295529ffb813778f882c355575e4433cc4c9bd8a1df0cd89d8fa5128cb32"
+#define EXPECTED_PARAMS_SHA   "fe608f32bc4070d801f21e464b7fd96c1ef4058637ab0bcc0cf4fee939fdea2c"
 
 int g_failures=0;
 int g_tests=0;
@@ -47,31 +47,28 @@ string RawRecord(const string &fields[])
 
 void FixtureBars(MSZZScreeningMarketBarV2 &bars[])
 {
-   // Exactly-representable (multiples of 0.25) so MQL5/Python 16-digit strings agree.
+   // Ordinary decimal prices (point_size 0.01) as exact integer point counts.
    ArrayResize(bars,3);
-   bars[0].time_raw=1000; bars[0].open_bid=100.0;  bars[0].high_bid=100.5;
-   bars[0].low_bid=99.5;   bars[0].close_bid=100.25; bars[0].spread_points=20;
-   bars[1].time_raw=1300; bars[1].open_bid=100.25; bars[1].high_bid=101.0;
-   bars[1].low_bid=100.0;  bars[1].close_bid=100.75; bars[1].spread_points=20;
-   bars[2].time_raw=1600; bars[2].open_bid=100.75; bars[2].high_bid=101.25;
-   bars[2].low_bid=100.25; bars[2].close_bid=100.5; bars[2].spread_points=30;
+   bars[0].time_raw=1000; bars[0].open_points=10000; bars[0].high_points=10050;
+   bars[0].low_points=9950;  bars[0].close_points=10020; bars[0].spread_points=20;
+   bars[1].time_raw=1300; bars[1].open_points=10020; bars[1].high_points=10100;
+   bars[1].low_points=10000; bars[1].close_points=10080; bars[1].spread_points=20;
+   bars[2].time_raw=1600; bars[2].open_points=10080; bars[2].high_points=10120;
+   bars[2].low_points=10030; bars[2].close_points=10040; bars[2].spread_points=30;
 }
 
-string MarketRowFields(const string time_raw,const string open_bid,const string high_bid,
-                       const string low_bid,const string close_bid,const string spread)
+string MarketRowFields(const string time_raw,const string open_p,const string high_p,
+                       const string low_p,const string close_p,const string spread)
 {
    string f[11];
    f[0]=MSZZ_SCREENING_MARKET_DATA_V2; f[1]="XAUUSD"; f[2]="5";
    f[3]=MSZZ_SCREENING_CLOCK_DOMAIN; f[4]=MSZZ_SCREENING_TIME_AUTHORITY;
-   f[5]=time_raw; f[6]=open_bid; f[7]=high_bid; f[8]=low_bid; f[9]=close_bid; f[10]=spread;
+   f[5]=time_raw; f[6]=open_p; f[7]=high_p; f[8]=low_p; f[9]=close_p; f[10]=spread;
    return RawRecord(f);
 }
 
-// A canonical two-bar body used to build fail-closed variants.
-string GoodBar0() { return MarketRowFields("1000","100.0000000000000000","100.5000000000000000",
-                                           "99.5000000000000000","100.2500000000000000","20"); }
-string GoodBar1() { return MarketRowFields("1300","100.2500000000000000","101.0000000000000000",
-                                           "100.0000000000000000","100.7500000000000000","20"); }
+string GoodBar0() { return MarketRowFields("1000","10000","10050","9950","10020","20"); }
+string GoodBar1() { return MarketRowFields("1300","10020","10100","10000","10080","20"); }
 
 bool ParseDoc(const string document,string &reason)
 {
@@ -105,8 +102,12 @@ void OnStart()
          "market data parses");
    Check(psym=="XAUUSD" && ptf==5 && ArraySize(out)==3 && psha==EXPECTED_MARKET_SHA,
          "market data fields reconstructed");
-   Check(out[1].time_raw==1300 && MathAbs(out[2].close_bid-100.5)<1e-9 && out[2].spread_points==30,
-         "market bar values reconstructed");
+   Check(out[1].time_raw==1300 && out[2].close_points==10040 && out[2].spread_points==30,
+         "market bar integer values reconstructed");
+
+   // --- price reconstruction from integer points ---
+   Check(MathAbs(CMSZZScreeningMarketV2::PointsToPrice(10020,1000000)-100.20)<1e-9,
+         "points->price reconstructs 100.20 exactly");
 
    // --- Market manifest byte parity + verify ---
    MSZZScreeningMarketManifestV2 manifest;
@@ -121,19 +122,21 @@ void OnStart()
    Check(CMSZZScreeningMarketV2::VerifyMarketManifest(parsed_manifest,"XAUUSD",5,3,
          EXPECTED_MARKET_SHA,reason),"market manifest verifies");
    Check(!CMSZZScreeningMarketV2::VerifyMarketManifest(parsed_manifest,"XAUUSD",5,3,
-         StringSubstr(EXPECTED_MANIFEST_SHA,0,64),reason) && reason=="MARKET_HASH_MISMATCH",
+         EXPECTED_MANIFEST_SHA,reason) && reason=="MARKET_HASH_MISMATCH",
          "market manifest rejects wrong data hash");
 
    // --- Instrument params byte parity + verify ---
-   string pdoc=CMSZZScreeningMarketV2::InstrumentParamsDocument("XAUUSD",5,0.01,0.01,0,0);
+   string pdoc=CMSZZScreeningMarketV2::InstrumentParamsDocument("XAUUSD",5,1000000,1000000,0,0);
    uchar pdata[]; Bytes(pdoc,pdata); string psha2="";
    CMSZZScreeningMarketV2::Sha256Bytes(pdata,psha2,reason);
    Check(psha2==EXPECTED_PARAMS_SHA,"instrument params byte-parity with Python ("+psha2+")");
    MSZZScreeningInstrumentParamsV2 params;
    Check(CMSZZScreeningMarketV2::ParseInstrumentParamsBytes(pdata,params,reason),
          "instrument params parse");
-   Check(MathAbs(params.point_size-0.01)<1e-12 && params.minimum_distance_points==0 &&
-         params.params_sha256==EXPECTED_PARAMS_SHA,"instrument params fields");
+   Check(params.point_size_1e8==1000000 &&
+         MathAbs(CMSZZScreeningMarketV2::PointSize(params)-0.01)<1e-12 &&
+         params.minimum_distance_points==0 && params.params_sha256==EXPECTED_PARAMS_SHA,
+         "instrument params fields");
    Check(CMSZZScreeningMarketV2::VerifyInstrumentParams(params,"XAUUSD",5,reason),
          "instrument params market matches");
    Check(CMSZZScreeningMarketV2::VerifyCandidatePointSize(params,2.0,200.0,reason),
@@ -142,7 +145,7 @@ void OnStart()
          reason=="INSTRUMENT_POINT_SIZE_MISMATCH","instrument point-size mismatch rejected");
 
    // --- minimum-distance derivation ---
-   string pdoc2=CMSZZScreeningMarketV2::InstrumentParamsDocument("XAUUSD",5,0.01,0.01,30,50);
+   string pdoc2=CMSZZScreeningMarketV2::InstrumentParamsDocument("XAUUSD",5,1000000,1000000,30,50);
    uchar pdata2[]; Bytes(pdoc2,pdata2);
    MSZZScreeningInstrumentParamsV2 params2;
    Check(CMSZZScreeningMarketV2::ParseInstrumentParamsBytes(pdata2,params2,reason) &&
@@ -151,32 +154,24 @@ void OnStart()
    // --- fail-closed market data matrix ---
    string header=CMSZZScreeningMarketV2::MarketDataHeader();
    ExpectMarketReject(header+"\r\n"+GoodBar0()+"\r\n"+
-      MarketRowFields("1000","100.2500000000000000","101.0000000000000000",
-                      "100.0000000000000000","100.7500000000000000","20")+"\r\n",
+      MarketRowFields("1000","10020","10100","10000","10080","20")+"\r\n",
       "DUPLICATE_MARKET_TIME");
    ExpectMarketReject(header+"\r\n"+GoodBar0()+"\r\n"+
-      MarketRowFields("500","100.2500000000000000","101.0000000000000000",
-                      "100.0000000000000000","100.7500000000000000","20")+"\r\n",
+      MarketRowFields("500","10020","10100","10000","10080","20")+"\r\n",
       "NON_MONOTONIC_MARKET_TIME");
    ExpectMarketReject(header+"\r\n"+
-      MarketRowFields("1000","100.0000000000000000","99.0000000000000000",
-                      "99.5000000000000000","100.2500000000000000","20")+"\r\n",
-      "INVALID_MARKET_BAR");
+      MarketRowFields("1000","10000","9900","9950","10020","20")+"\r\n","INVALID_MARKET_BAR");
    ExpectMarketReject(header+"\r\n"+
-      MarketRowFields("1000","100.0000000000000000","100.5000000000000000",
-                      "99.5000000000000000","100.2500000000000000","-1")+"\r\n",
-      "INVALID_SPREAD");
-   // noncanonical decimal (open_bid not 16 fractional digits)
+      MarketRowFields("1000","10000","10050","9950","10020","-1")+"\r\n","INVALID_SPREAD");
+   // noncanonical integer (leading zero)
    ExpectMarketReject(header+"\r\n"+
-      MarketRowFields("1000","100.0","100.5000000000000000",
-                      "99.5000000000000000","100.2500000000000000","20")+"\r\n",
-      "INVALID_NUMBER");
+      MarketRowFields("1000","010000","10050","9950","10020","20")+"\r\n","INVALID_INTEGER");
    // wrong version
    {
       string f[11];
       f[0]="OTHER"; f[1]="XAUUSD"; f[2]="5"; f[3]=MSZZ_SCREENING_CLOCK_DOMAIN;
-      f[4]=MSZZ_SCREENING_TIME_AUTHORITY; f[5]="1000"; f[6]="100.0000000000000000";
-      f[7]="100.5000000000000000"; f[8]="99.5000000000000000"; f[9]="100.2500000000000000"; f[10]="20";
+      f[4]=MSZZ_SCREENING_TIME_AUTHORITY; f[5]="1000"; f[6]="10000"; f[7]="10050";
+      f[8]="9950"; f[9]="10020"; f[10]="20";
       ExpectMarketReject(header+"\r\n"+RawRecord(f)+"\r\n","UNSUPPORTED_MARKET_DATA_VERSION");
    }
    // inconsistent symbol row 2
@@ -184,29 +179,27 @@ void OnStart()
       string f[11];
       f[0]=MSZZ_SCREENING_MARKET_DATA_V2; f[1]="EURUSD"; f[2]="5";
       f[3]=MSZZ_SCREENING_CLOCK_DOMAIN; f[4]=MSZZ_SCREENING_TIME_AUTHORITY; f[5]="1300";
-      f[6]="100.2500000000000000"; f[7]="101.0000000000000000"; f[8]="100.0000000000000000";
-      f[9]="100.7500000000000000"; f[10]="20";
+      f[6]="10020"; f[7]="10100"; f[8]="10000"; f[9]="10080"; f[10]="20";
       ExpectMarketReject(header+"\r\n"+GoodBar0()+"\r\n"+RawRecord(f)+"\r\n","INCONSISTENT_MARKET_MARKET");
    }
    // bad clock domain
    {
       string f[11];
       f[0]=MSZZ_SCREENING_MARKET_DATA_V2; f[1]="XAUUSD"; f[2]="5"; f[3]="UTC_CONVERTED";
-      f[4]=MSZZ_SCREENING_TIME_AUTHORITY; f[5]="1000"; f[6]="100.0000000000000000";
-      f[7]="100.5000000000000000"; f[8]="99.5000000000000000"; f[9]="100.2500000000000000"; f[10]="20";
+      f[4]=MSZZ_SCREENING_TIME_AUTHORITY; f[5]="1000"; f[6]="10000"; f[7]="10050";
+      f[8]="9950"; f[9]="10020"; f[10]="20";
       ExpectMarketReject(header+"\r\n"+RawRecord(f)+"\r\n","UNSUPPORTED_MARKET_TIME_AUTHORITY");
    }
    // header mismatch
    ExpectMarketReject("bad_header\r\n"+GoodBar0()+"\r\n","MARKET_HEADER_MISMATCH");
    // missing final CRLF
    ExpectMarketReject(header+"\r\n"+GoodBar0(),"MISSING_FINAL_CRLF");
-   // unquoted field (first field unquoted, quotes otherwise balanced)
+   // unquoted first field (quotes otherwise balanced)
    {
       string uq="MSZZ_SCREENING_MARKET_DATA_V2,"+RawQuote("XAUUSD")+","+RawQuote("5")+","+
                 RawQuote(MSZZ_SCREENING_CLOCK_DOMAIN)+","+RawQuote(MSZZ_SCREENING_TIME_AUTHORITY)+","+
-                RawQuote("1000")+","+RawQuote("100.0000000000000000")+","+
-                RawQuote("100.5000000000000000")+","+RawQuote("99.5000000000000000")+","+
-                RawQuote("100.2500000000000000")+","+RawQuote("20");
+                RawQuote("1000")+","+RawQuote("10000")+","+RawQuote("10050")+","+
+                RawQuote("9950")+","+RawQuote("10020")+","+RawQuote("20");
       ExpectMarketReject(header+"\r\n"+uq+"\r\n","UNQUOTED_FIELD");
    }
 
@@ -214,7 +207,7 @@ void OnStart()
    {
       string f[8];
       f[0]=MSZZ_SCREENING_INSTRUMENT_PARAMS_V2; f[1]="XAUUSD"; f[2]="5";
-      f[3]="0.0100000000000000"; f[4]="0.0100000000000000"; f[5]="50"; f[6]="30"; f[7]="30";
+      f[3]="1000000"; f[4]="1000000"; f[5]="50"; f[6]="30"; f[7]="30";
       string bad=CMSZZScreeningMarketV2::InstrumentParamsHeader()+"\r\n"+RawRecord(f)+"\r\n";
       uchar bd[]; Bytes(bad,bd);
       MSZZScreeningInstrumentParamsV2 bp;
@@ -222,7 +215,7 @@ void OnStart()
             reason=="INSTRUMENT_MINIMUM_DISTANCE_MISMATCH","params minimum mismatch rejected");
    }
    {
-      string bad=CMSZZScreeningMarketV2::InstrumentParamsDocument("XAUUSD",5,0.01,0.015,0,0);
+      string bad=CMSZZScreeningMarketV2::InstrumentParamsDocument("XAUUSD",5,1000000,1500000,0,0);
       uchar bd[]; Bytes(bad,bd);
       MSZZScreeningInstrumentParamsV2 bp;
       Check(!CMSZZScreeningMarketV2::ParseInstrumentParamsBytes(bd,bp,reason) &&

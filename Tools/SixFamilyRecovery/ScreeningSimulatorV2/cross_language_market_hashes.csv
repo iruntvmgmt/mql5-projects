@@ -1,4 +1,4 @@
 "artifact","sha256","detail"
-"market_data_fixture.csv","52f1e419b6c1c5ed723c6fb1f4b068a3a6ce30699ac6a55751b46c2f37f8601a","row_count=3"
-"market_manifest_fixture.csv","daa87892a2bffe3e001dd314ebedf536934109f9195a14eae7b65a224e3ef17e","symbol=XAUUSD"
-"instrument_params_fixture.csv","1fb4118a7eeb2b054ae2f4cb5499acf184148919bc5ebf28aeb4009e18e8f752","min_distance_points=0"
+"market_data_fixture.csv","78067caf702df82808a0c705d4043065d13f559b535c978ac30d4cfc6ddf9a83","row_count=3"
+"market_manifest_fixture.csv","3232295529ffb813778f882c355575e4433cc4c9bd8a1df0cd89d8fa5128cb32","symbol=XAUUSD"
+"instrument_params_fixture.csv","fe608f32bc4070d801f21e464b7fd96c1ef4058637ab0bcc0cf4fee939fdea2c","point_size=0.01"

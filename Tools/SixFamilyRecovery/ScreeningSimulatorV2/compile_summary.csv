@@ -1,3 +1,2 @@
 source,route,log_timestamp,result,fresh_ex5_bytes,evidence
-MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_ScreeningMarketV2.mq5,wine start /Unix metaeditor64 /compile /log,2026.07.30 23:35:27,0 errors 0 warnings,54022,fresh log entry + new ex5 (stale ex5 removed first)
-MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_ScreeningExecutionPolicyV2.mq5,wine start /Unix metaeditor64 /compile /log,2026.07.30 23:15:46,0 errors 0 warnings,8166,known-good control recompiled fresh (stale ex5 moved aside first)
+MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_ScreeningMarketV2.mq5,wine start /Unix metaeditor64 /compile /log,2026.07.30 23:55:18,0 errors 0 warnings,51676,fresh log entry + new ex5 (stale ex5 removed first) - integer transport

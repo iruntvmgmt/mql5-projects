@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Emit the committed shared market-transport fixtures and their hashes.
 
-The exact bars/params below are the frozen cross-language fixture and must be
-mirrored verbatim in Test_MSZZ_ScreeningMarketV2.mq5. Both languages produce
-byte-identical canonical documents; the recorded SHA-256 values prove it.
+Prices are ordinary decimals; the integer transport stores them as exact point
+counts, so there is no dependence on cross-language float formatting. The exact
+values below are the frozen cross-language fixture and are mirrored verbatim in
+Test_MSZZ_ScreeningMarketV2.mq5.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ from screening_market_v2 import (
     market_manifest_bytes,
     parse_instrument_params,
     parse_market_data,
+    point_size_1e8_from_decimal,
+    points_from_price,
     sha256_hex,
 )
 
@@ -27,22 +30,27 @@ ROOT = Path(__file__).resolve().parent
 SYMBOL = "XAUUSD"
 TIMEFRAME = 5
 
-# All OHLC values are exact multiples of 0.25 so they are exactly representable
-# in binary double. At the frozen 16-fractional-digit precision this guarantees
-# DoubleToString(v,16) (MQL5) and f"{v:.16f}" (Python) emit byte-identical
-# strings; non-representable large-magnitude prices exceed double precision and
-# can diverge between the two formatters. See the decimal-precision note in
-# SCREENING_SIMULATOR_V2_IMPLEMENTATION.md.
-BARS = [
-    MarketBar(1000, 100.0, 100.5, 99.5, 100.25, 20),
-    MarketBar(1300, 100.25, 101.0, 100.0, 100.75, 20),
-    MarketBar(1600, 100.75, 101.25, 100.25, 100.5, 30),
-]
-
 POINT_SIZE = 0.01
 TICK_SIZE = 0.01
+POINT_SIZE_1E8 = point_size_1e8_from_decimal(POINT_SIZE)      # 1_000_000
+TICK_SIZE_1E8 = point_size_1e8_from_decimal(TICK_SIZE)        # 1_000_000
 STOPS_LEVEL_POINTS = 0
 FREEZE_LEVEL_POINTS = 0
+
+# Ordinary decimal OHLC bid prices + integer spread points. Exactly representable
+# as integer point counts (unlike the float transport, this needs no coincidence).
+DECIMAL_BARS = [
+    #  time, open,   high,   low,    close,  spread
+    (1000, 100.00, 100.50, 99.50, 100.20, 20),
+    (1300, 100.20, 101.00, 100.00, 100.80, 20),
+    (1600, 100.80, 101.20, 100.30, 100.40, 30),
+]
+
+
+def _bar(row: tuple) -> MarketBar:
+    t, o, h, low, c, spr = row
+    p = lambda price: points_from_price(price, POINT_SIZE_1E8)
+    return MarketBar(t, p(o), p(h), p(low), p(c), spr)
 
 
 def _canonical(fields: list[str]) -> str:
@@ -52,7 +60,8 @@ def _canonical(fields: list[str]) -> str:
 
 
 def main() -> int:
-    market = market_data_bytes(SYMBOL, TIMEFRAME, BARS)
+    bars = [_bar(r) for r in DECIMAL_BARS]
+    market = market_data_bytes(SYMBOL, TIMEFRAME, bars)
     (ROOT / "market_data_fixture.csv").write_bytes(market)
     parsed = parse_market_data(market)
 
@@ -61,7 +70,7 @@ def main() -> int:
     (ROOT / "market_manifest_fixture.csv").write_bytes(manifest_raw)
 
     params_raw = instrument_params_bytes(
-        SYMBOL, TIMEFRAME, POINT_SIZE, TICK_SIZE, STOPS_LEVEL_POINTS, FREEZE_LEVEL_POINTS
+        SYMBOL, TIMEFRAME, POINT_SIZE_1E8, TICK_SIZE_1E8, STOPS_LEVEL_POINTS, FREEZE_LEVEL_POINTS
     )
     (ROOT / "instrument_params_fixture.csv").write_bytes(params_raw)
     params = parse_instrument_params(params_raw)
@@ -71,13 +80,17 @@ def main() -> int:
         ("market_data_fixture.csv", parsed.market_data_sha256, f"row_count={parsed.row_count}"),
         ("market_manifest_fixture.csv", sha256_hex(manifest_raw), f"symbol={manifest.symbol}"),
         ("instrument_params_fixture.csv", params.params_sha256,
-         f"min_distance_points={params.minimum_distance_points}"),
+         f"point_size={params.point_size}"),
     ]
     with (ROOT / "cross_language_market_hashes.csv").open("w", newline="") as handle:
         handle.write("\r\n".join(_canonical(list(row)) for row in rows) + "\r\n")
 
     for name, sha, detail in rows[1:]:
         print(f"{name}\t{sha}\t{detail}")
+    # Show the integer encoding of the first bar for the MQL fixture mirror.
+    b0 = bars[0]
+    print(f"bar0 points: o={b0.open_points} h={b0.high_points} l={b0.low_points} "
+          f"c={b0.close_points} spread={b0.spread_points}")
     return 0
 
 
