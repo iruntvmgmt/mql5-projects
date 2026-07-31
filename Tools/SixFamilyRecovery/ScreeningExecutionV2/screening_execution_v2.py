@@ -41,15 +41,28 @@ def validate(p: Policy) -> None:
     if p != canonical():
         raise ValueError("policy is not the frozen V2 contract")
 
-def _ticks(value: float, tick: float, mode) -> float:
+# Grid rounding with the certified MQL5 boundary epsilon
+# (ScreeningExecutionPolicyV2.mqh NormalizeStop/NormalizeTarget). The epsilon
+# sign is hard-bound to the rounding direction so no caller can supply the
+# wrong sign: floor(value/tick + 1e-9), ceil(value/tick - 1e-9). Only the
+# primary normalization carries the epsilon; the minimum-distance fallbacks
+# below are epsilon-free (matching MQL5). Long geometry (direction > 0) uses
+# the floor helper, short geometry (direction < 0) uses the ceil helper, for
+# both stop and target.
+def _floor_ticks(value: float, tick: float) -> float:
     if tick <= 0 or value <= 0:
         return 0.0
-    return mode(value / tick) * tick
+    return math.floor(value / tick + 1.0e-9) * tick
+
+def _ceil_ticks(value: float, tick: float) -> float:
+    if tick <= 0 or value <= 0:
+        return 0.0
+    return math.ceil(value / tick - 1.0e-9) * tick
 
 def normalize_stop(direction: int, raw_stop: float, entry: float, tick: float) -> float:
     if tick <= 0 or entry <= 0 or raw_stop <= 0:
         return 0.0
-    n = _ticks(raw_stop, tick, math.floor if direction > 0 else math.ceil)
+    n = _floor_ticks(raw_stop, tick) if direction > 0 else _ceil_ticks(raw_stop, tick)
     if direction > 0 and n >= entry:
         n = math.floor((entry - tick) / tick) * tick
     if direction < 0 and n <= entry:
@@ -59,7 +72,7 @@ def normalize_stop(direction: int, raw_stop: float, entry: float, tick: float) -
 def normalize_target(direction: int, raw_target: float, entry: float, tick: float) -> float:
     if tick <= 0 or entry <= 0 or raw_target <= 0:
         return 0.0
-    n = _ticks(raw_target, tick, math.floor if direction > 0 else math.ceil)
+    n = _floor_ticks(raw_target, tick) if direction > 0 else _ceil_ticks(raw_target, tick)
     if direction > 0 and n <= entry:
         n = math.ceil((entry + tick) / tick) * tick
     if direction < 0 and n >= entry:
