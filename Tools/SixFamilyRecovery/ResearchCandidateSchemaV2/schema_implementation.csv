@@ -7,5 +7,5 @@ clock_contract,Include/MultiSpeedZigZag/Research/ResearchCandidateSchemaV2.mqh,I
 canonical_serializer,Include/MultiSpeedZigZag/Research/ResearchCandidateCsvV2.mqh,IMPLEMENTED,UTF-8 RFC-4180 CRLF raw time and full structural ownership columns
 family_generators,Include/MultiSpeedZigZag/Research/Families,NOT_MODIFIED,no v2 emission authorized
 legacy_journal,Include/MultiSpeedZigZag/Research/SixFamilyResearchSuite.mqh,PRESERVED,historical evidence only
-dataset_manifest,not implemented,PENDING,separate family-neutral infrastructure
-strict_parser,not implemented,PENDING,cross-language parity phase
+dataset_manifest,Include/MultiSpeedZigZag/Research/ResearchJournalTransportV2.mqh,IMPLEMENTED,versioned row count journal SHA-256 market identity and source-data hash
+strict_parser,Include/MultiSpeedZigZag/Research/ResearchJournalTransportV2.mqh and Tools/SixFamilyRecovery/JournalTransportV2/research_journal_transport_v2.py,IMPLEMENTED,canonical RFC-4180 typed reconstruction duplicate rejection and cross-language parity

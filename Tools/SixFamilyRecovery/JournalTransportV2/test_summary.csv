@@ -1,0 +1,7 @@
+test,evidence,result,detail
+MQL5 focused transport,fresh isolated-terminal raw log,PASS,canonical typed round trip malformed matrix SHA-256 and manifest checks failures=0
+Python focused transport,Python unittest raw output,PASS,4/4 test methods pass
+MQL5 journal to Python parser,exact isolated Files artifact,PASS,116 columns 1 row identical journal hash
+MQL5 versus Python manifest,byte comparison and SHA-256,PASS,byte-identical sha256=4bd9c266ebc1e36dde8d465513de948c684e462358828f19e4ba5da478bdb602
+full regression,not run for final phase source,PENDING,required before certification
+P4 parity,not run for final phase source,PENDING,required before certification

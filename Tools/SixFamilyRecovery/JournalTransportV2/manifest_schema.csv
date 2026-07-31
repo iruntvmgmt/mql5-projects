@@ -1,0 +1,9 @@
+field,type,required,validation
+manifest_version,string,true,equals MSZZ_RESEARCH_MANIFEST_V2
+writer_version,string,true,equals MSZZ_RESEARCH_CSV_WRITER_V2
+schema_version,string,true,equals MSZZ_RESEARCH_CANDIDATE_V2
+symbol,string,true,nonempty and caller-equal
+timeframe,int,true,positive canonical integer and caller-equal
+row_count,long,true,nonnegative canonical integer and journal-equal
+journal_sha256,string,true,64 hex digits and exact journal-byte hash
+source_data_sha256,string,true,64 hex digits and caller-supplied hash equal

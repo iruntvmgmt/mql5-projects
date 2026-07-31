@@ -1,0 +1,16 @@
+gate,mql5,python,failure_policy
+UTF-8 without BOM,true,true,fail dataset
+exact 116-column header,true,true,fail dataset
+CRLF including final record,true,true,fail dataset
+all fields canonically quoted,true,true,fail dataset
+schema version per row,true,true,fail dataset
+canonical integer number enum and time,true,true,fail dataset
+typed candidate reconstruction,true,common and family invariant mirror,fail dataset
+byte-identical candidate reserialization,true,true,fail dataset
+non-owning extensions empty,true,true,fail dataset
+duplicate event ID,true,true,fail dataset
+duplicate sequence ID,true,true,fail dataset
+manifest row count,true,true,fail dataset
+manifest journal SHA-256,true,true,fail dataset
+manifest market identity,true,true,fail dataset
+manifest source-data SHA-256,true,true,fail dataset

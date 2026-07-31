@@ -1,0 +1,14 @@
+fixture,expected_valid,expected_reason
+canonical_journal,true,OK
+bare_lf,false,BARE_LF
+wrong_column_count,false,COLUMN_COUNT_MISMATCH
+duplicate_event_id,false,DUPLICATE_EVENT_ID
+duplicate_sequence_id,false,DUPLICATE_SEQUENCE_ID
+noncanonical_unquoted_field,false,UNQUOTED_FIELD
+invalid_direction,false,INVALID_DIRECTION
+invalid_number,false,INVALID_NUMBER
+invalid_lifecycle_time,false,INVALID_LIFECYCLE_TIME
+invalid_utf8,false,INVALID_UTF8_CONTINUATION
+manifest_round_trip,true,OK
+manifest_row_mismatch,false,ROW_COUNT_MISMATCH
+source_data_hash_mismatch,false,SOURCE_DATA_HASH_MISMATCH
