@@ -1,10 +1,10 @@
 # Screening Simulator V2 — Status
 
-**Phase status: `CORRECTION_IN_PROGRESS` — certification-hardening correction
-underway (candidate→journal binding, UTF-8 ordering, fail-closed evidence).
-The prior `CROSS_LANGUAGE_CERTIFIED` claim is suspended until the hardened
-95-fixture MQL run, collector V2 self-tests, coverage provenance, full
-regression, and exact P4 all pass. No family is authorized by this work.**
+**Phase status: `SCREENING_SIMULATOR_V2_CERTIFIED_BINDING_PARITY_HARDENED` —
+the certification-hardening correction (candidate→journal binding, UTF-8
+ordering, fail-closed evidence) is certified: hardened 95-fixture MQL run,
+collector V2 self-tests, coverage provenance, one clean full regression, and
+exact P4 all pass. No family is authorized by this work.**
 
 The standalone screening simulator reproduces byte-identical canonical
 outcomes across Python and MQL5 over the full fixture matrix, on top of the
@@ -101,8 +101,9 @@ unauthorized.
 
 ## Certification-hardening correction — evidence (2026-07-31)
 
-Status remains `CORRECTION_IN_PROGRESS` until committed-blob hashes and the
-ahead-only push are verified. All functional gates pass:
+Final certification. Remote pre-finalization HEAD `d13f3749f7e1234a763b410b7fdd0fc64db97c73`
+(the three hardened commits, committed-blob-verified and pushed). This signoff
+commit finalizes only the status token and evidence ledger. All gates pass:
 
 - **Python**: transport, policy, market, screening_simulator (F01-F58),
   journal_binding (JB01-JB24), ordering (OR01-OR13), certification-fixtures
@@ -124,8 +125,15 @@ ahead-only push are verified. All functional gates pass:
   run, exact ID sets, fail-closed + atomic. **Coverage V2**
   (`MSZZ_SCREENING_COVERAGE_V2`): 95/95 (58/24/13) python/mql5/parity all PASS,
   with provenance; rejects tampered results.
-- **Full regression**: 39 suites, 0 failures (one transient launch-race no-op,
-  `Test_MSZZ_Clusters`, confirmed PASS on isolated re-run).
+- **Full regression — one clean unified run** `REG_20260731_225841`: **39/39
+  PASS, 0 failures, 0 tooling no-ops** (no retries required, no manual
+  reconciliation; each suite launched in the same execution and classified from
+  its own fresh byte window). Roster split: legacy D033 32 + newly added 7
+  (`ScreeningMarketV2`, `ScreeningSimulatorV2`, `ScreeningJournalBindingV2`,
+  `ScreeningOrderingV2`, `ResearchJournalTransportV2`, `D032_ExportRates`,
+  `Export_MSZZ_Parity`) = 39. (A prior run showed one transient launch-race
+  no-op resolved on re-run; retained only as historical diagnostic, not
+  certification evidence.)
 - **P4 exact (fresh run 2026-07-31 22:30)**: 330 trades, +47.6083336413R,
   PF 1.2472234619, canonical journal SHA
   `9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f`.
