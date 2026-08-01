@@ -66,6 +66,11 @@ REJECT_TIMEFRAME_MISMATCH = "REJECT_TIMEFRAME_MISMATCH"
 REJECT_CLOCK_DOMAIN_MISMATCH = "REJECT_CLOCK_DOMAIN_MISMATCH"
 REJECT_TIME_AUTHORITY_MISMATCH = "REJECT_TIME_AUTHORITY_MISMATCH"
 REJECT_INSTRUMENT_PARAMS_MISMATCH = "REJECT_INSTRUMENT_PARAMS_MISMATCH"
+# Journal-binding failure on the certified public entry point: the supplied
+# bundle's candidates are not exactly those reconstructed from the verified
+# journal bytes / manifest (SHA, row count, projection digest, mutation, or
+# unsupported version). Dataset-level abort with no outcomes.
+REJECT_CANDIDATE_JOURNAL_BINDING_MISMATCH = "REJECT_CANDIDATE_JOURNAL_BINDING_MISMATCH"
 
 GRID_TOL = 1.0e-6  # point-grid alignment tolerance (in points)
 
@@ -230,6 +235,45 @@ def _blank_reject(c: Candidate, cm: CandidateManifest, params: InstrumentParams,
 
 
 def run_screening(
+    bundle,
+    market: MarketData,
+    market_manifest: MarketManifest,
+    params: InstrumentParams,
+    policy_id: str,
+    test_end_time_raw: int | None = None,
+) -> tuple[str, list[Outcome]]:
+    """Certified public entry point. Accepts ONLY a VerifiedCandidateJournalV2
+    bundle produced by the journal-binding adapter. It re-derives candidates
+    from the bundle's own verified journal bytes and proves every claimed field
+    matches the re-derivation, the manifest binding, and the market dataset; any
+    discrepancy is REJECT_CANDIDATE_JOURNAL_BINDING_MISMATCH with no outcomes.
+    An unbound candidate run is structurally impossible on this path.
+
+    Execution mechanics live in _run_screening_core (test-only / internal), which
+    the EXECUTION_CORE fixtures (F01-F58) exercise directly."""
+    # Lazy import breaks the transport->adapter->simulator cycle at load time.
+    from verified_candidate_journal_v2 import (
+        JournalBindingError, VerifiedCandidateJournalV2, rederive_and_check,
+    )
+    from research_journal_transport_v2 import TransportError
+
+    if not isinstance(bundle, VerifiedCandidateJournalV2):
+        return (REJECT_CANDIDATE_JOURNAL_BINDING_MISMATCH, [])
+    try:
+        candidates = list(rederive_and_check(bundle, market.market_data_sha256))
+    except (JournalBindingError, TransportError):
+        return (REJECT_CANDIDATE_JOURNAL_BINDING_MISMATCH, [])
+
+    candidate_manifest = CandidateManifest(
+        bundle.symbol, bundle.timeframe, bundle.journal_sha256, bundle.source_data_sha256
+    )
+    return _run_screening_core(
+        candidates, candidate_manifest, market, market_manifest, params, policy_id,
+        test_end_time_raw,
+    )
+
+
+def _run_screening_core(
     candidates: list[Candidate],
     candidate_manifest: CandidateManifest,
     market: MarketData,
@@ -238,7 +282,10 @@ def run_screening(
     policy_id: str,
     test_end_time_raw: int | None = None,
 ) -> tuple[str, list[Outcome]]:
-    """Return (run_status, outcomes). Dataset-level failure -> (REJECT_*, [])."""
+    """Execution-mechanics core (TEST-ONLY / internal — not the certified entry).
+    Owns ordering, occupancy, entry, policy-owned geometry, exits, MFE/MAE,
+    holding bars, and outcome serialization. Identical to the pre-binding
+    behavior so EXECUTION_CORE fixtures keep byte-identical outcome SHAs."""
     status = _dataset_identity(candidates, candidate_manifest, market, market_manifest,
                                params, policy_id)
     if status != RUN_OK:

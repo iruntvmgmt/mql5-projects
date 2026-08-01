@@ -1,0 +1,2 @@
+MQL5\Tools\SixFamilyRecovery\ScreeningSimulatorV2\compile_probes\Probe_UnauthorizedConsumer.mq5(11,40) : error 256: undeclared identifier 'RunScreeningCoreForFixtures'
+Result: 14 errors, 11 warnings

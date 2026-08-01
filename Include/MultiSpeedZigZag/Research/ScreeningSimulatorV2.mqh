@@ -35,6 +35,11 @@
 #define MSZZ_SIM_REJECT_CLOCK_DOMAIN_MISMATCH "REJECT_CLOCK_DOMAIN_MISMATCH"
 #define MSZZ_SIM_REJECT_TIME_AUTHORITY_MISMATCH "REJECT_TIME_AUTHORITY_MISMATCH"
 #define MSZZ_SIM_REJECT_INSTRUMENT_PARAMS_MISMATCH "REJECT_INSTRUMENT_PARAMS_MISMATCH"
+// Journal-binding failure on the certified public entry point (bundle candidates
+// are not exactly those reconstructed from the verified journal bytes/manifest).
+#define MSZZ_SIM_REJECT_CANDIDATE_JOURNAL_BINDING_MISMATCH "REJECT_CANDIDATE_JOURNAL_BINDING_MISMATCH"
+#define MSZZ_VERIFIED_SCREENING_CANDIDATE_PROJECTION_V2 "MSZZ_VERIFIED_SCREENING_CANDIDATE_PROJECTION_V2"
+#define MSZZ_VERIFIED_CANDIDATE_JOURNAL_V2 "MSZZ_VERIFIED_CANDIDATE_JOURNAL_V2"
 #define MSZZ_SIM_EXIT_STOP                   "STOP"
 #define MSZZ_SIM_EXIT_TARGET                 "TARGET"
 #define MSZZ_SIM_EXIT_TEST_END               "TEST_END"
@@ -160,14 +165,36 @@ private:
       for(int i=0;i<ArraySize(fields);i++) { if(i>0) r+=","; r+=Quote(fields[i]); }
       return r;
    }
+   // Explicit UTF-8 bytewise comparison (schema IDs are printable UTF-8, not
+   // ASCII-only). MathFloor-free: compare unsigned UTF-8 bytes lexicographically;
+   // on an equal common prefix the shorter byte string sorts first. This matches
+   // Python's event_id.encode("utf-8") ordering exactly, including the
+   // supplementary-plane case (e.g. U+1F600) where UTF-16 code-unit order
+   // (StringCompare) would diverge.
+   static int Utf8Compare(const string a,const string b)
+   {
+      uchar ba[]; StringToCharArray(a,ba,0,-1,CP_UTF8);
+      uchar bb[]; StringToCharArray(b,bb,0,-1,CP_UTF8);
+      int la=ArraySize(ba); if(la>0 && ba[la-1]==0) la--;   // drop terminating null
+      int lb=ArraySize(bb); if(lb>0 && bb[lb-1]==0) lb--;
+      int m=(la<lb ? la : lb);
+      for(int i=0;i<m;i++)
+      {
+         int ca=(int)ba[i];   // uchar is unsigned 0..255
+         int cb=(int)bb[i];
+         if(ca!=cb) return (ca<cb ? -1 : 1);
+      }
+      if(la!=lb) return (la<lb ? -1 : 1);
+      return 0;
+   }
    // stable comparator: signal_time, family_id, event_id bytewise, sequence_id bytewise
    static bool Less(const MSZZScreeningCandidateV2 &a,const MSZZScreeningCandidateV2 &b)
    {
       if(a.signal_time!=b.signal_time) return a.signal_time<b.signal_time;
       if(a.family_id!=b.family_id) return a.family_id<b.family_id;
-      int e=StringCompare(a.event_id,b.event_id,true);
+      int e=Utf8Compare(a.event_id,b.event_id);
       if(e!=0) return e<0;
-      int s=StringCompare(a.sequence_id,b.sequence_id,true);
+      int s=Utf8Compare(a.sequence_id,b.sequence_id);
       return s<0;
    }
    static void StableSort(MSZZScreeningCandidateV2 &c[])
@@ -361,8 +388,14 @@ private:
       o.holding_bars=holding_bars;
    }
 
-public:
-   static string RunScreening(MSZZScreeningCandidateV2 &candidates[],
+private:
+   // Execution-mechanics core over a supplied candidate array. PRIVATE by
+   // design: a normal research include exposes NO arbitrary-candidate entry.
+   // Access is granted only through the macro-gated wrappers below — to the
+   // certified binding adapter (MSZZ_SCREENING_BOUND_ADAPTER_ACCESS) and to
+   // fixture builds (MSZZ_SCREENING_FIXTURE_ACCESS). The certified public path
+   // is CMSZZScreeningJournalBindingV2::RunScreening (verified journal bytes).
+   static string RunScreeningCore(MSZZScreeningCandidateV2 &candidates[],
                               const MSZZScreeningCandidateManifestV2 &cm,
                               const MSZZScreeningMarketBarV2 &bars[],
                               const string market_symbol,const int market_tf,const string market_sha,
@@ -438,6 +471,40 @@ public:
       }
       return MSZZ_SIM_RUN_OK;
    }
+
+public:
+   // Macro-gated core access. No arbitrary-candidate entry exists unless a build
+   // explicitly opts in; ordinary research includes expose neither wrapper.
+#ifdef MSZZ_SCREENING_BOUND_ADAPTER_ACCESS
+   // Bound bridge for the certified journal-binding adapter only. The adapter
+   // reconstructs these candidates from verified journal bytes immediately
+   // before calling this; it is never handed an unverified caller array.
+   static string RunScreeningBoundCore(MSZZScreeningCandidateV2 &candidates[],
+                              const MSZZScreeningCandidateManifestV2 &cm,
+                              const MSZZScreeningMarketBarV2 &bars[],
+                              const string market_symbol,const int market_tf,const string market_sha,
+                              const MSZZScreeningMarketManifestV2 &mm,
+                              const MSZZScreeningInstrumentParamsV2 &params,
+                              const string policy_id,const long test_end_in,
+                              MSZZScreeningOutcomeV2 &outcomes[])
+   { return RunScreeningCore(candidates,cm,bars,market_symbol,market_tf,market_sha,mm,params,policy_id,test_end_in,outcomes); }
+#endif
+#ifdef MSZZ_SCREENING_FIXTURE_ACCESS
+   // ORDERING fixture access: exposes the exact frozen candidate comparator used
+   // by the core, so the OR suite verifies real UTF-8 bytewise ordering.
+   static void SortCandidatesForFixtures(MSZZScreeningCandidateV2 &c[]) { StableSort(c); }
+   // EXECUTION_CORE fixture access (F01-F58 mechanics parity). Never compiled
+   // into ordinary research/production builds.
+   static string RunScreeningCoreForFixtures(MSZZScreeningCandidateV2 &candidates[],
+                              const MSZZScreeningCandidateManifestV2 &cm,
+                              const MSZZScreeningMarketBarV2 &bars[],
+                              const string market_symbol,const int market_tf,const string market_sha,
+                              const MSZZScreeningMarketManifestV2 &mm,
+                              const MSZZScreeningInstrumentParamsV2 &params,
+                              const string policy_id,const long test_end_in,
+                              MSZZScreeningOutcomeV2 &outcomes[])
+   { return RunScreeningCore(candidates,cm,bars,market_symbol,market_tf,market_sha,mm,params,policy_id,test_end_in,outcomes); }
+#endif
 
    static string OutcomeHeader()
    {

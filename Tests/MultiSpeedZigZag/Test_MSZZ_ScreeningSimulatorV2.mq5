@@ -1,5 +1,6 @@
 #property strict
 #property script_show_inputs
+#define MSZZ_SCREENING_FIXTURE_ACCESS   // EXECUTION_CORE fixtures: opt into the core
 #include <MultiSpeedZigZag/Research/ScreeningSimulatorV2.mqh>
 
 // Cross-language parity test: consumes the shared committed fixtures
@@ -8,7 +9,10 @@
 // simulator must reproduce the reference run-status and byte-identical
 // canonical outcome SHA-256.
 
-int g_tests=0, g_failures=0;
+int g_tests=0, g_failures=0, g_markers=0, g_fixfail=0, g_harness=0;
+string g_run_id="";
+void Marker(const string id,const bool pass){ g_markers++; if(!pass) g_fixfail++; PrintFormat("FIXTURE_RESULT [%s] %s",id,(pass?"PASS":"FAIL")); }
+void Harness(const string code,const string detail){ g_harness++; g_failures++; PrintFormat("HARNESS_FAILURE [EXECUTION] %s %s",code,detail); }
 void Check(const bool ok,const string what)
 {
    g_tests++;
@@ -91,6 +95,7 @@ void ProcessFixture(const string id)
    int market_tf=(int)StringToInteger(m_meta[15]);
 
    int ei=ExpIndex(id);
+   if(ei<0) Harness("MISSING_EXPECTED",id);
    string want_status=(ei>=0 ? exp_status[ei] : "");
    string want_sha=(ei>=0 ? exp_sha[ei] : "");
 
@@ -126,7 +131,9 @@ void ProcessFixture(const string id)
    cm.source_data_sha256=(cm_source_mode=="AUTO" ? market_sha : cm_source_mode);
 
    MSZZScreeningOutcomeV2 outcomes[];
-   string run_status=CMSZZScreeningSimulatorV2::RunScreening(m_cands,cm,pbars,market_symbol,market_tf,
+   // EXECUTION_CORE fixtures exercise the mechanics core directly; the certified
+   // public journal-bound path is covered by the JB suite.
+   string run_status=CMSZZScreeningSimulatorV2::RunScreeningCoreForFixtures(m_cands,cm,pbars,market_symbol,market_tf,
                         market_sha,mm,params,policy_id,test_end,outcomes);
    string sha,sreason;
    CMSZZScreeningSimulatorV2::OutcomesSha256(run_status,outcomes,sha,sreason);
@@ -157,12 +164,22 @@ void AddCandidate(const string &f[],const double point_size)
    m_cands[n].stop_distance_points=(sdm=="AUTO" ? risk/point_size : StringToDouble(sdm));
 }
 
+void ProcessAndMark(const string id)
+{
+   int before=g_failures;
+   ProcessFixture(id);
+   Marker(id,g_failures==before);
+}
+
 void OnStart()
 {
+   string rid; string rreason;
+   if(ReadFileString("cert_run_id.txt",rid,rreason)) { StringReplace(rid,"\r",""); StringReplace(rid,"\n",""); g_run_id=rid; }
+   else Harness("MISSING_RUN_ID","");
    LoadExpected();
    string doc,reason;
    if(!ReadFileString("simulator_fixtures.csv",doc,reason))
-   { PrintFormat("FIXTURES %s",reason); PrintFormat("TEST_SUMMARY tests=0 failures=1"); return; }
+   { Harness("MISSING_FILE","simulator_fixtures.csv"); Summary(); return; }
    string lines[]; SplitLines(doc,lines);
 
    string current="";
@@ -175,7 +192,7 @@ void OnStart()
       string id=f[0], kind=f[1];
       if(id!=current)
       {
-         if(current!="") ProcessFixture(current);
+         if(current!="") ProcessAndMark(current);
          ResetFixture(); current=id;
       }
       if(kind=="META")
@@ -199,7 +216,14 @@ void OnStart()
          AddCandidate(f,point_size);
       }
    }
-   if(current!="") ProcessFixture(current);
+   if(current!="") ProcessAndMark(current);
 
-   PrintFormat("TEST_SUMMARY tests=%d failures=%d",g_tests,g_failures);
+   if(g_markers!=58) Harness("INVENTORY","f="+IntegerToString(g_markers));
+   Summary();
+}
+
+void Summary()
+{
+   PrintFormat("TEST_SUMMARY tests=%d failures=%d fixtures=58 f=%d jb=0 or=0 markers=%d fixture_failures=%d harness_failures=%d cert_run=%s",
+               g_tests,g_failures,g_markers,g_markers,g_fixfail,g_harness,g_run_id);
 }

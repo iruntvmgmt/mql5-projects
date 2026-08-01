@@ -49,7 +49,10 @@ def _run(f: fx.Fixture):
     params = parse_instrument_params(instrument_params_bytes(fx.SYMBOL, fx.TF, *f.params))
     source = f.cm_source if f.cm_source is not None else market.market_data_sha256
     cm = sim.CandidateManifest(f.cm_symbol, f.cm_timeframe, fx.JSHA, source)
-    return sim.run_screening(_candidates(f), cm, market, mm, params, f.policy_id, f.test_end)
+    # EXECUTION_CORE fixtures exercise the internal mechanics core directly; the
+    # certified public run_screening(bundle, ...) journal-binding path is covered
+    # by the JB suite, not by F01-F58.
+    return sim._run_screening_core(_candidates(f), cm, market, mm, params, f.policy_id, f.test_end)
 
 
 class SimulatorMatrix(unittest.TestCase):
@@ -94,34 +97,9 @@ class SimulatorMatrix(unittest.TestCase):
             self._record(f, ok)
 
 
-def _load_mql5_results():
-    # Optional per-fixture MQL5 isolated-runtime results produced by
-    # collect_mql5_results.py. When present, the MQL5 parity test's PASS is
-    # simultaneously the cross-language parity result (identical run-status +
-    # canonical outcome SHA-256 vs the Python reference).
-    path = ROOT / "mql5_results.csv"
-    if not path.exists():
-        return {}
-    with path.open(newline="") as f:
-        return {row["fixture_id"]: row["mql5_result"] for row in csv.DictReader(f)}
-
-
-def tearDownModule():
-    mql5 = _load_mql5_results()
-    merged = []
-    for fid, behavior, exp_status, exp_exit, py, _m, _p in sorted(set(_coverage)):
-        mres = mql5.get(fid, "PENDING")
-        parity = "PENDING" if mres == "PENDING" else (
-            "PASS" if (py == "PASS" and mres == "PASS") else "FAIL")
-        merged.append((fid, behavior, exp_status, exp_exit, py, mres, parity))
-    rows = [("fixture_id", "behavior", "expected_status", "expected_exit",
-             "python_result", "mql5_result", "parity_result")] + merged
-    out = io.StringIO()
-    w = csv.writer(out, quoting=csv.QUOTE_ALL, lineterminator="\r\n", doublequote=True)
-    for r in rows:
-        w.writerow(r)
-    (ROOT / "fixture_coverage.csv").write_bytes(out.getvalue().encode("utf-8"))
-
+# Cross-language coverage (all 95 fixtures across the three groups) is produced
+# by make_coverage_v2.py from the validated collector-V2 output; this suite only
+# proves the Python EXECUTION_CORE reference behavior.
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
