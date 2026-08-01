@@ -187,11 +187,62 @@ void ManifestTests()
          "source-data hash mismatch fails closed");
 }
 
+void VerifiedRecordsTests()
+{
+   MSZZResearchCandidateV2 c1=Candidate("SEQUENCE|1","EVENT|1|FINAL");
+   MSZZResearchCandidateV2 c2=Candidate("SEQUENCE|2","EVENT|2|FINAL");
+   string row1=CMSZZResearchCandidateCsvV2::Row(c1);
+   string row2=CMSZZResearchCandidateCsvV2::Row(c2);
+   string doc=CMSZZResearchCandidateCsvV2::Header()+"\r\n"+row1+"\r\n"+row2+"\r\n";
+   uchar data[]; Bytes(doc,data);
+
+   string records[]; long rows=0; string hash=""; string reason="";
+   bool ok=CMSZZResearchJournalTransportV2::ReconstructVerifiedRecords(data,records,rows,hash,reason);
+   Check(ok && rows==2,"verified records: valid journal succeeds");
+   Check(ArraySize(records)==(int)rows+1,"verified records: count == row_count+1");
+   Check(ArraySize(records)>0 && records[0]==CMSZZResearchCandidateCsvV2::Header(),
+         "verified records: records[0] is canonical header");
+   Check(ArraySize(records)>0 && records[ArraySize(records)-1]!="",
+         "verified records: no trailing empty pseudo-record");
+   bool allparse=true;
+   for(int r=1;r<ArraySize(records);r++)
+   { string f[]; if(!CMSZZResearchJournalTransportV2::ParseRecord(records[r],f,reason,true)){ allparse=false; break; } }
+   Check(allparse,"verified records: every data record parses");
+   string rebuilt=(ArraySize(records)>0 ? records[0] : "");
+   for(int r=1;r<ArraySize(records);r++) rebuilt+="\r\n"+records[r];
+   rebuilt+="\r\n";
+   Check(rebuilt==doc,"verified records: exact record round-trip");
+   long rows2=0; string hash2="";
+   CMSZZResearchJournalTransportV2::ValidateJournalBytes(data,rows2,hash2,reason);
+   Check(hash==hash2 && rows==rows2,"verified records: SHA/count match ValidateJournalBytes");
+
+   // malformed UTF-8 fails + no stale records left in the reused array
+   uchar bad[]; ArrayResize(bad,2); bad[0]=0xC3; bad[1]=0x28;
+   bool ok2=CMSZZResearchJournalTransportV2::ReconstructVerifiedRecords(bad,records,rows,hash,reason);
+   Check(!ok2,"verified records: malformed UTF-8 fails");
+   Check(ArraySize(records)==0,"verified records: no stale records after failure");
+
+   uchar lf[]; Bytes(CMSZZResearchCandidateCsvV2::Header()+"\n"+row1+"\n",lf);
+   string recs3[]; long r4=0; string h4="";
+   Check(!CMSZZResearchJournalTransportV2::ReconstructVerifiedRecords(lf,recs3,r4,h4,reason),
+         "verified records: LF-only fails");
+   uchar nofinal[]; Bytes(CMSZZResearchCandidateCsvV2::Header()+"\r\n"+row1,nofinal);
+   string recs4[]; long r5=0; string h5="";
+   Check(!CMSZZResearchJournalTransportV2::ReconstructVerifiedRecords(nofinal,recs4,r5,h5,reason),
+         "verified records: missing final CRLF fails");
+   string unq=doc; StringReplace(unq,"\"MSZZ_RESEARCH_CANDIDATE_V2\"","MSZZ_RESEARCH_CANDIDATE_V2");
+   uchar uq[]; Bytes(unq,uq);
+   string recs5[]; long r6=0; string h6="";
+   Check(!CMSZZResearchJournalTransportV2::ReconstructVerifiedRecords(uq,recs5,r6,h6,reason),
+         "verified records: malformed quoted record fails");
+}
+
 void OnStart()
 {
    Print("MSZZ ResearchJournalTransportV2 tests begin");
    ParserTests();
    ManifestTests();
+   VerifiedRecordsTests();
    int h=FileOpen("MSZZ_ResearchJournalTransportV2_TestSummary.csv",
                   FILE_WRITE|FILE_CSV|FILE_ANSI,',');
    if(h!=INVALID_HANDLE)

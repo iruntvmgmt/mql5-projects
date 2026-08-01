@@ -556,6 +556,22 @@ public:
       return ValidateJournalBytes(data,row_count,journal_sha256,reason);
    }
 
+   // Additive verified-records accessor (MQL5 analog of the Python
+   // reconstruct_verified_rows). Runs the certified ValidateJournalBytes (which
+   // already reconstructs + canonical round-trips every row), then returns the
+   // exact split records (records[0] is the header). Does not change any
+   // accepted/rejected byte, canonical serialization, or manifest rule.
+   static bool ReconstructVerifiedRecords(const uchar &data[],string &records[],
+                                          long &row_count,string &journal_sha256,
+                                          string &reason)
+   {
+      ArrayResize(records,0);  // fail-closed: never leave stale records on failure
+      row_count=0; journal_sha256="";
+      if(!ValidateJournalBytes(data,row_count,journal_sha256,reason)) return false;
+      string document=CharArrayToString(data,0,ArraySize(data),CP_UTF8);
+      return SplitDocument(document,records,reason);
+   }
+
    static string ManifestRow(const MSZZResearchJournalManifestV2 &manifest)
    {
       string fields[8];

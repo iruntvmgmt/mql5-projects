@@ -16,6 +16,7 @@ from pathlib import Path
 SCHEMA_VERSION = "MSZZ_RESEARCH_CANDIDATE_V2"
 WRITER_VERSION = "MSZZ_RESEARCH_CSV_WRITER_V2"
 MANIFEST_VERSION = "MSZZ_RESEARCH_MANIFEST_V2"
+TRANSPORT_VERSION = "MSZZ_RESEARCH_JOURNAL_TRANSPORT_V2"
 MANIFEST_HEADER = [
     "manifest_version",
     "writer_version",
@@ -42,6 +43,24 @@ class Manifest:
     row_count: int
     journal_sha256: str
     source_data_sha256: str
+
+
+@dataclass(frozen=True)
+class VerifiedJournalRowsV2:
+    """Immutable, already-validated journal rows produced by the certified
+    validator. Additive read-only accessor for downstream consumers (e.g. the
+    screening journal-binding adapter). Carries the transport-returned journal
+    SHA (never a caller-supplied value) so callers cannot smuggle an alternate
+    hash. This type is a projection of the certified validation output only; it
+    does not change any parsing, canonicalization, or manifest rule."""
+
+    transport_version: str
+    schema_version: str
+    journal_sha256: str
+    row_count: int
+    rows: tuple[tuple[str, ...], ...]  # data rows only, header excluded
+    event_ids: tuple[str, ...]  # journal row order (column 7)
+    sequence_ids: tuple[str, ...]  # journal row order (column 6)
 
 
 def _sha256(data: bytes) -> str:
@@ -284,7 +303,12 @@ def read_header(header_path: Path) -> list[str]:
     return header
 
 
-def validate_journal_bytes(data: bytes, expected_header: list[str]) -> dict[str, object]:
+def _validated_parse(data: bytes, expected_header: list[str]) -> dict[str, object]:
+    """Single certified validation + parse pass. Internal: shared by both
+    public entry points so there is exactly one parser/validation
+    implementation and no divergent second parse. Returns the certified fields
+    plus the immutable validated rows; callers expose only what their contract
+    permits."""
     text = _decode_utf8(data)
     rows = _records(text)
     if rows[0] != expected_header:
@@ -319,7 +343,40 @@ def validate_journal_bytes(data: bytes, expected_header: list[str]) -> dict[str,
         "column_count": len(expected_header),
         "event_ids": event_ids,
         "sequence_ids": sequence_ids,
+        "rows": tuple(tuple(row) for row in rows[1:]),
     }
+
+
+def validate_journal_bytes(data: bytes, expected_header: list[str]) -> dict[str, object]:
+    # Certified return payload — the original key set only, unchanged. The
+    # validated rows are available exclusively through reconstruct_verified_rows.
+    parsed = _validated_parse(data, expected_header)
+    return {
+        "row_count": parsed["row_count"],
+        "journal_sha256": parsed["journal_sha256"],
+        "column_count": parsed["column_count"],
+        "event_ids": parsed["event_ids"],
+        "sequence_ids": parsed["sequence_ids"],
+    }
+
+
+def reconstruct_verified_rows(data: bytes, expected_header: list[str]) -> VerifiedJournalRowsV2:
+    """Immutable already-validated rows from the same single certified
+    validation pass as validate_journal_bytes(). Additive accessor: it does not
+    re-parse with different semantics, alter accepted/rejected bytes, change
+    canonical serialization, or repair input. The journal SHA is the one the
+    certified validator computes over the exact bytes."""
+    parsed = _validated_parse(data, expected_header)
+    rows = parsed["rows"]
+    return VerifiedJournalRowsV2(
+        transport_version=TRANSPORT_VERSION,
+        schema_version=SCHEMA_VERSION,
+        journal_sha256=str(parsed["journal_sha256"]),
+        row_count=int(parsed["row_count"]),
+        rows=rows,
+        event_ids=tuple(row[7] for row in rows),
+        sequence_ids=tuple(row[6] for row in rows),
+    )
 
 
 def text_record_at(text: str, index: int) -> str:

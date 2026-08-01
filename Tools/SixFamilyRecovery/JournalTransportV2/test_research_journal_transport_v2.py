@@ -11,11 +11,13 @@ from pathlib import Path
 from research_journal_transport_v2 import (
     MANIFEST_VERSION,
     SCHEMA_VERSION,
+    TRANSPORT_VERSION,
     TransportError,
     build_manifest,
     manifest_bytes,
     parse_manifest_bytes,
     read_header,
+    reconstruct_verified_rows,
     validate_journal_bytes,
     verify_manifest,
 )
@@ -144,6 +146,41 @@ class JournalTransportV2Tests(unittest.TestCase):
         )
         with self.assertRaisesRegex(TransportError, "UNQUOTED_FIELD"):
             validate_journal_bytes(data, read_header(HEADER_PATH))
+
+    def test_validate_key_set_unchanged(self) -> None:
+        # The certified public return payload must be exactly these keys — the
+        # verified rows are NOT exposed here (only via reconstruct_verified_rows).
+        data = journal(row())
+        result = validate_journal_bytes(data, read_header(HEADER_PATH))
+        self.assertEqual(
+            set(result.keys()),
+            {"row_count", "journal_sha256", "column_count", "event_ids", "sequence_ids"},
+        )
+        self.assertNotIn("rows", result)
+
+    def test_reconstruct_verified_rows(self) -> None:
+        data = journal(row("SEQUENCE|1", "EVENT|1|FINAL"), row("SEQUENCE|2", "EVENT|2|FINAL"))
+        verified = reconstruct_verified_rows(data, read_header(HEADER_PATH))
+        self.assertEqual(verified.transport_version, TRANSPORT_VERSION)
+        self.assertEqual(verified.schema_version, SCHEMA_VERSION)
+        self.assertEqual(verified.row_count, 2)
+        self.assertEqual(len(verified.rows), 2)
+        # journal SHA is the certified validator's, over the exact bytes
+        self.assertEqual(
+            verified.journal_sha256,
+            validate_journal_bytes(data, read_header(HEADER_PATH))["journal_sha256"],
+        )
+        # event/sequence ids preserved in row order (cols 7 and 6)
+        self.assertEqual(verified.event_ids, ("EVENT|1|FINAL", "EVENT|2|FINAL"))
+        self.assertEqual(verified.sequence_ids, ("SEQUENCE|1", "SEQUENCE|2"))
+        # immutability: frozen dataclass + tuples
+        with self.assertRaises(Exception):
+            verified.rows = ()  # type: ignore[misc]
+
+    def test_reconstruct_rejects_invalid_journal(self) -> None:
+        bad = journal(row()[:12] + ["SIDEWAYS"] + row()[13:])
+        with self.assertRaisesRegex(TransportError, "INVALID_DIRECTION"):
+            reconstruct_verified_rows(bad, read_header(HEADER_PATH))
 
     def test_manifest_round_trip_and_verification(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
