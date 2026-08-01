@@ -2,3 +2,8 @@ source,route,log_timestamp,result,fresh_ex5_bytes,evidence
 MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_ScreeningMarketV2.mq5,wine start /Unix metaeditor64 /compile /log,2026.07.30 23:55:18,0 errors 0 warnings,51676,fresh log entry + new ex5 (stale ex5 removed first) - integer transport
 MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_ScreeningExecutionPolicyV2.mq5,wine start /Unix metaeditor64 /compile /log,2026.07.31 10:46:56,0 errors 0 warnings,8782,fresh Result: 0 errors 0 warnings + new ex5 - tick-boundary epsilon re-cert
 MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_ScreeningSimulatorV2.mq5,wine start /Unix metaeditor64 /compile /log,2026.07.31 10:52:31,0 errors 0 warnings,60066,fresh Result: 0 errors 0 warnings + new ex5 - cross-language simulator
+MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_ResearchJournalTransportV2.mq5,wine start /Unix metaeditor64 /compile /log,2026.07.31 correction,0 errors 0 warnings,fresh,verified-records accessor
+MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_ScreeningJournalBindingV2.mq5,wine start /Unix metaeditor64 /compile /log,2026.07.31 correction,0 errors 0 warnings,fresh,JB24 harness (adapter+bundle+projection parity)
+MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_ScreeningOrderingV2.mq5,wine start /Unix metaeditor64 /compile /log,2026.07.31 correction,0 errors 0 warnings,fresh,OR13 UTF-8 comparator harness
+MQL5\Tests\MultiSpeedZigZag\Test_MSZZ_ScreeningSimulatorV2.mq5,wine start /Unix metaeditor64 /compile /log,2026.07.31 correction,0 errors 0 warnings,fresh,F58 markers + fixture-access gate
+compile_probes\Probe_UnauthorizedConsumer.mq5,NEGATIVE probe,2026.07.31 correction,14 errors (EXPECTED),n/a,error 256 undeclared RunScreeningCoreForFixtures (access gate enforced)

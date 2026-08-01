@@ -1,8 +1,10 @@
 # Screening Simulator V2 — Status
 
-**Phase status: `CROSS_LANGUAGE_CERTIFIED` — commit 2 of 2 (family-neutral
-standalone screening simulator) implemented and certified. No family is
-authorized by this work.**
+**Phase status: `CORRECTION_IN_PROGRESS` — certification-hardening correction
+underway (candidate→journal binding, UTF-8 ordering, fail-closed evidence).
+The prior `CROSS_LANGUAGE_CERTIFIED` claim is suspended until the hardened
+95-fixture MQL run, collector V2 self-tests, coverage provenance, full
+regression, and exact P4 all pass. No family is authorized by this work.**
 
 The standalone screening simulator reproduces byte-identical canonical
 outcomes across Python and MQL5 over the full fixture matrix, on top of the
@@ -96,3 +98,39 @@ both languages. Coverage in `fixture_coverage.csv`: 58/58 PASS in
 Unchanged. All six families remain `implementation_authorized=false`. No family
 generator, production path, or P4 logic was touched. D034 and D035 remain
 unauthorized.
+
+## Certification-hardening correction — evidence (2026-07-31)
+
+Status remains `CORRECTION_IN_PROGRESS` until committed-blob hashes and the
+ahead-only push are verified. All functional gates pass:
+
+- **Python**: transport, policy, market, screening_simulator (F01-F58),
+  journal_binding (JB01-JB24), ordering (OR01-OR13), certification-fixtures
+  generator self-tests (5), collector-V2 self-tests (20), coverage-V2 — all green.
+- **MQL5 fresh compile 0/0**: ResearchJournalTransportV2, ScreeningSimulatorV2
+  (F markers), ScreeningJournalBindingV2 (JB), ScreeningOrderingV2 (OR),
+  certified + fixture compile probes. **Negative probe fails to compile**
+  (`error 256: undeclared identifier 'RunScreeningCoreForFixtures'`) — the
+  execution core is unreachable on an ordinary include.
+- **MQL5 isolated /portable (login 870012)**, all bound to one cert run
+  `MSZZ_SCREENING_CERT_RUN_V2_d5226c1c671ae1e9`:
+  - F `tests=114 failures=0 f=58 markers=58 fixture_failures=0 harness_failures=0`
+  - JB `tests=92 failures=0 jb=24 markers=24 fixture_failures=0 harness_failures=0`
+  - OR `tests=13 failures=0 or=13 markers=13 fixture_failures=0 harness_failures=0`
+  - Total **95 markers, 0 failures, 0 harness failures**.
+- **Cross-language SHA parity**: journal SHA `be0d32db…` and projection SHA
+  `1c855e6399…` byte-identical (Python == MQL5).
+- **Collector V2** (`MSZZ_MQL5_RESULT_COLLECTOR_V2`): 95 markers, shared cert
+  run, exact ID sets, fail-closed + atomic. **Coverage V2**
+  (`MSZZ_SCREENING_COVERAGE_V2`): 95/95 (58/24/13) python/mql5/parity all PASS,
+  with provenance; rejects tampered results.
+- **Full regression**: 39 suites, 0 failures (one transient launch-race no-op,
+  `Test_MSZZ_Clusters`, confirmed PASS on isolated re-run).
+- **P4 exact (fresh run 2026-07-31 22:30)**: 330 trades, +47.6083336413R,
+  PF 1.2472234619, canonical journal SHA
+  `9ebf2f41dae137199634521ee7b996e0ef6d8e7996a5c82806d554ef7605eb5f`.
+- **F01-F58 outcome SHAs unchanged**; production EA ex5
+  `e739e76e6de5a13e8fb210b13480339cdba9a7ae6fa73de80acda796b40daa16`,
+  ScreeningExecutionPolicyV2.mqh, and family generators all unchanged.
+
+All six families remain unauthorized. D034 and D035 remain blocked.

@@ -6,8 +6,10 @@ This document freezes the simulator input sub-layers and (once implemented) the
 simulator itself. It does not authorize any family and does not touch a family
 generator, production path, or P4.
 
-Status: **market/instrument transport sub-layer frozen (commit 1)**; simulator
-loop pending (commit 2).
+Status: **CORRECTION_IN_PROGRESS** — market/instrument transport, simulator
+loop, and the certification-hardening correction (verified journal binding,
+UTF-8 ordering, fail-closed evidence) are implemented; final certification is
+pending the full regression + exact P4 (see the status file).
 
 ## Frozen decisions (user-approved 2026-07-30)
 
@@ -143,8 +145,71 @@ are never deduplicated or repaired here.
 
 ## Simulator loop and outcome record (commit 2)
 
-Pending. Will freeze `MSZZ_SCREENING_OUTCOME_V2`, the additive status/rejection
-taxonomy (R3), next-executable-bar entry, bid/ask construction, gap-fill
-geometry (R5), one-position-per-family occupancy, stop-first collisions,
-MFE/MAE, holding-bar convention, and test-end closure, with full MQL5/Python
-outcome parity.
+Implemented. `MSZZ_SCREENING_OUTCOME_V2`, the additive status/rejection taxonomy,
+next-executable-bar entry, bid/ask construction, gap-fill geometry,
+one-position-per-family occupancy, stop-first collisions, MFE/MAE, holding-bar
+convention and test-end closure, with full MQL5/Python outcome parity.
+
+## Certification-hardening correction
+
+### Verified candidate→journal binding
+
+The certified public entry accepts **only** a transport-produced verified
+bundle:
+- Python `verified_candidate_journal_v2.VerifiedCandidateJournalV2` /
+  `screening_simulator_v2.run_screening(bundle, ...)`;
+- MQL5 `MSZZVerifiedScreeningJournalV2` /
+  `CMSZZScreeningJournalBindingV2::RunScreening(bundle, ...)`.
+
+The adapter reconstructs the simulator candidate projection from the exact
+canonical journal bytes verified by JournalTransportV2 (additive accessor
+`reconstruct_verified_rows` / `ReconstructVerifiedRecords`; the certified
+`validate_journal_bytes` payload is unchanged). The public entry **re-derives**
+candidates from the bundle's own journal bytes and proves journal SHA,
+projection SHA, row count, manifest binding, market binding, and candidate
+identity before executing; any discrepancy is
+`REJECT_CANDIDATE_JOURNAL_BINDING_MISMATCH` with zero outcomes. Ownership: Python
+frozen dataclasses/tuples; MQL5 bundle-owned arrays copied locally after
+verification. Precedence: binding failures win over the market-identity tokens,
+which the execution core still returns for otherwise-valid re-derived data.
+
+**Projection** `MSZZ_VERIFIED_SCREENING_CANDIDATE_PROJECTION_V2` preserves the
+journal-owned candidate evidence verbatim (17 fields incl. both `target` and
+`target_r`, no recomputation); its SHA is byte-identical across languages and
+recorded alongside the journal SHA (the mutation guard).
+
+### Access boundary
+
+The MQL5 execution core is private `RunScreeningCore`; arbitrary-candidate
+access exists only behind compile-time gates
+(`MSZZ_SCREENING_BOUND_ADAPTER_ACCESS` for the certified adapter,
+`MSZZ_SCREENING_FIXTURE_ACCESS` for fixture builds). An ordinary research
+include exposes only the bundle-only entry — proven by a negative compile probe.
+Python's core is the module-private `_run_screening_core`.
+
+### Canonical ID ordering
+
+Candidate order is `signal_time`, `family_id`, `event_id`, `sequence_id`, the
+last two by explicit **UTF-8 bytewise** comparison (schema IDs are printable
+UTF-8). MQL5 `Utf8Compare` replaces `StringCompare`; parity is proven including
+the U+1F600 vs U+F900 case where UTF-16 code-unit order diverges.
+
+### Fixture groups, counts, and fail-closed evidence
+
+- `EXECUTION_CORE` F01–F58, `JOURNAL_BINDING` JB01–JB24, `ORDERING` OR01–OR13 —
+  total **95**. Three fail-closed MQL5 harnesses each emit exactly one
+  `FIXTURE_RESULT [id] PASS|FAIL` marker per fixture plus `HARNESS_FAILURE`
+  diagnostics, and a strict summary
+  (`... f=.. jb=.. or=.. markers=.. fixture_failures=.. harness_failures=.. cert_run=..`).
+  All three share one content-derived `cert_run` id.
+- `collect_mql5_results.py` (`MSZZ_MQL5_RESULT_COLLECTOR_V2`) aggregates the
+  three latest suite runs, requiring the shared cert run, exact marker ID sets,
+  zero failures/harness/fixture failures, atomic output — never PASS-by-absence.
+- `make_coverage_v2.py` (`MSZZ_SCREENING_COVERAGE_V2`) writes coverage only when
+  the Python suites pass and the validated MQL results match the inventory
+  exactly, with provenance (cert run, source-log SHA, fixture-source SHAs).
+
+### Policy tick-boundary helpers
+
+Policy rounding uses explicit `_floor_ticks` / `_ceil_ticks` (the removed
+`_ticks` helper is gone); the epsilon sign is hard-bound to the direction.

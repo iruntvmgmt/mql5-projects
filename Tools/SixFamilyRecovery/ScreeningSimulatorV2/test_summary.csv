@@ -8,3 +8,14 @@ screening_simulator,mql5,114,0,isolated /portable login 870012 2026.07.31 10:53:
 regression_legacy_D033_32,mql5,32,0,corrected run_full_regression.sh + classify_regression.py isolated /portable 2026.07.31 12:15-12:40 - all 32 legacy D033 suites PASS (own script name + fresh completion + PID)
 regression_newly_added_4,mql5,4,0,corrected harness 2026.07.31 - D032_ExportRates Export_MSZZ_Parity ScreeningMarketV2 ScreeningSimulatorV2 all PASS
 regression_expanded_total_36,mql5,36,0,corrected harness TOTALS PASS=36 FAIL=0 TOOLING_NO_OP=0 (no suite dropped/renamed; zero tooling no-ops)
+journal_transport_accessor,mql5,12,0,isolated /portable 2026.07.31 ReconstructVerifiedRecords assertions failures=0 (round-trip / no-stale-on-failure / malformed fail-closed)
+journal_transport_accessor,python,3,0,python3 -m unittest test_research_journal_transport_v2 (7 ok; incl reconstruct_verified_rows + certified-key-set-unchanged)
+journal_binding,python,2,0,python3 -m unittest test_journal_binding_v2 (JB01-JB24; reject token + zero outcomes; projection preserves target/target_r)
+journal_binding,mql5,92,0,isolated /portable cert_run d5226c1c TEST_SUMMARY tests=92 failures=0 fixtures=24 jb=24 markers=24 fixture_failures=0 harness_failures=0
+ordering,python,3,0,python3 -m unittest test_ordering_v2 (OR01-OR13 incl U+1F600 vs U+F900 divergence)
+ordering,mql5,13,0,isolated /portable cert_run d5226c1c TEST_SUMMARY tests=13 failures=0 or=13 markers=13 fixture_failures=0 harness_failures=0
+execution_core_markers,mql5,114,0,isolated /portable cert_run d5226c1c TEST_SUMMARY tests=114 failures=0 f=58 markers=58 fixture_failures=0 harness_failures=0 (F01-F58 SHAs unchanged)
+access_boundary_probes,mql5,3,0,certified consumer 0/0 + fixture consumer 0/0 + negative unauthorized consumer FAILS (error 256 undeclared RunScreeningCoreForFixtures)
+collector_v2_self_tests,python,20,0,python3 -m unittest test_collect_mql5_results (20 ok - fail-closed on every malformation + atomic)
+coverage_v2,python,1,0,make_coverage_v2.py 95/95 EXECUTION_CORE 58 JOURNAL_BINDING 24 ORDERING 13 all python/mql5/parity PASS + rejects tampered results
+generator_self_tests,python,5,0,python3 -m unittest test_certification_fixtures (byte-reproducible + canonical + JB/OR inventory + cert_run stable)
