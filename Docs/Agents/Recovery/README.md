@@ -2,166 +2,149 @@
 
 **Status:** Active recovery operating model  
 **Repository:** `iruntvmgmt/mql5-projects`  
-**Applies to:** the current uncommitted MultiSpeedZigZag MC-CANON-2 checkpoint-2 recovery only  
+**Applies to:** current MultiSpeedZigZag MC-CANON-2 checkpoint-2 recovery only  
 **Branch containing this pack:** `docs/openclaw-mc-recovery-team-v2`
 
 ## Purpose
 
-This pack defines the temporary three-agent organization authorized to recover and complete MC-CANON-2 checkpoint 2 without disturbing the current dirty working tree, migrating tests into the main MT5 installation, changing frozen strategy behavior, or producing false evidence.
+This pack defines the temporary three-agent organization authorized to recover and complete MC-CANON-2 checkpoint 2 without disturbing the inherited working tree, changing frozen strategy behavior, migrating test workloads into the main MT5 installation, or producing false evidence.
 
-It exists because the current work is unusually fragile:
-
-- Claude left valuable uncommitted MC-CANON-2 implementation, fixtures, tests, and documentation.
-- The active canonical working tree is the installed MT5 `MQL5` directory.
-- A prior recovery attempt correctly discovered that apparently identical Python/MQL journals were all Python-authored, but then began copying harness files and dependencies into the main MT5 installation.
-- MT5 runtime and MetaEditor automation have known no-op and stale-evidence failure modes.
-- The current checkpoint requires independent MQL5 runtime output before historical screening may begin.
-
-The solution is not five autonomous agents working in parallel. The solution is one coordinator/writer, one isolated-runtime operator, and one read-only reviewer.
+The current checkpoint requires independently MQL5-authored CertifiedJournal output before historical screening may begin.
 
 ## Active team
 
-| Role | Authority | Repository writes | Runtime writes | Verdict authority |
+| Role | Authority | Canonical repository writes | Isolated runtime writes | Verdict authority |
 |---|---|---:|---:|---:|
-| MultiSpeedZigZag Lead | Coordinator and canonical source owner | Yes, sole writer | No, except through an explicit runtime ticket | No final approval |
-| MT5 Runtime Engineer | Compile, stage, launch, collect evidence | No canonical source edits | Yes, only inside `/Users/matt/MT5-MSZZ-TEST` and external evidence directories | No |
-| Independent Reviewer | Adversarial evidence review | Never | Never generates or overwrites evidence | Yes, only authorized checkpoint token |
+| MultiSpeedZigZag Lead | Coordinator and canonical source owner | Yes, sole writer | Through explicit ticket only | No final approval |
+| MT5 Runtime Engineer | Stage, compile, launch, collect evidence | No | Yes, only ticketed isolated paths and external evidence | No |
+| Independent Reviewer | Adversarial evidence review | Never | Never generates or overwrites evidence | Authorized checkpoint verdict only |
 
-## Paused roles
+## Paused work
 
-The following roles remain inactive until checkpoint 2 is independently reviewed and the user explicitly authorizes broader work:
+All work outside the active MC-CANON-2 checkpoint remains inactive until the checkpoint is independently reviewed and the user explicitly authorizes a new task.
 
-- QuantBeast Architect
-- QuantBeast Platform Lead
-- Triple MA Engine Lead
-- NQ Breakout Engine Lead
-- Statistical Research Agent
-- Portfolio Integration Agent
-
-No adapter design, QuantBeast integration, historical screening, or unrelated strategy-family work is authorized under this recovery pack.
+No adapter implementation, QuantBeast source change, historical screening, optimization, or unrelated strategy work is authorized under this recovery pack.
 
 ## Canonical source tree
-
-The one canonical repository working tree is:
 
 ```text
 /Users/matt/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5
 ```
 
-Only the MultiSpeedZigZag Lead may modify this tree during the recovery session.
-
-Other agents may:
-
-- read the canonical tree;
-- hash files;
-- write reports under `~/OpenClawEvidence/`;
-- operate the explicitly designated isolated MT5 runtime;
-- prepare proposed patches outside the repository.
-
-They may not apply patches to the canonical tree without a written ownership transfer from the Lead.
+Only the MultiSpeedZigZag Lead may modify this tree during recovery.
 
 ## Isolated runtime
 
-For checkpoint 2, the only authorized execution environment is:
+The checkpoint workload executes only in:
 
 ```text
 /Users/matt/MT5-MSZZ-TEST
 ```
 
-The CertifiedJournal harness, required includes, fixture inputs, and outputs must not be copied into or executed from the main MetaTrader installation as a fallback.
+The main installed terminal may remain running, but the CertifiedJournal workload, sources, binary, fixtures, logs, and outputs remain isolated.
 
-If the isolated runtime cannot launch, the Runtime Engineer must repair the isolated launch path or report a fully evidenced blocker. “MT5 is not running” is not a blocker; the repository documents how to launch MT5 and poll readiness.
+## Canonical operational bridge
+
+All Runtime Engineer activity must follow:
+
+```text
+Docs/Agents/Operations/README.md
+Docs/Agents/Operations/MT5_MACOS_WINE_OPERATIONAL_BRIDGE.md
+Docs/Agents/Operations/INI_CONFIG_REFERENCE.md
+Docs/Agents/Operations/PROCESS_AND_PID_PROTOCOL.md
+Docs/Agents/Operations/LOG_AND_ARTIFACT_PROTOCOL.md
+Docs/Agents/Operations/FAILURE_RECOVERY_MATRIX.md
+Docs/Agents/Operations/COMMAND_COOKBOOK.md
+Docs/Agents/Operations/RUNTIME_EVIDENCE_TEMPLATE.md
+```
+
+The proven execution routes are:
+
+```text
+MQL5 compile
+  -> isolated MetaEditor via Wine `start /Unix`
+
+CertifiedJournal MQL5 Script
+  -> isolated terminal64.exe `/portable /config:`
+  -> `[StartUp] Script=MultiSpeedZigZagTests\Test_MSZZ_MC_CANON2_CertifiedJournal`
+
+Strategy Tester, when separately authorized
+  -> isolated terminal64.exe `/portable /config:`
+  -> `[Tester] Expert=...`
+```
+
+MCP is not the Script execution bridge.
 
 ## Current authorized task
 
-The current authorized item is:
-
 ```text
 MC-CANON-2 checkpoint 2:
-independent MQL5 certified-journal runtime evidence and full cross-language parity
+independent MQL5 CertifiedJournal runtime evidence and complete cross-language parity
 ```
 
 Historical SER export is forbidden until all checkpoint-2 gates are green.
 
-## Non-negotiable recovery rules
+## Non-negotiable rules
 
-1. One canonical source writer only.
+1. One canonical source writer.
 2. No automatic commits or pushes.
-3. No branch switches, resets, cleans, stashes, restores, rebases, amends, or project-wide formatting.
-4. No changes to the frozen MC-CANON-2 specification.
-5. No edits to the CertifiedJournal harness by the Runtime Engineer.
-6. No migration to the main MT5 terminal.
-7. Every staged file requires a provenance manifest.
-8. Every output artifact requires authorship and hash evidence.
-9. Existing identical files are not cross-language parity unless independently produced.
-10. The Reviewer remains completely non-writing.
+3. No branch switches, resets, cleans, stashes, restores, rebases, amends, or broad formatting.
+4. No changes to frozen MC-CANON-2 behavior.
+5. Runtime Engineer does not edit harness, fixtures, assertions, schemas, or expectations.
+6. No main-terminal fallback.
+7. Every staged file has source/destination provenance and SHA-256.
+8. Every output has authorship, fresh-boundary, and hash evidence.
+9. Same-process copies are not cross-language parity.
+10. Reviewer remains read-only.
 11. No historical screening, optimization, or profitability claims.
-12. Stop after the checkpoint verdict and wait for a higher-capability audit before commit/push.
+12. Preserve the preexisting main terminal PID; kill only ticket-owned portable processes.
+13. Do not print or read out MCP bearer tokens.
+14. Stop after the checkpoint verdict.
 
 ## Document index
 
-- `TEAM_CONSTITUTION.md` — team authority, sequencing, and universal rules.
-- `MSZZ_LEAD.md` — sole writer and checkpoint coordinator instructions.
-- `MT5_RUNTIME_ENGINEER.md` — isolated runtime, compile, launch, and evidence instructions.
-- `INDEPENDENT_REVIEWER.md` — read-only review and verdict rules.
-- `OWNERSHIP_AND_GIT_PROTOCOL.md` — source ownership, prohibited Git operations, and transfer procedure.
-- `TASK_AND_MESSAGE_PROTOCOL.md` — exact runtime ticket and agent-to-agent messaging format.
-- `SESSION_INVENTORY_STANDARD.md` — mandatory dirty-tree inventory and hash baseline.
-- `STAGING_AND_PROVENANCE_STANDARD.md` — file-copy manifest and artifact authorship rules.
-- `EVIDENCE_AND_CHECKPOINT_STANDARD.md` — checkpoint gates, evidence index, and verdict criteria.
-- `BLOCKED_AND_ESCALATION_PROTOCOL.md` — exact requirements for blocked states and escalation.
+### Recovery governance
+
+- `TEAM_CONSTITUTION.md`
+- `MSZZ_LEAD.md`
+- `MT5_RUNTIME_ENGINEER.md`
+- `INDEPENDENT_REVIEWER.md`
+- `OWNERSHIP_AND_GIT_PROTOCOL.md`
+- `TASK_AND_MESSAGE_PROTOCOL.md`
+- `SESSION_INVENTORY_STANDARD.md`
+- `STAGING_AND_PROVENANCE_STANDARD.md`
+- `EVIDENCE_AND_CHECKPOINT_STANDARD.md`
+- `BLOCKED_AND_ESCALATION_PROTOCOL.md`
+
+### Runtime operations
+
+- `../Operations/README.md`
+- `../Operations/MT5_MACOS_WINE_OPERATIONAL_BRIDGE.md`
+- `../Operations/INI_CONFIG_REFERENCE.md`
+- `../Operations/PROCESS_AND_PID_PROTOCOL.md`
+- `../Operations/LOG_AND_ARTIFACT_PROTOCOL.md`
+- `../Operations/FAILURE_RECOVERY_MATRIX.md`
+- `../Operations/COMMAND_COOKBOOK.md`
+- `../Operations/RUNTIME_EVIDENCE_TEMPLATE.md`
 
 ## Activation sequence
 
-### Phase 1 — Lead inventory and runtime ticket
+### Phase 1 — Lead inventory and ticket
 
-The MultiSpeedZigZag Lead:
+The Lead verifies Git guardrails, inventories active MC files, hashes dependencies, and issues one exact runtime ticket.
 
-- verifies Git guardrails;
-- inventories every active MC file by path, size, mtime, and SHA-256;
-- inspects the harness and its dependency graph;
-- writes one exact runtime ticket;
-- does not launch MT5 or modify the isolated runtime.
+### Phase 2 — Isolated runtime
 
-### Phase 2 — Runtime execution
+The Runtime Engineer stages only ticketed files, compiles in isolated MetaEditor, creates a ticket-specific `[StartUp]` INI, launches one portable isolated terminal, collects fresh logs and MQL-authored artifacts, and terminates only the ticket-owned process.
 
-The Runtime Engineer:
+### Phase 3 — Lead parity
 
-- accepts only the Lead’s ticket;
-- creates a staging manifest before copying anything;
-- stages only ticketed files into `/Users/matt/MT5-MSZZ-TEST`;
-- compiles the exact source;
-- verifies a newly generated EX5;
-- establishes a fresh log boundary;
-- launches exactly once;
-- collects fresh runtime evidence;
-- makes no source or harness changes.
-
-### Phase 3 — Lead parity and evidence index
-
-The Lead:
-
-- verifies output authorship;
-- compares independently produced Python and MQL artifacts;
-- completes any Lead-owned missing parity work;
-- creates the checkpoint evidence index;
-- does not issue the final approval token.
+The Lead verifies authorship, compares independent Python/MQL artifacts, closes Lead-owned parity gates, and builds the evidence index.
 
 ### Phase 4 — Independent review
 
-The Reviewer:
-
-- reads the diff and evidence index;
-- independently verifies hashes and provenance;
-- confirms protected refs and files are unchanged;
-- issues exactly one authorized checkpoint verdict token.
+The Reviewer verifies provenance and issues one authorized checkpoint verdict.
 
 ### Phase 5 — Stop
 
-After the verdict:
-
-- do not begin historical screening;
-- do not commit;
-- do not push;
-- do not activate paused roles;
-- wait for explicit user authorization and a frontier-model audit.
+Do not begin later work until explicitly authorized.
